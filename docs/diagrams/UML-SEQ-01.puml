@@ -1,0 +1,28 @@
+@startuml
+!include style.iuml
+actor "Customer" as C
+participant "BFF" as BFF
+participant "Cart /\nCheckout" as CART
+participant "Promo" as PROMO
+participant "Inv" as INV
+participant "Payment" as PAY
+participant "Gateway" as PG
+participant "Order" as ORD
+participant "Event\nBus" as BUS
+C -> BFF : POST /checkout/quotes
+BFF -> CART : createQuote(cartId)
+CART -> INV : validate + reserve(lines)
+CART -> PROMO : evaluate(waterfall)
+CART --> BFF : quote{id, totals, sig}
+C -> BFF : POST /payments {quoteId, upi}
+BFF -> PAY : createIntent(quote)
+PAY -> PG : order.create
+PG --> C : UPI intent
+PG -> PAY : webhook captured (HMAC)
+PAY -> PAY : verify + idempotency
+PAY -> ORD : confirm(quoteId, payRef)
+ORD -> INV : reserve -> commit
+ORD -> BUS : OrderConfirmed
+BUS -> ORD : (async) fee accrual to Finance
+ORD --> C : 201 order{id}
+@enduml

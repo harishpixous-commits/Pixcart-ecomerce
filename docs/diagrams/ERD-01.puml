@@ -1,0 +1,64 @@
+@startuml
+!include style.iuml
+hide circle
+hide empty members
+skinparam linetype polyline
+skinparam nodesep 12
+skinparam ranksep 30
+entity CUSTOMER
+entity ADDRESS
+entity CART
+entity CART_LINE
+entity QUOTE
+entity ORDER
+entity SUB_ORDER
+entity ORDER_LINE
+entity PAYMENT
+entity REFUND
+entity SHIPMENT
+entity RMA
+entity REVIEW
+entity WALLET_TXN
+entity CONSENT
+entity NOTIFICATION
+entity VENDOR
+entity STORE
+entity LISTING
+entity VARIANT
+entity INVENTORY_ITEM
+entity LOCATION
+entity CATEGORY
+entity BRAND
+entity PRODUCT
+entity COUPON
+entity COUPON_REDEMPTION
+entity LEDGER_ENTRY
+entity SETTLEMENT_BATCH
+CUSTOMER ||--o{ ADDRESS : has
+CUSTOMER ||--o{ CART : owns
+CUSTOMER ||--o{ ORDER : places
+CUSTOMER ||--o{ REVIEW : writes
+CUSTOMER ||--o{ WALLET_TXN : earns
+CUSTOMER ||--o{ CONSENT : grants
+CUSTOMER ||--o{ NOTIFICATION : receives
+VENDOR ||--|| STORE : operates
+VENDOR ||--o{ LISTING : sells
+CATEGORY ||--o{ PRODUCT : classifies
+BRAND ||--o{ PRODUCT : labels
+PRODUCT ||--o{ LISTING : offered_as
+LISTING ||--|{ VARIANT : has
+VARIANT ||--o{ INVENTORY_ITEM : stocked_at
+LOCATION ||--o{ INVENTORY_ITEM : holds
+CART ||--o{ CART_LINE : contains
+CART ||--o| QUOTE : freezes
+ORDER ||--|{ SUB_ORDER : splits
+SUB_ORDER ||--|{ ORDER_LINE : contains
+ORDER ||--|{ PAYMENT : paid_by
+PAYMENT ||--o{ REFUND : reversed_by
+SUB_ORDER ||--o{ SHIPMENT : fulfilled_by
+ORDER_LINE ||--o{ RMA : returned_via
+SUB_ORDER ||--o{ LEDGER_ENTRY : accrues
+SETTLEMENT_BATCH ||--o{ LEDGER_ENTRY : settles
+COUPON ||--o{ COUPON_REDEMPTION : redeemed
+ORDER ||--o{ COUPON_REDEMPTION : uses
+@enduml

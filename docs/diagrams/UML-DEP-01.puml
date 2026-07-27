@@ -1,0 +1,25 @@
+@startuml
+!include style.iuml
+node "CDN + WAF" as edge
+node "Kubernetes Cluster (3 AZ)" as k8s {
+  node "Ingress / Gateway" as ing
+  node "Node Pool: web / BFF" as np1
+  node "Node Pool: core services" as np2
+  node "Node Pool: AI / ML (GPU-opt)" as np3
+}
+database "MySQL\n(Multi-AZ + replicas)" as db
+database "Redis (HA)" as rd
+database "OpenSearch\n(3 nodes)" as os
+queue "Kafka (3 brokers)" as kf
+node "Object Storage" as s3
+cloud "Payment GW / Couriers /\nLLM & Speech APIs" as ext
+edge --> ing
+ing --> np1
+np1 --> np2
+np2 --> db
+np2 --> rd
+np2 --> kf
+np3 --> os
+np2 --> s3
+np2 --> ext
+@enduml

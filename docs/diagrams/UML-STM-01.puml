@@ -1,0 +1,26 @@
+@startuml
+!include style.iuml
+[*] --> Confirmed
+Confirmed --> Accepted : vendor / auto (4 h)
+Confirmed --> Cancelled : customer / system
+Accepted --> Packed
+Packed --> Cancelled : pre-manifest only
+Packed --> Shipped : handover scan
+Shipped --> OutForDelivery
+OutForDelivery --> Delivered : POD rule
+OutForDelivery --> NDR
+NDR --> OutForDelivery : re-attempt <= 3
+NDR --> RTO_Initiated : attempts exhausted / refused
+RTO_Initiated --> RTO_Received
+Delivered --> ReturnRequested : window (BRU-07)
+ReturnRequested --> ReturnPickedUp
+ReturnPickedUp --> QC
+QC --> Refunded : pass
+QC --> ReturnRejected : fail
+Delivered --> Closed : window lapse
+Refunded --> Closed
+RTO_Received --> Closed : restock + fees
+Cancelled --> Closed
+ReturnRejected --> Closed : dispute path noted
+Closed --> [*]
+@enduml

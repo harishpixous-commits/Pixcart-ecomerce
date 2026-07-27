@@ -1,0 +1,23 @@
+@startuml
+!include style.iuml
+actor "Customer" as C
+participant "Order" as ORD
+participant "Logistics" as LOG
+participant "QC / Warehouse" as WH
+participant "Payment" as PAY
+participant "Finance" as FIN
+C -> ORD : create RMA(reason, photos)
+ORD -> LOG : book reverse pickup
+LOG --> C : reverse AWB + slot
+LOG -> WH : received at hub
+WH -> WH : QC checklist
+alt QC pass
+  WH -> PAY : refund.initiate
+  PAY -> FIN : ledger refund lines
+  PAY --> C : refund ARN
+  WH -> FIN : release vendor hold (BRU-09)
+else QC fail
+  WH --> C : evidence + dispute path
+  WH -> ORD : return rejected
+end
+@enduml

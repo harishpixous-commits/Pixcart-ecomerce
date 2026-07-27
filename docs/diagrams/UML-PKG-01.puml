@@ -1,0 +1,37 @@
+@startuml
+!include style.iuml
+package storefront
+package vendorportal
+package adminconsole
+package "bff-gateway" as bff
+package identity
+package catalogue
+package discovery
+package cartcheckout
+package order
+package payment
+package logistics
+package finance
+package marketing
+package notification
+package "ai-orchestrator" as ai
+package "ml-serving" as ml
+package "shared-libs\n(contracts, events, telemetry)" as shared
+storefront ..> bff
+vendorportal ..> bff
+adminconsole ..> bff
+bff ..> identity
+bff ..> catalogue
+bff ..> discovery
+bff ..> cartcheckout
+bff ..> order
+bff ..> ai
+cartcheckout ..> marketing
+order ..> payment
+order ..> logistics
+finance ..> order : events
+ml ..> payment : scores
+shared <.. identity
+shared <.. order
+shared <.. finance
+@enduml

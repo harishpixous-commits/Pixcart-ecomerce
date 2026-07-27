@@ -1,0 +1,5 @@
+{
+  "name": "pixcart",
+  "private": true,
+  "workspaces": ["services/marketing-svc"]
+}

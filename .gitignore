@@ -1,0 +1,9 @@
+node_modules/
+out/
+target/
+dist/
+*.class
+mysql-data/
+docs/diagrams/*.png
+docs/diagrams/plantuml.jar
+.DS_Store

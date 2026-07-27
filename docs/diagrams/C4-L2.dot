@@ -1,0 +1,100 @@
+digraph C4L2 {
+  rankdir=TB; compound=true; nodesep=0.12; ranksep=0.24; bgcolor="white"; newrank=true;
+  node [fontname="DejaVu Sans", fontsize=10, shape=box, style="rounded,filled", margin="0.08,0.06", width=1.42];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#1F4E79", arrowsize=0.6];
+
+  subgraph cluster_people {
+    label="Users"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#17365D";
+    style="rounded,filled"; fillcolor="#FAFCFE"; color="#1F4E79";
+    node [fillcolor="#17365D", color="#0F2440", fontcolor="white"];
+    CUST [label=<<b>Customer</b><br/><font point-size="7">person</font>>];
+    VEND [label=<<b>Vendor</b><br/><font point-size="7">person</font>>];
+    ADMN [label=<<b>Operator Staff</b><br/><font point-size="7">person</font>>];
+    { rank=same; CUST; VEND; ADMN; }
+    CUST -> VEND [style=invis]; VEND -> ADMN [style=invis];
+  }
+
+  subgraph cluster_fe {
+    label="Client Applications"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#17365D";
+    style="rounded,filled"; fillcolor="#FAFCFE"; color="#1F4E79";
+    node [fillcolor="#DCE8F5", color="#17365D", fontcolor="#17365D"];
+    WEB [label=<<b>Storefront PWA</b><br/><font point-size="7">React 19 / Vite</font>>];
+    APP [label=<<b>Mobile Apps</b><br/><font point-size="7">React Native (Expo)</font>>];
+    VPT [label=<<b>Vendor Portal</b><br/><font point-size="7">React</font>>];
+    ACN [label=<<b>Admin Console</b><br/><font point-size="7">React</font>>];
+    { rank=same; WEB; APP; VPT; ACN; }
+    WEB -> APP [style=invis]; APP -> VPT [style=invis]; VPT -> ACN [style=invis];
+  }
+
+  BFF [label=<<b>BFF + API Gateway</b><br/><font point-size="7">Node.js 22 / Kong — authN edge, aggregation, rate limits</font>>,
+       fillcolor="#E7F3EC", color="#1E7B45", fontcolor="#12603A", width=3.4];
+
+  subgraph cluster_core {
+    label="Core Services"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#17365D";
+    style="rounded,filled"; fillcolor="#FAFCFE"; color="#1F4E79";
+    node [fillcolor="#DCE8F5", color="#17365D", fontcolor="#17365D"];
+    IDS [label=<<b>Identity Svc</b><br/><font point-size="7">Spring Boot / Java 21</font>>];
+    CATS [label=<<b>Catalogue Svc</b><br/><font point-size="7">Spring Boot</font>>];
+    DISS [label=<<b>Discovery Svc</b><br/><font point-size="7">Node.js</font>>];
+    CRTS [label=<<b>Cart / Checkout</b><br/><font point-size="7">Spring Boot</font>>];
+    ORDS [label=<<b>Order Svc</b><br/><font point-size="7">Spring Boot</font>>];
+    PAYS [label=<<b>Payment Svc</b><br/><font point-size="7">Spring Boot</font>>];
+    LOGS [label=<<b>Logistics Svc</b><br/><font point-size="7">Spring Boot</font>>];
+    FINS [label=<<b>Finance Svc</b><br/><font point-size="7">Spring Boot</font>>];
+    MKTS [label=<<b>Marketing Svc</b><br/><font point-size="7">Node.js</font>>];
+    NTFS [label=<<b>Notification Svc</b><br/><font point-size="7">Node.js</font>>];
+    { rank=same; IDS; CATS; DISS; CRTS; }
+    { rank=same; ORDS; PAYS; LOGS; FINS; }
+    { rank=same; MKTS; NTFS; }
+    IDS -> CATS [style=invis]; CATS -> DISS [style=invis]; DISS -> CRTS [style=invis];
+    ORDS -> PAYS [style=invis]; PAYS -> LOGS [style=invis]; LOGS -> FINS [style=invis];
+    MKTS -> NTFS [style=invis];
+    IDS -> ORDS [style=invis]; ORDS -> MKTS [style=invis];
+  }
+
+  subgraph cluster_ai {
+    label="AI Platform"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#12603A";
+    style="rounded,filled"; fillcolor="#F3FAF5"; color="#1E7B45";
+    node [fillcolor="#DFF0E6", color="#1E7B45", fontcolor="#12603A"];
+    AIO [label=<<b>AI Orchestrator</b><br/><font point-size="7">Python FastAPI — assistant, RAG, tools</font>>, width=2.1];
+    MLS [label=<<b>ML Serving</b><br/><font point-size="7">Python — reco, fraud, forecast</font>>, width=2.1];
+    { rank=same; AIO; MLS; }
+    AIO -> MLS [style=invis];
+  }
+
+  subgraph cluster_data {
+    label="Data Stores"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#12603A";
+    style="rounded,filled"; fillcolor="#F7FBF8"; color="#1E7B45";
+    node [shape=cylinder, style=filled, fillcolor="#DFF0E6", color="#1E7B45", fontcolor="#12603A", width=1.38];
+    SQL [label=<<b>MySQL cluster</b><br/><font point-size="7">service schemas</font>>];
+    RDS [label=<<b>Redis</b><br/><font point-size="7">cache / locks</font>>];
+    OSX [label=<<b>OpenSearch</b><br/><font point-size="7">+ vector indices</font>>];
+    OBJ [label=<<b>Object Store</b><br/><font point-size="7">media, documents</font>>];
+    BUS [label=<<b>Event Bus</b><br/><font point-size="7">Kafka-compatible</font>>];
+    { rank=same; SQL; RDS; OSX; OBJ; BUS; }
+    SQL -> RDS [style=invis]; RDS -> OSX [style=invis]; OSX -> OBJ [style=invis]; OBJ -> BUS [style=invis];
+  }
+
+  subgraph cluster_ext {
+    label="External Systems"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#595959";
+    style="rounded,filled"; fillcolor="#F7F7F4"; color="#8A8A8A";
+    node [fillcolor="#EDEDE8", color="#8A8A8A", fontcolor="#3A3A3A"];
+    PGW [label=<<b>Payment Gateway</b>>]; CRR [label=<<b>Courier Aggregators</b>>];
+    MSG [label=<<b>Email / SMS / WhatsApp</b>>]; LLM [label=<<b>LLM &amp; Speech APIs</b>>];
+    { rank=same; PGW; CRR; MSG; LLM; }
+    PGW -> CRR [style=invis]; CRR -> MSG [style=invis]; MSG -> LLM [style=invis];
+  }
+
+  CUST -> WEB [ltail=cluster_people, lhead=cluster_fe, label="uses"];
+  WEB -> BFF [ltail=cluster_fe, label="HTTPS / JSON"];
+  BFF -> CATS [lhead=cluster_core, label="REST"];
+  BFF -> AIO [lhead=cluster_ai, label="REST / stream", constraint=false];
+  ORDS -> SQL [lhead=cluster_data, label="reads / writes", constraint=false];
+  ORDS -> BUS [style=dashed, label="publishes"];
+  AIO -> OSX [style=dashed, constraint=false];
+  PAYS -> PGW [lhead=cluster_ext, label="REST + webhooks", constraint=false];
+  // force clusters to stack vertically instead of spreading sideways
+  MKTS -> AIO [style=invis];
+  MLS -> SQL [style=invis];
+  BUS -> PGW [style=invis];
+}

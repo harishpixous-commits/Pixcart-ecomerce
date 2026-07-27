@@ -1,0 +1,50 @@
+digraph CTX01 {
+  rankdir=TB; compound=true; nodesep=0.16; ranksep=0.34; bgcolor="white"; newrank=true;
+  node [fontname="DejaVu Sans", fontsize=11, shape=box, style="rounded,filled",
+        fillcolor="#EDF2F8", color="#17365D", fontcolor="#17365D", margin="0.12,0.08", width=1.32];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#1F4E79", arrowsize=0.6];
+  subgraph cluster_clients {
+    label="Clients"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#17365D";
+    style="rounded,filled"; fillcolor="#FAFCFE"; color="#1F4E79";
+    W [label="Web PWA"]; M [label="Mobile Apps"]; VP [label="Vendor Portal"];
+    AC [label="Admin Console"]; DP [label="Delivery Portal"];
+    { rank=same; W; M; VP; AC; DP; }
+    W -> M [style=invis]; M -> VP [style=invis]; VP -> AC [style=invis]; AC -> DP [style=invis];
+  }
+  GW [label="API Gateway + BFF", fillcolor="#E7F3EC", color="#1E7B45", fontcolor="#12603A", width=2.4];
+  subgraph cluster_core {
+    label="Core Services"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#17365D";
+    style="rounded,filled"; fillcolor="#FAFCFE"; color="#1F4E79";
+    ID [label="Identity &\nAccess"]; CAT [label="Catalogue"]; SRCH [label="Search &\nDiscovery"]; CART [label="Cart &\nCheckout"];
+    ORD [label="Order"]; PAY [label="Payment"]; LOG [label="Logistics"]; FIN [label="Finance &\nSettlement"];
+    MKT [label="Marketing"]; NOT [label="Notification"]; SUP [label="Support"];
+    { rank=same; ID; CAT; SRCH; CART; }
+    { rank=same; ORD; PAY; LOG; FIN; }
+    { rank=same; MKT; NOT; SUP; }
+    ID -> CAT [style=invis]; CAT -> SRCH [style=invis]; SRCH -> CART [style=invis];
+    ORD -> PAY [style=invis]; PAY -> LOG [style=invis]; LOG -> FIN [style=invis];
+    MKT -> NOT [style=invis]; NOT -> SUP [style=invis];
+    ID -> ORD [style=invis]; ORD -> MKT [style=invis];
+  }
+  subgraph cluster_ai {
+    label="AI Layer"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#12603A";
+    style="rounded,filled"; fillcolor="#F3FAF5"; color="#1E7B45";
+    AST [label="Assistant\nOrchestrator"]; RAG [label="Vector + BM25\nIndex"]; ML [label="ML Scoring\nfraud · reco · forecast"];
+    { rank=same; AST; RAG; ML; }
+    AST -> RAG [style=invis]; RAG -> ML [style=invis];
+  }
+  subgraph cluster_ext {
+    label="External Systems"; fontname="DejaVu Sans"; fontsize=12; fontcolor="#595959";
+    style="rounded,filled"; fillcolor="#F7F7F4"; color="#8A8A8A";
+    PG [label="Payment\nGateway"]; CR [label="Courier APIs"]; MSG [label="Email / SMS /\nWhatsApp"];
+    KYC [label="KYC / GST\nVerify"]; LLM [label="LLM & Speech\nAPIs"];
+    { rank=same; PG; CR; MSG; KYC; LLM; }
+    PG -> CR [style=invis]; CR -> MSG [style=invis]; MSG -> KYC [style=invis]; KYC -> LLM [style=invis];
+  }
+  W -> GW [ltail=cluster_clients];
+  GW -> CAT [lhead=cluster_core];
+  GW -> AST [lhead=cluster_ai];
+  CART -> AST [style=dashed, constraint=false];
+  PAY -> PG [dir=both]; LOG -> CR [dir=both]; NOT -> MSG [dir=both];
+  ID -> KYC [dir=both]; AST -> LLM [dir=both];
+}

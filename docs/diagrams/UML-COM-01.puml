@@ -1,0 +1,15 @@
+@startuml
+!include style.iuml
+object Customer
+object BFF
+object Cart
+object Promotions
+object Inventory
+Customer -> BFF : 1: applyCoupon(code)
+BFF -> Cart : 2: mutate(cartId)
+Cart -> Promotions : 3: evaluate(cart, user)
+Promotions --> Cart : 4: waterfall
+Cart -> Inventory : 5: revalidate
+Cart --> BFF : 6: cart{totals, savings}
+BFF --> Customer : 7: 200 + explanation
+@enduml

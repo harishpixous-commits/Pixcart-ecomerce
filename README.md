@@ -1,0 +1,27 @@
+# PixCart AI — AI-Powered Multi-Vendor E-Commerce Platform
+
+Source of truth: **Enterprise Software Documentation Suite v1.0** (16 volumes,
+PIX-ECOM-DOCSUITE-2026-001). Every directory below maps to that suite; nothing in this
+repository may contradict it, and changes flow through the RTM (Vol. 13 §13.3).
+
+## Layout (per Vol. 11 §11.3 / Vol. 5 C4-L2)
+services/   Spring Boot 3.5 / Java 21 core services + Node 22 services (discovery,
+            marketing, notification) exactly as assigned in the container diagram
+apps/       React 19 storefront, vendor portal, admin console, Expo mobile
+ai/         FastAPI AI orchestrator (FR-AI-001) and ML serving (FR-AI-003/006/010)
+contracts/  OpenAPI 3.1 /v1 bundle (Vol. 7) and event schemas (Vol. 5 SS5.5)
+infra/      Terraform layout per IaC-01; db/migrations are Flyway-named and are the
+            GENERATED Vol. 6 DDL — the document and the schema cannot drift
+runbooks/   Inventory per Vol. 11 SS11.12
+
+## Delivery model
+Vertical slices per the release train (Vol. 15): each slice ships with its tests,
+traceable FR ids, and passes the same automated audit discipline used on the suite.
+Slice 0: repo skeleton · Vol. 6 schema proven on a live engine (7 proofs) ·
+FR-MKT-010 promotions waterfall engine — 18/18 tests, p95 4.8 ms vs 80 ms budget.
+Slice 1 (identity): V002 auth schema proven live (role/attempt CHECKs, token-hash
+uniqueness, FK) · framework-free identity domain in Java 21 — ULID, OTP state machine
+(5-min/3-attempt/30-s per FR-CUS-001), sliding-window budgets (5/h, 20/min per Vol. 7),
+refresh-token family rotation with reuse-detection (TC-SEC-011), password rule
+(≥10 chars, 3-of-4 classes), Vol. 2 §2.4 RBAC matrix — 15/15 JUnit tests in-sandbox.
+Spring adapters (pom, app shell) authored for the CI build.

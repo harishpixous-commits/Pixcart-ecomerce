@@ -1,0 +1,124 @@
+@startuml
+!include style.iuml
+hide circle
+skinparam classAttributeIconSize 0
+class Customer {
+  +id : ULID
+  +mobile
+  +email
+  +status
+}
+class Address {
+  +id
+  +pin
+  +geo
+}
+class Vendor {
+  +id
+  +gstin
+  +status
+  +tier
+}
+class Store {
+  +slug
+  +policies
+}
+class Product {
+  +id
+  +categoryId
+  +brandId
+  +attributes
+}
+class Listing {
+  +id
+  +vendorId
+  +state
+  +mrp
+  +price
+}
+class Variant {
+  +sku
+  +optionMap
+}
+class InventoryItem {
+  +locationId
+  +onHand
+  +reserved
+}
+class Cart {
+  +id
+  +userRef
+}
+class CartLine {
+  +qty
+  +priceSnapshot
+}
+class Quote {
+  +id
+  +expiry
+  +signature
+}
+class Order {
+  +id
+  +totals
+  +status
+}
+class SubOrder {
+  +id
+  +vendorId
+  +state
+}
+class OrderLine {
+  +qty
+  +unitPrice
+  +taxSplit
+}
+class Payment {
+  +id
+  +method
+  +captureId
+  +status
+}
+class Refund {
+  +id
+  +amount
+  +arn
+}
+class Shipment {
+  +awb
+  +courier
+  +state
+}
+class RMA {
+  +id
+  +reason
+  +qcResult
+}
+class LedgerEntry {
+  +account
+  +debit
+  +credit
+}
+class SettlementBatch {
+  +id
+  +cycle
+  +utr
+}
+Customer "1" -- "0..*" Address
+Customer "1" -- "0..*" Order
+Vendor "1" -- "1" Store
+Vendor "1" -- "0..*" Listing
+Product "1" -- "0..*" Listing
+Listing "1" -- "1..*" Variant
+Variant "1" -- "0..*" InventoryItem
+Cart "1" -- "0..*" CartLine
+Quote "1" -- "1" Cart
+Order "1" -- "1..*" SubOrder
+SubOrder "1" -- "1..*" OrderLine
+Order "1" -- "1..*" Payment
+Payment "1" -- "0..*" Refund
+SubOrder "1" -- "0..*" Shipment
+OrderLine "1" -- "0..*" RMA
+SubOrder "1" -- "0..*" LedgerEntry
+SettlementBatch "1" -- "0..*" LedgerEntry
+@enduml

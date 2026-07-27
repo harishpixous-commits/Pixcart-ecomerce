@@ -1,0 +1,21 @@
+@startuml
+!include style.iuml
+package "Discovery Svc" {
+  [Query API] --> [Hybrid Ranker]
+  [Hybrid Ranker] --> [Lexical Index]
+  [Hybrid Ranker] --> [Vector Index]
+  [Constraint Parser] --> [Hybrid Ranker]
+}
+package "AI Orchestrator" {
+  [Session Mgr] --> [Planner]
+  [Planner] --> [Tool Router]
+  [Planner] --> [Retriever]
+  [Guardrails] .. [Planner]
+}
+[Tool Router] --> [Catalogue API]
+[Tool Router] --> [Order API]
+[Retriever] --> [Vector Index]
+[Indexer Pipeline] --> [Lexical Index]
+[Indexer Pipeline] --> [Vector Index]
+[Catalogue CDC] --> [Indexer Pipeline]
+@enduml

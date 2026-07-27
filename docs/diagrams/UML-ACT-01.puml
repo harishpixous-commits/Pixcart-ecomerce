@@ -1,0 +1,30 @@
+@startuml
+!include style.iuml
+start
+:Open cart;
+:Revalidate lines
+(price / stock / serviceability);
+if (All lines valid?) then (yes)
+  :Select address & delivery options;
+  :Apply promotions waterfall;
+  :Create signed quote (10 min);
+  :Choose payment method;
+  if (COD allowed? BRU-05) then (COD)
+    :Risk check, then confirm order;
+  else (Online)
+    :Gateway authorise / capture;
+    if (Captured?) then (yes)
+      :Confirm order (idempotent);
+    else (no)
+      :Show retry / alternate methods;
+      stop
+    endif
+  endif
+  :Split into vendor sub-orders;
+  :Notify customer & vendors;
+  stop
+else (no)
+  :Per-line resolution UI;
+  stop
+endif
+@enduml

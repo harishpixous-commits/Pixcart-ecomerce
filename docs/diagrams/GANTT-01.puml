@@ -1,0 +1,36 @@
+@startgantt
+skinparam dpi 150
+skinparam defaultFontName "DejaVu Sans"
+skinparam shadowing false
+<style>
+ganttDiagram {
+  task { BackGroundColor #EDF2F8  LineColor #17365D  FontColor #17365D }
+  milestone { BackGroundColor #1E7B45  LineColor #1E7B45  FontColor #1E7B45 }
+  note { BackGroundColor #FFF6E0  LineColor #9C6500 }
+}
+</style>
+printscale monthly
+Project starts 2026-08-03
+saturday are closed
+sunday are closed
+[Foundations & platform] lasts 60 days
+[Identity & catalogue core] lasts 60 days
+[Identity & catalogue core] starts 40 days after [Foundations & platform]'s start
+[Cart, checkout & payments] lasts 60 days
+[Cart, checkout & payments] starts 40 days after [Identity & catalogue core]'s start
+[R0 Internal Alpha] happens at [Cart, checkout & payments]'s end
+[Fulfilment & orders] lasts 60 days
+[Fulfilment & orders] starts 40 days after [Cart, checkout & payments]'s start
+[Finance core] lasts 40 days
+[Finance core] starts 40 days after [Fulfilment & orders]'s start
+[R1 Closed Beta] happens at [Finance core]'s end
+[Returns, wallet & AI assistant] lasts 60 days
+[Returns, wallet & AI assistant] starts 20 days after [Finance core]'s start
+[Marketing, admin & risk] lasts 60 days
+[Marketing, admin & risk] starts 40 days after [Returns, wallet & AI assistant]'s start
+[Analytics & hardening] lasts 50 days
+[Analytics & hardening] starts 40 days after [Marketing, admin & risk]'s start
+[UAT & stabilisation] lasts 40 days
+[UAT & stabilisation] starts 30 days after [Analytics & hardening]'s start
+[R2 General Availability] happens at [UAT & stabilisation]'s end
+@endgantt

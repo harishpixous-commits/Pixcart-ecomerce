@@ -1,0 +1,29 @@
+@startuml
+!include style.iuml
+start
+:Customer visits storefront;
+:Discovery — search / voice / image / assistant;
+:Product detail;
+:Add to cart;
+repeat
+  :Checkout — address · slot · payment;
+  backward:Retry / alternate method;
+repeat while (Payment authorised?) is (no) not (yes)
+:Order confirmed — split per vendor;
+repeat
+  :Vendor accepts & packs;
+  :Courier pickup;
+  :In-transit tracking;
+  backward:Re-attempt / RTO;
+repeat while (Delivered?) is (NDR) not (yes)
+:Return window;
+if (Return raised?) then (yes)
+  :Reverse pickup — QC — Refund;
+else (no)
+  :Auto-confirm delivery;
+endif
+:Settlement engine — commission · fees · taxes;
+:Vendor payout T+2 & ledgers;
+:Analytics · AI learning loop;
+stop
+@enduml

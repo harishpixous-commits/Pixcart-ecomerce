@@ -1,0 +1,40 @@
+@startuml
+!include style.iuml
+left to right direction
+actor "Customer" as C
+actor "Vendor" as V
+actor "Admin" as A
+actor "Finance" as F
+actor "Courier" as CR
+actor "Payment\nGateway" as PG
+rectangle "PixCart AI Platform" {
+  usecase "Register / Login\n(MFA)" as UC1
+  usecase "Discover\n(Search / Assistant)" as UC2
+  usecase "Manage Cart\n& Checkout" as UC3
+  usecase "Pay" as UC4
+  usecase "Fulfil Order" as UC5
+  usecase "Track & Receive" as UC6
+  usecase "Return & Refund" as UC7
+  usecase "Manage Listings" as UC8
+  usecase "Approve Catalogue\n/ Vendors" as UC9
+  usecase "Run Promotions" as UC10
+  usecase "Settle & Pay out" as UC11
+  usecase "Monitor & Govern" as UC12
+}
+C --> UC1
+C --> UC2
+C --> UC3
+C --> UC4
+C --> UC6
+C --> UC7
+V --> UC8
+V --> UC5
+V --> UC10
+A --> UC9
+A --> UC10
+A --> UC12
+F --> UC11
+UC4 ..> PG : <<include>>
+UC5 ..> CR : <<include>>
+UC7 ..> UC11 : <<extend>>
+@enduml

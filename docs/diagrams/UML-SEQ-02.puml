@@ -1,0 +1,20 @@
+@startuml
+!include style.iuml
+actor "Customer" as C
+participant "BFF" as BFF
+participant "AI Orchestrator" as AST
+participant "Retriever (RAG)" as RET
+participant "LLM" as LLM
+participant "Order Svc" as ORD
+C -> BFF : POST /assistant/messages\n{"track my order"}
+BFF -> AST : turn(sessionCtx)
+AST -> RET : retrieve(policy + intents)
+RET --> AST : passages[]
+AST -> LLM : plan(tools, passages)
+LLM --> AST : tool_call get_order_status
+AST -> ORD : GET /orders/latest (scoped token)
+ORD --> AST : status, EDD, courier
+AST -> LLM : synthesize(grounded)
+LLM --> AST : streamed answer + citation
+AST --> C : stream + action card
+@enduml
