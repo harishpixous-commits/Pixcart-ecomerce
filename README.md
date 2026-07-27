@@ -25,3 +25,9 @@ uniqueness, FK) · framework-free identity domain in Java 21 — ULID, OTP state
 refresh-token family rotation with reuse-detection (TC-SEC-011), password rule
 (≥10 chars, 3-of-4 classes), Vol. 2 §2.4 RBAC matrix — 15/15 JUnit tests in-sandbox.
 Spring adapters (pom, app shell) authored for the CI build.
+Slice 2 (catalogue + approvals): V003 schema proven live — 21 tables, coherent seed
+graph, 7 negative proofs (FKs incl. retro-fitted inv_item→variant/location, slug/sku/
+revision uniqueness, approval-state CHECK, category delete-restrict). Java 21 domain:
+ListingLifecycle (FR-VEN-003/BRU-02 — exhaustive 63-pair matrix test) and ApprovalCase
+(FR-ADM-004 — bulk ≤100 with ≥10% sampling, prohibited-item exclusion with the doc's
+acceptance scenario verbatim, diff-view gate, fix-list on rejection) — 9/9 JUnit.
