@@ -1,0 +1,9 @@
+{
+  "name": "@pixcart/ai-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI assistant orchestrator (FR-AI-001/002, FR-CUS-008). Vendor-neutral provider ports with Anthropic (LLM) and Sarvam (STT/TTS) adapters; deny-by-default tools, per-session budget, 6-hop cap, kill-switch.",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9" }
+}

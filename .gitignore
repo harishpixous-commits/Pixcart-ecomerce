@@ -7,3 +7,6 @@ mysql-data/
 docs/diagrams/*.png
 docs/diagrams/plantuml.jar
 .DS_Store
+.env
+*.env
+.secrets/

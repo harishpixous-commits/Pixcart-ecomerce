@@ -1,0 +1,10 @@
+{
+  "name": "@pixcart/cart-checkout-svc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cart & Checkout (Spring Boot per C4-L2; quote engine authored in TS to reuse the FR-MKT-010 promotions engine directly). FR-CUS-007/014, BRU-03/05/14.",
+  "scripts": { "test": "vitest run" },
+  "dependencies": { "zod": "^3.23.8" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9" }
+}
