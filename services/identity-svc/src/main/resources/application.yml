@@ -1,0 +1,10 @@
+spring:
+  application.name: identity-svc
+  flyway:
+    locations: filesystem:../../infra/db/migrations   # single schema source of truth
+  datasource:
+    url: ${IDENTITY_DB_URL}      # no defaults with credentials — Vol. 10 §10.5 secrets policy
+    username: ${IDENTITY_DB_USER}
+    password: ${IDENTITY_DB_PASSWORD}
+server:
+  port: 8081
