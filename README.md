@@ -31,3 +31,12 @@ revision uniqueness, approval-state CHECK, category delete-restrict). Java 21 do
 ListingLifecycle (FR-VEN-003/BRU-02 — exhaustive 63-pair matrix test) and ApprovalCase
 (FR-ADM-004 — bulk ≤100 with ≥10% sampling, prohibited-item exclusion with the doc's
 acceptance scenario verbatim, diff-view gate, fix-list on rejection) — 9/9 JUnit.
+
+Slice 7 (returns & refund orchestration): ReturnSaga (FR-CUS-017/018, FR-LOG-005) over
+the Slice-5 return states, Slice-4 refund engine and Slice-0 promo allocation. Admission:
+BRU-07 window (default 7d, category override, non-returnable refused), photo evidence
+required for DAMAGED/WRONG_ITEM. Resolution: QC-pass refunds the NET paid to original
+instrument (BRU-06 default; wallet needs consent) within the <=24h SLA, and emits a
+settlement reversal whose vendor + commission clawbacks sum EXACTLY to the refund. 21/21
+JUnit (order-svc). LIVE-LEDGER proof: capture then QC-pass return nets every account
+(gateway/vendor/commission) to 0.00 - no money leaks - both journals balanced.
