@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixcart.pixoustech.com/contracts/events/payment.captured.v1.json",
+  "title": "payment.captured.v1",
+  "description": "Producer: Payment. Consumers: Order, Finance, Risk. Vol.5 §5.5: gatewayRefs, method, amount; ordering per orderId partition. Emitted when Payment reaches CAPTURED (Slice 4). Mirrors the Payment aggregate's captured state.",
+  "type": "object",
+  "required": ["paymentId", "quoteId", "captureRef", "idempotencyKey", "instrument", "amountPaise"],
+  "additionalProperties": false,
+  "properties": {
+    "paymentId": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" },
+    "quoteId":   { "type": "string", "minLength": 1 },
+    "captureRef":{ "type": "string", "minLength": 1, "description": "Gateway capture reference." },
+    "authRef":   { "type": "string", "description": "Gateway authorisation reference." },
+    "idempotencyKey": { "type": "string", "minLength": 1, "description": "uq_pay_idem; capture exactly-once." },
+    "instrument": { "type": "string", "enum": ["UPI", "CARD", "NETBANKING", "WALLET", "COD"] },
+    "amountPaise": { "type": "integer", "minimum": 1, "description": "Captured amount, integer paise; equals quote grand total." }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixcart.pixoustech.com/contracts/events/payment.refunded.v1.json",
+  "title": "payment.refunded.v1",
+  "description": "Producer: Payment. Consumers: Order, Finance, Risk. Emitted on each refund (full or partial) per Slice 4 / BRU-06. destination carries the BRU-06 routing.",
+  "type": "object",
+  "required": ["paymentId", "refundId", "amountPaise", "destination", "resultingState"],
+  "additionalProperties": false,
+  "properties": {
+    "paymentId": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" },
+    "refundId":  { "type": "string", "minLength": 1, "description": "Refund idempotency key." },
+    "subOrderId":{ "type": "string", "description": "Sub-order the refund pertains to, if line-scoped." },
+    "amountPaise": { "type": "integer", "minimum": 1 },
+    "destination": { "type": "string", "enum": ["ORIGINAL_INSTRUMENT", "WALLET"] },
+    "resultingState": { "type": "string", "enum": ["PARTIALLY_REFUNDED", "REFUNDED"] }
+  }
+}

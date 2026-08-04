@@ -59,3 +59,12 @@ QC-pass->refund executed by the real Payment aggregate; failed-capture->no-order
 JUnit. Companion live-ledger walk of the same journey balances every journal and closes
 the net of ALL accounts to 0.00. Test-only harness; services never import each other in
 prod (boundary note in integration/e2e/README.md).
+
+Slice 10 (contracts): contracts/events JSON Schemas (Vol.5 §5.5 EDA) for the money-spine
+events (envelope + payment.captured/refunded, order.confirmed, shipment.status,
+rma.qc.completed, settlement.batch.executed) and contracts/openapi money-spine.v1.yaml
+(OpenAPI 3.1, Vol.7 conventions: Bearer JWT, Idempotency-Key). A validation harness proves
+they are LIVE: every schema compiles under Ajv, a payload shaped as the real domain object
+emits validates (wrong ones rejected), each event validates against the envelope, the
+OpenAPI doc resolves, and event sub-order states are a subset of the OpenAPI Order state
+enum (mirrors SubOrderLifecycle). 9/9 vitest.

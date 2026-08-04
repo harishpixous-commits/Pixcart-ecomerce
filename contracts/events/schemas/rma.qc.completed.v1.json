@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixcart.pixoustech.com/contracts/events/rma.qc.completed.v1.json",
+  "title": "rma.qc.completed.v1",
+  "description": "Producer: Logistics/WH. Consumers: Payment (refund), Finance (hold release), Vendor. Vol.5 §5.5: result, checklist, evidence refs. Drives ReturnSaga.resolveAfterQc (Slice 7).",
+  "type": "object",
+  "required": ["returnId", "subOrderId", "lineId", "result", "disposition"],
+  "additionalProperties": false,
+  "properties": {
+    "returnId": { "type": "string", "minLength": 1 },
+    "subOrderId": { "type": "string", "minLength": 1 },
+    "lineId": { "type": "string", "minLength": 1 },
+    "result": { "type": "string", "enum": ["PASS", "FAIL"] },
+    "disposition": { "type": "string", "enum": ["RESTOCK", "REFURB", "SCRAP"] },
+    "evidenceRefs": { "type": "array", "items": { "type": "string" }, "description": "Retained QC evidence references." }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixcart.pixoustech.com/contracts/events/envelope.v1.json",
+  "title": "Pixcart Event Envelope v1",
+  "description": "Common envelope for every domain event (Vol.5 §5.5 EDA Contract). Consumers dedup by (topic, eventId); the outbox pattern guarantees the envelope is written in the SAME transaction as the state change (no dual-write). Payload PII is minimised to reference ids.",
+  "type": "object",
+  "required": ["eventId", "eventType", "occurredAt", "producer", "partitionKey", "schemaVersion", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "description": "ULID; the idempotency key for consumers ((topic, eventId) dedup).",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "eventType": {
+      "type": "string",
+      "description": "Fully-qualified topic name, e.g. payment.captured.v1.",
+      "pattern": "^[a-z]+(?:\\.[a-z]+)+\\.v[0-9]+$"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Business event time (UTC). Distinct from ingest time for courier-sourced events."
+    },
+    "producer": {
+      "type": "string",
+      "description": "Owning service (single writer per topic).",
+      "enum": ["order", "payment", "inventory", "logistics", "finance", "catalogue", "risk"]
+    },
+    "partitionKey": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Ordering key; per Vol.5, payment/order events are ordered per orderId."
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Registry schema version; compatibility = BACKWARD."
+    },
+    "correlationId": {
+      "type": "string",
+      "description": "Optional trace/correlation id spanning a request or saga."
+    },
+    "data": {
+      "type": "object",
+      "description": "Event-specific payload; schema per event type."
+    }
+  }
+}

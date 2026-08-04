@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixcart.pixoustech.com/contracts/events/settlement.batch.executed.v1.json",
+  "title": "settlement.batch.executed.v1",
+  "description": "Producer: Finance. Consumers: Vendor portal, Reporting. Vol.5 §5.5: batchId, lines→UTR map. Mirrors SettlementBatch.execute output (Slice 6).",
+  "type": "object",
+  "required": ["batchId", "batchDate", "payouts"],
+  "additionalProperties": false,
+  "properties": {
+    "batchId": { "type": "string", "minLength": 1 },
+    "batchDate": { "type": "string", "format": "date" },
+    "checksumPaise": { "type": "integer", "minimum": 0, "description": "Σ payouts; batch checksum." },
+    "payouts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["vendorId", "amountPaise", "paid"],
+        "additionalProperties": false,
+        "properties": {
+          "vendorId": { "type": "string", "minLength": 1 },
+          "amountPaise": { "type": "integer", "minimum": 1 },
+          "paid": { "type": "boolean" },
+          "utr": { "type": "string", "description": "Bank UTR on success." },
+          "attempts": { "type": "integer", "minimum": 1, "maximum": 2, "description": "1 + one retry (FR-VEN-011)." },
+          "heldReason": { "type": "string", "description": "Present when paid=false (held)." },
+          "lineIds": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Traces each order event (acceptance)." }
+        }
+      }
+    }
+  }
+}

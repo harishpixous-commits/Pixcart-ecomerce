@@ -1,0 +1,258 @@
+openapi: 3.1.0
+info:
+  title: Pixcart Money-Spine API
+  version: 1.0.0
+  description: >
+    Synchronous API surface for the checkout → payment → order path exercised by the
+    Slice-9 end-to-end harness. Conventions per Vol.7: OAuth2/OIDC Bearer JWT (15-min
+    access), all unsafe POSTs accept an Idempotency-Key (UUID, 48 h retention; replay
+    returns the original result), application/json. Amounts are integer paise. This spec
+    covers only the money spine; other services publish their own specs under contracts/openapi.
+servers:
+  - url: https://api.pixcart.pixoustech.com/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /checkout/quotes:
+    post:
+      operationId: createQuote
+      summary: Create a server-authoritative order quote (FR-CUS-014).
+      description: >
+        Revalidates every line (price, stock, serviceability, offer eligibility), prices
+        via the promotions + tax engines, splits per vendor (BRU-03), and returns a signed
+        quote valid 10 minutes. Fails with per-line problems if any line is invalid.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuoteRequest' }
+      responses:
+        '201':
+          description: Quote created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '422':
+          description: One or more lines failed revalidation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QuoteProblems' }
+  /payments/{paymentId}/capture:
+    post:
+      operationId: capturePayment
+      summary: Capture an authorised payment (FR-CUS-014, idempotent).
+      description: >
+        Idempotent on Idempotency-Key (uq_pay_idem). Replaying the same key returns the
+        original capture; a different key on an already-captured payment is rejected
+        (double-charge guard). On success emits payment.captured.v1.
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gatewayCaptureRef, amountPaise]
+              additionalProperties: false
+              properties:
+                gatewayCaptureRef: { type: string, minLength: 1 }
+                amountPaise: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Captured (or idempotent replay of a prior capture).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentState' }
+        '409':
+          description: Different idempotency key on an already-captured payment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Create the split order from a captured payment (FR-CUS-014, BRU-03).
+      description: >
+        Idempotent on the payment reference — the same reference always returns the same
+        order, never a second. Sub-order amounts must sum to the quote grand total to the
+        paisa or the request is rejected. On success emits order.confirmed.v1.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quoteId, paymentRef, grandTotalPaise, lines]
+              additionalProperties: false
+              properties:
+                quoteId: { type: string, minLength: 1 }
+                paymentRef: { type: string, minLength: 1 }
+                grandTotalPaise: { type: integer, minimum: 1 }
+                lines:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [lineId, vendorId, netPaise]
+                    additionalProperties: false
+                    properties:
+                      lineId: { type: string, minLength: 1 }
+                      vendorId: { type: string, minLength: 1 }
+                      netPaise: { type: integer, minimum: 1 }
+      responses:
+        '201':
+          description: Order created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '200':
+          description: Idempotent — existing order for this payment reference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '422':
+          description: Sub-order split does not reconcile to the quote total.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Retrieve an order with its sub-order status timeline (FR-CUS-016).
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '404':
+          description: Not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: UUID; 48 h retention; replay returns the original result (Vol.7).
+      schema: { type: string, format: uuid }
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    QuoteRequest:
+      type: object
+      required: [cartId, customerId, addressPin, lines, requestedPaymentMethod, fraudScore]
+      additionalProperties: false
+      properties:
+        cartId: { type: string, minLength: 1 }
+        customerId: { type: string, minLength: 1 }
+        addressPin: { type: string, pattern: '^[0-9]{6}$' }
+        requestedPaymentMethod: { type: string, enum: [PREPAID, COD] }
+        fraudScore: { type: number, minimum: 0, maximum: 1 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [lineId, listingId, vendorId, categoryId, qty, unitListPaise, availableStock, serviceablePin]
+            additionalProperties: false
+            properties:
+              lineId: { type: string }
+              listingId: { type: string }
+              vendorId: { type: string }
+              categoryId: { type: string }
+              qty: { type: integer, minimum: 1, maximum: 10 }
+              unitListPaise: { type: integer, minimum: 0 }
+              unitSalePaise: { type: integer, minimum: 0 }
+              availableStock: { type: integer, minimum: 0 }
+              serviceablePin: { type: boolean }
+              taxBps: { type: integer, minimum: 0 }
+    Quote:
+      type: object
+      required: [quoteId, grandTotalPaise, expiresAtMs, subOrders, paymentMethod, codEligible]
+      properties:
+        quoteId: { type: string }
+        grandTotalPaise: { type: integer, minimum: 0 }
+        itemTotalPaise: { type: integer, minimum: 0 }
+        discountTotalPaise: { type: integer, minimum: 0 }
+        taxTotalPaise: { type: integer, minimum: 0 }
+        expiresAtMs: { type: integer }
+        paymentMethod: { type: string, enum: [PREPAID, COD] }
+        codEligible: { type: boolean }
+        codReasons: { type: array, items: { type: string } }
+        subOrders:
+          type: array
+          items:
+            type: object
+            properties:
+              vendorId: { type: string }
+              lineIds: { type: array, items: { type: string } }
+              grandPaise: { type: integer, minimum: 0 }
+    QuoteProblems:
+      type: object
+      required: [problems]
+      properties:
+        problems:
+          type: array
+          items:
+            type: object
+            required: [lineId, reason]
+            properties:
+              lineId: { type: string }
+              reason: { type: string, enum: [OUT_OF_STOCK, QTY_OVER_CATEGORY_CAP, PIN_NOT_SERVICEABLE] }
+    PaymentState:
+      type: object
+      required: [paymentId, state]
+      properties:
+        paymentId: { type: string }
+        state: { type: string, enum: [CREATED, AUTHORISED, CAPTURED, PARTIALLY_REFUNDED, REFUNDED, VOIDED, FAILED] }
+        amountPaise: { type: integer }
+    Order:
+      type: object
+      required: [orderId, quoteId, paymentRef, grandTotalPaise, subOrders]
+      properties:
+        orderId: { type: string }
+        quoteId: { type: string }
+        paymentRef: { type: string }
+        grandTotalPaise: { type: integer, minimum: 1 }
+        subOrders:
+          type: array
+          items:
+            type: object
+            required: [subOrderId, vendorId, amountPaise, state]
+            properties:
+              subOrderId: { type: string }
+              vendorId: { type: string }
+              lineIds: { type: array, items: { type: string } }
+              amountPaise: { type: integer, minimum: 1 }
+              state:
+                type: string
+                enum: [CONFIRMED, ACCEPTED, PACKED, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, NDR, RTO_INITIATED, RTO_RECEIVED, RETURN_REQUESTED, RETURN_PICKED_UP, QC, REFUNDED, RETURN_REJECTED, CANCELLED, CLOSED]
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
