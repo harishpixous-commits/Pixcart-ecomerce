@@ -106,3 +106,13 @@ returns before/after payloads (ACCEPTANCE). 9 audit tests (24/24 identity-svc to
 the Slice-1 domain). LIVE-DB proof: a 3-entry chain built in SQL with the schema's exact
 this_hash rule verifies intact (all links LINKED), then a fraudulent amount change
 200->999 on entry 2 is DETECTED (that row's payload-hash check flips to BROKEN).
+
+Slice 15 (logistics tracking): FR-LOG-004 courier status normalisation (TypeScript,
+logistics-svc) - per-carrier raw->canonical maps (Delhivery/Bluedart/DTDC/India Post) onto
+the SubOrderLifecycle shipment subset; webhook+polling de-duplication (idempotent by
+provider event id or awb|status|time); POD required for delivered orders > Rs 2,000 (held
+otherwise); EDD recompute on NDR (bumped per attempt, capped 3) and cleared on delivery;
+48 h stale-feed detection; unknown courier status HELD as a mapping-needed ops task, never
+dropped (VALIDATION). 14/14 vitest incl. cross-slice proofs that the emitted event
+validates against the Slice-10 shipment.status.v1 schema and drives the Slice-11 timeline
+to DELIVERED.
