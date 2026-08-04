@@ -85,3 +85,13 @@ row_version for optimistic locking. 15/15 JUnit. LIVE-DB proof: ck_inv_nonneg re
 over-reservation, and an optimistic row_version race proves no lost update and no oversell
 (winner commits 1 row, stale writer 0 rows, loser's re-checked over-ATP retry refused;
 final reserved<=on_hand, zero oversold rows).
+
+Slice 13 (shopping cart): FR-CUS-007 multi-vendor cart (TypeScript, cart-checkout-svc) -
+pure/immutable: add/update/remove with the 1-10 per-line cap (add combines+clamps, update
+rejects over-cap), saved-for-later + move-back, per-vendor grouping, suspended-vendor
+auto-quarantine to saved-for-later with notice (RULES), guest-cart merge on login (union
+by listing, sum+clamp qty, no saved/active dup), 90-day TTL, and a read-only revalidation
+preview (price deltas per BRU-04, out-of-stock, qty-over-stock/cap, suspended) that never
+mutates. Emits checkout lines at the current approved price for the quote engine. 13/13
+vitest incl. a cross-slice proof that the cart feeds the Slice-3 FR-CUS-014 quote engine
+(grand total Rs 2,600, BRU-03 two-vendor split; suspended lines excluded).
