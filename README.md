@@ -50,3 +50,12 @@ unregistered-vendor exempt path with category guard). The doc's tax acceptance r
 verbatim: TN vendor + KA ship-to at 18% -> IGST 18%, taxable = price x100/118, reconciled
 to the paisa. 19/19 vitest, plus 2 cross-engine reconciliation tests proving the tax
 engine and the Slice-3 quote engine agree to the paisa across rates.
+
+Slice 9 (end-to-end composition proof): integration/e2e drives the REAL aggregates from
+four services - Payment (S4), Order + SubOrderLifecycle (S5), ReturnSaga (S7),
+SettlementEngine (S6) - through one customer journey, proving they interoperate. Three
+scenarios (happy path pay->split->deliver->settle->payout; return branch delivered->
+QC-pass->refund executed by the real Payment aggregate; failed-capture->no-order): 3/3
+JUnit. Companion live-ledger walk of the same journey balances every journal and closes
+the net of ALL accounts to 0.00. Test-only harness; services never import each other in
+prod (boundary note in integration/e2e/README.md).
