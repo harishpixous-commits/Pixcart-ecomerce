@@ -40,3 +40,13 @@ instrument (BRU-06 default; wallet needs consent) within the <=24h SLA, and emit
 settlement reversal whose vendor + commission clawbacks sum EXACTLY to the refund. 21/21
 JUnit (order-svc). LIVE-LEDGER proof: capture then QC-pass return nets every account
 (gateway/vendor/commission) to 0.00 - no money leaks - both journals balanced.
+Slice 8 (fee & tax engines): FR-FIN-001 commission (BRU-08 formula: category-slab
+commission + payment fee + logistics-if-platform-shipped - platform-funded promo, from
+versioned effective-dated schedules; deterministic replay; proportional fee reversal on
+refund with configurable payment-fee retention; +/-30% override bound) and FR-FIN-002
+GST/VAT (HSN->rate resolution effective-dated to order date, exactly-one-active-rate
+validation, CGST/SGST vs IGST by vendor-vs-ship-to state, inclusive back-calc per BRU-04,
+unregistered-vendor exempt path with category guard). The doc's tax acceptance runs
+verbatim: TN vendor + KA ship-to at 18% -> IGST 18%, taxable = price x100/118, reconciled
+to the paisa. 19/19 vitest, plus 2 cross-engine reconciliation tests proving the tax
+engine and the Slice-3 quote engine agree to the paisa across rates.

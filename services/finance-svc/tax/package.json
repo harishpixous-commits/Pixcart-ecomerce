@@ -1,0 +1,9 @@
+{
+  "name": "@pixcart/fee-tax",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Commission (FR-FIN-001, BRU-08) and GST/VAT (FR-FIN-002, BRU-04) engines. Pure, integer-paise, effective-dated. Consumed by cart-checkout quote engine and finance settlement.",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9" }
+}
