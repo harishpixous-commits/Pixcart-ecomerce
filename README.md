@@ -127,3 +127,15 @@ redeem<=balance, returns claw back points floored at zero, tiers with immediate 
 LIVE-DB proof: V005 migrates; ck_wal_nonneg blocks a wallet overdraft; uq_wal_reference
 blocks a refund replay; the promo-expiry query counts only the unexpired tranche;
 ck_loy_nonneg blocks an over-redemption.
+
+Slice 17 (address & serviceability): FR-LOG-001 serviceability/rate-shopping (TS,
+logistics-svc) - PIN-master validation, courier eligibility (weight cap, COD capability),
+allocation by cost x SLA-score(OTIF) x capability with per-zone configurable weights and
+deterministic tie-break, EDD with risk-tier promise buffers, and the BRU-05 COD gate.
+This is now the AUTHORITATIVE source of the serviceablePin fact the cart/quote previously
+took as a pre-computed boolean - proven by cross-slice tests (serviceable PIN -> quote
+prices; unserviceable -> quote rejects with PIN_NOT_SERVICEABLE). FR-CUS-005 AddressBook
+(Java, identity-svc) - max 10 addresses, auto-default and promotion on delete, validation
+(PIN in master, E.164 mobile, line1>=6, URL filter), and the immutable order-snapshot rule
+proven: editing OR deleting the book entry afterwards leaves the order's snapshot
+untouched. logistics-svc 29/29, identity-svc 32/32.
