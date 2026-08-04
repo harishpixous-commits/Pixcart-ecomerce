@@ -116,3 +116,14 @@ otherwise); EDD recompute on NDR (bumped per attempt, capped 3) and cleared on d
 dropped (VALIDATION). 14/14 vitest incl. cross-slice proofs that the emitted event
 validates against the Slice-10 shipment.status.v1 schema and drives the Slice-11 timeline
 to DELIVERED.
+
+Slice 16 (wallet & loyalty): FR-CUS-019 closed-loop wallet + FR-CUS-020 loyalty (Java,
+finance-svc) with V005 schema. Wallet: CASH bucket (never expires) + PROMO bucket (90-day
+default expiry), spend consumes PROMO earliest-expiry-first then CASH, debit<=balance so
+negative is impossible, idempotent on reference, refund-to-wallet credits CASH (BRU-06).
+Loyalty: integer points (1pt=Rs1), accrual admitted only after the return window lapses,
+redeem<=balance, returns claw back points floored at zero, tiers with immediate upgrade and
+30-day downgrade grace (re-qualify cancels). 13 tests (finance-svc 23/23 incl. settlement).
+LIVE-DB proof: V005 migrates; ck_wal_nonneg blocks a wallet overdraft; uq_wal_reference
+blocks a refund replay; the promo-expiry query counts only the unexpired tranche;
+ck_loy_nonneg blocks an over-redemption.
