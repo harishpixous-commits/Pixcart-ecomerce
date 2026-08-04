@@ -68,3 +68,11 @@ they are LIVE: every schema compiles under Ajv, a payload shaped as the real dom
 emits validates (wrong ones rejected), each event validates against the envelope, the
 OpenAPI doc resolves, and event sub-order states are a subset of the OpenAPI Order state
 enum (mirrors SubOrderLifecycle). 9/9 vitest.
+
+Slice 11 (notification service): FR-CUS-022 policy gate + FR-CUS-016/LOG-004 timeline
+projector, provider-agnostic (dispatch is a port). Policy: transactional cannot be opted
+out (channel choice only); promotional needs active consent (BRU-12) and respects quiet
+hours 22:00-08:00 local; SMS needs a DLT template id (FR-MKT-004); legal STOP wins.
+Timeline: pure fold of the Slice-10 events into a per-sub-order status timeline, idempotent
+by (eventType,eventId). 19/19 vitest incl. a cross-slice proof that the projector's event
+inputs validate against the Slice-10 JSON Schemas (read model and contracts cannot drift).

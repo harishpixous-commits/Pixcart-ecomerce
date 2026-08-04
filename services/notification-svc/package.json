@@ -1,0 +1,14 @@
+{
+  "name": "@pixcart/notification-svc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Notification service (FR-CUS-022): timeline projector (FR-CUS-016/LOG-004) + policy gate (transactional vs promotional, BRU-12 consent, quiet hours, DLT). Provider-agnostic dispatch ports. Consumes contracts/events (Slice 10).",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}
