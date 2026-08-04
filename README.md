@@ -95,3 +95,14 @@ preview (price deltas per BRU-04, out-of-stock, qty-over-stock/cap, suspended) t
 mutates. Emits checkout lines at the current approved price for the quote engine. 13/13
 vitest incl. a cross-slice proof that the cart feeds the Slice-3 FR-CUS-014 quote engine
 (grand total Rs 2,600, BRU-03 two-vendor split; suspended lines excluded).
+
+Slice 14 (audit hash-chain): FR-ADM-013 AuditChain SDK (Java, identity-svc) - append-only
+(NO mutate/delete API, per RULES), each entry's this_hash = SHA-256(prev_hash ||
+canonicalBytes(record)) chaining from a 32-byte genesis, matching the Vol.6
+adm_audit_event columns. Deterministic injective canonicalisation (length-prefixed sorted
+fields, null!=empty) so hashes reproduce byte-for-byte for the daily tamper check.
+verify() re-derives every link and pinpoints the first broken index; search-by-entity
+returns before/after payloads (ACCEPTANCE). 9 audit tests (24/24 identity-svc total incl.
+the Slice-1 domain). LIVE-DB proof: a 3-entry chain built in SQL with the schema's exact
+this_hash rule verifies intact (all links LINKED), then a fraudulent amount change
+200->999 on entry 2 is DETECTED (that row's payload-hash check flips to BROKEN).
