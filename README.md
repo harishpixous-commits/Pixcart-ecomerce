@@ -76,3 +76,12 @@ hours 22:00-08:00 local; SMS needs a DLT template id (FR-MKT-004); legal STOP wi
 Timeline: pure fold of the Slice-10 events into a per-sub-order status timeline, idempotent
 by (eventType,eventId). 19/19 vitest incl. a cross-slice proof that the projector's event
 inputs validate against the Slice-10 JSON Schemas (read model and contracts cannot drift).
+
+Slice 12 (inventory reservation): FR-VEN-004 InventoryItem (Java) - ATP = on_hand -
+reserved - safety_stock; reserve at order-confirm (idempotent on holdRef, refused past
+ATP = the anti-oversell gate), commit on manifest (decrement on_hand+reserved), release
+on cancel/RTO/QC-pass, restock on GRN inbound; mirrors inv_item + ck_inv_nonneg and uses
+row_version for optimistic locking. 15/15 JUnit. LIVE-DB proof: ck_inv_nonneg rejects
+over-reservation, and an optimistic row_version race proves no lost update and no oversell
+(winner commits 1 row, stale writer 0 rows, loser's re-checked over-ATP retry refused;
+final reserved<=on_hand, zero oversold rows).
