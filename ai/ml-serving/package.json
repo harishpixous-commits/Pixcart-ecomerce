@@ -1,0 +1,9 @@
+{
+  "name": "@pixcart/ml-serving",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Recommendation serving (FR-AI-003 + FR-CUS-013 rules): two-stage candidates, pre-ranking filters, consent-gated personalisation, diversity, sponsored cap, top-1 epsilon guard, model->heuristic->curated fallback. Learned ranker is injected.",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9" }
+}

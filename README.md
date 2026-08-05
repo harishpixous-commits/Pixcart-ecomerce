@@ -164,3 +164,15 @@ AFTER fusion so a stale index cannot surface non-LIVE/out-of-stock/unserviceable
 (fails closed on unknown ids), and sponsored blending capped at 2 of the top 10 with
 mandatory "Sponsored" labels. 20/20 vitest. OpenSearch + vector store remain edge adapters
 (not runnable in this sandbox) supplying the two ranked lists.
+
+Slice 20 (recommendations): FR-AI-003 serving platform enforcing FR-CUS-013 rules (TS,
+ai/ml-serving). Two-stage: candidate generation (co-visitation/embedding/popularity/
+personalised, source-unioned) with personalised-only candidates DROPPED absent consent
+(BRU-12) and attribution stripped so explanations cannot leak history; pre-ranking filters
+(LIVE+in-stock+serviceable, no self-recommend of the seed, category exclusions, fail-closed
+on unknown); ranking via an INJECTED learned ranker with the model->heuristic->curated
+fallback chain that always yields a full slate; business re-rank with a per-vendor cap of
+ceil(size/3) forcing >=3 distinct vendors in a 10-rail (backfilling to stay full and
+reporting diversityMet honestly when the pool has fewer) and the FR-AI-003 top-1 EPSILON
+GUARD so re-rank cannot depress the best relevance beyond epsilon; sponsored blend <=20%,
+labelled, never at position 1. Every organic item carries a "why this". 21/21 vitest.
