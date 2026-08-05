@@ -218,6 +218,22 @@ ratchet in CI (currently 40, never lowered silently). Building the extractor als
 that a 3-letter regex silently dropped the entire FR-AI family, which had understated the
 catalogue as 83.
 
+Slice 24 (catalogue governance): FR-ADM-005 + FR-ADM-006 (Java, catalogue-svc) - the first
+bite out of the ADM gap the traceability report exposed. CategoryGovernance: tree depth
+capped at 5 levels (unconstructible beyond), typed attribute schemas with mandatory/facet
+flags, draft->publish versioning where publish is atomic and returns an ImpactPreview naming
+the newly-mandatory attributes, affected live-listing count and the 14-day grace end; guards
+that REFUSE rather than warn - no deleting a node with live listings (merge/move instead),
+no attribute type change without a migration-plan reference, no enum-value removal while
+referenced (and an enum can never be emptied); facets regenerate FROM the schema and appear
+only at >=100 listings carrying values. BrandRegistry: normalised brand-name dedupe (case,
+punctuation and spacing variants all collide), dated-and-expiring authorisations with expiry
+ENFORCED by the mayListBrand gate that FR-ADM-004 calls to auto-block infringement, and the
+takedown workflow with a 48h decision SLA, 1h execution window, mandatory counter-notice
+path and an append-only case log. Both documented acceptance scenarios run verbatim - the
+Sarees 'fabric' mandatory-attribute walk and the accepted-takedown execution. 18 new tests
+(catalogue-svc 9 -> 27); repo total 355; FR coverage 41% -> 43%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
