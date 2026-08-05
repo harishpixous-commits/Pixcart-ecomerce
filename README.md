@@ -286,6 +286,20 @@ the last Super Admin cannot be removed; and the SoD ruleset is versioned, correc
 FINANCE under SOD-01 and showing SUPER_ADMIN tripping both rules rather than hiding it. 14 new
 tests (identity-svc 65 -> 79); repo total 411; FR coverage 48% -> 49%, ratchet raised to 48.
 
+Slice 28 (API & integration management): FR-ADM-016 (Java, identity-svc). The revoked-key
+acceptance scenario is met STRUCTURALLY: authorise() appends every decision - allowed or refused
+- to the key's usage log in the same call, so a rejected request cannot fail to appear, and a
+revoked key reports 401 KEY_REVOKED even after it would also have expired (revocation is the
+honest reason). Scopes come from a published catalogue and are bounded upward by the plan tier,
+so a SANDBOX key can never obtain write authority and SETTLEMENT_READ stays partner-only. Keys
+auto-expire at 12 months with rotation reminders at exactly T-30 and T-7 (and stop nagging once
+expired). Per-key sliding-window rate limits come from the tier (60/min sandbox), returning 429
+RATE_LIMITED and recovering as the window slides. Webhooks require HTTPS, a >=32-char signing
+secret, at least one event type and a challenge token, with ownership proven only by echoing the
+EXACT token; the retry ladder is asserted against the documented 1m/5m/30m/2h/6h schedule delay
+by delay, then dead-letters, and UI redrive clears the dead letter and restarts the ladder from
+the top. 12 new tests (identity-svc 79 -> 91); repo total 423; FR coverage 49% -> 50%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
