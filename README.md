@@ -151,3 +151,16 @@ penny-drop + signed agreement; penny-drop must credit AND name-match; GSTIN must
 declared PAN; live-verify pending blocks verification; bank/GSTIN change forces re-KYC and
 suspends selling; unregistered-GST vendors need a turnover self-declaration and are
 restricted to exempt categories. identity-svc 48/48 JUnit.
+
+Slice 19 (discovery: query understanding + hybrid fusion): FR-CUS-009/010 (TS,
+discovery-svc). Query: sanitisation, banned-term policy message, constraint extraction
+(under/above/between with k/lakh/comma/₹ notations, star rating) including TANGLISH
+postpositions ("5k kku keela"), Tamil script preserved as free text (graceful fallback),
+inverted price range dropped, and attribute-schema validation that drops constraints a
+category does not declare. The doc's own example query "office chair for back pain under
+8k" is a verbatim test. Fusion: reciprocal-rank fusion score = Σ weight/(K+rank) with
+per-category weights (proven to change ordering), the approved-only index filter applied
+AFTER fusion so a stale index cannot surface non-LIVE/out-of-stock/unserviceable listings
+(fails closed on unknown ids), and sponsored blending capped at 2 of the top 10 with
+mandatory "Sponsored" labels. 20/20 vitest. OpenSearch + vector store remain edge adapters
+(not runnable in this sandbox) supplying the two ranked lists.
