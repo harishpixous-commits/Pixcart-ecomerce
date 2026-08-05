@@ -139,3 +139,15 @@ prices; unserviceable -> quote rejects with PIN_NOT_SERVICEABLE). FR-CUS-005 Add
 (PIN in master, E.164 mobile, line1>=6, URL filter), and the immutable order-snapshot rule
 proven: editing OR deleting the book entry afterwards leaves the order's snapshot
 untouched. logistics-svc 29/29, identity-svc 32/32.
+
+Slice 18 (vendor registration & KYC): FR-VEN-001 (Java, identity-svc). KycValidators -
+GSTIN mod-36 check digit (verified against Pixous's own real published GSTIN
+33AAMCP3151E1ZO, with tampered variants rejected), GSTIN structure + state code, PAN
+extracted from the GSTIN for a free cross-check, PAN format + holder-type + 5th-char
+name-initial check, IFSC structure, name similarity with corporate-suffix canonicalisation
+(PVT LTD == PRIVATE LIMITED -> 1.0) gated at >=0.8, document type/size (pdf/jpg/png <=5MB).
+VendorKycApplication - the BRU-01 transact gate requiring ALL THREE of verified KYC +
+penny-drop + signed agreement; penny-drop must credit AND name-match; GSTIN must embed the
+declared PAN; live-verify pending blocks verification; bank/GSTIN change forces re-KYC and
+suspends selling; unregistered-GST vendors need a turnover self-declaration and are
+restricted to exempt categories. identity-svc 48/48 JUnit.
