@@ -268,6 +268,24 @@ exactly at the window end with no publish, unpublish or mutation - because sched
 evaluated at read time. 25 new tests (marketing-svc 18 -> 43); repo total 397; FR coverage
 47% -> 48%, ratchet raised to 47.
 
+Slice 27 (platform administration): FR-ADM-014 + FR-ADM-017 (Java, identity-svc).
+SystemSettings is EFFECTIVE-DATED, which is what makes the documented acceptance scenario true
+by construction: with the Fashion return window changed 7->10 days, an order placed before the
+change still resolves 7 for ever while a new order resolves 10 - retroactive mutation is not
+expressible and nothing runs at the boundary. Critical keys in production require a change note
+AND a second-person review who differs from the author; feature flags default OFF on create;
+guard rules (COD cap <= Rs 50k, return window <= 90 days) and dependency checks (cannot disable
+all, or the last, payment method) fire at save with every violation reported at once; rollback
+re-asserts a prior value as a new version so history stays append-only and intermediate values
+remain resolvable at their own moments. SecurityAdministration: console access requires an
+allow-listed CIDR AND satisfied MFA - neither alone suffices - with real IPv4 CIDR matching
+(/8, /24, /32, /0 and malformed input all covered); privileged roles cannot opt out of MFA;
+break-glass demands two DISTINCT custodians plus a substantive justification and schedules its
+own 24-hour auto-review at the moment of opening; permission changes preview their blast radius;
+the last Super Admin cannot be removed; and the SoD ruleset is versioned, correctly flagging
+FINANCE under SOD-01 and showing SUPER_ADMIN tripping both rules rather than hiding it. 14 new
+tests (identity-svc 65 -> 79); repo total 411; FR coverage 48% -> 49%, ratchet raised to 48.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
