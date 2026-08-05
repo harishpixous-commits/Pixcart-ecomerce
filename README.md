@@ -300,6 +300,20 @@ EXACT token; the retry ladder is asserted against the documented 1m/5m/30m/2h/6h
 by delay, then dead-letters, and UI redrive clears the dead letter and restarts the ladder from
 the top. 12 new tests (identity-svc 79 -> 91); repo total 423; FR coverage 49% -> 50%.
 
+Slice 29 (platform promotions console): FR-ADM-008 (TS, marketing-svc - the operator superset of
+the FR-MKT-001/002 engine already there). Budget approval required at or above Rs 1 lakh (below
+it, none). EXCLUSIVE-EVENT CONFLICTS ARE DETECTED AT SAVE, not discovered later: an exclusive
+campaign overlapping another exclusive one for the same audience is refused, adjacent windows are
+allowed, distinct segments are allowed, and an ALL-audience exclusive still conflicts with a
+segmented one. The 5% holdout is maintained by deterministic bucketing rather than stored state -
+stable per user, lands within 3-7% over 5,000 users, and a held-out user is NOT eligible even
+inside the window, which is what makes incrementality measurable. The price-integrity gate stops
+fake discounts: a listing whose MRP was raised within 30 days before the event start cannot join,
+while a stable or never-raised MRP can. Burn accumulates against the cap and is refused beyond
+it; incremental ROI is measured treated-vs-holdout per user and returns NULL rather than a
+fabricated number when spend is zero or a cohort is empty. 20 new tests (marketing-svc 43 -> 63);
+FR coverage 50% -> 51%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
