@@ -44,6 +44,9 @@ jobs:
       - name: Run TypeScript tests
         run: ./scripts/test-all.sh ts
 
+      - name: Requirements traceability (ratchet)
+        run: python3 scripts/traceability.py --check
+
   # The Spring Boot services need Maven Central, which is unavailable in the development
   # sandbox but present here — this is the job that turns "authored for CI" into "built".
   build-spring-services:

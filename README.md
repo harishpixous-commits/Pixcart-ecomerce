@@ -206,6 +206,18 @@ the sandbox could only author), security (gitleaks + tracked-secret assertion + 
 contract (event schema/OpenAPI validation), integration (migrations against real MySQL 8).
 ## Verifying this repository yourself
 
+Slice 23 (requirements traceability): scripts/traceability.py GENERATES docs/TRACEABILITY.md
+from the code - every source file cites the requirement ids it implements, and the
+denominator is the requirement catalogue read straight out of the SRS volumes (98 FRs,
+matching the suite). The honest result: 40 of 98 FRs (41%) have implementing code, 34 have
+tests citing them, 11 BRUs are cited. The 58 unimplemented FRs are dominated by console and
+UI-surface requirements - ADM 13 (admin dashboard, CMS, settings, reports), AI 12,
+CUS 11 - not by the transactional core, which is where the 337 tests live. A generated
+report cannot drift from the code or flatter it; --check enforces a coverage floor as a
+ratchet in CI (currently 40, never lowered silently). Building the extractor also caught
+that a 3-letter regex silently dropped the entire FR-AI family, which had understated the
+catalogue as 83.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
