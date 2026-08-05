@@ -234,6 +234,23 @@ path and an append-only case log. Both documented acceptance scenarios run verba
 Sarees 'fabric' mandatory-attribute walk and the accepted-takedown execution. 18 new tests
 (catalogue-svc 9 -> 27); repo total 355; FR coverage 41% -> 43%.
 
+Slice 25 (vendor lifecycle & user administration): FR-ADM-003 + FR-ADM-002 (Java,
+identity-svc). VendorLifecycle - the documented acceptance scenario proven END TO END against
+the real Slice-14 AuditChain: a fraud-flagged application approved by an ordinary admin stops
+at PENDING_SECOND_APPROVAL and only a Super Admin's confirmation activates it, with BOTH
+actions appended to the tamper-evident chain and the chain still verifying. Same-person second
+approval refused (SoD). KYC-not-green needs a documented override AND super-admin authority.
+Rejection needs a template; a FRAUD_SIGNALS rejection starts the 30-day re-application
+cooldown. Suspension freezes listings and payouts but PRESERVES the duty to service placed
+orders; restriction freezes listings only. Off-boarding is financially safe - refused while
+open orders, unsettled payables or unrecovered balances remain, each blocker named.
+UserAdministration - PII masked by default with a reveal that carries its own audit entry (an
+unaudited reveal is not expressible), ad-hoc customer deletion REFUSED in favour of the
+privacy workflow, MFA reset requiring identity re-proof plus a second approver, staff email
+domain allow-list, 60-day dormancy auto-disable, and the FR-ADM-017 SoD check expressed
+against the Vol.2 §2.4 matrix. 17 new tests (identity-svc 48 -> 65); repo total 372;
+FR coverage 43% -> 47%, ratchet raised to 46.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
