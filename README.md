@@ -176,3 +176,16 @@ ceil(size/3) forcing >=3 distinct vendors in a 10-rail (backfilling to stay full
 reporting diversityMet honestly when the pool has fewer) and the FR-AI-003 top-1 EPSILON
 GUARD so re-rank cannot depress the best relevance beyond epsilon; sponsored blend <=20%,
 labelled, never at position 1. Every organic item carries a "why this". 21/21 vitest.
+
+Slice 21 (risk & fraud decisioning): FR-AI-010 (TS, risk-svc) - closes the last
+pre-computed input by PRODUCING the fraudScore the COD gate consumes. Per-flow velocity
+rules (card-testing, instrument cycling, order/device velocity, COD-refusal history, promo
+velocity, self-referral match, serial returner, repeat-offender strikes) emit interpretable
+reason codes; the ML model is injected and a failing/out-of-range model degrades to
+rules-only. Actions allow/step-up/hold-review/deny on per-flow thresholds. TWO STRUCTURAL
+SAFETY INVARIANTS: (1) no black-box denial - proven in two layers, the model weight alone
+caps a rules-free score below any deny threshold AND the invariant refuses to deny without
+an interpretable reason even under deliberately permissive thresholds; (2) above the
+per-flow monetary cap an automatic decision escalates to a human hold instead of denying
+(proven: identical case denies AT the cap, escalates one paisa above). 18/18 vitest incl. a
+cross-slice proof that a COD-abusing customer's score makes the quote engine refuse COD.

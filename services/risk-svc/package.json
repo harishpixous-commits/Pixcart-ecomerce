@@ -1,0 +1,9 @@
+{
+  "name": "@pixcart/risk-svc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Risk & fraud decisioning (FR-AI-010): per-flow velocity rules + injected ML model, actions {allow, step-up, hold-review, deny} with explainable reason codes. Producer of risk.decision.v1 and of the fraudScore the COD gate consumes.",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9", "zod": "^3.23.8" }
+}
