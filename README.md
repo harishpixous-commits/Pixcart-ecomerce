@@ -251,6 +251,23 @@ domain allow-list, 60-day dormancy auto-disable, and the FR-ADM-017 SoD check ex
 against the Vol.2 §2.4 matrix. 17 new tests (identity-svc 48 -> 65); repo total 372;
 FR coverage 43% -> 47%, ratchet raised to 46.
 
+Slice 26 (CMS): FR-ADM-007 (TS, marketing-svc, which owns CMS_BANNERS per the Vol.2 §2.4
+matrix). Publish is GATED and every gate names its violation: accessibility lint requiring alt
+text on every image including variant images, image-slot dimension enforcement, an injected
+link checker, a mandatory legal review on POLICY pages (not on help pages), A/B weights that
+must sum to 100 and be positive, and no inverted schedule window - a failing gate blocks the
+publish entirely, leaving nothing live and no version recorded. Versioned publish with rollback
+that re-publishes a prior version as a NEW version, so history is append-only and v2 survives a
+rollback to v1 - and rollback RE-RUNS the gates, so it cannot resurrect a page whose links have
+since died. Emergency unpublish takes effect immediately and returns the <=1 min propagation
+deadline. Deterministic A/B bucketing (same user, same variant; 70/30 split lands within
+65-75% over 4,000 users). The documented acceptance scenario runs verbatim - a Fri 00:00 to
+Sun 23:59 banner targeted at Tamil-language users, with Tamil alt text: invisible before the
+window, visible ONLY to ta-* users during it (ta-LK matches on prefix), and auto-retiring
+exactly at the window end with no publish, unpublish or mutation - because scheduling is
+evaluated at read time. 25 new tests (marketing-svc 18 -> 43); repo total 397; FR coverage
+47% -> 48%, ratchet raised to 47.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
