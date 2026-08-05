@@ -1,0 +1,148 @@
+name: pixcart-ci
+
+# Implements the runnable stages of Documentation Suite v1.0, Vol. 11 §11.4:
+#   1. Validate    — lint/typecheck + unit tests (all modules)
+#   2. Security    — secret scan + dependency audit
+#   4. Contract    — event-schema + OpenAPI validation
+#   5. Integration — migrations and DB invariants against real MySQL 8
+# Stages 3 (image build/sign/SBOM), 6-8 (GitOps deploy, DAST, E2E/perf, canary promote)
+# require registry, cluster and staging credentials and are intentionally not defined here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------- stage 1
+  validate-java:
+    name: "1. Validate — Java domain"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install JUnit console standalone
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq junit5
+      - name: Run Java domain tests
+        run: ./scripts/test-all.sh java
+
+  validate-ts:
+    name: "1. Validate — TypeScript"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run TypeScript tests
+        run: ./scripts/test-all.sh ts
+
+  # The Spring Boot services need Maven Central, which is unavailable in the development
+  # sandbox but present here — this is the job that turns "authored for CI" into "built".
+  build-spring-services:
+    name: "1. Validate — Spring Boot build"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [identity-svc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: mvn verify
+        working-directory: services/${{ matrix.service }}
+        run: mvn -B -ntp verify
+
+  # ---------------------------------------------------------------- stage 2
+  security:
+    name: "2. Security — secrets & dependencies"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assert no env files are tracked
+        run: |
+          if git ls-files | grep -E '(^|/)\.env|\.env$|/\.secrets/'; then
+            echo "::error::a secret-bearing file is tracked"; exit 1
+          fi
+          echo "no secret-bearing files tracked"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit (high+ fails)
+        run: |
+          status=0
+          for pkg in $(find services ai contracts -maxdepth 3 -name package.json -not -path '*/node_modules/*'); do
+            dir=$(dirname "$pkg")
+            ( cd "$dir" && npm install --no-audit --no-fund >/dev/null 2>&1 \
+              && npm audit --audit-level=high ) || status=1
+          done
+          exit $status
+
+  # ---------------------------------------------------------------- stage 4
+  contracts:
+    name: "4. Contract — event schemas & OpenAPI"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate event schemas, envelope and OpenAPI
+        working-directory: contracts
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+      - name: OpenAPI breaking-change diff against main
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main --depth=1
+          if git diff --name-only origin/main -- contracts/openapi | grep -q .; then
+            echo "OpenAPI changed — a breaking-change diff gate belongs here (oasdiff)."
+            echo "Breaking changes on /v1 must block per Vol. 11 §11.4 stage 4."
+          else
+            echo "no OpenAPI changes"
+          fi
+
+  # ---------------------------------------------------------------- stage 5
+  integration-db:
+    name: "5. Integration — migrations on MySQL 8"
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: pixcart_verify
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MySQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client
+      - name: Apply migrations and verify invariants
+        env:
+          MYSQL_PWD: root
+        run: |
+          # the verifier speaks the mariadb client CLI; alias it to mysql for this runner
+          sudo ln -sf "$(command -v mysql)" /usr/local/bin/mariadb
+          sudo ln -sf "$(command -v mysqladmin)" /usr/local/bin/mariadb-admin
+          MYSQL_ARGS="-h 127.0.0.1 -P 3306 -u root" ./scripts/verify-migrations.sh

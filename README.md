@@ -189,3 +189,34 @@ an interpretable reason even under deliberately permissive thresholds; (2) above
 per-flow monetary cap an automatic decision escalates to a human hold instead of denying
 (proven: identical case denies AT the cap, escalates one paisa above). 18/18 vitest incl. a
 cross-slice proof that a COD-abusing customer's score makes the quote engine refuse COD.
+
+Slice 22 (verification & CI): the repo is now verifiable by anyone, not just asserted.
+scripts/test-all.sh runs EVERY module (Java domains via JDK+JUnit console, TS via vitest),
+auto-discovering TS packages, and prints an authoritative total: ALL GREEN - 337 tests.
+(Writing it caught two bugs in itself: a filename exclusion pattern that wrongly skipped
+VendorKycApplication.java, and a JUnit flag that suppressed the counts - and it corrected
+the running total previously quoted by hand as 353. The per-module numbers were right; the
+addition was not.) scripts/verify-migrations.sh applies V001-V005 in order (25 tables) and
+re-runs 7 invariants on a live engine: ck_inv_nonneg blocks overselling, ck_sub_order_state
+rejects unknown states, ck_wal_nonneg blocks a wallet overdraft, ck_loy_nonneg blocks an
+over-redemption, every journal balances, capture+refund closes ALL accounts to 0.00, and
+uq_ledger_event_leg blocks a ledger replay. .github/workflows/ci.yml implements the runnable
+stages of Vol.11 §11.4 - validate (Java/TS/Spring-Boot mvn verify, which finally BUILDS what
+the sandbox could only author), security (gitleaks + tracked-secret assertion + npm audit),
+contract (event schema/OpenAPI validation), integration (migrations against real MySQL 8).
+## Verifying this repository yourself
+
+```bash
+./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
+./scripts/test-all.sh java       # Java domain layers only
+./scripts/test-all.sh ts         # TypeScript modules only
+./scripts/verify-migrations.sh   # apply V001-V005 and re-run the DB invariants
+```
+
+`test-all.sh` needs a JDK 21 and the JUnit console standalone (`apt-get install junit5`) for
+the Java modules, and Node 20 for the TypeScript ones. `verify-migrations.sh` starts a
+throwaway MariaDB by default, or point it at MySQL 8 with
+`MYSQL_ARGS="-h 127.0.0.1 -P 3306 -u root -proot"`.
+
+CI (`.github/workflows/ci.yml`) runs the same two scripts plus `mvn verify` for the Spring
+Boot services, secret scanning, dependency audit and contract validation.
