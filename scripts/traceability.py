@@ -22,15 +22,21 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import re
 import sys
 from collections import Counter, defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The requirement catalogue is VENDORED into the repository so this script is
+# self-contained: it must run for anyone who clones the repo, with no dependency on the
+# authoring workspace. (Learned the hard way — a workspace reset once left the generator
+# unable to find its own denominator.) The SRS globs remain as an optional refresh path.
+CATALOGUE_JSON = os.path.join(ROOT, "docs", "requirements", "catalogue.json")
 SRS_GLOBS = [
-    os.path.join(ROOT, "docs", "srs-source", "v03*.js"),   # if vendored into the repo
-    "/home/claude/ecomdoc/v03*.js",                        # authoring workspace fallback
+    os.path.join(ROOT, "docs", "srs-source", "v03*.js"),
+    "/home/claude/ecomdoc/v03*.js",
 ]
 CODE_ROOTS = ["services", "ai", "contracts", "integration", "infra"]
 CODE_EXT = (".java", ".ts", ".sql", ".json", ".yaml", ".yml")
@@ -41,11 +47,20 @@ BRU_RE = re.compile(r"\bBRU-\d{2}\b")
 TEST_HINT = re.compile(r"(^|/)(test|tests)/|Test\.java$|\.spec\.ts$")
 
 # Coverage floor for --check; raise this as slices land, never lower it silently.
-COVERAGE_FLOOR = 50   # ratchet against regression, never lowered silently
+COVERAGE_FLOOR = 51   # ratchet against regression, never lowered silently
 
 
 def load_catalogue() -> dict[str, str]:
-    """Requirement id -> name, read from the SRS volumes (the specification itself)."""
+    """
+    Requirement id -> name. Prefers the vendored catalogue (always present in a clone); falls
+    back to parsing the SRS volumes when they are available, which is how the vendored file is
+    refreshed if the specification changes.
+    """
+    if os.path.exists(CATALOGUE_JSON):
+        with open(CATALOGUE_JSON, encoding="utf-8") as fh:
+            vendored = json.load(fh)
+        if vendored:
+            return vendored
     files: list[str] = []
     for pattern in SRS_GLOBS:
         files.extend(sorted(glob.glob(pattern)))

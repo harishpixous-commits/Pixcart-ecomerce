@@ -1,0 +1,9 @@
+{
+  "name": "@pixcart/reporting-svc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operational reports (FR-ADM-009): replica/lakehouse-only reads, bounded parameters, recipient domain allow-list, PII column gating, run log with SHA-256 checksum and row count, signed expiring links, daily IST scheduling.",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9", "@types/node": "^22.5.0" }
+}

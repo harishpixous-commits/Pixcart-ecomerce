@@ -314,6 +314,23 @@ it; incremental ROI is measured treated-vs-holdout per user and returns NULL rat
 fabricated number when spend is zero or a cohort is empty. 20 new tests (marketing-svc 43 -> 63);
 FR coverage 50% -> 51%.
 
+Slice 30 (operational reports + traceability made self-contained): FR-ADM-009 (TS,
+reporting-svc). The documented acceptance scenario runs verbatim - a daily settlements report
+completing at 07:00 IST delivers a signed, 24h-expiring link and records a REAL SHA-256 checksum
+plus row count in the run log (identical rows hash identically; one changed cell or a re-ordered
+column changes the hash). Reading the OLTP primary is refused structurally before any work
+happens; replica and lakehouse are accepted, and every run is footnoted with source, replica
+freshness, range and filters. Parameters are bounded per report kind (inventory 31 days,
+settlements 366), inverted and future-ending ranges refused; recipients must be on the domain
+allow-list with the offending domain named; PII columns are role-gated and named in the refusal;
+and every violation is reported at once rather than one per attempt. The daily IST schedule is
+COMPUTED, so a tick at the run instant resolves to tomorrow and cannot fire twice.
+Also: the workspace was reset mid-slice, which exposed that the Slice-23 traceability generator
+read its requirement catalogue from a path OUTSIDE the repo - so it could not run for anyone who
+merely cloned it. The catalogue (all 98 FRs) is now VENDORED at docs/requirements/catalogue.json
+and the script prefers it, with the SRS globs kept as a refresh path. 18 new tests; repo total
+461; FR coverage 51% -> 52%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
