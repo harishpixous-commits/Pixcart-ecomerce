@@ -331,6 +331,22 @@ merely cloned it. The catalogue (all 98 FRs) is now VENDORED at docs/requirement
 and the script prefers it, with the SRS globs kept as a refresh path. 18 new tests; repo total
 461; FR coverage 51% -> 52%.
 
+Slice 31 (invoicing & credit notes): FR-FIN-003 (Java, finance-svc) - closes the money story with
+the statutory documents. Three properties are STRUCTURAL: (1) immutability - Document exposes no
+setter, amend or update method (asserted by reflection), so corrections exist only as credit
+notes; (2) GAPLESS NUMBERING - mandatory GST fields are validated BEFORE a sequence is allocated,
+so three rejected attempts leave the next good invoice at 000002 rather than 000005, and the
+series restarts per vendor+financial-year on the Indian April boundary; (3) EXACT PROPORTIONAL
+REVERSAL - credit amounts are cumulative(returned) minus already-credited, so three successive
+1-of-3 credit notes on an awkward amount (1000.01 taxable, 90.01 SGST) sum to EXACTLY the
+original with no paisa leaked or created. The documented acceptance scenario runs verbatim: a
+1-of-3 partial return produces a credit note referencing the original number, carrying one third
+of the taxable value and of each tax component, with both documents in the customer's set.
+Also: over-crediting refused, credit notes cannot themselves be credited, tamper-hash per
+document, and the e-invoice lifecycle - pending-IRN when the GSP is down, hard alert at 20h, IRN
+attach once only, and cancellation honouring the 24h window before directing the caller to a
+credit note. 16 new tests (finance-svc 23 -> 39); repo total 477; FR coverage 52% -> 53%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
