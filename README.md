@@ -384,6 +384,23 @@ and killed when their session is revoked or evicted. Recovery codes: exactly 10,
 spending them all forces identity re-verification. 25 new tests (identity-svc 91 -> 116); repo
 total 523; FR coverage 55% -> 57%.
 
+Slice 34 (pickup, manifest & handover): FR-LOG-002 + FR-LOG-003 (TS, logistics-svc). The property
+this slice guarantees is that LIABILITY NEVER TRANSFERS SILENTLY: a shipment reports SHIPPED and
+its settlement risk flips to the carrier ONLY on a recorded handover carrying rider identity -
+a manifest merely existing changes nothing, which the tests assert per-AWB. Pickup: slot-within-
+location-hours, label required, same-day 14:00 cut-off (next-day slots still bookable after it),
+inverted and past slots refused, Scheduled->Attempted->Completed/Failed with the documented
+18:00-failure acceptance case auto-booking the next slot, and escalation on the SECOND CONSECUTIVE
+failure - a success clears the streak, and couriers and locations are tracked independently.
+Manifest: only labelled AND pickup-booked shipments manifestable, duplicate AWBs refused,
+tamper-proof checksum that ignores line order but not content, DUPLICATE SCANS IDEMPOTENT keeping
+the first evidence, offline OTP fallback requiring a photo, and 180-day evidence retention. The
+documented acceptance scenario runs verbatim - 10 manifested, 9 scanned: closure is BLOCKED, a
+late scan resolves it and closes cleanly, OR a substantive exception note by a NAMED operator
+permits closure while shipping only the 9 actually handed over and RECORDING the gap rather than
+erasing it; the unscanned shipment never gains carrier liability. 24 new tests (logistics-svc
+29 -> 53); repo total 547; FR coverage 57% -> 59%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
