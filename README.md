@@ -365,6 +365,25 @@ composite on the documented 60/25/15 weighting with the weights asserted to sum 
 tiering, and a recency trend that is positive for an improving listing and zero for a flat one.
 21 new tests (catalogue-svc 27 -> 48); repo total 498; FR coverage 53% -> 55%.
 
+Slice 33 (login, sessions & MFA): FR-CUS-002 + FR-CUS-003 (Java, identity-svc). The TOTP is a
+REAL RFC 6238 implementation - HMAC-SHA1 over the big-endian time counter with RFC 4226 dynamic
+truncation - and it is verified against the PUBLISHED TEST VECTORS in RFC 6238 Appendix B (all
+six, at T=59 through T=20000000000). Verification against the standard rather than against
+fixtures of our own is the assurance a primitive guarding payout-account edits deserves. The +/-1
+step window accepts one step either side and refuses two; comparison is constant-time with no
+early exit. Login: progressive lockout proven across the whole ladder (15/30/60/120/240/480/960
+minutes, then capped at 24h), a correct credential still refused while a lock stands, and the
+next lock doubling after the first lapses. NO ENUMERATION is asserted directly - the responses to
+an unknown identifier and a wrong password are compared for EQUALITY, so the endpoint cannot be
+used to discover which accounts exist. Suspended and deleted accounts refused even with correct
+credentials; +/-60s clock-skew tolerance. Sessions: capped at 8 with the OLDEST evicted, new
+devices flagged once then recognised, listable and revocable per device. Step-up grants are bound
+to action type AND session AND ten minutes - a password-change grant cannot edit a payout account
+and a laptop grant cannot be presented from a phone - consumed on use so they cannot be replayed,
+and killed when their session is revoked or evicted. Recovery codes: exactly 10, single-use, and
+spending them all forces identity re-verification. 25 new tests (identity-svc 91 -> 116); repo
+total 523; FR coverage 55% -> 57%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
