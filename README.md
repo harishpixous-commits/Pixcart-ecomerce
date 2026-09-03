@@ -331,6 +331,27 @@ merely cloned it. The catalogue (all 98 FRs) is now VENDORED at docs/requirement
 and the script prefers it, with the SRS globs kept as a refresh path. 18 new tests; repo total
 461; FR coverage 51% -> 52%.
 
+Slices 38-40 (finance completion + first AI slice). Slice 38 FR-FIN-007 statutory deductions
+closes the TCS/TDS dangling reference from Slice 35: rates are never constants in the arithmetic
+but effective-dated config requiring an advisor sign-off, the two levies keep DIFFERENT bases (TCS
+on net taxable, TDS 194-O on gross - conflating them is the classic error), a mid-month rate change
+splits the period with both segments shown and segment bases that reconstruct the total EXACTLY,
+PAN-missing applies the higher rate and raises the onboarding block, registers tie out to the
+control ledger exactly, corrections route to a subsequent month with a trace, and certificates are
+tamper-hashed. Slice 39 FR-FIN-008 period close COMPLETES THE FIN FAMILY (8/8): the lock is a GATE
+every posting passes, the acceptance criterion is proven in all four directions including that
+claiming to be a prior-period adjustment does NOT unlock the locked month, the close is blocked by
+an incomplete checklist or a control imbalance (auto-generating the imbalance report), the lock is
+dual SA+FIN by two different people, and the auditor workspace is read-only with refused writes
+still recorded. Slice 40 FR-AI-008 dynamic pricing is the first AI slice, using the injected-model
+pattern: BRU-10 floor/ceiling and the MRP ceiling are enforced IN THE ENGINE so a model suggesting
+Rs 9,999 cannot produce a price above MRP, collusion-safety is structural (a competitor band
+aggregating fewer than 5 sellers is refused as a coordination signal and blocks the change
+entirely), low elasticity confidence forces suggest-only regardless of mode, event locks and the
+1-per-24h rate limiter downgrade to suggestions, kill switch and category guard-trip stop the
+engine, a throwing or nonsensical model never moves a price, every decision including refusals is
+audited with model version and factors, and simulation never applies a price.
+
 Slice 31 (invoicing & credit notes): FR-FIN-003 (Java, finance-svc) - closes the money story with
 the statutory documents. Three properties are STRUCTURAL: (1) immutability - Document exposes no
 setter, amend or update method (asserted by reflection), so corrections exist only as credit
