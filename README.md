@@ -347,6 +347,24 @@ document, and the e-invoice lifecycle - pending-IRN when the GSP is down, hard a
 attach once only, and cancellation honouring the 24h window before directing the caller to a
 credit note. 16 new tests (finance-svc 23 -> 39); repo total 477; FR coverage 52% -> 53%.
 
+Slice 32 (reviews & ratings): FR-CUS-023 + FR-CUS-024 (Java, catalogue-svc). Both documented
+acceptance scenarios run verbatim. (1) A non-purchaser attempting to review is REFUSED and
+nothing is stored - and "bought but not yet delivered" is reported distinctly from "never
+purchased", because they need different messages. (2) A listing with a single 1-star review must
+NOT display 1.0: the Bayesian posterior (m=10, C=category mean) yields 3.727 -> 3.7, and the test
+asserts the raw mean genuinely is 1.0 so the smoothing is doing real work rather than the data
+being convenient. Smoothing is also shown to CONVERGE - 100 one-star reviews reach below 1.3 but
+never quite 1.0. Reviews: one per delivered SKU per customer, 2000-char/5-photo/60-second limits,
+URL/email/phone/profanity filters, AI screen where UNCERTAIN routes to a human queue with a 24h
+SLA and is visible to the author only (and counts for nothing meanwhile), 30-day edit window with
+every version retained, vendor reply with NO delete path anywhere in the API (asserted by
+reflection), admin-only takedown with a logged reason, self-votes refused, and a per-customer
+anti-brigading velocity cap that recovers after a day. Ratings: only PUBLISHED reviews count -
+pending, rejected and taken-down are excluded - per-star histogram, 1-decimal display, vendor
+composite on the documented 60/25/15 weighting with the weights asserted to sum to 1, payout-risk
+tiering, and a recency trend that is positive for an improving listing and zero for a flat one.
+21 new tests (catalogue-svc 27 -> 48); repo total 498; FR coverage 53% -> 55%.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
