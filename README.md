@@ -401,6 +401,37 @@ permits closure while shipping only the 9 actually handed over and RECORDING the
 erasing it; the unscanned shipment never gains carrier liability. 24 new tests (logistics-svc
 29 -> 53); repo total 547; FR coverage 57% -> 59%.
 
+Slice 35 (vendor revenue & fee transparency, FR-VEN-010): the statement is a PROJECTION over
+ledger lines with no calculator surface at all (asserted by reflection), so the vendor-facing
+number cannot drift from the ledger. The acceptance criterion is verified in BOTH halves and the
+second half is a real cross-check: the statement's Rs 790 net and the Slice-6 SettlementEngine's
+independently-computed Rs 790 payout are compared for equality, because both live in the same
+module. Component signs enforced at construction, another vendor's or sub-order's line REFUSED
+rather than silently filtered, repeated ledger line ids refused (the actual double-count
+mechanism), SETTLING state with real figures never blank, rendersCompletely() catching an omitted
+TCS or double-listed commission, disputes bound to line ids on the statement, watermarked
+downloads, and fee-schedule changes refused unless forward-effective with 15 days' notice.
+
+Slice 36 (referral programme, FR-CUS-025 + FR-MKT-007): resolves the dangling SELF_REFERRAL_MATCH
+rule that Slice 21's risk engine had carried since it was written - a cross-slice test drives the
+hand-off for real. Self-referral blocking tested on each signal INDEPENDENTLY (device, instrument,
+address), first-touch-wins with the losing code AUDITED, per-referrer quarterly cap, suspected
+rings held UNDER_REVIEW rather than rejected, vesting only after the return window lapses,
+clawback on refund. The documented budget-cap acceptance scenario runs verbatim AND proves the
+harder half: in-flight vesting is HONOURED because each attribution snapshots the reward it was
+promised, so pausing stops new promises without reneging on existing ones.
+
+Slice 37 (refund operations console, FR-FIN-006): the authority model is the substance - Support
+is bounded to <= Rs 2,000 AND delivered-issue reasons only, so a support seat cannot be socially
+engineered into a large payout; Finance is unbounded on amount but a manual refund ABOVE
+Rs 10,000 needs a checker who is not the maker. Amount capped against captured net of prior
+refunds, duplicate-refund guard per line that a FAILED refund does not permanently block, COD
+requiring a verified beneficiary and no original instrument, goodwill requiring evidence and
+tagged separately for P&L, every gateway reject code mapped to a remediation (asserted exhaustively
+so an unmapped code cannot return null), success requiring an ARN/UTR proof, ordered gateway
+transitions, 7-day stuck escalation with customer notice, the 24h initiation SLA, and analytics
+separating goodwill from returns-driven leakage.
+
 ```bash
 ./scripts/test-all.sh            # every module; prints an authoritative total (337 tests)
 ./scripts/test-all.sh java       # Java domain layers only
