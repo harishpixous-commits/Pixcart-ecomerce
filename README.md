@@ -352,6 +352,26 @@ entirely), low elasticity confidence forces suggest-only regardless of mode, eve
 engine, a throwing or nonsensical model never moves a price, every decision including refusals is
 audited with model version and factors, and simulation never applies a price.
 
+Slices 41-43 (AI family). Slice 41 FR-AI-002 conversational commerce actions closes the gap open
+since Slice 3 - the LlmChain enforced a deny-by-default allowedTools list but no action catalogue
+existed behind it. All eight documented tools registered; "no bypass path" is structural because a
+tool cannot be REGISTERED without its owning service's validator and a security-review sign-off,
+and cannot be registered twice (closing the validator-swap follow-on). Guests restricted to
+read+cart with a narrower allow-list handed to the LLM; monetary tools capped at 3 attempts per
+session where a FAILED coupon still consumes one; irreversible actions need a single-use 120s token
+bound to session AND tool; multi-item actions report itemised outcomes with no silent partials.
+Slice 42 FR-AI-007 inventory optimisation works the documented acceptance case arithmetically -
+95% service level, lead time 7+/-2d, demand 10+/-3 gives sigma=sqrt(463)=21.52, safety stock
+ceil(1.6449*21.52)=36, ROP=106 - and asserts that demand variance ALONE would give 7.94, so an
+implementation dropping the lead-time term would look plausible but understate the buffer by half.
+Advisory-only is structural (no export begins with execute/apply/commit/placeOrder), and markdown
+ranges REUSE the Slice-40 BRU-10 clamp rather than reimplementing the floor/MRP rule. Slice 43
+FR-AI-014 review summarisation enforces extractive groundedness as a real gate: a fabricating
+summariser cannot publish because a claim citing a review that does not contain its substance is
+REJECTED and the section hidden. Comparative claims refused even when grounded in a real review;
+summaries suppressed below 5 eligible reviews; provider payloads PII-free by construction; a
+moderated-out review changes the review-set hash so the stale summary is HIDDEN rather than shown.
+
 Slice 31 (invoicing & credit notes): FR-FIN-003 (Java, finance-svc) - closes the money story with
 the statutory documents. Three properties are STRUCTURAL: (1) immutability - Document exposes no
 setter, amend or update method (asserted by reflection), so corrections exist only as credit

@@ -47,7 +47,7 @@ BRU_RE = re.compile(r"\bBRU-\d{2}\b")
 TEST_HINT = re.compile(r"(^|/)(test|tests)/|Test\.java$|\.spec\.ts$")
 
 # Coverage floor for --check; raise this as slices land, never lower it silently.
-COVERAGE_FLOOR = 65   # ratchet against regression, never lowered silently
+COVERAGE_FLOOR = 68   # ratchet against regression, never lowered silently
 
 
 def load_catalogue() -> dict[str, str]:
