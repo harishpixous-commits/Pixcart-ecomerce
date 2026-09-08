@@ -4,6 +4,7 @@
  * transactional-only.
  */
 import { describe, expect, it } from 'vitest';
+import { createHmac } from 'node:crypto';
 import {
   blockedClassesFor,
   domainHealth,
@@ -428,7 +429,7 @@ describe('click tracking links are signed and PII-free (SECURITY)', () => {
 describe('ESP webhooks are verified (SECURITY)', () => {
   it('accepts a correctly signed body and rejects everything else', () => {
     const body = JSON.stringify({ type: 'HARD_BOUNCE', email: 'gone@example.com' });
-    const good = require('node:crypto').createHmac('sha256', SECRET).update(body, 'utf8').digest('hex');
+    const good = createHmac('sha256', SECRET).update(body, 'utf8').digest('hex');
     expect(verifyWebhook(body, good, SECRET)).toBe(true);
     expect(verifyWebhook(body, good, 'other-secret')).toBe(false);
     expect(verifyWebhook('{"tampered":true}', good, SECRET)).toBe(false);

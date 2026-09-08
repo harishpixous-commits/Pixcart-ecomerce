@@ -4,7 +4,15 @@
   "private": true,
   "type": "module",
   "description": "Marketing service (Node 22 per C4-L2): FR-MKT-001..010. Slice 0 ships the FR-MKT-010 promotions waterfall domain engine.",
-  "scripts": { "test": "vitest run" },
-  "dependencies": { "zod": "^3.23.8" },
-  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9" }
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9",
+    "@types/node": "^22.5.0"
+  }
 }

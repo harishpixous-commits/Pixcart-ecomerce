@@ -270,7 +270,8 @@ describe('the documented acceptance scenario: budget ₹1,00,000 and the burn hi
     for (let i = 0; i < 3; i++) {
       expect(p.recordQualifyingOrder(`CUS-${i}`, 600 * 100, windowEnds, NOW).ok).toBe(true);
       const v = p.vest(`CUS-${i}`, windowEnds);
-      expect(v.ok).toBe(true, `attribution ${i} was promised a reward before the pause`);
+      // each attribution was promised a reward before the pause, so it must still vest
+      expect(v.ok).toBe(true);
       if (v.ok) expect(v.referrerRewardPaise + v.refereeRewardPaise).toBe(300 * 100);
     }
     expect(p.spentPaise('REF-2026')).toBe(900 * 100);
