@@ -487,3 +487,18 @@ throwaway MariaDB by default, or point it at MySQL 8 with
 
 CI (`.github/workflows/ci.yml`) runs the same two scripts plus `mvn verify` for the Spring
 Boot services, secret scanning, dependency audit and contract validation.
+
+## Verification gates
+
+```bash
+./scripts/test-all.sh          # every module's tests; prints an authoritative total
+./scripts/typecheck-all.sh     # every TS module compiles; a module with no tsconfig FAILS
+./scripts/verify-migrations.sh # apply V001-V005 and re-run the DB invariants
+python3 scripts/traceability.py --check   # FR coverage ratchet
+```
+
+The typecheck gate exists because vitest does not typecheck: a module can have every test passing
+while failing to compile. That is not hypothetical - marketing-svc had 166 green tests while its
+tsconfig declared `"types": []` against source using `node:crypto` and `Buffer`. A module with no
+tsconfig is a FAILURE rather than a skip, because skipping is how contracts/ went unchecked for its
+whole life.
