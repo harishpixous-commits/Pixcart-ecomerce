@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Discovery (FR-CUS-009/010): query understanding (sanitisation, banned terms, constraint extraction incl. Tanglish, schema validation) and hybrid BM25+vector reciprocal-rank fusion with approved-only index filter and sponsored-slot compliance. OpenSearch/vector adapters attach at the edge.",
-  "scripts": { "test": "vitest run" },
-  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9" }
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9",
+    "@types/node": "^22.5.0"
+  }
 }
