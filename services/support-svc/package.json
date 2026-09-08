@@ -1,0 +1,9 @@
+{
+  "name": "@pixcart/support-svc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Customer support & help centre (FR-CUS-026): ticketing with SLA matrix, duplicate-append detection, non-blocking attachment failures, consented assistant hand-off, tier and grievance escalation, searchable help centre.",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.1.9", "@types/node": "^22.5.0" }
+}
