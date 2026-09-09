@@ -35,6 +35,11 @@
  *     offer email.
  */
 import { createHmac } from 'node:crypto';
+// The health thresholds live in the FR-ADM-015 notification centre, which is the platform's single
+// answer to "what counts as too many complaints". They were duplicated here as literals until
+// Slice 71 gave them a home.
+import { COMPLAINT_RATE_THRESHOLD, HARD_BOUNCE_RATE_THRESHOLD }
+  from '../../../../notification-svc/src/domain/notification-centre.js';
 
 export type MessageClass = 'TRANSACTIONAL' | 'PROMOTIONAL';
 
@@ -339,12 +344,11 @@ export function domainHealth(events: EspEvent[]):
 
   const hardBounceRate = attempted === 0 ? 0 : Math.round((hard / attempted) * 10_000) / 10_000;
   const complaintRate = delivered === 0 ? 0 : Math.round((complaints / delivered) * 10_000) / 10_000;
-  // the thresholds mailbox providers actually act on
   return {
     delivered,
     hardBounceRate,
     complaintRate,
-    healthy: hardBounceRate < 0.02 && complaintRate < 0.001,
+    healthy: hardBounceRate < HARD_BOUNCE_RATE_THRESHOLD && complaintRate < COMPLAINT_RATE_THRESHOLD,
   };
 }
 
