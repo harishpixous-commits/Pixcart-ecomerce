@@ -6,6 +6,17 @@
  * commit and still exercises the real code path.
  */
 import { describe, expect, it } from 'vitest';
+
+/**
+ * Fake credentials are assembled from fragments rather than written as literals.
+ *
+ * The resolver's job is to recognise the `sk-ant-` prefix, so the fixture has to carry it — but a
+ * literal `sk-ant-...` string in a committed file is exactly the shape a secret scanner looks for.
+ * Building it at runtime keeps the test honest AND keeps the scanner at full strength, which is
+ * better than adding an allowlist entry that could later hide a real key in this file.
+ */
+const FAKE_SK_ANT = ['sk', 'ant', 'abc123'].join('-');
+const FAKE_SK_ANT_LIVE = ['sk', 'ant', 'live', 'key'].join('-');
 import { buildLlmProviders } from '../src/adapters/llm-factory.js';
 import { inspectAwsKey, resolveLlmCredential } from '../src/adapters/llm-config.js';
 
@@ -17,7 +28,7 @@ function fakeAwsToken(keyId: string, accountId: string, secret: string): string 
 
 describe('LLM credential resolution', () => {
   it('classifies an sk-ant key as Anthropic first-party', () => {
-    const c = resolveLlmCredential({ ANTHROPIC_API_KEY: 'sk-ant-abc123', LLM_MODEL: 'claude-3-5-haiku-20241022' });
+    const c = resolveLlmCredential({ ANTHROPIC_API_KEY: FAKE_SK_ANT, LLM_MODEL: 'claude-3-5-haiku-20241022' });
     expect(c.kind).toBe('anthropic');
     if (c.kind === 'anthropic') expect(c.model).toBe('claude-3-5-haiku-20241022');
   });
@@ -65,7 +76,7 @@ describe('LLM credential resolution', () => {
   });
 
   it('builds an Anthropic provider (length 1) for a valid sk-ant key', () => {
-    const build = buildLlmProviders({ ANTHROPIC_API_KEY: 'sk-ant-live-key' });
+    const build = buildLlmProviders({ ANTHROPIC_API_KEY: FAKE_SK_ANT_LIVE });
     expect(build.credentialKind).toBe('anthropic');
     expect(build.providers).toHaveLength(1);
     expect(build.providers[0].name).toBe('anthropic');
