@@ -1,0 +1,148 @@
+/* ------------------------------------------------------------------ *
+ * Vendor portal screens — additions only. The shared furniture
+ * (px-panel, px-kpis, px-form, px-dl …) lives in screens/lib/screens.css;
+ * this file styles only what the vendor surfaces add. Tokens only.
+ * ------------------------------------------------------------------ */
+
+/* ---- Store status row (dashboard, onboarding) ---------------------- */
+
+.px-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+  margin-bottom: var(--px-space-5);
+}
+
+/* ---- Needs-your-attention list (dashboard) ------------------------- */
+
+.px-attention {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-3);
+}
+.px-attention li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-3);
+}
+.px-attention__text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* ---- Filter bar (products, orders) ---------------------------------- */
+
+.px-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-4);
+  align-items: flex-end;
+  margin-bottom: var(--px-space-4);
+}
+.px-filterbar .px-field {
+  flex: 0 1 280px;
+  min-width: 220px;
+}
+
+/* ---- Row action groups (tables) ------------------------------------ */
+
+.px-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.px-row-actions__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--px-fs-12);
+  color: var(--px-danger);
+}
+
+/* ---- Per-row stock editor (inventory) ------------------------------ */
+
+.px-inv-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.px-inv-edit__input {
+  width: 8ch;
+}
+.px-inv-edit__hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+@media (max-width: 599.98px) {
+  .px-inv-edit__input {
+    min-height: var(--px-target-touch);
+  }
+}
+
+/* ---- Tabs (finance) ------------------------------------------------- */
+
+.px-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-1);
+  border-bottom: 1px solid var(--px-border-subtle);
+  margin-bottom: var(--px-space-5);
+}
+.px-tabs__tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--px-space-3) var(--px-space-4);
+  min-height: var(--px-target-touch);
+  font: inherit;
+  font-weight: var(--px-fw-medium);
+  color: var(--px-text-muted);
+  cursor: pointer;
+}
+.px-tabs__tab[aria-selected='true'] {
+  color: var(--px-text);
+  font-weight: var(--px-fw-semibold);
+  border-bottom-color: var(--px-cta);
+}
+
+/* ---- Steps list (onboarding) ---------------------------------------- */
+
+.px-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-2);
+}
+.px-steps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-3);
+}
+
+/* ---- Per-field save panels (onboarding) ----------------------------- */
+
+.px-savegrid {
+  display: grid;
+  gap: var(--px-space-4);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 1024px) {
+  .px-savegrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.px-savegrid .px-panel {
+  margin-bottom: 0;
+}

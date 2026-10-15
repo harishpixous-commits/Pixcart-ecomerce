@@ -1,0 +1,89 @@
+.px-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-1);
+  margin-bottom: var(--px-space-4);
+}
+
+.px-field__label {
+  font-size: var(--px-fs-14);
+  font-weight: var(--px-fw-medium);
+  color: var(--px-text);
+}
+
+.px-field__req {
+  color: var(--px-danger);
+  margin-inline-start: 2px;
+}
+
+.px-input {
+  width: 100%;
+  min-height: var(--px-target-min);
+  padding: var(--px-space-2) var(--px-space-3);
+  background: var(--px-surface);
+  /* §8.4 non-text contrast: control boundary ≥3:1 → --px-border-control is 4.11:1. */
+  border: 1px solid var(--px-border-control);
+  border-radius: var(--px-radius-card);
+  font-family: inherit;
+  font-size: var(--px-fs-16);
+  line-height: var(--px-lh-body);
+  color: var(--px-text);
+  transition: border-color var(--px-motion-fast) var(--px-ease-out);
+}
+
+.px-input::placeholder {
+  color: var(--px-text-muted);
+  opacity: 1;
+}
+
+.px-input:hover:not(:disabled) {
+  border-color: var(--px-navy-700);
+}
+
+.px-input:disabled {
+  background: var(--px-surface-alt);
+  color: var(--px-text-muted);
+  cursor: not-allowed;
+}
+
+.px-input--area {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.px-input--select {
+  appearance: auto;
+  background: var(--px-surface);
+}
+
+.px-field.is-invalid .px-input {
+  border-color: var(--px-danger);
+  border-width: 2px;
+}
+
+.px-field__hint {
+  margin: 0;
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+
+/* Errors are never colour-only (§8.4) — the word "Error" is prefixed. */
+.px-field__error {
+  margin: 0;
+  font-size: var(--px-fs-12);
+  font-weight: var(--px-fw-medium);
+  color: var(--px-danger);
+}
+
+.px-field__error::before {
+  content: 'Error: ';
+  font-weight: var(--px-fw-semibold);
+}
+
+@media (max-width: 599.98px) {
+  .px-input {
+    min-height: var(--px-target-touch);
+    /* 16px prevents iOS zoom-on-focus. */
+    font-size: var(--px-fs-16);
+  }
+}

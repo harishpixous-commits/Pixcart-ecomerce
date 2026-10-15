@@ -1,0 +1,463 @@
+/* ------------------------------------------------------------------ *
+ * Application shell.
+ *
+ * Breakpoints (§8.4): mobile <600, tablet 600–1024, desktop >1024.
+ * Colour, type, spacing, radius and elevation all come from tokens.css —
+ * nothing here hard-codes a hex value, so the palette stays auditable.
+ * ------------------------------------------------------------------ */
+
+.px-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--px-surface-alt);
+}
+
+/* ------------------------------------------------------------------ *
+ * Header
+ * ------------------------------------------------------------------ */
+
+.px-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--px-navy-900);
+  color: var(--px-text-on-structure);
+  box-shadow: var(--px-e1);
+}
+
+.px-header__row {
+  max-width: var(--px-content-max);
+  margin: 0 auto;
+  padding: var(--px-space-2) var(--px-space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+}
+
+/* The menu button only exists on mobile; the mega-menu is desktop-only. */
+.px-header__menubtn {
+  display: none;
+  color: var(--px-text-on-structure);
+}
+.px-header__menubtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.px-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  color: var(--px-text-on-structure);
+  text-decoration: none;
+  font-weight: var(--px-fw-bold);
+  flex: none;
+}
+.px-logo__mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: var(--px-green-600);
+  color: var(--px-text-on-cta);
+  border-radius: var(--px-radius-card);
+  font-size: var(--px-fs-18);
+  line-height: 1;
+}
+.px-logo__word {
+  font-size: var(--px-fs-18);
+  letter-spacing: -0.01em;
+}
+
+.px-header__search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.px-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-1);
+  flex: none;
+}
+
+/*
+ * Header icon controls are links, not buttons — they navigate. They are styled to
+ * match IconButton's metrics so the header reads as one system, but they are real
+ * anchors so middle-click, ⌘-click and the "link" announcement all behave.
+ */
+.px-navicon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--px-radius-card);
+  color: var(--px-text-on-structure);
+  text-decoration: none;
+}
+.px-navicon:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--px-text-on-structure);
+}
+.px-navicon:focus-visible {
+  outline: var(--px-focus-width) solid var(--px-text-on-structure);
+  outline-offset: 2px;
+}
+.px-navicon__badge,
+.px-tabbar__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--px-space-1);
+  border-radius: var(--px-radius-pill);
+  background: var(--px-danger);
+  color: var(--px-text-on-cta);
+  font-size: var(--px-fs-12);
+  font-weight: var(--px-fw-bold);
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.px-accountbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  padding: var(--px-space-1) var(--px-space-3);
+  border-radius: var(--px-radius-pill);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--px-text-on-structure);
+  text-decoration: none;
+  min-height: 40px;
+  max-width: 220px;
+}
+.px-accountbtn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--px-text-on-structure);
+}
+.px-accountbtn__name {
+  font-weight: var(--px-fw-semibold);
+  font-size: var(--px-fs-14);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.px-accountbtn__role {
+  font-size: var(--px-fs-12);
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------------ *
+ * Search
+ * ------------------------------------------------------------------ */
+
+.px-search {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  background: var(--px-surface);
+  border-radius: var(--px-radius-pill);
+  padding: 2px 2px 2px var(--px-space-3);
+  max-width: 640px;
+  margin: 0 auto;
+}
+.px-search__icon {
+  color: var(--px-text-muted);
+  flex: none;
+}
+.px-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--px-fs-14);
+  color: var(--px-text);
+  padding: var(--px-space-2) 0;
+  min-height: 40px;
+}
+.px-search__input::placeholder {
+  color: var(--px-text-muted);
+}
+.px-search__submit {
+  flex: none;
+  border: 0;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-green-600);
+  color: var(--px-text-on-cta);
+  font-weight: var(--px-fw-semibold);
+  font-size: var(--px-fs-14);
+  padding: 0 var(--px-space-4);
+  min-height: 40px;
+  cursor: pointer;
+}
+.px-search__submit:hover {
+  background: var(--px-navy-700);
+}
+
+/* ------------------------------------------------------------------ *
+ * Mega-menu (desktop) and drawer (mobile)
+ * ------------------------------------------------------------------ */
+
+.px-mega {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--px-navy-700);
+  color: var(--px-text-on-structure);
+}
+.px-mega__inner {
+  max-width: var(--px-content-max);
+  margin: 0 auto;
+  padding: var(--px-space-6) var(--px-space-4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--px-space-8);
+}
+.px-mega__group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--px-space-6);
+}
+.px-mega__heading {
+  margin: 0 0 var(--px-space-2);
+  font-size: var(--px-fs-12);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
+.px-mega__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.px-mega__link {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: var(--px-space-2);
+  border-radius: var(--px-radius-card);
+  color: var(--px-text-on-structure);
+  text-decoration: none;
+  font-size: var(--px-fs-14);
+}
+.px-mega__link:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--px-text-on-structure);
+}
+
+/* Drawer is the mobile equivalent of the mega-menu. */
+.px-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(88vw, 360px);
+  z-index: 60;
+  background: var(--px-surface);
+  color: var(--px-text);
+  box-shadow: var(--px-e3);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.px-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-space-3);
+  padding: var(--px-space-3) var(--px-space-4);
+  background: var(--px-navy-900);
+  color: var(--px-text-on-structure);
+}
+.px-drawer__title {
+  font-weight: var(--px-fw-bold);
+}
+.px-drawer__nav {
+  padding: var(--px-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-6);
+}
+/* The mega-section styles are reused inside the drawer, whose surface is light
+   rather than navy, so colours are restated there. */
+.px-drawer .px-mega__heading {
+  color: var(--px-text-muted);
+  opacity: 1;
+}
+.px-drawer .px-mega__link {
+  color: var(--px-text);
+  min-height: var(--px-target-touch);
+}
+.px-drawer .px-mega__link:hover {
+  background: var(--px-surface-alt);
+  color: var(--px-text);
+}
+.px-drawer__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  border: 0;
+  padding: 0;
+  background: rgba(23, 54, 93, 0.45);
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ *
+ * Main / footer
+ * ------------------------------------------------------------------ */
+
+.px-main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--px-content-max);
+  margin: 0 auto;
+  padding: var(--px-space-6) var(--px-space-6) 120px;
+  outline: none;
+}
+
+.px-footer {
+  background: var(--px-navy-900);
+  color: var(--px-text-on-structure);
+  padding: var(--px-space-6) var(--px-space-4) 140px;
+}
+.px-footer__note {
+  max-width: var(--px-content-max);
+  margin: 0 auto;
+  font-size: var(--px-fs-12);
+  opacity: 0.85;
+  line-height: var(--px-lh-body);
+}
+
+/* ------------------------------------------------------------------ *
+ * Bottom tab bar (mobile only)
+ * ------------------------------------------------------------------ */
+
+.px-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: none;
+  background: var(--px-surface);
+  border-top: 1px solid var(--px-border-control);
+  box-shadow: var(--px-e2);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.px-tabbar__tab {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--px-tabbar-h);
+  padding: var(--px-space-1);
+  border: 0;
+  background: transparent;
+  color: var(--px-text-muted);
+  font-size: 11px;
+  font-weight: var(--px-fw-semibold);
+  text-decoration: none;
+  cursor: pointer;
+}
+.px-tabbar__tab:hover {
+  color: var(--px-navy-700);
+}
+.px-tabbar__tab[aria-current='page'] {
+  color: var(--px-navy-700);
+}
+/* Active state is not colour-only (§8.4): the active tab also gains a top rule. */
+.px-tabbar__tab[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--px-green-600);
+  border-radius: 0 0 2px 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Assistant launcher (desktop/tablet)
+ * ------------------------------------------------------------------ */
+
+.px-launcher {
+  position: fixed;
+  right: var(--px-space-4);
+  bottom: var(--px-space-4);
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  padding: var(--px-space-3) var(--px-space-4);
+  border-radius: var(--px-radius-pill);
+  background: var(--px-navy-700);
+  color: var(--px-text-on-structure);
+  text-decoration: none;
+  font-weight: var(--px-fw-semibold);
+  font-size: var(--px-fs-14);
+  min-height: var(--px-target-touch);
+  box-shadow: var(--px-e2);
+}
+.px-launcher:hover {
+  background: var(--px-navy-900);
+  color: var(--px-text-on-structure);
+}
+
+/* ------------------------------------------------------------------ *
+ * Responsive
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 1024px) {
+  .px-mega__inner {
+    grid-template-columns: 1fr;
+    gap: var(--px-space-4);
+  }
+  .px-accountbtn__name,
+  .px-accountbtn__role {
+    display: none;
+  }
+  .px-accountbtn {
+    padding: var(--px-space-2);
+    min-width: 40px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .px-header__menubtn {
+    display: inline-flex;
+  }
+  .px-header__row {
+    flex-wrap: wrap;
+  }
+  .px-header__search {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .px-search {
+    max-width: none;
+  }
+  .px-logo__word {
+    display: none;
+  }
+  .px-tabbar {
+    display: flex;
+  }
+  .px-launcher {
+    display: none;
+  }
+  .px-main {
+    padding: var(--px-space-4) var(--px-space-4) calc(var(--px-tabbar-h) + var(--px-space-8));
+  }
+  .px-footer {
+    padding-bottom: calc(var(--px-tabbar-h) + var(--px-space-8));
+  }
+}

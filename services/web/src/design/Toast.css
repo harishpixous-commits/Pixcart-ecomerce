@@ -1,0 +1,120 @@
+.px-toast-region {
+  position: fixed;
+  z-index: 90;
+  right: var(--px-space-6);
+  bottom: var(--px-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-3);
+  pointer-events: none;
+}
+
+@media (max-width: 599.98px) {
+  .px-toast-region {
+    right: var(--px-space-3);
+    left: var(--px-space-3);
+    bottom: calc(var(--px-tabbar-h) + var(--px-space-3));
+  }
+}
+
+.px-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  min-width: 280px;
+  max-width: 420px;
+  padding: var(--px-space-3) var(--px-space-3) var(--px-space-3) var(--px-space-4);
+  background: var(--px-surface);
+  border: 1px solid var(--px-border-subtle);
+  border-left-width: 4px;
+  border-radius: var(--px-radius-card);
+  box-shadow: var(--px-e3); /* e3 = modals / transient layers; max one at a time */
+  font-size: var(--px-fs-14);
+  animation: px-toast-in var(--px-motion-base) var(--px-ease-out);
+}
+
+@keyframes px-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .px-toast {
+    animation: none;
+  }
+}
+
+.px-toast--success {
+  border-left-color: var(--px-success);
+}
+.px-toast--error {
+  border-left-color: var(--px-danger);
+}
+.px-toast--info {
+  border-left-color: var(--px-info);
+}
+
+.px-toast__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.px-toast--success .px-toast__icon {
+  color: var(--px-success);
+}
+.px-toast--error .px-toast__icon {
+  color: var(--px-danger);
+}
+.px-toast--info .px-toast__icon {
+  color: var(--px-info);
+}
+
+.px-toast__msg {
+  flex: 1 1 auto;
+  color: var(--px-text);
+}
+
+.px-toast__undo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-1);
+  min-height: var(--px-target-min);
+  padding: 0 var(--px-space-2);
+  background: transparent;
+  border: 1px solid var(--px-border-control);
+  border-radius: var(--px-radius-card);
+  color: var(--px-navy-700);
+  font: inherit;
+  font-weight: var(--px-fw-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.px-toast__undo:hover {
+  background: var(--px-surface-alt);
+}
+
+.px-toast__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--px-target-min);
+  height: var(--px-target-min);
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  border-radius: var(--px-radius-card);
+  color: var(--px-text-muted);
+  cursor: pointer;
+}
+
+.px-toast__close:hover {
+  background: var(--px-surface-alt);
+  color: var(--px-text);
+}

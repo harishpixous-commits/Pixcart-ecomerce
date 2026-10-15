@@ -41,14 +41,18 @@ mariadb $MYSQL_ARGS -e "DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\`
 
 echo
 echo "${BOLD}1. apply migrations in order${OFF}"
-for f in $(ls "$MIGRATIONS"/V*.sql | sort); do
+# Read the sorted list one path per line. `for f in $(ls ...)` word-splits on any space
+# in the path, which is exactly what happens in a checkout dir named "pixcart source
+# new": the loop then opened /c/Users/haris/Downloads/pixcart as a migration. Glob
+# expansion is already lexicographic, so the printf keeps `sort` without the split.
+while IFS= read -r f; do
   name="$(basename "$f")"
   if err="$(mariadb $MYSQL_ARGS "$DB" < "$f" 2>&1)"; then
     echo "  ${GREEN}applied${OFF} $name"
   else
     echo "  ${RED}FAILED${OFF} $name"; echo "$err" | head -5 | sed 's/^/      /'; fails=$((fails+1))
   fi
-done
+done < <(printf '%s\n' "$MIGRATIONS"/V*.sql | sort)
 tables="$(M "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB'")"
 echo "  tables created: $tables"
 
@@ -96,6 +100,46 @@ netall="$(M "SELECT CAST(SUM(debit-credit) AS DECIMAL(18,2)) FROM fin_ledger_ent
 check "capture+refund closes all accounts to zero" "0.00" "$netall"
 replay="$(M "INSERT INTO fin_ledger_entry (id,journal_id,account_code,debit,credit,ref_type,ref_id,event_id,period) VALUES ('01VLG0DUP00000000000001','01VJRNCAP00000000000001','GATEWAY_CLEARING',900.00,0,'ORDER','01VORD0000000000000000001','01VEVTCAP0000000000001','2026-08')" | grep -c 'uq_ledger_event_leg')"
 check "uq_ledger_event_leg blocks a ledger replay" "1" "$replay"
+
+# V008: staff/vendor credentials and the VENDOR session principal
+# ------------------------------------------------------------------------
+# password_hash is NULL until an operator provisions it, and a NULL hash must
+# never be writable as a non-null placeholder — a placeholder hash is a
+# credential, i.e. a second unknown password.
+hashnull="$(M "SELECT (SELECT COUNT(*) FROM id_staff WHERE password_hash IS NOT NULL)
+             + (SELECT COUNT(*) FROM ven_store WHERE password_hash IS NOT NULL)")"
+check "V008 leaves every staff/vendor hash NULL until provisioned" "0" "$hashnull"
+
+# ven_store gained the same generated email_norm the other two principal tables
+# have, so the login lookup stays index-backed and lower-casing lives in one place.
+# Asserted as PARITY with the other two rather than as "is_nullable = NO": MariaDB
+# reports every STORED GENERATED column as nullable regardless of its source, so a
+# nullability check would fail against id_customer too and would prove nothing. What
+# matters is (a) the same generation expression and (b) a NOT NULL source column,
+# which together make a NULL email_norm unrepresentable.
+norm="$(M "SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema='$DB' AND column_name='email_norm'
+             AND table_name IN ('id_customer','id_staff','ven_store')
+             AND generation_expression = 'lcase(\`email\`)'
+             AND extra = 'STORED GENERATED'
+             AND column_type = 'varchar(254)'")"
+check "ven_store.email_norm is generated exactly as id_customer/id_staff do" "3" "$norm"
+srcnotnull="$(M "SELECT is_nullable FROM information_schema.columns
+                  WHERE table_schema='$DB' AND table_name='ven_store' AND column_name='email'")"
+check "ven_store.email is NOT NULL, so email_norm can never be NULL" "NO" "$srcnotnull"
+hasindex="$(M "SELECT COUNT(*) FROM information_schema.statistics
+                WHERE table_schema='$DB' AND table_name='ven_store'
+                  AND index_name='uq_store_email_norm' AND column_name='email_norm'")"
+check "ven_store.email_norm is unique-keyed for the login lookup" "1" "$hasindex"
+
+# id_session must now admit a VENDOR principal (a vendor operator is a ven_store
+# row) and still refuse anything else — widening a CHECK is only safe if the
+# boundary moved by exactly the intended amount.
+M "INSERT INTO id_session (id,principal_type,principal_id,created_at) VALUES ('01VSESVENDOR00000000000001','VENDOR','01VVND0000000000000000001','2026-08-15 10:00:00.000')" >/dev/null
+vendorok="$(M "SELECT principal_type FROM id_session WHERE id='01VSESVENDOR00000000000001'")"
+check "ck_session_ptype admits a VENDOR principal" "VENDOR" "$vendorok"
+badtype="$(M "INSERT INTO id_session (id,principal_type,principal_id,created_at) VALUES ('01VSESROBOT000000000000001','ROBOT','01VVND0000000000000000001','2026-08-15 10:00:00.000')" | grep -c 'ck_session_ptype')"
+check "ck_session_ptype still refuses an unknown principal type" "1" "$badtype"
 
 echo
 if [[ "$fails" -eq 0 ]]; then

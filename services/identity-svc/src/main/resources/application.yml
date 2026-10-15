@@ -1,7 +1,14 @@
 spring:
   application.name: identity-svc
   flyway:
-    locations: filesystem:../../infra/db/migrations   # single schema source of truth
+    # single schema source of truth: the shared infra/db/migrations tree, relative to the
+    # module directory this service is started from.
+    locations: filesystem:../../infra/db/migrations
+    # pixcart_dev was migrated out-of-band (V001–V006 already applied, no flyway_schema_history
+    # row exists). Baseline at V006 so Flyway records history going forward without trying to
+    # re-create tables that are already there; V007+ still applies normally.
+    baseline-on-migrate: true
+    baseline-version: 6
   datasource:
     url: ${IDENTITY_DB_URL}      # no defaults with credentials — Vol. 10 §10.5 secrets policy
     username: ${IDENTITY_DB_USER}

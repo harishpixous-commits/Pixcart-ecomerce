@@ -1,0 +1,126 @@
+.px-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--px-space-10) var(--px-space-4);
+  gap: var(--px-space-3);
+}
+
+.px-state--loading {
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+  padding: var(--px-space-2) 0;
+}
+
+.px-state__art {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-green-100);
+  color: var(--px-green-600);
+}
+
+.px-state__art--danger {
+  background: var(--px-danger-bg);
+  color: var(--px-danger);
+}
+
+.px-state__title {
+  font-size: var(--px-fs-18);
+  font-weight: var(--px-fw-semibold);
+}
+
+.px-state__desc {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--px-text-muted);
+  font-size: var(--px-fs-14);
+}
+
+.px-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-3);
+  justify-content: center;
+  margin-top: var(--px-space-2);
+}
+
+.px-state__trace {
+  margin-top: var(--px-space-2);
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+
+.px-state__trace summary {
+  cursor: pointer;
+  min-height: var(--px-target-min);
+  display: flex;
+  align-items: center;
+}
+
+.px-state__trace code {
+  display: block;
+  padding: var(--px-space-2);
+  background: var(--px-surface-alt);
+  border: 1px solid var(--px-border-subtle);
+  border-radius: var(--px-radius-card);
+  word-break: break-all;
+}
+
+/* ---- skeletons ---- */
+.px-skel {
+  background: linear-gradient(
+    90deg,
+    var(--px-surface-alt) 25%,
+    #e8eef5 37%,
+    var(--px-surface-alt) 63%
+  );
+  background-size: 400% 100%;
+  animation: px-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--px-radius-card);
+}
+
+@keyframes px-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .px-skel {
+    animation: none;
+    background: var(--px-surface-alt);
+  }
+}
+
+.px-skel__line {
+  height: 12px;
+  margin-bottom: var(--px-space-2);
+}
+
+.px-skel__line--short {
+  width: 35%;
+  height: 10px;
+}
+
+.px-skel__list > .px-skel,
+.px-skel__table > .px-skel,
+.px-skel__card > .px-skel,
+.px-skel__detail > .px-skel {
+  padding: var(--px-space-3);
+  border: 1px solid var(--px-border-subtle);
+  background-color: var(--px-surface);
+  margin-bottom: var(--px-space-3);
+}
+
+.px-skel__bar {
+  height: 40px;
+}

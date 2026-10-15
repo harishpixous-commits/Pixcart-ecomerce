@@ -24,6 +24,10 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security</artifactId></dependency>
     <!-- JWT RS256 verification per Vol. 10 §10.3 (issuing uses nimbus via this starter) -->
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-oauth2-resource-server</artifactId></dependency>
+    <!-- Declared directly because identity.security signs and verifies HS256 itself. The
+         version is the one already on the classpath via the resource-server starter, so this
+         adds no new artefact, only makes the direct use visible. -->
+    <dependency><groupId>com.nimbusds</groupId><artifactId>nimbus-jose-jwt</artifactId><version>9.37.3</version></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
     <!-- Argon2id (m=64MiB, t=3, p=2) per Vol. 10 §10.3 -->
@@ -31,6 +35,13 @@
     <dependency><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk18on</artifactId><version>1.78.1</version></dependency>
     <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-core</artifactId></dependency>
     <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-mysql</artifactId></dependency>
+    <!-- mysql-connector-j is the TEST driver (Vol. 12 §12.5 runs ITs against MySQL 8).
+         The runtime datasource is MariaDB: application.yml wires Flyway at
+         filesystem:../../infra/db/migrations and the schema is verified against MariaDB 11.8.
+         `jdbc:mariadb://` needs org.mariadb.jdbc.Driver; mysql-connector-j only ships
+         com.mysql.cj.jdbc.Driver, so without this dependency the fat jar fails at boot with
+         "Failed to load driver class org.mariadb.jdbc.Driver". Caught on first-ever `mvn package`. -->
+    <dependency><groupId>org.mariadb.jdbc</groupId><artifactId>mariadb-java-client</artifactId><scope>runtime</scope></dependency>
     <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><scope>runtime</scope></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     <!-- Vol. 12 §12.5: integration tests run against real MySQL 8 via Testcontainers -->

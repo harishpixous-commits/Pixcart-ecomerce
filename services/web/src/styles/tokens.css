@@ -1,0 +1,135 @@
+/*
+ * Pix DS — design tokens.
+ *
+ * Verbatim from Documentation Suite v1.0 Vol. 8 §8.1 (Design System tokens), §8.2
+ * (breakpoints) and §8.4 (accessibility). Every screen composes these; screens never
+ * hard-code a colour, a radius or a duration.
+ *
+ * Contrast: the core palette was checked against WCAG 2.2 AA before use.
+ *   navy-900 #17365D on white .... 12.19:1   white on navy-900 .... 12.19:1
+ *   green-600 #1E7B45 on white .... 5.28:1   white on green-600 .... 5.28:1
+ *   warning   #9C6500 on white .... 4.91:1
+ *   danger    #B23B3B on white .... 5.87:1
+ *   info      #1F4E79 on white .... 8.66:1
+ * The two border tokens below are not in the source table (it lists core values only);
+ * they are derived and are asserted by styles/tokens.test.ts rather than chosen by eye.
+ *   border-control  #737E8E .... 4.11:1 on white — meets §8.4 "UI ≥ 3:1" for the
+ *                                  boundary of an interactive control.
+ *   border-subtle   #E1E7EF — decoration only (dividers), exempt from §1.4.11.
+ */
+
+:root {
+  /* ---- Colour: brand (§8.1) ------------------------------------------- */
+  --px-navy-900: #17365d;
+  --px-navy-700: #1f4e79;
+  --px-green-600: #1e7b45;
+  --px-green-100: #e7f3ec;
+
+  /* navy = structure / secondary actions; green = primary CTA + success accents.
+     Never green text on navy — enforced by tokens.test.ts. */
+  --px-structure: var(--px-navy-900);
+  --px-action-secondary: var(--px-navy-700);
+  --px-cta: var(--px-green-600);
+
+  /* ---- Colour: semantic (§8.1) ---------------------------------------- */
+  --px-success: #1e7b45;
+  --px-warning: #9c6500;
+  --px-danger: #b23b3b;
+  --px-info: #1f4e79;
+  --px-surface: #ffffff;
+  --px-surface-alt: #f5f8fb;
+
+  --px-success-bg: #e7f3ec;
+  --px-warning-bg: #fdf3e3;
+  --px-danger-bg: #fbeeee;
+  --px-info-bg: #e9eff6;
+
+  /* Derived — see header. */
+  --px-border-control: #737e8e;
+  --px-border-subtle: #e1e7ef;
+
+  /* Text. All pass ≥4.5:1 on --px-surface and on --px-surface-alt. */
+  --px-text: #17365d;
+  --px-text-muted: #4a5568;
+  --px-text-on-cta: #ffffff;
+  --px-text-on-structure: #ffffff;
+
+  /* ---- Typography (§8.1) ---------------------------------------------- */
+  --px-font-latin: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Arial, 'Helvetica Neue', sans-serif;
+  /* Tamil never falls back to serif. */
+  --px-font-tamil: 'Noto Sans Tamil', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --px-font: var(--px-font-latin), var(--px-font-tamil);
+
+  --px-fs-12: 12px;
+  --px-fs-14: 14px;
+  --px-fs-16: 16px;
+  --px-fs-18: 18px;
+  --px-fs-20: 20px;
+  --px-fs-24: 24px;
+  --px-fs-30: 30px;
+  --px-fs-38: 38px;
+
+  --px-lh-body: 1.5;
+  --px-lh-heading: 1.25;
+
+  --px-fw-regular: 400;
+  --px-fw-medium: 500;
+  --px-fw-semibold: 600;
+  --px-fw-bold: 700;
+
+  /* ---- Spacing & radius (§8.1) — 4-pt grid, no off-grid margins -------- */
+  --px-space-1: 4px;
+  --px-space-2: 8px;
+  --px-space-3: 12px;
+  --px-space-4: 16px;
+  --px-space-5: 20px;
+  --px-space-6: 24px;
+  --px-space-7: 28px;
+  --px-space-8: 32px;
+  --px-space-10: 40px;
+  --px-space-12: 48px;
+  --px-space-14: 56px;
+  --px-space-16: 64px;
+
+  --px-radius-card: 8px;
+  --px-radius-sheet: 12px;
+  --px-radius-pill: 999px;
+
+  /* §8.4: target size ≥24×24 CSS px, 44px touch on mobile. */
+  --px-target-min: 24px;
+  --px-target-touch: 44px;
+
+  /* ---- Elevation (§8.1) — max one e3 at a time ------------------------- */
+  --px-e0: none;
+  --px-e1: 0 1px 2px rgba(23, 54, 93, 0.06), 0 1px 3px rgba(23, 54, 93, 0.08);
+  --px-e2: 0 -1px 0 var(--px-border-subtle), 0 4px 12px rgba(23, 54, 93, 0.1);
+  --px-e3: 0 12px 32px rgba(23, 54, 93, 0.18), 0 4px 8px rgba(23, 54, 93, 0.1);
+
+  /* ---- Motion (§8.1) — 150–250 ms ease-out; reduced-motion respected --- */
+  --px-motion-fast: 150ms;
+  --px-motion-base: 200ms;
+  --px-motion-slow: 250ms;
+  --px-ease-out: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- Focus (§8.4) — visible 2 px outline token ----------------------- */
+  --px-focus-width: 2px;
+  --px-focus-ring: 0 0 0 var(--px-focus-width) var(--px-surface),
+    0 0 0 calc(var(--px-focus-width) + 2px) var(--px-navy-700);
+
+  /* ---- Layout (§8.2) --------------------------------------------------- */
+  --px-bp-tablet: 600px;
+  --px-bp-desktop: 1024px;
+  --px-content-max: 1280px; /* desktop: 12-col grid, max 1280 content */
+  --px-grid-cols: 12;
+  --px-header-h: 64px;
+  --px-tabbar-h: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --px-motion-fast: 1ms;
+    --px-motion-base: 1ms;
+    --px-motion-slow: 1ms;
+  }
+}

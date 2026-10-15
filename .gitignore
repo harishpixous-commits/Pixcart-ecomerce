@@ -10,3 +10,16 @@ docs/diagrams/plantuml.jar
 .env
 *.env
 .secrets/
+
+# TS incremental build state - regenerable per checkout, and stale state is a
+# silent-failure vector: a tsbuildinfo from an older compiler will make a clean
+# checkout skip work it still needs to do.
+*.tsbuildinfo
+
+# Scratch workspace for parsing the vendored requirements PDF (office-pdf skill).
+# The extraction is derived from docs/*.pdf, which is already tracked - committing
+# the text as well would create two sources of truth for the same requirements.
+work/
+
+# uv virtualenv created inside work/ when parsing the PDF.
+.venv/

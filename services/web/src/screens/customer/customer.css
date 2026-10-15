@@ -1,0 +1,404 @@
+/*
+ * Customer storefront screens.
+ *
+ * Co-located styles for the screens in this folder only. Tokens only — no
+ * hard-coded colours, no hex values (§8.1). Everything here is layout that the
+ * shared `screens.css` classes do not cover: category tiles, the PDP buy box,
+ * the qty stepper, the review histogram, cart lines and the sticky summaries.
+ * Reusable screen furniture (page header, product grid, panels, definition
+ * lists, chat bubbles) comes from `screens/lib/Screen.tsx` and `screens.css`
+ * and is not re-implemented here.
+ */
+
+/* ---- Category tiles (home) ------------------------------------------ */
+
+.pxcu-cats {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-3);
+  margin: 0 0 var(--px-space-6);
+  padding: 0;
+}
+
+.pxcu-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  min-height: var(--px-target-min);
+  padding: var(--px-space-2) var(--px-space-4);
+  border-radius: var(--px-radius-pill);
+  background: var(--px-surface);
+  box-shadow: var(--px-e1);
+  color: var(--px-text);
+  font-size: var(--px-fs-14);
+  font-weight: var(--px-fw-medium);
+  text-decoration: none;
+}
+.pxcu-cat:hover {
+  color: var(--px-text);
+  box-shadow: var(--px-e2);
+}
+
+.pxcu-cat__count {
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Filter / facet chips ------------------------------------------- */
+
+.pxcu-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+  margin: 0 0 var(--px-space-4);
+}
+
+.pxcu-chips__label {
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pxcu-chips__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---- Product media placeholder (PDP) -------------------------------- */
+
+.pxcu-media {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  max-height: 480px;
+  border-radius: var(--px-radius-card);
+  background: var(--px-surface);
+  box-shadow: var(--px-e1);
+  overflow: hidden;
+}
+.pxcu-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pxcu-media__ph {
+  font-size: var(--px-fs-38);
+  font-weight: var(--px-fw-bold);
+  color: var(--px-text-muted);
+  opacity: 0.5;
+}
+
+/* ---- Price block ----------------------------------------------------- */
+
+.pxcu-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--px-space-3);
+}
+.pxcu-price__now {
+  font-size: var(--px-fs-24);
+  font-weight: var(--px-fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+.pxcu-price__mrp {
+  color: var(--px-text-muted);
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+.pxcu-price__off {
+  color: var(--px-success);
+  font-size: var(--px-fs-14);
+  font-weight: var(--px-fw-semibold);
+}
+
+/* ---- Buy box (sticky on desktop) ------------------------------------ */
+
+.pxcu-buybox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-4);
+  background: var(--px-surface);
+  border-radius: var(--px-radius-card);
+  box-shadow: var(--px-e1);
+  padding: var(--px-space-5);
+}
+@media (min-width: 1024px) {
+  .pxcu-buybox {
+    position: sticky;
+    top: var(--px-space-4);
+  }
+}
+
+/* ---- Qty stepper ----------------------------------------------------- */
+
+.pxcu-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.pxcu-qty__value {
+  min-width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--px-fw-semibold);
+}
+
+/* ---- Cart lines ------------------------------------------------------ */
+
+.pxcu-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-4);
+}
+
+.pxcu-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--px-space-3);
+  padding: var(--px-space-4);
+  border-radius: var(--px-radius-card);
+  background: var(--px-surface);
+  box-shadow: var(--px-e1);
+}
+@media (max-width: 600px) {
+  .pxcu-line {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pxcu-line__title {
+  font-weight: var(--px-fw-semibold);
+}
+.pxcu-line__meta {
+  display: block;
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+.pxcu-line__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.pxcu-line__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--px-space-2);
+}
+
+/* ---- Sticky money summary (cart / checkout) -------------------------- */
+
+.pxcu-summary {
+  background: var(--px-surface);
+  border-radius: var(--px-radius-card);
+  box-shadow: var(--px-e1);
+  padding: var(--px-space-5);
+}
+@media (min-width: 1024px) {
+  .pxcu-summary {
+    position: sticky;
+    top: var(--px-space-4);
+  }
+}
+.pxcu-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--px-space-4);
+  padding: var(--px-space-2) 0;
+  font-size: var(--px-fs-14);
+  font-variant-numeric: tabular-nums;
+}
+.pxcu-summary__row--total {
+  border-top: 1px solid var(--px-border-subtle);
+  margin-top: var(--px-space-2);
+  padding-top: var(--px-space-3);
+  font-size: var(--px-fs-16);
+  font-weight: var(--px-fw-bold);
+}
+
+/* ---- Review histogram ------------------------------------------------ */
+
+.pxcu-hist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-1);
+}
+.pxcu-hist__row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 3rem;
+  align-items: center;
+  gap: var(--px-space-3);
+  font-size: var(--px-fs-12);
+  font-variant-numeric: tabular-nums;
+}
+.pxcu-hist__track {
+  height: 8px;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-surface-alt);
+  overflow: hidden;
+}
+.pxcu-hist__fill {
+  height: 100%;
+  border-radius: var(--px-radius-pill);
+  background: var(--px-green-600);
+}
+
+/* ---- Reviews --------------------------------------------------------- */
+
+.pxcu-reviews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-4);
+}
+.pxcu-review {
+  padding: var(--px-space-4);
+  border-radius: var(--px-radius-card);
+  background: var(--px-surface);
+  box-shadow: var(--px-e1);
+}
+.pxcu-review__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+  margin-bottom: var(--px-space-2);
+  font-size: var(--px-fs-14);
+}
+.pxcu-review__author {
+  font-weight: var(--px-fw-semibold);
+}
+.pxcu-review__meta {
+  color: var(--px-text-muted);
+  font-size: var(--px-fs-12);
+}
+.pxcu-review__body {
+  margin: 0;
+}
+
+/* ---- Notifications --------------------------------------------------- */
+
+.pxcu-notifs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-3);
+}
+.pxcu-notif {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-2);
+  padding: var(--px-space-4);
+  border-radius: var(--px-radius-card);
+  background: var(--px-surface);
+  box-shadow: var(--px-e1);
+  border-left: 3px solid var(--px-border-subtle);
+}
+.pxcu-notif--unread {
+  border-left-color: var(--px-navy-700);
+}
+.pxcu-notif__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.pxcu-notif__title {
+  font-weight: var(--px-fw-semibold);
+}
+.pxcu-notif__body {
+  margin: 0;
+  font-size: var(--px-fs-14);
+}
+
+/* ---- Timeline / tracking --------------------------------------------- */
+
+.pxcu-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--px-space-4);
+  border-left: 2px solid var(--px-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-3);
+}
+.pxcu-timeline__at {
+  display: block;
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+
+/* ---- Forms: checkbox row (no checkbox primitive exists) -------------- */
+
+.pxcu-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  min-height: var(--px-target-min);
+  font-size: var(--px-fs-14);
+}
+.pxcu-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--px-cta);
+}
+
+/* ---- Misc ------------------------------------------------------------ */
+
+/* Fieldsets are used for radio groups (address, payment); strip the UA
+   chrome so the group reads as part of the form, not a nested box. */
+.pxcu-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.pxcu-legend {
+  padding: 0;
+  margin-bottom: var(--px-space-3);
+  font-size: var(--px-fs-16);
+  font-weight: var(--px-fw-semibold);
+}
+
+.pxcu-muted {
+  color: var(--px-text-muted);
+  font-size: var(--px-fs-14);
+}
+.pxcu-note {
+  margin: 0 0 var(--px-space-4);
+  padding: var(--px-space-3) var(--px-space-4);
+  border-radius: var(--px-radius-card);
+  background: var(--px-info-bg);
+  font-size: var(--px-fs-14);
+}
+.pxcu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-space-4);
+}
+.pxcu-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-3);
+}

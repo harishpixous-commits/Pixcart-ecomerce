@@ -1,0 +1,247 @@
+.px-table-wrap {
+  background: var(--px-surface);
+  border: 1px solid var(--px-border-subtle);
+  border-radius: var(--px-radius-card);
+  overflow: hidden;
+}
+
+.px-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-space-3);
+  padding: var(--px-space-3) var(--px-space-4);
+  border-bottom: 1px solid var(--px-border-subtle);
+}
+
+.px-table-count {
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+
+.px-table-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  flex-wrap: wrap;
+}
+
+.px-density {
+  display: inline-flex;
+  border: 1px solid var(--px-border-control);
+  border-radius: var(--px-radius-pill);
+  overflow: hidden;
+}
+
+.px-density__btn {
+  min-height: var(--px-target-min);
+  padding: 0 var(--px-space-3);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+  cursor: pointer;
+}
+
+.px-density__btn.is-active {
+  background: var(--px-navy-700);
+  color: var(--px-text-on-structure);
+  font-weight: var(--px-fw-semibold);
+}
+
+.px-table-export {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-2);
+  min-height: var(--px-target-min);
+  padding: 0 var(--px-space-3);
+  background: transparent;
+  border: 1px solid var(--px-border-control);
+  border-radius: var(--px-radius-card);
+  color: var(--px-navy-700);
+  font: inherit;
+  font-size: var(--px-fs-14);
+  font-weight: var(--px-fw-medium);
+  cursor: pointer;
+}
+
+.px-table-export:hover {
+  background: var(--px-surface-alt);
+}
+
+.px-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-space-3);
+  padding: var(--px-space-3) var(--px-space-4);
+  background: var(--px-green-100);
+  border-bottom: 1px solid var(--px-border-subtle);
+  font-size: var(--px-fs-14);
+  font-weight: var(--px-fw-semibold);
+}
+
+.px-bulk-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--px-space-3);
+  flex-wrap: wrap;
+}
+
+.px-bulk-bar__clear {
+  min-height: var(--px-target-min);
+  background: transparent;
+  border: 0;
+  color: var(--px-navy-700);
+  font: inherit;
+  font-weight: var(--px-fw-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Sticky header (§8.3). */
+.px-table-scroll {
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.px-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--px-fs-14);
+}
+
+.px-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--px-surface-alt);
+  border-bottom: 1px solid var(--px-border-subtle);
+  padding: var(--px-space-3) var(--px-space-4);
+  text-align: start;
+  font-size: var(--px-fs-12);
+  font-weight: var(--px-fw-semibold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--px-text-muted);
+  white-space: nowrap;
+}
+
+.px-table th.is-end,
+.px-table td.is-end {
+  text-align: end;
+}
+
+.px-table th.is-secondary,
+.px-table td.is-secondary {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  /* §8.2: tables gain column pickers on desktop — secondary columns become visible. */
+  .px-table th.is-secondary,
+  .px-table td.is-secondary {
+    display: table-cell;
+  }
+}
+
+.px-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-1);
+  min-height: var(--px-target-min);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--px-fs-12);
+  font-weight: var(--px-fw-semibold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: inherit;
+  cursor: pointer;
+}
+
+.px-table__sort-idle {
+  opacity: 0.35;
+}
+
+.px-table tbody td {
+  padding: var(--px-space-3) var(--px-space-4);
+  border-bottom: 1px solid var(--px-border-subtle);
+  vertical-align: middle;
+  color: var(--px-text);
+}
+
+.px-table--compact tbody td {
+  padding: var(--px-space-2) var(--px-space-4);
+}
+
+.px-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.px-table tbody tr:hover td {
+  background: var(--px-surface-alt);
+}
+
+.px-table tbody tr.is-selected td {
+  background: var(--px-green-100);
+}
+
+.px-table__select {
+  width: 40px;
+  text-align: center;
+}
+
+.px-table__select input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--px-green-600);
+  cursor: pointer;
+}
+
+/* Keep the checkbox itself ≥24×24 hit area (§8.4) without growing the cell. */
+.px-table__select {
+  padding-inline: var(--px-space-2);
+}
+
+.px-table__empty {
+  padding: var(--px-space-8) var(--px-space-4);
+  text-align: center;
+  color: var(--px-text-muted);
+}
+
+.px-table-more {
+  display: flex;
+  justify-content: center;
+  padding: var(--px-space-4);
+  border-top: 1px solid var(--px-border-subtle);
+}
+
+.px-table-more__btn {
+  min-height: var(--px-target-min);
+  padding: 0 var(--px-space-5);
+  background: transparent;
+  border: 1px solid var(--px-border-control);
+  border-radius: var(--px-radius-pill);
+  color: var(--px-navy-700);
+  font: inherit;
+  font-size: var(--px-fs-14);
+  font-weight: var(--px-fw-semibold);
+  cursor: pointer;
+}
+
+.px-table-more__btn:hover:not(:disabled) {
+  background: var(--px-surface-alt);
+}
+
+@media (max-width: 599.98px) {
+  .px-table-scroll {
+    max-height: none;
+  }
+}

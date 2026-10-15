@@ -1,0 +1,121 @@
+.px-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--px-space-4);
+}
+
+.px-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(23, 54, 93, 0.45);
+}
+
+.px-modal {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--px-surface);
+  /* e3 = modals. Max one at a time (§8.1). */
+  box-shadow: var(--px-e3);
+  border-radius: var(--px-radius-sheet);
+  animation: px-modal-in var(--px-motion-base) var(--px-ease-out);
+}
+
+.px-modal--sm {
+  max-width: 420px;
+}
+.px-modal--lg {
+  max-width: 800px;
+}
+
+@keyframes px-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .px-modal {
+    animation: none;
+  }
+}
+
+.px-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--px-space-4);
+  padding: var(--px-space-5) var(--px-space-5) var(--px-space-3);
+}
+
+.px-modal__title {
+  font-size: var(--px-fs-20);
+  font-weight: var(--px-fw-semibold);
+}
+
+.px-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--px-target-min);
+  height: var(--px-target-min);
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  border-radius: var(--px-radius-card);
+  color: var(--px-text-muted);
+  cursor: pointer;
+}
+
+.px-modal__close:hover {
+  background: var(--px-surface-alt);
+  color: var(--px-text);
+}
+
+.px-modal__body {
+  padding: 0 var(--px-space-5) var(--px-space-5);
+  overflow: auto;
+}
+
+.px-modal__desc {
+  color: var(--px-text-muted);
+  font-size: var(--px-fs-14);
+}
+
+.px-modal__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--px-space-3);
+  padding: var(--px-space-4) var(--px-space-5);
+  border-top: 1px solid var(--px-border-subtle);
+  background: var(--px-surface-alt);
+  border-radius: 0 0 var(--px-radius-sheet) var(--px-radius-sheet);
+}
+
+@media (max-width: 599.98px) {
+  .px-modal-root {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .px-modal {
+    max-width: none;
+    max-height: 92vh;
+    border-radius: var(--px-radius-sheet) var(--px-radius-sheet) 0 0;
+  }
+  .px-modal__foot {
+    border-radius: 0;
+    padding-bottom: calc(var(--px-space-4) + env(safe-area-inset-bottom));
+  }
+}

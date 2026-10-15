@@ -1,0 +1,123 @@
+/* ------------------------------------------------------------------ *
+ * Admin console screens — additions only. The shared furniture
+ * (px-panel, px-kpis, px-form, px-dl …) lives in screens/lib/screens.css;
+ * this file styles only what the admin surfaces add. Tokens only —
+ * no hex colours, ever.
+ * ------------------------------------------------------------------ */
+
+/* ---- Filter bar (orders search/status) ------------------------------ */
+
+.px-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-4);
+  align-items: flex-end;
+  margin-bottom: var(--px-space-4);
+}
+.px-filterbar .px-field {
+  flex: 0 1 280px;
+  min-width: 220px;
+}
+
+/* ---- Row action groups (tables) ------------------------------------- */
+
+.px-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.px-row-actions__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--px-fs-12);
+  color: var(--px-danger);
+}
+
+/* ---- Category tree (catalogue) -------------------------------------- */
+
+.px-cat-tree,
+.px-cat-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.px-cat-tree ul {
+  margin-left: var(--px-space-5);
+  border-left: 1px solid var(--px-border-subtle);
+  padding-left: var(--px-space-4);
+}
+.px-cat-tree li {
+  margin-bottom: var(--px-space-3);
+}
+.px-cat-tree__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-space-2);
+}
+.px-cat-tree__name {
+  font-weight: var(--px-fw-semibold);
+}
+.px-cat-tree__slug {
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+}
+.px-cat-tree__count {
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+  white-space: nowrap;
+}
+
+/* ---- Inline notes (finance payout state, audit chain, CMS) ---------- */
+
+.px-note {
+  margin: 0 0 var(--px-space-4);
+  padding: var(--px-space-3) var(--px-space-4);
+  border-left: 3px solid var(--px-border-strong);
+  background: var(--px-surface-alt);
+  border-radius: var(--px-radius-card);
+  font-size: var(--px-fs-14);
+  color: var(--px-text);
+  max-width: 80ch;
+}
+.px-note p {
+  margin: 0;
+}
+.px-note p + p {
+  margin-top: var(--px-space-2);
+}
+
+/* ---- Risk-flag chips (approvals) ------------------------------------ */
+
+.px-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-space-1);
+}
+
+/* ---- KPI trend text (overview) -------------------------------------- */
+
+.px-kpi__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-space-1);
+  font-size: var(--px-fs-12);
+  color: var(--px-text-muted);
+  margin-top: var(--px-space-1);
+}
+
+/* ---- Modal form width ----------------------------------------------- */
+
+.px-modal .px-form {
+  max-width: none;
+}
+
+/* ---- Muted text utility --------------------------------------------- *
+ * The class name is used across screens (App.tsx, vendor portal) but was
+ * never defined; the token has always existed. Defined here so the admin
+ * surfaces render it correctly. Tokens only. */
+
+.px-text-muted {
+  color: var(--px-text-muted);
+}
