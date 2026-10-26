@@ -152,7 +152,7 @@ export function AssistantScreen() {
           />
         )}
 
-        <form className="px-chat__composer" onSubmit={onSubmit} role="search">
+        <form className="px-chat__composer" onSubmit={onSubmit}>
           <TextField
             label="Ask the assistant"
             hideLabel

@@ -149,15 +149,15 @@ function DetailInner() {
                   .map((s) => (
                     <div key={s.id} style={{ marginBottom: 'var(--px-space-4)' }}>
                       <p className="pxcu-line__meta">{s.vendorName}</p>
-                      <ul className="pxcu-timeline">
+                      <ol className="pxcu-timeline">
                         {s.tracking!.events.map((e, i) => (
-                          <li key={`${s.id}-${i}`}>
+                          <li key={`${s.id}-${i}`} aria-current={i === s.tracking!.events.length - 1 ? 'step' : undefined}>
                             <span className="pxcu-timeline__at">{dateTime(e.at)}</span>
                             {e.label}
                             {e.location && <> — {e.location}</>}
                           </li>
                         ))}
-                      </ul>
+                      </ol>
                     </div>
                   ))}
               </section>
@@ -169,14 +169,14 @@ function DetailInner() {
               <div className="px-panel__head">
                 <h2 id="od-timeline">Timeline</h2>
               </div>
-              <ul className="pxcu-timeline">
+              <ol className="pxcu-timeline">
                 {o.timeline.map((t, i) => (
-                  <li key={`${t.at}-${i}`}>
+                  <li key={`${t.at}-${i}`} aria-current={i === o.timeline.length - 1 ? 'step' : undefined}>
                     <span className="pxcu-timeline__at">{dateTime(t.at)}</span>
                     {t.label}
                   </li>
                 ))}
-              </ul>
+              </ol>
             </section>
           )}
         </div>

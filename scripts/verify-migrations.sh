@@ -22,17 +22,43 @@ check() { # check <label> <expected> <actual>
 
 OWN_SERVER=0
 if [[ -z "${MYSQL_ARGS:-}" ]]; then
-  # start a throwaway MariaDB on a socket
-  D="${TMPDIR:-/tmp}/pixcart-verify-data"; S="${TMPDIR:-/tmp}/pixcart-verify.sock"
-  rm -rf "$D"; mkdir -p "$D"
-  mariadb-install-db --datadir="$D" --user="$(id -un)" --auth-root-authentication-method=normal >/dev/null 2>&1
-  /usr/sbin/mariadbd --user="$(id -un)" --datadir="$D" --socket="$S" --skip-networking \
-      --pid-file="${TMPDIR:-/tmp}/pixcart-verify.pid" >"${TMPDIR:-/tmp}/pixcart-verify.log" 2>&1 &
-  for _ in $(seq 1 30); do mariadb-admin --socket="$S" ping >/dev/null 2>&1 && break; sleep 1; done
-  MYSQL_ARGS="--socket=$S"
-  OWN_SERVER=1
+  # Three ways to reach an engine, in order of preference. The first is the development
+  # sandbox this script was written in; the others exist because it was silently
+  # unusable anywhere else - on Windows there is no /usr/sbin/mariadbd and no unix
+  # socket, so the script failed at line 50 with "mariadb: command not found" for every
+  # migration and then reported 21 failed checks, none of which were about the schema.
+  if [[ -x /usr/sbin/mariadbd ]] && command -v mariadb-install-db >/dev/null 2>&1; then
+    D="${TMPDIR:-/tmp}/pixcart-verify-data"; S="${TMPDIR:-/tmp}/pixcart-verify.sock"
+    rm -rf "$D"; mkdir -p "$D"
+    mariadb-install-db --datadir="$D" --user="$(id -un)" --auth-root-authentication-method=normal >/dev/null 2>&1
+    /usr/sbin/mariadbd --user="$(id -un)" --datadir="$D" --socket="$S" --skip-networking \
+        --pid-file="${TMPDIR:-/tmp}/pixcart-verify.pid" >"${TMPDIR:-/tmp}/pixcart-verify.log" 2>&1 &
+    for _ in $(seq 1 30); do mariadb-admin --socket="$S" ping >/dev/null 2>&1 && break; sleep 1; done
+    MYSQL_ARGS="--socket=$S"
+    OWN_SERVER=1
+  elif command -v mariadb >/dev/null 2>&1 \
+       && mariadb -h 127.0.0.1 -P 3306 -u root --skip-ssl -e "SELECT 1" >/dev/null 2>&1; then
+    # Borrow an already-running local server. OWN_SERVER stays 0 so cleanup() does NOT
+    # shut down something this script did not start.
+    MYSQL_ARGS="-h 127.0.0.1 -P 3306 -u root --skip-ssl"
+  else
+    echo "${RED}No reachable MySQL-compatible engine${OFF}" >&2
+    echo "  looked for: a local mariadbd to spawn (unix socket), then 127.0.0.1:3306 as root" >&2
+    echo "  fix: start a server and export MYSQL_ARGS=\"-h 127.0.0.1 -P 3306 -u root\"" >&2
+    exit 1
+  fi
 fi
-M() { mariadb $MYSQL_ARGS "$DB" -N -B -e "$1" 2>&1; }
+# MYSQL_ARGS supplied by the caller is used verbatim - that is how CI points it at the
+# MySQL 8 service container.
+M() {
+  # Warnings are dropped from the captured stream because M() merges stderr into stdout to
+  # read CONSTRAINT NAMES out of violation errors. The mariadb client emits
+  # "WARNING: option --ssl-verify-server-cert is disabled, ..." on stderr for passwordless
+  # logins, which was prepended to every captured value - so "3" came back as
+  # "WARNING...\n3" and seven invariant checks reported FAIL with the right answer inside.
+  # ERROR lines are deliberately NOT filtered: a constraint violation must still be readable.
+  mariadb $MYSQL_ARGS "$DB" -N -B -e "$1" 2>&1 | grep -v '^WARNING:'
+}
 cleanup() { [[ "$OWN_SERVER" == "1" ]] && mariadb-admin $MYSQL_ARGS shutdown >/dev/null 2>&1; }
 trap cleanup EXIT
 

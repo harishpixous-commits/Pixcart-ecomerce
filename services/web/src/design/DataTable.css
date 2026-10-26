@@ -199,8 +199,8 @@
 }
 
 .px-table__select input {
-  width: 16px;
-  height: 16px;
+  width: var(--px-target-min);
+  height: var(--px-target-min);
   accent-color: var(--px-green-600);
   cursor: pointer;
 }

@@ -17,7 +17,7 @@
  * them would be a dead link.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
   LayoutGrid,
@@ -119,6 +119,7 @@ function Section({ section }: { section: NavSection }) {
 function SearchBox() {
   const [q, setQ] = useState('');
   const id = useId();
+  const navigate = useNavigate();
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +127,7 @@ function SearchBox() {
     if (!trimmed) return;
     // Navigating via a GET form means the query lives in the URL, which §8.3
     // requires so a search is shareable, bookmarkable and restorable on Back.
-    window.location.assign(`/search?q=${encodeURIComponent(trimmed)}`);
+    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
   };
 
   return (

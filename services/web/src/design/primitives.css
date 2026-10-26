@@ -130,8 +130,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: var(--px-target-min);
+  height: var(--px-target-min);
   margin-right: -4px;
   background: transparent;
   border: 0;
