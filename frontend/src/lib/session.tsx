@@ -1,0 +1,191 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { api, refreshSession, setAccessToken } from "./api";
+import type { CartView, User } from "./types";
+
+/* ---------------------------------------------------------------- guest cart (signed out) */
+
+export interface GuestLine {
+  variant_id: string;
+  qty: number;
+  title: string;
+  image: string;
+  price: number;
+  mrp: number;
+  slug: string;
+  variant_label: string;
+  seller_name: string;
+}
+
+const GUEST_KEY = "pc_guest_cart_v1";
+// Non-secret hint that a refresh cookie probably exists, so signed-out visitors skip the refresh call.
+const SESSION_HINT = "pc_signed_in";
+
+function hint(on?: boolean): boolean {
+  try {
+    if (on === true) window.localStorage.setItem(SESSION_HINT, "1");
+    else if (on === false) window.localStorage.removeItem(SESSION_HINT);
+    return window.localStorage.getItem(SESSION_HINT) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function readGuest(): GuestLine[] {
+  try {
+    const raw = window.localStorage.getItem(GUEST_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((l) => l && typeof l.variant_id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeGuest(lines: GuestLine[]) {
+  try {
+    window.localStorage.setItem(GUEST_KEY, JSON.stringify(lines));
+  } catch {
+    /* storage unavailable (private mode) — the cart lives for this page only */
+  }
+}
+
+/* ---------------------------------------------------------------- context */
+
+interface SessionCtx {
+  user: User | null;
+  ready: boolean;
+  signIn: (token: string, user: User) => Promise<void>;
+  signOut: () => Promise<void>;
+  reloadUser: () => Promise<void>;
+  cartCount: number;
+  guestLines: GuestLine[];
+  addToCart: (line: GuestLine) => Promise<void>;
+  setGuestQty: (variantId: string, qty: number) => void;
+  refreshCart: () => Promise<CartView | null>;
+}
+
+const Ctx = createContext<SessionCtx | null>(null);
+
+export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [ready, setReady] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+  const [guestLines, setGuestLines] = useState<GuestLine[]>([]);
+  // Kept in sync wherever setUser is called, so callbacks read the latest user without re-creating.
+  const userRef = useRef<User | null>(null);
+
+  const refreshCart = useCallback(async () => {
+    if (!userRef.current) {
+      const g = readGuest();
+      setGuestLines(g);
+      setCartCount(g.reduce((n, l) => n + l.qty, 0));
+      return null;
+    }
+    try {
+      const cart = await api<CartView>("/api/cart");
+      setCartCount(cart.summary.item_count + cart.groups.flatMap((g) => g.lines).filter((l) => l.problem).reduce((n, l) => n + l.qty, 0));
+      return cart;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const loadUser = useCallback(async () => {
+    const me = await api<User>("/api/auth/me");
+    setUser(me);
+    userRef.current = me;
+    return me;
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (hint() && (await refreshSession())) {
+        try {
+          await loadUser();
+        } catch {
+          setAccessToken(null);
+        }
+      } else {
+        hint(false);
+      }
+      setReady(true);
+      await refreshCart();
+    })();
+  }, [loadUser, refreshCart]);
+
+  const signIn = useCallback(
+    async (token: string, u: User) => {
+      setAccessToken(token);
+      hint(true);
+      setUser(u);
+      userRef.current = u;
+      const g = readGuest();
+      if (g.length) {
+        try {
+          await api("/api/cart/merge", { method: "POST", body: { items: g.map((l) => ({ variant_id: l.variant_id, qty: l.qty })) } });
+          writeGuest([]);
+          setGuestLines([]);
+        } catch {
+          /* keep the guest cart so nothing is lost */
+        }
+      }
+      await refreshCart();
+    },
+    [refreshCart],
+  );
+
+  const signOut = useCallback(async () => {
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch {
+      /* already signed out */
+    }
+    setAccessToken(null);
+    hint(false);
+    setUser(null);
+    userRef.current = null;
+    await refreshCart();
+  }, [refreshCart]);
+
+  const addToCart = useCallback(
+    async (line: GuestLine) => {
+      if (userRef.current) {
+        await api("/api/cart/items", { method: "POST", body: { variant_id: line.variant_id, qty: line.qty } });
+      } else {
+        const g = readGuest();
+        const existing = g.find((l) => l.variant_id === line.variant_id);
+        if (existing) existing.qty = Math.min(10, existing.qty + line.qty);
+        else g.push(line);
+        writeGuest(g);
+      }
+      await refreshCart();
+    },
+    [refreshCart],
+  );
+
+  const setGuestQty = useCallback((variantId: string, qty: number) => {
+    const g = readGuest()
+      .map((l) => (l.variant_id === variantId ? { ...l, qty } : l))
+      .filter((l) => l.qty > 0);
+    writeGuest(g);
+    setGuestLines(g);
+    setCartCount(g.reduce((n, l) => n + l.qty, 0));
+  }, []);
+
+  const reloadUser = useCallback(async () => {
+    await loadUser();
+  }, [loadUser]);
+
+  const value = useMemo(
+    () => ({ user, ready, signIn, signOut, reloadUser, cartCount, guestLines, addToCart, setGuestQty, refreshCart }),
+    [user, ready, signIn, signOut, reloadUser, cartCount, guestLines, addToCart, setGuestQty, refreshCart],
+  );
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useSession() {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("useSession outside SessionProvider");
+  return ctx;
+}

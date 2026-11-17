@@ -1,0 +1,98 @@
+"use client";
+
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/portal-shell";
+import { Button, ErrorNote, Modal, PageLoader, StatusPill, Textarea, useToast } from "@/components/ui";
+import { api, ApiError } from "@/lib/api";
+import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
+import type { OrderDetail } from "@/lib/types";
+import { CustomerMessage } from "./message";
+import { RiskBrief } from "@/components/ai";
+
+export default function AdminOrderDetail() {
+  const { id } = useParams<{ id: string }>();
+  const toast = useToast();
+  const [o, setO] = useState<OrderDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => api<OrderDetail>(`/api/admin/orders/${id}`).then(setO).catch((e) => setError(e.message)), [id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function act(path: string, body?: object, msg = "Updated") {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(path, { method: "POST", body });
+      await load();
+      toast(msg);
+      setCancelId(null);
+      setReason("");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!o) return error ? <ErrorNote message={error} /> : <PageLoader />;
+  const a = o.ship_to;
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader title={`Order ${o.number}`} sub={`${dateTime(o.created_at)}, ${o.payment_method === "cod" ? "cash on delivery" : "online"}: ${PAYMENT_STATUS_LABEL[o.payment_status]}`} />
+      <ErrorNote message={error} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <RiskBrief path={`/api/admin/ai/briefs/order/${o.id}`} title="Order risk" />
+        <CustomerMessage orderId={o.id} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Customer</h2><p>{o.customer?.name}</p><p className="text-ink-soft">{o.customer?.phone} {o.customer?.email}</p></section>
+        <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Ship to</h2><p className="text-ink-soft">{a.full_name}, {a.phone}, {a.line1}, {a.city}, {a.state} {a.pincode}</p></section>
+        <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Totals</h2><p>Order {rupeesExact(o.grand_total)}</p>{o.refunded_total > 0 && <p className="text-leaf">Refunded {rupeesExact(o.refunded_total)}</p>}</section>
+      </div>
+      {o.sub_orders.map((s) => (
+        <section key={s.id} className="rounded-xl bg-white p-4">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <h2 className="font-semibold">{s.number}, {s.seller?.name}</h2>
+            <StatusPill status={s.status} label={SUB_STATUS_LABEL[s.status]} />
+            <div className="ml-auto flex gap-2">
+              {s.status === "shipped" && <Button size="sm" onClick={() => act(`/api/admin/sub-orders/${s.id}/deliver`, undefined, "Marked delivered")} loading={busy}>Mark delivered</Button>}
+              {["pending_payment", "placed", "confirmed", "packed"].includes(s.status) && <Button size="sm" variant="danger" onClick={() => setCancelId(s.id)}>Cancel and refund</Button>}
+            </div>
+          </div>
+          <ul className="mb-2 text-[15px]">
+            {s.items.map((it, i) => <li key={i}>{it.title}{it.variant_label ? ` (${it.variant_label})` : ""} × {it.qty}: {rupeesExact(it.line_total)}</li>)}
+          </ul>
+          <p className="text-sm text-ink-soft">
+            Total {rupeesExact(s.total)}; commission {rupeesExact(s.commission ?? 0)} + GST {rupeesExact(s.commission_gst ?? 0)}; TCS {rupeesExact(s.tcs ?? 0)}; TDS {rupeesExact(s.tds ?? 0)}; seller payout {rupeesExact(s.seller_payout ?? 0)} ({s.settlement_status})
+          </p>
+          {s.tracking_number && <p className="text-sm">Tracking: {s.courier_name} {s.tracking_number}</p>}
+          {s.cancel_reason && <p className="text-sm text-vermilion">Cancelled by {s.cancelled_by}: {s.cancel_reason}</p>}
+        </section>
+      ))}
+      {o.refunds.length > 0 && (
+        <section className="rounded-xl bg-white p-4">
+          <h2 className="mb-2 font-semibold">Refunds</h2>
+          {o.refunds.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-3 border-t border-line py-2 text-[15px]">
+              <span>{rupeesExact(r.amount)}</span><StatusPill status={r.status} /><span className="text-ink-soft">{r.reason}</span>
+              {r.last_error && <span className="text-sm text-vermilion">{r.last_error}</span>}
+              {r.status === "failed" && r.id && <Button size="sm" variant="secondary" className="ml-auto" onClick={() => act(`/api/admin/refunds/${r.id}/retry`, undefined, "Refund retried")}>Retry</Button>}
+            </div>
+          ))}
+        </section>
+      )}
+      <section className="rounded-xl bg-white p-4">
+        <h2 className="mb-2 font-semibold">Timeline</h2>
+        <ol className="text-sm">{o.timeline.map((e, i) => <li key={i}><span className="text-ink-faint">{dateTime(e.at)}</span> {e.from ? `${e.from} to ` : ""}{e.to} by {e.actor}{e.note ? `: ${e.note}` : ""}</li>)}</ol>
+      </section>
+      <Modal open={!!cancelId} onClose={() => setCancelId(null)} title="Cancel this part of the order">
+        <p className="mb-2 text-ink-soft">Stock is returned to the seller. If the customer paid online, a refund is sent to Razorpay.</p>
+        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason shown to the customer and seller" aria-label="Reason" />
+        <Button className="mt-3" variant="buy" disabled={reason.trim().length < 5} loading={busy} onClick={() => act(`/api/admin/sub-orders/${cancelId}/cancel`, { reason }, "Cancelled")}>Cancel and refund</Button>
+      </Modal>
+    </div>
+  );
+}

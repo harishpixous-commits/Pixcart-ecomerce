@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --c-primary: 11 85 99;
+    --c-primary-dark: 7 59 69;
+    --c-primary-light: 227 239 241;
+    --c-accent: 245 165 36;
+    --c-accent-dark: 216 138 12;
+    --c-accent-light: 254 243 220;
+    --c-buy: 215 38 61;
+    --c-buy-dark: 176 28 48;
+    --c-buy-light: 252 232 235;
+    --c-success: 30 142 62;
+    --c-success-light: 230 244 234;
+    --c-page: 238 242 244;
+    --r-lg: 0.5rem;
+    --r-xl: 0.75rem;
+    --r-2xl: 1rem;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-mist font-sans text-[15px] leading-relaxed text-ink antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display leading-tight;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-primary));
+    outline-offset: 2px;
+  }
+}
+
+/* The one decorative flourish: a market-stall awning edge hanging under the header. */
+.awning {
+  height: 12px;
+  background-image: radial-gradient(circle at 12px 0, rgb(var(--c-primary)) 11.5px, transparent 12px);
+  background-size: 24px 12px;
+  background-repeat: repeat-x;
+}
+
+.scroll-x {
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.prose-cms h1 { @apply mb-3 mt-6 text-3xl font-semibold; }
+.prose-cms h2 { @apply mb-2 mt-6 text-2xl font-semibold; }
+.prose-cms h3 { @apply mb-2 mt-4 text-xl font-semibold; }
+.prose-cms p { @apply mb-3 leading-relaxed text-ink-soft; }
+.prose-cms ul { @apply mb-3 list-disc space-y-1 pl-6 text-ink-soft; }
+.prose-cms ol { @apply mb-3 list-decimal space-y-1 pl-6 text-ink-soft; }
+.prose-cms a { @apply font-semibold text-peacock underline-offset-2 hover:underline; }
+.prose-cms strong { @apply font-semibold text-ink; }

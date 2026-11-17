@@ -1,0 +1,19 @@
+# cp terraform.tfvars.example terraform.tfvars, then edit.
+domain            = "www.yourshop.in"
+hosted_zone       = "yourshop.in"
+media_domain      = "cdn.yourshop.in"
+github_repository = "your-github-user/pixcart-marketplace"
+alarm_email       = "ops@yourshop.in"
+
+app_env = {
+  PLATFORM_LEGAL_NAME     = "Your Company Pvt Ltd"
+  PLATFORM_GSTIN          = ""      # your e-commerce operator GSTIN
+  GRIEVANCE_OFFICER_NAME  = ""
+  GRIEVANCE_OFFICER_EMAIL = ""
+  GRIEVANCE_OFFICER_PHONE = ""
+  SMTP_HOST               = "email-smtp.ap-south-1.amazonaws.com"
+  SMTP_FROM               = "no-reply@yourshop.in" # sender name = brand name
+  PAYOUT_MODE             = "manual" # razorpayx once RazorpayX is active
+  SHIPPING_PROVIDER       = "manual" # shiprocket once the API user is created
+  AI_MODEL                = "claude-haiku-5-5"
+}
