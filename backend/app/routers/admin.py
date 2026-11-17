@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime, time, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, BackgroundTasks, File, Query, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import exists, func, or_, select, update
 
 from app.core.deps import SessionDep, audit
@@ -21,6 +22,7 @@ from app.models import (
     Category,
     Order,
     Product,
+    ProductImage,
     RefreshSession,
     Refund,
     Seller,
@@ -30,8 +32,10 @@ from app.models import (
 from app.models.catalog import GST_RATES_BPS
 from app.routers.orders import order_detail, run_refunds
 from app.routers.seller_onboarding import document_response, seller_profile
-from app.routers.seller_products import product_detail
-from app.services.catalog import images_for
+from app.config import settings
+from app.routers.seller_products import MAX_IMAGES, product_detail
+from app.services import storage
+from app.services.catalog import check_image_url, images_for
 from app.services.orders import cancel_sub_order, transition
 from app.services.platform_settings import get_settings, update_settings
 from app.services.reports import IST, tcs_report_data
@@ -41,6 +45,17 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 class ReasonIn(BaseModel):
     reason: str = Field(min_length=5, max_length=1000)
+
+
+class ProductImagesIn(BaseModel):
+    images: list[str] = Field(min_length=1, max_length=MAX_IMAGES)
+
+    @field_validator("images")
+    @classmethod
+    def _images(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("The same photo is listed twice")
+        return [check_image_url(u) for u in v]
 
 
 class CommissionIn(BaseModel):
@@ -270,6 +285,29 @@ async def _product(session, product_id: uuid.UUID, *, lock: bool = False) -> Pro
 @router.get("/products/{product_id}")
 async def get_product(product_id: uuid.UUID, admin: Perm("catalog"), session: SessionDep) -> dict:
     p = await _product(session, product_id)
+    data = await product_detail(session, p)
+    s = await session.get(Seller, p.seller_id)
+    data["seller"] = {"id": str(s.id), "name": s.display_name, "status": s.status}
+    return data
+
+
+@router.post("/products/images", status_code=201)
+async def upload_product_image(admin: Perm("catalog"), file: UploadFile = File(...)) -> dict:
+    """Stores a photo through the same validated pipeline sellers use; attach it with PUT .../images."""
+    data = await file.read(settings.max_image_bytes + 1)  # never buffer more than the limit
+    return {"url": await storage.save_image(data, "products")}
+
+
+@router.put("/products/{product_id}/images")
+async def set_product_images(product_id: uuid.UUID, body: ProductImagesIn, admin: Perm("catalog"), session: SessionDep) -> dict:
+    """Replaces a listing's photos (order = display order, first = main). The listing keeps its status:
+    this is a catalogue correction by staff, so it is not sent back to review."""
+    p = await _product(session, product_id, lock=True)
+    await session.execute(sa_delete(ProductImage).where(ProductImage.product_id == p.id))
+    for i, url in enumerate(body.images):
+        session.add(ProductImage(product_id=p.id, url=url, position=i))
+    audit(session, admin, "product.images", "product", p.id, f"{len(body.images)} photos")
+    await session.commit()
     data = await product_detail(session, p)
     s = await session.get(Seller, p.seller_id)
     data["seller"] = {"id": str(s.id), "name": s.display_name, "status": s.status}

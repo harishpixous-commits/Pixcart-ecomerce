@@ -23,7 +23,7 @@ export default async function SellPage() {
           <p className="max-w-md text-lg text-white/85">List your products on {brand}, ship orders from your own premises and get paid to your bank account after the return window closes.</p>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/login?next=/seller/onboarding" variant="cart" className="h-12 px-6">Start selling</ButtonLink>
-            <ButtonLink href="/seller" variant="secondary" className="h-12 bg-transparent px-6 text-white ring-white/50 hover:bg-white/10">Go to seller dashboard</ButtonLink>
+            <ButtonLink href="/seller" variant="outlineLight" className="h-12 px-6">Go to seller dashboard</ButtonLink>
           </div>
         </div>
         <dl className="grid grid-cols-2 gap-px bg-white/10">

@@ -11,9 +11,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import io
+import json
 import random
 import sys
+from pathlib import Path
 
+import httpx
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
 
@@ -90,6 +93,33 @@ async def seed_categories(session) -> dict[str, Category]:
         for j, (cname, (cbps, cgst, _)) in enumerate(children.items()):
             await upsert(cname, parent, cbps, cgst, j)
     await session.commit()
+    return out
+
+
+DEMO_IMAGES_DIR = Path(__file__).parent / "demo_images"
+
+
+def demo_photos(title: str) -> list[bytes]:
+    """Real product photos for a demo listing, from demo_images/manifest.json (keyed by title).
+
+    Each entry has a `file` in demo_images/ and optionally a `url`: when the file is missing and a
+    url is given, the photo is downloaded and saved as that file, so swapping a photo is a one-line
+    edit. Returns [] when the title has no entry (the caller then draws a placeholder)."""
+    manifest = DEMO_IMAGES_DIR / "manifest.json"
+    if not manifest.exists():
+        return []
+    entries = json.loads(manifest.read_text(encoding="utf-8")).get("products", {}).get(title, [])
+    out = []
+    for e in entries:
+        path = DEMO_IMAGES_DIR / e["file"]
+        if not path.exists() and e.get("url"):
+            r = httpx.get(e["url"], follow_redirects=True, timeout=60, headers={"User-Agent": "PixCartDemoImageSeeder/1.0"})
+            r.raise_for_status()
+            path.write_bytes(r.content)
+        if path.exists():
+            out.append(path.read_bytes())
+        else:
+            print(f"  missing demo photo {e['file']} for {title!r}; skipped")
     return out
 
 
@@ -238,8 +268,9 @@ async def seed_demo(session, cats: dict[str, Category]) -> None:
         )
         session.add(p)
         await session.flush()
-        for k in range(2):
-            url = await storage.save_image(demo_image(title, color, k), "products")
+        photos = demo_photos(title) or [demo_image(title, color, k) for k in range(2)]
+        for k, data in enumerate(photos):
+            url = await storage.save_image(data, "products")
             session.add(ProductImage(product_id=p.id, url=url, position=k))
         for j, combo in enumerate(_combos(options)):
             v = Variant(product_id=p.id, seller_id=seller.id, sku=f"P{n:02d}-{j:02d}", options=combo, mrp_paise=mrp, price_paise=price, stock=0)

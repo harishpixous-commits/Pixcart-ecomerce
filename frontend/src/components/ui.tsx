@@ -8,7 +8,7 @@ import { rupees } from "@/lib/format";
 
 /* ---------------------------------------------------------------- buttons */
 
-type Variant = "primary" | "cart" | "buy" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "cart" | "buy" | "secondary" | "ghost" | "danger" | "outlineLight";
 
 const VARIANTS: Record<Variant, string> = {
   primary: "bg-peacock text-white hover:bg-peacock-dark",
@@ -17,6 +17,9 @@ const VARIANTS: Record<Variant, string> = {
   secondary: "bg-white text-peacock ring-1 ring-inset ring-peacock/40 hover:bg-peacock-light",
   ghost: "text-peacock hover:bg-peacock-light",
   danger: "bg-white text-vermilion ring-1 ring-inset ring-vermilion/40 hover:bg-vermilion-light",
+  // For dark panels (e.g. the peacock hero). Use a variant rather than overriding bg/text through className:
+  // classes are joined with clsx (no tailwind-merge), so a conflicting override loses to CSS order.
+  outlineLight: "bg-transparent text-white ring-1 ring-inset ring-white/60 hover:bg-white/15",
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

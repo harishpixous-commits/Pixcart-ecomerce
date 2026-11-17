@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
-import { Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, ImagePlus, Sparkles, X } from "lucide-react";
 import { Button, ErrorNote, Modal, PageLoader, Pill, StatusPill, Textarea, useToast } from "@/components/ui";
 import { useSite } from "@/lib/site";
 import { api, ApiError } from "@/lib/api";
@@ -86,12 +86,7 @@ export default function AdminProductReview() {
       )}
       <div className="flex items-center gap-3"><StatusPill status={p.status} />{p.rejection_reason && <span className="text-vermilion">{p.rejection_reason}</span>}</div>
       <section className="rounded-xl bg-white p-5">
-        <div className="mb-4 flex flex-wrap gap-3">
-          {p.images.map((src) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={src} src={src} alt="" className="h-40 w-40 rounded-lg border border-line object-contain" />
-          ))}
-        </div>
+        <PhotoEditor key={p.images.join("|")} productId={id} images={p.images} onSaved={(next) => { setP(next); toast("Photos saved"); }} />
         <dl className="grid grid-cols-[150px_1fr] gap-y-1.5 text-[15px]">
           <dt className="text-ink-faint">Brand</dt><dd>{p.brand || "—"}</dd>
           <dt className="text-ink-faint">HSN / GST</dt><dd>{p.hsn_code} at {pct(p.gst_bps)}</dd>
@@ -126,6 +121,91 @@ export default function AdminProductReview() {
           {p.status === "approved" ? "Take down" : "Reject"}
         </Button>
       </Modal>
+    </div>
+  );
+}
+
+const MAX_PHOTOS = 8;
+
+/** Staff can correct a listing's photos: add, remove, reorder (first = main), then save. */
+function PhotoEditor({ productId, images, onSaved }: { productId: string; images: string[]; onSaved: (p: SellerProduct) => void }) {
+  const [draft, setDraft] = useState<string[]>(images);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dirty = draft.join("|") !== images.join("|");
+
+  async function upload(files: FileList) {
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files).slice(0, MAX_PHOTOS - draft.length)) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await api<{ url: string }>("/api/admin/products/images", { method: "POST", form });
+        setDraft((cur) => [...cur, r.url]);
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function move(i: number, d: -1 | 1) {
+    const j = i + d;
+    if (j < 0 || j >= draft.length) return;
+    const next = [...draft];
+    [next[i], next[j]] = [next[j], next[i]];
+    setDraft(next);
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await api<SellerProduct>(`/api/admin/products/${productId}/images`, { method: "PUT", body: { images: draft } }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not save photos");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">Photos</h2>
+        {dirty && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setDraft(images)} disabled={saving}>Discard</Button>
+            <Button size="sm" onClick={save} loading={saving} disabled={!draft.length || uploading}>Save photos</Button>
+          </div>
+        )}
+      </div>
+      <ErrorNote message={error} />
+      <div className="flex flex-wrap gap-3">
+        {draft.map((src, i) => (
+          <div key={src} className="relative h-40 w-40 overflow-hidden rounded-lg border border-line bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={`Photo ${i + 1}`} className="h-full w-full object-contain" />
+            {i === 0 && <span className="absolute left-1 top-1 rounded bg-peacock px-1.5 text-xs font-semibold text-white">Main</span>}
+            <div className="absolute inset-x-0 bottom-0 flex justify-between bg-white/90 p-0.5">
+              <button type="button" onClick={() => move(i, -1)} aria-label="Move left" className="p-1 disabled:opacity-30" disabled={i === 0}><ArrowLeft className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setDraft(draft.filter((x) => x !== src))} aria-label="Remove photo" className="p-1 text-vermilion"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={() => move(i, 1)} aria-label="Move right" className="p-1 disabled:opacity-30" disabled={i === draft.length - 1}><ArrowRight className="h-4 w-4" /></button>
+            </div>
+          </div>
+        ))}
+        {draft.length < MAX_PHOTOS && (
+          <label className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-line text-sm font-semibold text-peacock hover:border-peacock">
+            <ImagePlus className="h-6 w-6" />
+            {uploading ? "Uploading" : "Add photos"}
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" disabled={uploading} onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ""; }} />
+          </label>
+        )}
+      </div>
+      <p className="mt-2 text-sm text-ink-faint">Up to {MAX_PHOTOS} photos. The first one is the main photo. Changes go live when you save.</p>
     </div>
   );
 }

@@ -78,6 +78,16 @@ In development, OTPs are printed in the API log (`DEV OTP for 98xxxxxxxx: 123456
 with mobiles 9000000001 to 9000000003, the demo customer with 9999900001. The admin panel is at
 `/admin/login`. Demo coupons: `WELCOME10` (first order) and `FESTIVE250`.
 
+**Demo product photos** are real, openly licensed photos in `backend/scripts/demo_images/` (credits and
+licences in `CREDITS.md` there; keep that file with the photos). `manifest.json` maps each demo product title
+to its photos: change a `file`, or add a `url` to download a new photo, then run
+`python -m scripts.apply_demo_images` to update an already-seeded database (a fresh `seed --demo` uses them
+automatically). One listing at a time, photos can be changed in Admin → Products → open a listing → Photos
+(add, remove, reorder; the first is the main photo), or by the seller in the seller panel.
+
+**Test logins**: add extra admin logins in Admin → Staff → Add staff. Use **Remove access** to switch a login
+off (it is signed out at once) and **Restore** to switch it back on.
+
 Every integration is optional and switches on when its keys are set: Razorpay, RazorpayX, MSG91, SMTP,
 WhatsApp, Shiprocket, Anthropic (AI), S3 and Sentry. Admin → Integrations shows which are connected.
 
