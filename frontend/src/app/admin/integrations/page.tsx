@@ -51,7 +51,7 @@ export default function Integrations() {
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-faint">{label}</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {items.map((i) => (
-                <button key={i.key} id={i.key} onClick={() => setOpen(i)} className="min-w-0 rounded-xl bg-white p-4 text-left ring-brand/40 transition hover:ring-2 focus-visible:ring-2">
+                <button key={i.key} id={i.key} onClick={() => setOpen(i)} className="min-w-0 rounded-xl bg-white p-4 text-left ring-peacock/40 transition hover:ring-2 focus-visible:ring-2">
                   <div className="flex items-center gap-2">
                     {i.ready ? <CheckCircle2 className="h-5 w-5 shrink-0 text-leaf" /> : <CircleDashed className="h-5 w-5 shrink-0 text-ink-faint" />}
                     <span className="truncate text-lg font-semibold">{i.name}</span>
@@ -217,7 +217,7 @@ function Editor({ item, onClose, onSaved }: { item: Item; onClose: () => void; o
             <div className="rounded-lg bg-mist p-3">
               <p className="font-medium">Webhook address</p>
               <p className="mt-1 flex items-start gap-1 break-all font-mono text-xs">{item.webhook_url}
-                <button type="button" onClick={() => copy(item.webhook_url)} aria-label="Copy webhook address" className="shrink-0 text-brand"><Copy className="h-3.5 w-3.5" /></button></p>
+                <button type="button" onClick={() => copy(item.webhook_url)} aria-label="Copy webhook address" className="shrink-0 text-peacock"><Copy className="h-3.5 w-3.5" /></button></p>
               <p className="mt-2 font-medium">Events</p>
               <p className="text-xs text-ink-soft">{item.webhook_events.join(", ")}</p>
             </div>
@@ -225,7 +225,7 @@ function Editor({ item, onClose, onSaved }: { item: Item; onClose: () => void; o
           <div>
             <p className="font-medium">How to set it up</p>
             <ol className="mt-1 list-decimal space-y-1 pl-5 text-ink-soft">{item.setup_steps.map((s) => <li key={s}>{s}</li>)}</ol>
-            <a className="mt-2 inline-flex items-center gap-1 text-brand underline" href={item.docs_url} target="_blank" rel="noreferrer">Provider guide<ExternalLink className="h-3.5 w-3.5" /></a>
+            <a className="mt-2 inline-flex items-center gap-1 text-peacock underline" href={item.docs_url} target="_blank" rel="noreferrer">Provider guide<ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
           {item.missing.length > 0 && <p className="text-amber-700">Still needed: {item.missing.join(", ")}</p>}
         </aside>

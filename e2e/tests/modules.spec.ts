@@ -56,6 +56,7 @@ test("admin manages business details, contact and social links, and the shop fol
 test("export centre downloads CSV files with the right content", async ({ admin, seller }) => {
   await admin.goto("/admin/exports");
   const card = admin.locator("section", { has: admin.getByRole("heading", { name: "Orders (one row per package)" }) });
+  await card.getByRole("radio", { name: "CSV" }).click();
   const [file] = await Promise.all([admin.waitForEvent("download"), card.getByRole("button", { name: "Download CSV" }).click()]);
   expect(file.suggestedFilename()).toMatch(/-orders-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.csv$/);
   const text = readFileSync(await file.path(), "utf8");
@@ -70,6 +71,7 @@ test("export centre downloads CSV files with the right content", async ({ admin,
 
   await seller.goto("/seller/exports");
   const stock = seller.locator("section", { has: seller.getByRole("heading", { name: "Stock", exact: true }) });
+  await stock.getByRole("radio", { name: "CSV" }).click();
   const [sf] = await Promise.all([seller.waitForEvent("download"), stock.getByRole("button", { name: "Download CSV" }).click()]);
   expect(readFileSync(await sf.path(), "utf8").split("\r\n")[0]).toContain("sku,warehouse_code,quantity");
 });

@@ -1,11 +1,12 @@
 "use client";
 
 import {
-  BarChart3, Bell, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
+  BarChart3, Bell, Bot, Cpu, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
   ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AssistantDock } from "@/components/assistant/dock";
 import { PortalShell } from "@/components/portal-shell";
 import { PageLoader } from "@/components/ui";
 import { AdminCtx, type AdminMe } from "@/lib/admin";
@@ -58,6 +59,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/exports", label: "Exports", icon: FileDown, p: "dashboard" },
     { href: "/admin/settings", label: "Settings", icon: Settings, p: "settings" },
     { href: "/admin/ai", label: "AI studio", icon: Sparkles, p: "settings" },
+    { href: "/admin/assistant", label: "AI assistant", icon: Bot, p: "settings" },
+    { href: "/admin/ai-providers", label: "AI providers", icon: Cpu, p: "ai_providers" },
+    { href: "/admin/go-live", label: "Go-live checklist", icon: Rocket, p: "dashboard" },
     { href: "/admin/integrations", label: "Integrations", icon: Plug, p: "integrations" },
     { href: "/admin/staff", label: "Staff and roles", icon: ShieldCheck, p: "staff" },
     { href: "/admin/audit", label: "Audit log", icon: FileClock, p: "audit" },
@@ -68,6 +72,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <PortalShell title={`Admin, ${me.role_label}`} root="/admin" nav={nav}>
         {children}
       </PortalShell>
+      {can("assistant") && <AssistantDock />}
     </AdminCtx.Provider>
   );
 }

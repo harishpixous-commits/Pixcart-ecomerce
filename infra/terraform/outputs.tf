@@ -17,3 +17,7 @@ output "webhook_urls" {
     shiprocket = "https://${var.domain}/api/webhooks/shiprocket"
   }
 }
+output "outbound_ip" {
+  description = "The servers' fixed outbound IP (NAT). Allowlist it in RazorpayX → Developer controls."
+  value       = aws_eip.nat.public_ip
+}

@@ -215,6 +215,7 @@ export interface SubOrderView {
 export interface CheckoutPayload {
   provider: "razorpay";
   key_id: string;
+  checkout_url?: string;
   razorpay_order_id: string;
   amount: Paise;
   currency: "INR";

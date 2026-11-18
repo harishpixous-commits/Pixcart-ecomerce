@@ -37,7 +37,9 @@ log = logging.getLogger("pixcart.ai")
 
 async def mode() -> str:
     """live when a key is set (and not in tests); otherwise sandbox, which returns marked placeholder text."""
-    if env.environment == "test" and client.transport is None:
+    from app.llm import adapters
+
+    if env.environment == "test" and adapters.transport is None:
         return "sandbox"
     return "live" if await client.configured() else "sandbox"
 
@@ -220,7 +222,7 @@ async def run(
     try:
         if current == "live":
             site = await get_site(session)
-            comp = await client.complete(model=cfg["model"], rules=task.rules, brand=_brand_block(site, cfg, tcfg),
+            comp = await client.complete(session, rules=task.rules, brand=_brand_block(site, cfg, tcfg),
                                          user=task.build(inputs, model_inputs), max_tokens=task.max_tokens)
             parsed = task.parse(comp.text)
             record.model, record.latency_ms = comp.model, comp.latency_ms

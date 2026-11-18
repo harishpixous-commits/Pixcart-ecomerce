@@ -41,7 +41,7 @@ class FieldDef:
 class Provider:
     key: str
     name: str
-    group: Literal["payments", "messaging", "shipping", "ai", "monitoring", "analytics"]
+    group: Literal["payments", "messaging", "shipping", "ai", "monitoring"]
     purpose: str
     fields: tuple[FieldDef, ...]
     docs_url: str
@@ -253,23 +253,6 @@ PROVIDERS: tuple[Provider, ...] = (
         docs_url="https://docs.sentry.io/platforms/python/integrations/fastapi/",
         setup_steps=("Create a Python/FastAPI project in Sentry and copy its DSN here.", "Save; the server starts reporting within a minute."),
     ),
-    Provider(
-        key="analytics",
-        name="Storefront analytics",
-        group="analytics",
-        purpose="Google Analytics 4 and Meta Pixel on the storefront (never on admin or seller pages).",
-        fields=(
-            FieldDef("ga4_measurement_id", "Google Analytics 4 measurement ID", "ga4_measurement_id", pattern=r"G-[A-Z0-9]{4,15}", pattern_hint="G-XXXXXXX"),
-            FieldDef("meta_pixel_id", "Meta Pixel ID", "meta_pixel_id", pattern=r"[0-9]{8,20}", pattern_hint="Digits"),
-            FieldDef("need_consent", "Ask visitors before loading trackers", "analytics_need_consent", kind="bool",
-                     help="Recommended under the DPDP Act: trackers load only after the visitor accepts."),
-        ),
-        off={"ga4_measurement_id": "", "meta_pixel_id": ""},
-        default_on="ga4_measurement_id|meta_pixel_id",
-        testable=False,
-        docs_url="https://support.google.com/analytics/answer/9539598",
-        setup_steps=("Copy the measurement ID from GA4 → Admin → Data streams.", "Copy the Pixel ID from Meta Events Manager.", "Save and switch on."),
-    ),
 )
 
 BY_KEY = {p.key: p for p in PROVIDERS}
@@ -280,7 +263,6 @@ GROUP_LABELS = {
     "shipping": "Shipping",
     "ai": "AI",
     "monitoring": "Monitoring",
-    "analytics": "Analytics",
 }
 
 

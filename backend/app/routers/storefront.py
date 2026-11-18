@@ -32,9 +32,8 @@ async def site(session: SessionDep) -> dict:
     # Sellers see AI buttons when AI studio is on and a key is set (or, outside production, in sandbox mode).
     features["ai"] = bool(ai_cfg["enabled"]) and (await ai_service.mode() == "live" or env.environment != "production")
     ic = await get_integrations(session)
-    analytics = {"ga4": ic.ga4_measurement_id, "meta_pixel": ic.meta_pixel_id, "need_consent": bool(ic.analytics_need_consent)}
     return {**s, "features": features, "cod_enabled": cfg["cod_enabled"], "online_payments": ic.online_payments,
-            "free_shipping_threshold_paise": cfg["free_shipping_threshold_paise"], "analytics": analytics}
+            "free_shipping_threshold_paise": cfg["free_shipping_threshold_paise"]}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

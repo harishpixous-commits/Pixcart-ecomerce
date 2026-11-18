@@ -70,16 +70,20 @@ test("list pages export what is on screen", async ({ admin, seller }) => {
   await admin.goto("/admin/returns");
   await admin.getByRole("button", { name: "Export" }).click();
   await admin.getByLabel("Period").selectOption("90");
+  await admin.getByRole("dialog", { name: "Export" }).getByRole("radio", { name: "CSV" }).click();
   const [file] = await Promise.all([admin.waitForEvent("download"), admin.getByRole("dialog", { name: "Export" }).getByRole("button", { name: "Download CSV" }).click()]);
   expect(file.suggestedFilename()).toMatch(/-returns-.*\.csv$/);
   expect(readFileSync(await file.path(), "utf8")).toContain("Return,Package,Seller");
 
   await seller.goto("/seller/orders");
   await seller.getByRole("button", { name: "Export" }).click();
+  await seller.getByRole("dialog", { name: "Export" }).getByRole("radio", { name: "CSV" }).click();
   const [sf] = await Promise.all([seller.waitForEvent("download"), seller.getByRole("dialog", { name: "Export" }).getByRole("button", { name: "Download CSV" }).click()]);
   expect(readFileSync(await sf.path(), "utf8")).toContain("Package,Order,Placed (IST)");
 
   await admin.goto("/admin/sellers");
-  const [all] = await Promise.all([admin.waitForEvent("download"), admin.getByRole("button", { name: "Export" }).click()]);
+  await admin.getByRole("button", { name: "Export" }).click();
+  await admin.getByRole("dialog", { name: "Export" }).getByRole("radio", { name: "CSV" }).click();
+  const [all] = await Promise.all([admin.waitForEvent("download"), admin.getByRole("dialog", { name: "Export" }).getByRole("button", { name: "Download CSV" }).click()]);
   expect(readFileSync(await all.path(), "utf8")).toContain("Store,Legal name");
 });

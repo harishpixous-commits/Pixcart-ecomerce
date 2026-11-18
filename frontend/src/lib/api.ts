@@ -160,6 +160,76 @@ export async function downloadFile(path: string, query?: Options["query"], fallb
   return name;
 }
 
+function saveBlob(blob: Blob, name: string) {
+  const href = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  }
+}
+
+/** POSTs JSON and saves the file the server returns (e.g. a ZIP of several reports). */
+export async function downloadPost(path: string, body: unknown, fallback = "download"): Promise<string> {
+  const go = () => fetch(path, {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "pixcart", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  let res = await go();
+  if (res.status === 401 && (await refreshSession())) res = await go();
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const e = data.error ?? {};
+    throw new ApiError(res.status, e.code ?? "download_failed", e.message ?? "Could not download the file. Try again.", e.fields ?? {});
+  }
+  const name = filenameFrom(res.headers.get("content-disposition"), fallback);
+  saveBlob(await res.blob(), name);
+  return name;
+}
+
+/**
+ * Streams Server-Sent Events from a POST (the AI assistant). Calls onEvent for each JSON event.
+ * Pass an AbortSignal to stop; the server saves what was said so far.
+ */
+export async function streamPost(path: string, body: unknown, onEvent: (ev: Record<string, unknown>) => void, signal?: AbortSignal): Promise<void> {
+  const go = () => fetch(path, {
+    method: "POST", credentials: "same-origin", signal,
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream", "X-Requested-With": "pixcart", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  let res = await go();
+  if (res.status === 401 && (await refreshSession())) res = await go();
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    const e = data.error ?? {};
+    throw new ApiError(res.status, e.code ?? "error", e.message ?? "The assistant could not answer. Try again.", e.fields ?? {});
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      const chunk = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const data = chunk.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("\n");
+      if (data) {
+        try { onEvent(JSON.parse(data)); } catch { /* ignore a broken event */ }
+      }
+    }
+  }
+}
+
 export async function downloadBlob(path: string): Promise<Blob> {
   const go = () => fetch(path, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
   let res = await go();

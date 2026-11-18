@@ -87,10 +87,6 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.05
 
-    # --- storefront analytics (also editable in Admin → Integrations) ------------------
-    ga4_measurement_id: str = ""  # G-XXXXXXX
-    meta_pixel_id: str = ""
-    analytics_need_consent: bool = True  # load trackers only after the visitor accepts
 
     msg91_api_base: str = "https://control.msg91.com"
 

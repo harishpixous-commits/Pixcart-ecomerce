@@ -5,7 +5,7 @@ import logging
 from datetime import timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import delete, text
+from sqlalchemy import delete, update, text
 
 from app.core.deps import prune_rate_limits
 from app.db import SessionLocal, engine, utcnow
@@ -74,6 +74,11 @@ async def cleanup_job() -> None:
     async def run(session):
         await prune_rate_limits(session)
         await session.execute(delete(OtpChallenge).where(OtpChallenge.created_at < utcnow() - timedelta(days=2)))
+        # Files given to the AI assistant are kept for 7 days only; stale action proposals expire.
+        from app.models import AssistantAction, AssistantUpload
+
+        await session.execute(delete(AssistantUpload).where(AssistantUpload.expires_at < utcnow()))
+        await session.execute(update(AssistantAction).where(AssistantAction.status == "pending", AssistantAction.created_at < utcnow() - timedelta(hours=1)).values(status="expired"))
         await session.commit()
 
     await _with_lock(_LOCK_CLEANUP, run)

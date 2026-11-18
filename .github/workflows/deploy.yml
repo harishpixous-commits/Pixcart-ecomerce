@@ -1,5 +1,7 @@
 # Builds both images, runs database migrations, then rolls out the API and the web services.
-# Needs (GitHub → Settings → Environments → production → variables):
+# Pushes to main deploy to "production". Run it by hand (Actions → Deploy → Run workflow) and pick
+# "staging" to deploy the same commit to the staging stack.
+# Needs, per GitHub environment (Settings → Environments → staging / production → variables):
 #   AWS_DEPLOY_ROLE_ARN  output deploy_role_arn from Terraform
 #   AWS_REGION           ap-south-1
 #   ECS_CLUSTER          output ecs_cluster
@@ -8,13 +10,19 @@
 name: Deploy
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
   workflow_run:
     workflows: [CI]
     branches: [main]
     types: [completed]
 
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.event.inputs.target || 'production' }}
   cancel-in-progress: false
 
 permissions:
@@ -25,7 +33,7 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.event.inputs.target || 'production' }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       CLUSTER: ${{ vars.ECS_CLUSTER }}

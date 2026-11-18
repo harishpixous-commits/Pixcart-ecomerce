@@ -46,6 +46,7 @@ test.describe.serial("order to refund, across customer, seller and admin", () =>
     await page.getByRole("button", { name: "Apply", exact: true }).first().click();
     await expect(page.getByText(/WELCOME10\s+applied/).first()).toBeVisible();
 
+    await page.getByText("Cash on delivery", { exact: true }).click(); // online payment is the default when Razorpay is connected
     await page.getByRole("button", { name: "Place order" }).click();
     await expect(page.getByText("Package 1 of 1").first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Coupon WELCOME10").first()).toBeVisible();

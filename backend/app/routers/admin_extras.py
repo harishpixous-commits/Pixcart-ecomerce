@@ -554,6 +554,74 @@ async def setup_status(admin: Perm("dashboard"), session: SessionDep) -> dict:
 # ----------------------------------------------------------------------------- integrations & AI
 
 
+@router.get("/go-live")
+async def go_live(admin: Perm("dashboard"), session: SessionDep) -> dict:
+    """Everything between staging and launch, in order, with what is done. Mirrors docs/GO_LIVE.md."""
+    from app.integrations import store as istore
+    from app.llm import config as llm_config
+    from app.services.platform_settings import get_settings
+
+    site = await get_site(session)
+    b = site["business"]
+    ic = await get_integrations(session)
+    st = {i["key"]: i for i in await istore.status(session)}
+    cfg = await get_settings(session)
+    pages = {p.slug: p for p in (await session.execute(select(CmsPage))).scalars()}
+    placeholder = lambda slug: slug in pages and pages[slug].is_published and "placeholder" not in (pages[slug].body or "").lower()  # noqa: E731
+    llm_ready = bool(await llm_config.targets(session, "assistant"))
+    https = settings.public_web_url.startswith("https://")
+
+    def item(key, label, done, detail="", href="", who="admin", required=True):
+        return {"key": key, "label": label, "done": bool(done), "detail": detail, "href": href, "who": who, "required": required}
+
+    sections = [
+        {"title": "1. Servers and domain (Terraform, one time)", "items": [
+            item("aws", "AWS account, Route 53 domain, Terraform state bucket", https, settings.public_web_url, who="terraform"),
+            item("https", "Site served over HTTPS on your domain", https, "", who="terraform"),
+            item("storage", "Images and KYC files on S3", settings.storage_backend == "s3", settings.storage_backend, who="terraform"),
+            item("secrets", "JWT, encryption key and database password generated", settings.environment != "production" or not settings.jwt_secret.startswith("dev-only"), "AWS Secrets Manager", who="terraform"),
+        ]},
+        {"title": "2. Payments", "items": [
+            item("razorpay", "Razorpay keys and webhook", st["razorpay"]["ready"] and ic.razorpay_webhook_secret, f"{st['razorpay']['mode'] or 'not set'} keys", "/admin/integrations#razorpay"),
+            item("razorpay_live", "Live Razorpay keys (not test)", st["razorpay"]["mode"] == "live", "Switch after KYC is approved", "/admin/integrations#razorpay"),
+            item("razorpayx", "RazorpayX automatic payouts", st["razorpayx"]["ready"], "Optional: bank file + UTR works without it", "/admin/integrations#razorpayx", required=False),
+        ]},
+        {"title": "3. Messages", "items": [
+            item("msg91", "MSG91 SMS with DLT-approved OTP template", st["msg91"]["ready"], "Customers sign in with OTP", "/admin/integrations#msg91"),
+            item("email", "Email through Amazon SES (verified domain)", st["email"]["ready"], ic.smtp_from or "", "/admin/integrations#email"),
+            item("whatsapp", "WhatsApp Cloud API with approved templates", st["whatsapp"]["ready"], "", "/admin/integrations#whatsapp", required=False),
+        ]},
+        {"title": "4. Shipping, AI and monitoring", "items": [
+            item("shiprocket", "Shiprocket API user and webhook", st["shiprocket"]["ready"], "Optional: sellers can enter AWB by hand", "/admin/integrations#shiprocket", required=False),
+            item("ai", "AI model connected (Claude or another provider)", llm_ready, "Assistant and AI studio work in sandbox until then", "/admin/ai-providers", required=False),
+            item("sentry", "Sentry error tracking", st["sentry"]["ready"], "", "/admin/integrations#sentry", required=False),
+            item("analytics", "Google Analytics / Meta Pixel", site["analytics"]["google_analytics_id"] or site["analytics"]["meta_pixel_id"], "", "/admin/storefront?tab=brand", required=False),
+        ]},
+        {"title": "5. Business details (Consumer Protection (E-Commerce) Rules 2020)", "items": [
+            item("legal_name", "Registered business name", b["legal_name"], b["legal_name"], "/admin/storefront?tab=business"),
+            item("gstin", "E-commerce operator GSTIN", b["gstin"], b["gstin"], "/admin/storefront?tab=business"),
+            item("address", "Registered address", b["registered_address"], "", "/admin/storefront?tab=business"),
+            item("grievance", "Grievance officer name, email and phone", b["grievance"]["name"] and b["grievance"]["email"] and b["grievance"].get("phone"), b["grievance"]["name"], "/admin/storefront?tab=business"),
+        ]},
+        {"title": "6. Policies (your lawyer)", "items": [
+            item("terms", "Terms of use reviewed and published", placeholder("terms"), "", "/admin/storefront?tab=pages", who="lawyer"),
+            item("privacy", "Privacy notice (DPDP Act 2023) reviewed and published", placeholder("privacy"), "", "/admin/storefront?tab=pages", who="lawyer"),
+            item("returns_policy", "Returns and refunds policy reviewed and published", placeholder("returns-policy"), "", "/admin/storefront?tab=pages", who="lawyer"),
+        ]},
+        {"title": "7. Tax rates (your CA)", "items": [
+            item("tax", "TCS, TDS and GST on commission confirmed", True, f"TCS {cfg['tcs_bps'] / 100:g}% · TDS {cfg['tds_bps'] / 100:g}% · GST on commission {cfg['commission_gst_bps'] / 100:g}% — confirm, then change in Settings if needed",
+                 "/admin/settings", who="ca"),
+        ]},
+        {"title": "8. Your own account", "items": [
+            item("two_step", "Two-step sign-in on your admin account", admin.totp_enabled, "", "/admin/account"),
+            item("staff", "Staff added with the right roles", True, "Owner, operations, finance, support…", "/admin/staff", required=False),
+        ]},
+    ]
+    flat = [i for sec in sections for i in sec["items"]]
+    req = [i for i in flat if i["required"]]
+    return {"environment": settings.environment, "done": sum(i["done"] for i in req), "total": len(req), "ready": all(i["done"] for i in req), "sections": sections}
+
+
 @router.post("/products/{product_id}/ai-check")
 async def ai_check(product_id: uuid.UUID, admin: Perm("catalog"), session: SessionDep) -> dict:
     from app.ai import service as ai_service
