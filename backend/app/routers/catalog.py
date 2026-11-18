@@ -20,7 +20,9 @@ from app.services.catalog import (
     public_product_filter,
     variant_label,
 )
+from app.services import product_page as pp
 from app.services.platform_settings import get_settings
+from app.services.product_info import details_of, fmt_qty, important_info, info_rows, unit_price
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
@@ -64,13 +66,23 @@ async def _category_tree(session) -> list[dict]:
     counts = dict(
         (await session.execute(select(Product.category_id, func.count()).where(*public_product_filter()).group_by(Product.category_id))).all()
     )
-    nodes = {c.id: {"id": str(c.id), "name": c.name, "slug": c.slug, "image_url": c.image_url, "product_count": int(counts.get(c.id, 0)), "children": []} for c in cats}
+    nodes = {c.id: {"id": str(c.id), "name": c.name, "slug": c.slug, "image_url": c.image_url, "product_count": int(counts.get(c.id, 0)),
+                    "required_details": list(c.required_details or []), "children": []} for c in cats}
     roots = []
     for c in cats:
         if c.parent_id and c.parent_id in nodes:
             nodes[c.parent_id]["children"].append(nodes[c.id])
         else:
             roots.append(nodes[c.id])
+
+    def inherit(n: dict, parent: list[str]) -> None:
+        # what a listing in this category must include: its own list plus its parents'
+        n["required_details"] = list(dict.fromkeys(parent + n["required_details"]))
+        for ch in n["children"]:
+            inherit(ch, n["required_details"])
+
+    for r in roots:
+        inherit(r, [])
 
     def total(n: dict) -> int:
         n["product_count"] += sum(total(ch) for ch in n["children"])
@@ -235,6 +247,8 @@ async def product_page(slug: str, session: SessionDep) -> dict:
     while cur is not None:
         breadcrumbs.insert(0, {"name": cur.name, "slug": cur.slug})
         cur = await session.get(Category, cur.parent_id) if cur.parent_id else None
+    details = details_of(p.details)
+    unit = details.net_unit
     # option axes, e.g. {"Size": ["S","M","L"], "Colour": ["Red","Blue"]}
     axes: dict[str, list[str]] = {}
     for v in variants:
@@ -248,7 +262,13 @@ async def product_page(slug: str, session: SessionDep) -> dict:
                 select(Product).where(*public_product_filter(), Product.category_id == p.category_id, Product.id != p.id, Product.in_stock.is_(True)).order_by(Product.sold_count.desc(), Product.rating_avg.desc()).limit(12)
             )
         ).scalars()
-    )
+    ) if cfg["pdp_similar"] else []
+    key_specs = []
+    if cfg["pdp_key_specs"]:
+        names = details.key_specs or list(p.specs)[:5]
+        key_specs = [{"label": k, "value": p.specs[k]} for k in names if k in p.specs][:6]
+        if p.brand and not any(k["label"].lower() == "brand" for k in key_specs):
+            key_specs.insert(0, {"label": "Brand", "value": p.brand})
     return {
         "id": str(p.id),
         "slug": p.slug,
@@ -280,9 +300,21 @@ async def product_page(slug: str, session: SessionDep) -> dict:
                 "in_stock": v.stock > 0,
                 "low_stock": 0 < v.stock <= 5,
                 "stock_left": v.stock if v.stock <= 5 else None,
+                "net_quantity": fmt_qty(v.net_qty, unit),
+                "unit_price": unit_price(v.price_paise, v.net_qty, unit) if cfg["pdp_unit_price"] else None,
             }
             for v in variants
         ],
+        "key_specs": key_specs,
+        "info": info_rows(details, brand=p.brand, country_of_origin=p.country_of_origin),
+        "important": important_info(details),
+        "required_missing": [],  # filled for staff previews only
+        "first_available": p.approved_at.date().isoformat() if p.approved_at else None,
+        "bought_last_month": await pp.bought_last_month(session, p.id, cfg["pdp_bought_min"]) if cfg["pdp_bought_count"] else None,
+        "bestseller": await pp.bestseller_rank(session, p) if cfg["pdp_bestseller_badge"] else None,
+        "offers": await pp.offers_for(session, p, seller, cfg["pdp_offers_max"]) if cfg["pdp_offers"] and cfg["feature_coupons"] else [],
+        "seller_snapshot": await pp.seller_snapshot(session, seller, cfg) if cfg["pdp_seller_snapshot"] else None,
+        "returnable": p.return_window_days > 0,
         # Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.
         "seller": {
             "name": seller.display_name,
@@ -292,6 +324,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
             "city": seller.pickup_city,
             "state": STATES.get(seller.pickup_state_code, ""),
             "grievance_officer": {"name": seller.grievance_name, "email": seller.grievance_email},
+            "dispatch_days": seller.dispatch_days,
         },
         "similar": await product_cards(session, similar),
     }

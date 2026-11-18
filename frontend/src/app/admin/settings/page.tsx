@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
-import { Button, ErrorNote, PageLoader, Select, TextField, useToast } from "@/components/ui";
+import { Button, ErrorNote, PageLoader, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
 import { paiseToInput, toPaise } from "@/lib/format";
 
@@ -16,8 +17,7 @@ type S = {
 
 const FLAGS: [keyof S, string, string][] = [
   ["feature_wishlist", "Wishlist", "Customers can save products for later"],
-  ["feature_reviews", "Ratings and reviews", "Customers who received a product can review it"],
-  ["reviews_need_approval", "Hold new reviews for moderation", "Reviews appear only after the catalogue team publishes them"],
+  ["feature_reviews", "Ratings and reviews", "Customers can rate and review products (more options in Reviews → Settings)"],
   ["feature_returns", "Returns", "Customers can request returns inside the return window"],
   ["auto_approve_returns", "Approve returns automatically", "Skip the seller's approval step; the seller still confirms receipt"],
   ["feature_coupons", "Coupons", "Coupon box and offers list at checkout"],
@@ -31,7 +31,6 @@ export default function AdminSettings() {
   const [f, setF] = useState<Record<string, string>>({});
   const [cod, setCod] = useState(true);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
-  const [gallery, setGallery] = useState({ zoom: true, level: 25, videos: true, mb: "50", per: "3" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -39,7 +38,6 @@ export default function AdminSettings() {
       setS(x);
       setCod(x.cod_enabled);
       setFlags(Object.fromEntries(FLAGS.map(([k]) => [k, Boolean(x[k])])));
-      setGallery({ zoom: x.gallery_zoom, level: x.gallery_zoom_level, videos: x.feature_product_videos, mb: String(x.max_video_mb), per: String(x.max_videos_per_listing) });
       setF({
         shipping: paiseToInput(x.shipping_fee_paise), free: paiseToInput(x.free_shipping_threshold_paise), codFee: paiseToInput(x.cod_fee_paise),
         codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item),
@@ -61,7 +59,6 @@ export default function AdminSettings() {
         cod_max_order_paise: toPaise(f.codMax), tcs_bps: bps(f.tcs), tds_bps: bps(f.tds), commission_gst_bps: bps(f.cgst), max_qty_per_item: Number(f.qty),
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), ...flags,
-        gallery_zoom: gallery.zoom, gallery_zoom_level: gallery.level, feature_product_videos: gallery.videos, max_video_mb: Number(gallery.mb), max_videos_per_listing: Number(gallery.per),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
       setS(await api<S>("/api/admin/settings", { method: "PUT", body }));
@@ -108,25 +105,11 @@ export default function AdminSettings() {
           ))}
         </div>
       </section>
-      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
-        <h2 className="text-lg font-semibold sm:col-span-2">Product page: photos and videos</h2>
-        <label className="flex items-start gap-3 rounded-lg border border-line p-3">
-          <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={gallery.zoom} onChange={(e) => setGallery({ ...gallery, zoom: e.target.checked })} />
-          <span><span className="font-semibold">Zoom on hover</span><br /><span className="text-sm text-ink-soft">On a computer, moving the mouse over a photo shows a magnified view beside it. Clicking always opens the full-screen viewer.</span></span>
-        </label>
-        <label className="flex flex-col gap-1 rounded-lg border border-line p-3">
-          <span className="font-semibold">Zoom strength</span>
-          <Select value={gallery.level} onChange={(e) => setGallery({ ...gallery, level: Number(e.target.value) })} disabled={!gallery.zoom} aria-label="Zoom strength">
-            {[[15, "1.5×"], [20, "2×"], [25, "2.5× (recommended)"], [30, "3×"], [40, "4×"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </Select>
-          <span className="text-xs text-ink-faint">Upload photos at least 1000 px wide so the zoom stays sharp.</span>
-        </label>
-        <label className="flex items-start gap-3 rounded-lg border border-line p-3 sm:col-span-2">
-          <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={gallery.videos} onChange={(e) => setGallery({ ...gallery, videos: e.target.checked })} />
-          <span><span className="font-semibold">Product videos</span><br /><span className="text-sm text-ink-soft">Sellers can add MP4 or WebM videos; customers play them from the gallery. Off hides existing videos too.</span></span>
-        </label>
-        <TextField label="Largest video (MB)" inputMode="numeric" value={gallery.mb} onChange={(e) => setGallery({ ...gallery, mb: e.target.value })} hint="5 to 200" disabled={!gallery.videos} />
-        <TextField label="Videos per listing" inputMode="numeric" value={gallery.per} onChange={(e) => setGallery({ ...gallery, per: e.target.value })} hint="0 to 10" disabled={!gallery.videos} />
+      <section className="rounded-xl bg-white p-5 text-sm text-ink-soft">
+        <h2 className="mb-1 text-lg font-semibold text-ink">Product page</h2>
+        Photo zoom, product videos, unit price, offers, seller snapshot and every other product page block are in{" "}
+        <Link href="/admin/product-page" className="font-semibold text-peacock">Product page</Link>; review options in{" "}
+        <Link href="/admin/reviews" className="font-semibold text-peacock">Reviews → Settings</Link>.
       </section>
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-3">
         <h2 className="text-lg font-semibold sm:col-span-3">Delivery estimates</h2>

@@ -29,8 +29,10 @@ from app.models import (
     LedgerEntry,
     Payout,
     Product,
+    ProductReport,
     ReturnRequest,
     Review,
+    ReviewReport,
     StockMovement,
     SubOrder,
     User,
@@ -45,6 +47,8 @@ from app.services.catalog import refresh_product_aggregates
 from app.services.invoices import credit_note_pdf, invoice_pdf
 from app.services.ledger import balances, payout_out
 from app.services.orders import transition
+from app.services import product_page, review_settings
+from app.services.platform_settings import PRODUCT_REPORT_REASONS
 
 router = APIRouter(prefix="/api/seller", tags=["seller-extras"])
 
@@ -56,17 +60,21 @@ class PrefsIn(BaseModel):
     dispatch_days: int = Field(ge=0, le=10)
     holiday_mode: bool
     invoice_prefix: str = Field(default="", max_length=4, pattern=r"^[A-Z0-9]{0,4}$")
+    # Orders placed before this time (IST) are packed that day; shoppers see "Order within ..." on product pages.
+    dispatch_cutoff: str | None = Field(default=None, pattern=r"^((?:[01]\d|2[0-3]):[0-5]\d)?$")
 
 
 @router.get("/preferences")
 async def get_prefs(seller: SellerAccount) -> dict:
     return {"dispatch_days": seller.dispatch_days, "holiday_mode": seller.holiday_mode, "invoice_prefix": seller.invoice_prefix,
-            "rating_avg": float(seller.rating_avg or 0), "rating_count": seller.rating_count}
+            "dispatch_cutoff": seller.dispatch_cutoff, "rating_avg": float(seller.rating_avg or 0), "rating_count": seller.rating_count}
 
 
 @router.put("/preferences")
 async def put_prefs(body: PrefsIn, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
     seller.dispatch_days, seller.holiday_mode, seller.invoice_prefix = body.dispatch_days, body.holiday_mode, body.invoice_prefix
+    if body.dispatch_cutoff is not None:
+        seller.dispatch_cutoff = body.dispatch_cutoff
     audit(session, user, "seller.preferences", "seller", seller.id, f"holiday={body.holiday_mode}")
     await session.commit()
     return await get_prefs(seller)
@@ -458,17 +466,87 @@ class ReplyIn(BaseModel):
 
 
 @router.get("/reviews")
-async def seller_reviews(seller: SellerAccount, session: SessionDep, page: int = Query(default=1, ge=1)) -> dict:
-    rows = (
-        await session.execute(
-            select(Review, Product.title).join(Product, Product.id == Review.product_id).where(Product.seller_id == seller.id)
-            .order_by(Review.created_at.desc()).offset((page - 1) * 20).limit(20)
-        )
-    ).all()
+async def seller_reviews(seller: SellerAccount, session: SessionDep, page: int = Query(default=1, ge=1),
+                         rating: int | None = Query(default=None, ge=1, le=5), unanswered: bool = False, media: bool = False,
+                         q: str = Query(default="", max_length=80)) -> dict:
+    stmt = select(Review, Product.title, Product.slug).join(Product, Product.id == Review.product_id).where(Product.seller_id == seller.id)
+    if rating:
+        stmt = stmt.where(Review.rating == rating)
+    if unanswered:
+        stmt = stmt.where(Review.seller_reply == "")
+    if media:
+        stmt = stmt.where(func.jsonb_array_length(Review.media) > 0)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(Product.title.ilike(like) | Review.title.ilike(like) | Review.body.ilike(like))
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    rows = (await session.execute(stmt.order_by(Review.created_at.desc()).offset((page - 1) * 20).limit(20))).all()
+    rcfg = await review_settings.get(session)
+    dist = dict((await session.execute(
+        select(Review.rating, func.count()).join(Product, Product.id == Review.product_id)
+        .where(Product.seller_id == seller.id, Review.status == "published").group_by(Review.rating))).all())
+    reported = set((await session.execute(
+        select(ReviewReport.review_id).where(ReviewReport.user_id == seller.user_id, ReviewReport.review_id.in_([r.id for r, _, _ in rows])))).scalars()) if rows else set()
     return {
         "rating_avg": float(seller.rating_avg or 0), "rating_count": seller.rating_count,
-        "items": [{"id": str(r.id), "product": t, "rating": r.rating, "title": r.title, "body": r.body, "reply": r.seller_reply, "status": r.status, "at": r.created_at.isoformat()} for r, t in rows],
+        "distribution": {str(k): dist.get(k, 0) for k in range(5, 0, -1)},
+        "topics": await product_page.review_topics(session, rcfg["topics"], seller_id=seller.id) if rcfg["topics_enabled"] else [],
+        "can_report": rcfg["seller_can_report"], "report_reasons": review_settings.REPORT_REASONS,
+        "items": [{"id": str(r.id), "product": t, "slug": slug, "rating": r.rating, "title": r.title, "body": r.body, "reply": r.seller_reply,
+                   "status": r.status, "verified": r.verified, "media": r.media if r.media_status != "hidden" else [], "media_status": r.media_status,
+                   "helpful_count": r.helpful_count, "reported": r.id in reported, "at": r.created_at.isoformat()} for r, t, slug in rows],
+        "total": total, "page": page, "has_more": page * 20 < total,
     }
+
+
+@router.post("/reviews/{review_id}/report")
+async def seller_report_review(review_id: uuid.UUID, body: dict, seller: ApprovedSeller, session: SessionDep) -> dict:
+    """Sellers cannot remove reviews; they can ask staff to check one (abuse, wrong product, personal details)."""
+    from app.routers.customer import ReportIn, file_review_report
+
+    if not (await review_settings.get(session))["seller_can_report"]:
+        raise ApiError("Reporting reviews is switched off", "reports_off")
+    r = await session.get(Review, review_id)
+    p = await session.get(Product, r.product_id) if r else None
+    if r is None or p.seller_id != seller.id:
+        raise NotFound("Review")
+    return await file_review_report(session, r, seller.user_id, ReportIn.model_validate(body))
+
+
+# ----------------------------------------------------------------------------- product reports (customer feedback on listings)
+
+
+@router.get("/product-reports")
+async def seller_product_reports(seller: SellerAccount, session: SessionDep, status: Literal["open", "resolved", "dismissed"] | None = None,
+                                 page: int = Query(default=1, ge=1)) -> dict:
+    """Reports customers made about this seller's listings, without the customer's identity."""
+    stmt = select(ProductReport, Product.title, Product.slug).join(Product, Product.id == ProductReport.product_id).where(ProductReport.seller_id == seller.id)
+    if status:
+        stmt = stmt.where(ProductReport.status == status)
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    rows = (await session.execute(stmt.order_by(ProductReport.created_at.desc()).offset((page - 1) * 20).limit(20))).all()
+    return {
+        "items": [{"id": str(x.id), "product_id": str(x.product_id), "product": t, "slug": slug, "reason": x.reason,
+                   "reason_label": PRODUCT_REPORT_REASONS.get(x.reason, x.reason), "note": x.note, "url": x.url, "status": x.status,
+                   "admin_note": x.admin_note, "seller_note": x.seller_note, "at": x.created_at.isoformat()} for x, t, slug in rows],
+        "total": total, "page": page, "has_more": page * 20 < total,
+        "open": (await session.execute(select(func.count()).select_from(ProductReport).where(ProductReport.seller_id == seller.id, ProductReport.status == "open"))).scalar_one(),
+    }
+
+
+class SellerNoteIn(BaseModel):
+    note: str = Field(min_length=2, max_length=2000)
+
+
+@router.post("/product-reports/{report_id}/respond")
+async def seller_respond_report(report_id: uuid.UUID, body: SellerNoteIn, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
+    x = await session.get(ProductReport, report_id)
+    if x is None or x.seller_id != seller.id:
+        raise NotFound("Report")
+    x.seller_note = body.note.strip()
+    audit(session, user, "product_report.seller_note", "product_report", x.id)
+    await session.commit()
+    return {"ok": True}
 
 
 @router.put("/reviews/{review_id}/reply")

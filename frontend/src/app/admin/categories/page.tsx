@@ -8,8 +8,8 @@ import { useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, pct } from "@/lib/format";
 
-type Cat = { id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean };
-const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "" };
+type Cat = { id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean; required_details: string[] };
+const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[] };
 
 export default function AdminCategories() {
   const toast = useToast();
@@ -18,8 +18,20 @@ export default function AdminCategories() {
   const [editing, setEditing] = useState<Cat | "new" | null>(null);
   const [f, setF] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [options, setOptions] = useState<Record<string, string>>({});
   const load = useCallback(() => api<Cat[]>("/api/admin/categories").then(setCats).catch(quietly), []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { api<{ options: Record<string, string> }>("/api/admin/categories/requirements").then((r) => setOptions(r.options)).catch(quietly); }, []);
+  // what a category inherits from its parents
+  const inherited = (pid: string | null): string[] => {
+    const out: string[] = [];
+    let cur = cats?.find((c) => c.id === pid);
+    while (cur) {
+      out.push(...cur.required_details);
+      cur = cats?.find((c) => c.id === cur!.parent_id);
+    }
+    return out;
+  };
 
   const ordered = useMemo(() => {
     if (!cats) return [];
@@ -32,13 +44,13 @@ export default function AdminCategories() {
   function open(c: Cat | "new") {
     setError(null);
     setEditing(c);
-    setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active, image_url: c.image_url });
+    setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active, image_url: c.image_url, required: c.required_details ?? [] });
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: f.image_url };
+    const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: f.image_url, required_details: f.required };
     try {
       if (editing === "new") await api("/api/admin/categories", { method: "POST", body });
       else if (editing) await api(`/api/admin/categories/${editing.id}`, { method: "PUT", body });
@@ -54,12 +66,13 @@ export default function AdminCategories() {
   return (
     <div>
       <PageHeader title="Categories" sub="Sellers list products in the most specific category. Commission and GST here are defaults." actions={<Button onClick={() => open("new")}>Add category</Button>} />
-      <Table head={["Category", "Commission", "Default GST", "Order", "Status", ""]}>
+      <Table head={["Category", "Commission", "Default GST", "Required information", "Order", "Status", ""]}>
         {ordered.map(({ c, depth }) => (
           <tr key={c.id}>
             <td className="px-4 py-2.5" style={{ paddingLeft: 16 + depth * 24 }}>{depth ? "└ " : ""}<span className={depth ? "" : "font-semibold"}>{c.name}</span></td>
             <td className="px-4 py-2.5">{pct(c.commission_bps)}</td>
             <td className="px-4 py-2.5">{pct(c.default_gst_bps)}</td>
+            <td className="px-4 py-2.5 text-sm text-ink-soft">{c.required_details?.length ? `${c.required_details.length} items` : "—"}</td>
             <td className="px-4 py-2.5">{c.position}</td>
             <td className="px-4 py-2.5">{c.is_active ? <Pill tone="green">Active</Pill> : <Pill>Hidden</Pill>}</td>
             <td className="px-4 py-2.5"><Button size="sm" variant="ghost" onClick={() => open(c)}>Edit</Button></td>
@@ -86,6 +99,22 @@ export default function AdminCategories() {
             <TextField label="Display order" inputMode="numeric" value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} />
             <label className="flex items-center gap-2 pt-6"><input type="checkbox" className="accent-peacock" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> Visible</label>
           </div>
+          <fieldset className="rounded-lg border border-line p-3">
+            <legend className="px-1 text-sm font-semibold">Product information sellers must give</legend>
+            <p className="mb-2 text-xs text-ink-faint">A listing in this category (or one inside it) cannot be sent for review until these are filled in. For packaged goods, Legal Metrology rules expect net quantity, manufacturer or packer, importer for imports and consumer care details; add FSSAI licence for food.</p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {Object.entries(options).map(([k, label]) => {
+                const fromParent = inherited(f.parent_id || null).includes(k);
+                return (
+                  <label key={k} className="flex items-start gap-2 text-sm">
+                    <input type="checkbox" className="mt-1 accent-peacock" checked={fromParent || f.required.includes(k)} disabled={fromParent}
+                      onChange={(e) => setF({ ...f, required: e.target.checked ? [...f.required, k] : f.required.filter((x) => x !== k) })} />
+                    <span>{label}{fromParent && <span className="text-xs text-ink-faint"> (from the parent category)</span>}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
           <Button type="submit">Save category</Button>
         </form>
       </Modal>

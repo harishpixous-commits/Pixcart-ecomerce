@@ -21,6 +21,12 @@ export const FALLBACK_SITE: Site = {
   cod_enabled: true,
   free_shipping_threshold_paise: 49900,
   gallery: { zoom: true, zoom_level: 2.5, max_video_mb: 50, max_videos: 3 },
+  pdp: {
+    unit_price: true, bought_count: true, bestseller_badge: true, offers: true, service_icons: true, key_specs: true, delivery_countdown: true,
+    seller_snapshot: true, customer_media: true, share: true, report: true, ask_assistant: true, sticky_bar: true, similar: true,
+    recently_viewed: true, header_pincode: true, page_loading_bar: true,
+  },
+  reviews: { buyers_only: true, photos: true, max_photos: 5, videos: true, max_video_mb: 30, media_public: true, min_body_chars: 0, guidelines: "", report_reasons: {} },
 };
 
 /** Fill any missing keys from the fallback, so an older or partial API answer never breaks rendering. */

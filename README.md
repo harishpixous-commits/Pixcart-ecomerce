@@ -112,6 +112,39 @@ in the product editor (the browser takes the poster frame and length; nothing is
 Listings → a listing → Videos. Admin → Marketplace settings → *Product page* switches zoom and videos on or off
 and sets the zoom strength, the largest video and the number of videos per listing.
 
+**Product page.** Gallery | details | buy box, like the large marketplaces, plus:
+- **Price and buying:** unit price (₹ per 100 g, kg, litre or piece, from each version's net quantity); the coupons this product
+  qualifies for, with copy-code; service icons (free delivery, pay on delivery, returns, top seller, verified seller, GST
+  invoice, secure payment).
+- **Delivery:** a "Deliver to PIN" chooser in the header that every page follows, delivery date and charge for that PIN, and
+  "Order within 2 hrs 10 mins" when the seller sets a daily dispatch cut-off.
+- **Social proof:** "300+ bought in the past month" and a "#1 Best seller in <category>" badge.
+- **Product details:** key specifications beside the price, "About this item", Important information (ingredients,
+  directions, safety, disclaimer) and Item details (generic name, manufacturer, packer, importer, consumer care, FSSAI
+  licence, best before, warranty, in the box, dimensions, best sellers rank).
+- **Seller:** a seller snapshot (positive ratings, orders in 3 months, on-time dispatch, time on the store, Top seller).
+- **Customers and help:** customer photos under the gallery, Ask a question (opens the shop assistant), Share,
+  "Report an issue with this product", "Customers also viewed" and the shopper's browsing history.
+- **Phones:** a buy bar stays at the bottom while scrolling.
+
+Admin → **Product page** switches every block on or off (with the numbers that tune them); Admin → **Categories** sets the
+product information each category requires before a listing can be submitted (net quantity, manufacturer, FSSAI licence
+and so on; sub-categories inherit). Sellers fill it in under *Product information* in the product editor and set the
+dispatch cut-off in Store settings. `scripts/demo_details.json` holds the demo listings' information
+(`python -m scripts.apply_demo_details` updates an existing database). A thin loading bar and skeleton pages show while pages load.
+
+**Reviews.** Anyone can read reviews; writing, "helpful" votes and reports need a signed-in account, and by default only
+customers whose order was delivered can write (badge "Verified purchase"). Reviews carry up to 5 photos and a video,
+shown in the review and in a gallery that opens each photo beside its review. Shoppers filter by stars, photos,
+verified purchases and topics ("Quality (12)", counted from the review text, positive or negative), sort, vote helpful
+(one vote, can be taken back), report, and edit or delete their own review. Reviews with phone numbers, emails or links
+wait for a check; enough reports hide a review until staff look. Admin → **Reviews** has the queues (waiting, reported,
+photos to check, published, hidden) and **Settings**: who can review, photos and videos and their limits, approval of
+photos, whether visitors who are not signed in see customer photos, the report threshold, seller reports, minimum
+length, topics and the review guidelines. Admin → **Product reports** handles "report an issue" (resolve, dismiss or take
+the listing down); sellers see reports about their listings without the customer's details under *Customer reports*,
+and can answer, reply to reviews and ask staff to check a review.
+
 **Accounts in the admin panel.** *Customers and accounts* lists everyone (filter customers, sellers, staff, blocked);
 open one to see profile, consent, addresses, orders, returns, support requests, signed-in devices and staff
 history, and to edit name/mobile/email, sign out everywhere, block or unblock. *Add customer* creates an account
@@ -134,7 +167,7 @@ WhatsApp, Shiprocket, Anthropic (AI), S3 and Sentry. Admin → Integrations show
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q          # 60 API tests against a real PostgreSQL (creates pixcart_test)
+cd backend && python -m pytest -q          # 97 API tests against a real PostgreSQL (creates pixcart_test)
 cd frontend && npm run typecheck && npm run lint && npm run build
 cd e2e && npm ci && npx playwright test    # browser journeys against a running stack (see below)
 ```

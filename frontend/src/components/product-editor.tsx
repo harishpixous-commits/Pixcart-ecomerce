@@ -10,16 +10,24 @@ import { useSite } from "@/lib/site";
 import { AiBadge } from "@/components/ai";
 import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, paiseToInput, pct, rupees, toPaise } from "@/lib/format";
-import type { ProductVideo, SellerCategory, SellerProduct } from "@/lib/types";
+import type { ProductDetails, ProductVideo, SellerCategory, SellerProduct } from "@/lib/types";
 import { VideoEditor } from "@/components/video-editor";
+import { ProductInfoSection, EMPTY_DETAILS, UNIT_LABEL } from "@/components/product-info-editor";
 
-type VRow = { id?: string; key: string; sku: string; options: Record<string, string>; mrp: string; price: string; stock: string; weight: string; is_active: boolean };
+type VRow = { id?: string; key: string; sku: string; options: Record<string, string>; mrp: string; price: string; stock: string; weight: string; net: string; is_active: boolean };
 
 let keySeq = 0;
 const newKey = () => `v${++keySeq}`;
 
 function rowFrom(v: SellerProduct["variants"][number]): VRow {
-  return { id: v.id, key: newKey(), sku: v.sku, options: v.options, mrp: paiseToInput(v.mrp_paise), price: paiseToInput(v.price_paise), stock: String(v.stock), weight: String(v.weight_grams), is_active: v.is_active };
+  return { id: v.id, key: newKey(), sku: v.sku, options: v.options, mrp: paiseToInput(v.mrp_paise), price: paiseToInput(v.price_paise), stock: String(v.stock), weight: String(v.weight_grams),
+    net: v.net_qty != null ? String(v.net_qty) : "", is_active: v.is_active };
+}
+
+function unitPreview(price: number, qty: number, unit: string): string {
+  const [base, per] = unit === "g" ? (qty >= 1000 ? [1000, "kg"] : [100, "100 g"]) : unit === "ml" ? (qty >= 1000 ? [1000, "l"] : [100, "100 ml"])
+    : unit === "pcs" ? [1, "piece"] : [1, unit];
+  return `${rupees(Math.round((price * base) / qty))}/${per}`;
 }
 
 const STATUS_TEXT: Record<string, string> = {
@@ -46,12 +54,14 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   const [returnDays, setReturnDays] = useState(String(product?.return_window_days ?? 7));
   const [images, setImages] = useState<string[]>(product?.images ?? []);
   const [videos, setVideos] = useState<ProductVideo[]>(product?.videos ?? []);
+  const [details, setDetails] = useState<ProductDetails>({ ...EMPTY_DETAILS, ...(product?.details ?? {}) });
+  const [required, setRequired] = useState<string[]>(product?.required_details ?? []);
   const [axes, setAxes] = useState<string[]>(() => {
     const first = product?.variants[0];
     return first ? Object.keys(first.options) : [];
   });
   const [rows, setRows] = useState<VRow[]>(() =>
-    product?.variants.length ? product.variants.map(rowFrom) : [{ key: newKey(), sku: "", options: {}, mrp: "", price: "", stock: "", weight: "500", is_active: true }],
+    product?.variants.length ? product.variants.map(rowFrom) : [{ key: newKey(), sku: "", options: {}, mrp: "", price: "", stock: "", weight: "500", net: "", is_active: true }],
   );
   const [bulk, setBulk] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
@@ -93,6 +103,12 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   }, []);
 
   const cat = useMemo(() => cats.find((c) => c.id === categoryId), [cats, categoryId]);
+
+  // what this category requires (net quantity, manufacturer, FSSAI licence...), set by the marketplace per category
+  useEffect(() => {
+    if (!categoryId) return;
+    api<{ required: string[] }>("/api/seller/listing-requirements", { query: { category_id: categoryId } }).then((r) => setRequired(r.required)).catch(quietly);
+  }, [categoryId]);
 
   function pickCategory(id: string) {
     setCategoryId(id);
@@ -140,7 +156,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         const existing = rows.find((r) => axes.every((a) => r.options[a] === options[a]));
         if (existing) return existing;
         const suffix = Object.values(options).map((v) => v.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6)).join("-");
-        return { key: newKey(), sku: `${prefix}-${suffix}`, options, mrp: base?.mrp ?? "", price: base?.price ?? "", stock: base?.stock ?? "", weight: base?.weight ?? "500", is_active: true };
+        return { key: newKey(), sku: `${prefix}-${suffix}`, options, mrp: base?.mrp ?? "", price: base?.price ?? "", stock: base?.stock ?? "", weight: base?.weight ?? "500", net: base?.net ?? "", is_active: true };
       }),
     );
     setError(null);
@@ -158,7 +174,10 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       if (mrp === null || price === null) throw new Error(`Row ${i + 1}: enter MRP and selling price in rupees`);
       if (!Number.isInteger(stock) || stock < 0 || r.stock === "") throw new Error(`Row ${i + 1}: enter stock as a whole number`);
       const options = axes.length ? Object.fromEntries(axes.map((a) => [a, r.options[a] ?? ""])) : {};
-      return { ...(r.id ? { id: r.id } : {}), sku: r.sku.trim(), options, mrp_paise: mrp, price_paise: price, stock, weight_grams: Number(r.weight) || 500, is_active: r.is_active };
+      const net = r.net.trim() ? Number(r.net) : null;
+      if (net !== null && (!Number.isFinite(net) || net <= 0)) throw new Error(`Row ${i + 1}: enter the net quantity as a number, e.g. 500`);
+      return { ...(r.id ? { id: r.id } : {}), sku: r.sku.trim(), options, mrp_paise: mrp, price_paise: price, stock, weight_grams: Number(r.weight) || 500,
+        net_qty: details.net_unit ? net : null, is_active: r.is_active };
     });
     return {
       category_id: categoryId,
@@ -174,6 +193,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       images,
       videos,
       variants,
+      details: { ...details, key_specs: details.key_specs.filter((k) => specs.some(([s]) => s.trim() === k)) },
     };
   }
 
@@ -226,6 +246,11 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
           <StatusPill status={product.status} />
           <p className="text-ink-soft">{STATUS_TEXT[product.status]}</p>
           {product.status === "rejected" && product.rejection_reason && <p className="w-full font-semibold text-vermilion">{product.rejection_reason}</p>}
+          {(product.missing_details?.length ?? 0) > 0 && (
+            <p className="w-full rounded-lg bg-marigold-light p-2 text-sm">
+              <span className="font-semibold">Still needed for this category:</span> {product.missing_details!.join(", ")}. <a href="#product-information" className="font-semibold text-peacock">Fill in</a>
+            </p>
+          )}
         </div>
       )}
       <ErrorNote message={error} />
@@ -328,6 +353,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
                 <th className="px-2 py-1 font-medium">Selling price (₹)</th>
                 <th className="px-2 py-1 font-medium">Stock</th>
                 <th className="px-2 py-1 font-medium">Weight (g)</th>
+                {details.net_unit && <th className="px-2 py-1 font-medium">Net qty ({UNIT_LABEL[details.net_unit]}){required.includes("net_quantity") ? " *" : ""}</th>}
                 <th className="px-2 py-1 font-medium">On sale</th>
                 <th />
               </tr>
@@ -350,6 +376,12 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
                     </td>
                     <td className="px-1 py-1"><Input value={r.stock} inputMode="numeric" onChange={(e) => updateRow(r.key, { stock: e.target.value })} className="h-9 w-20" aria-label="Stock" /></td>
                     <td className="px-1 py-1"><Input value={r.weight} inputMode="numeric" onChange={(e) => updateRow(r.key, { weight: e.target.value })} className="h-9 w-20" aria-label="Weight in grams" /></td>
+                    {details.net_unit && (
+                      <td className="px-1 py-1">
+                        <Input value={r.net} inputMode="decimal" onChange={(e) => updateRow(r.key, { net: e.target.value })} className="h-9 w-20" aria-label="Net quantity" />
+                        {toPaise(r.price) && Number(r.net) > 0 && <p className="text-[11px] text-ink-faint">{unitPreview(toPaise(r.price)!, Number(r.net), details.net_unit)}</p>}
+                      </td>
+                    )}
                     <td className="px-2 py-2"><input type="checkbox" className="h-4 w-4 accent-peacock" checked={r.is_active} onChange={(e) => updateRow(r.key, { is_active: e.target.checked })} aria-label="On sale" /></td>
                     <td className="px-1 py-1">
                       {rows.length > 1 && <button type="button" onClick={() => setRows(rows.filter((x) => x.key !== r.key))} className="p-2 text-ink-faint hover:text-vermilion" aria-label="Remove version"><Trash2 className="h-4 w-4" /></button>}
@@ -360,7 +392,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
             </tbody>
           </table>
         </div>
-        <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setRows([...rows, { key: newKey(), sku: "", options: {}, mrp: rows[0]?.mrp ?? "", price: rows[0]?.price ?? "", stock: "", weight: "500", is_active: true }])}>
+        <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setRows([...rows, { key: newKey(), sku: "", options: {}, mrp: rows[0]?.mrp ?? "", price: rows[0]?.price ?? "", stock: "", weight: "500", net: rows[0]?.net ?? "", is_active: true }])}>
           <Plus className="h-4 w-4" /> Add a version
         </Button>
         {rows[0] && toPaise(rows[0].price) && cat && (
@@ -388,16 +420,27 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       <section className="rounded-xl bg-white p-5">
         <h2 className="mb-3 text-xl font-semibold">Specifications</h2>
         <div className="flex flex-col gap-2">
-          {specs.map(([k, v], i) => (
-            <div key={i} className="flex gap-2">
-              <Input placeholder="e.g. Material" value={k} onChange={(e) => setSpecs(specs.map((s, j) => (j === i ? [e.target.value, s[1]] : s)))} className="max-w-[220px]" aria-label="Specification name" />
-              <Input placeholder="e.g. 100% cotton" value={v} onChange={(e) => setSpecs(specs.map((s, j) => (j === i ? [s[0], e.target.value] : s)))} aria-label="Specification value" />
-              <button type="button" onClick={() => setSpecs(specs.filter((_, j) => j !== i))} className="p-2 text-ink-faint hover:text-vermilion" aria-label="Remove specification"><Trash2 className="h-4 w-4" /></button>
-            </div>
-          ))}
+          <p className="-mt-2 text-sm text-ink-soft">Tick up to 6 key specifications to show beside the price on your product page.</p>
+          {specs.map(([k, v], i) => {
+            const key = k.trim();
+            const isKey = Boolean(key) && details.key_specs.includes(key);
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <Input placeholder="e.g. Material" value={k} onChange={(e) => setSpecs(specs.map((s, j) => (j === i ? [e.target.value, s[1]] : s)))} className="max-w-[220px]" aria-label="Specification name" />
+                <Input placeholder="e.g. 100% cotton" value={v} onChange={(e) => setSpecs(specs.map((s, j) => (j === i ? [s[0], e.target.value] : s)))} aria-label="Specification value" />
+                <label className="flex shrink-0 items-center gap-1 text-xs text-ink-soft" title="Show beside the price">
+                  <input type="checkbox" className="accent-peacock" checked={isKey} disabled={!key || (!isKey && details.key_specs.length >= 6)}
+                    onChange={(e) => setDetails({ ...details, key_specs: e.target.checked ? [...details.key_specs, key] : details.key_specs.filter((x) => x !== key) })} /> Key
+                </label>
+                <button type="button" onClick={() => setSpecs(specs.filter((_, j) => j !== i))} className="p-2 text-ink-faint hover:text-vermilion" aria-label="Remove specification"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            );
+          })}
           <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => setSpecs([...specs, ["", ""]])}><Plus className="h-4 w-4" /> Add specification</Button>
         </div>
       </section>
+
+      <ProductInfoSection details={details} onChange={setDetails} required={required} countryOfOrigin={origin} />
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] flex-wrap justify-end gap-2">

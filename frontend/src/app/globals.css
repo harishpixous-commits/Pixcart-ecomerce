@@ -50,6 +50,25 @@
   display: none;
 }
 
+/* Loading placeholders: a soft shimmer in the shape of what is coming. */
+.skeleton {
+  background: linear-gradient(90deg, rgb(226 232 236) 0%, rgb(240 244 246) 50%, rgb(226 232 236) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Phones: the help button moves up while the product page's buy bar is showing. */
+@media (max-width: 1023px) {
+  body[data-buy-bar="1"] .shop-assistant-launcher { bottom: 9.5rem; }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  body[data-buy-bar="1"] .shop-assistant-launcher { bottom: 5.5rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

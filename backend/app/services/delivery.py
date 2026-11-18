@@ -56,10 +56,32 @@ def _add_working_days(start: datetime, days: int) -> datetime:
     return d
 
 
-def estimate(cfg: dict, dispatch_days: int, origin_pin: str, origin_state: str, dest_pin: str, now: datetime | None = None) -> dict:
+def cutoff_minutes_left(cutoff: str, now: datetime) -> int | None:
+    """Minutes until the seller's daily dispatch cut-off ("HH:MM" IST), or None when it has passed, it is
+    Sunday or no cut-off is set."""
+    if not cutoff:
+        return None
+    try:
+        hh, mm = (int(x) for x in cutoff.split(":"))
+    except ValueError:
+        return None
+    local = now.astimezone(IST)
+    if local.weekday() == 6:
+        return None
+    left = (hh * 60 + mm) - (local.hour * 60 + local.minute)
+    return left if left > 0 else None
+
+
+def estimate(cfg: dict, dispatch_days: int, origin_pin: str, origin_state: str, dest_pin: str, now: datetime | None = None,
+             cutoff: str = "") -> dict:
+    """Expected delivery window. With a dispatch cut-off, an order placed after it (or on a Sunday) is
+    packed a day later, and before it the customer sees how long is left to get the earlier date."""
     z = zone(origin_pin, dest_pin, origin_state)
     transit = {"city": cfg["transit_days_same_city"], "state": cfg["transit_days_same_state"], "national": cfg["transit_days_national"]}[z]
     start = (now or datetime.now(IST)).astimezone(IST)
-    earliest = _add_working_days(start, dispatch_days + transit)
-    latest = _add_working_days(start, dispatch_days + transit + (1 if z == "city" else 2))
-    return {"zone": z, "min_date": earliest.date().isoformat(), "max_date": latest.date().isoformat(), "days_min": dispatch_days + transit}
+    left = cutoff_minutes_left(cutoff, start)
+    days = dispatch_days + transit + (1 if cutoff and left is None else 0)
+    earliest = _add_working_days(start, days)
+    latest = _add_working_days(start, days + (1 if z == "city" else 2))
+    return {"zone": z, "min_date": earliest.date().isoformat(), "max_date": latest.date().isoformat(), "days_min": days,
+            "order_within_min": left}

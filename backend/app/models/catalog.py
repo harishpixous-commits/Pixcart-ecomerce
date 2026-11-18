@@ -39,6 +39,9 @@ class Category(IdMixin, TimestampMixin, Base):
     default_gst_bps: Mapped[int] = mapped_column(Integer, default=1800)
     position: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Product information sellers must fill in before a listing in this category can be submitted
+    # (keys from services.product_info.REQUIRABLE); sub-categories inherit their parents' list.
+    required_details: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
 
     __table_args__ = (
         CheckConstraint("commission_bps BETWEEN 0 AND 5000", name="commission"),
@@ -75,6 +78,8 @@ class Product(IdMixin, TimestampMixin, Base):
     sold_count: Mapped[int] = mapped_column(Integer, default=0)
     review_summary: Mapped[str] = mapped_column(Text, default="", server_default="")
     review_summary_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Legal Metrology declarations and product information (see services.product_info.ProductDetails).
+    details: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
 
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR,
@@ -128,6 +133,8 @@ class Variant(IdMixin, TimestampMixin, Base):
     price_paise: Mapped[int] = mapped_column(BigInteger)
     stock: Mapped[int] = mapped_column(Integer, default=0)
     weight_grams: Mapped[int] = mapped_column(Integer, default=500)
+    # Net quantity in the product's unit (details["net_unit"]), for the unit sale price (e.g. 50 for 50 g).
+    net_qty: Mapped[float | None] = mapped_column(Numeric(12, 3))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     __table_args__ = (

@@ -282,6 +282,10 @@ async def seed_demo(session, cats: dict[str, Category]) -> None:
     session.add(Coupon(code="WELCOME10", description="10% off your first order, up to ₹200", kind="percent", value=1000, max_discount_paise=20000, first_order_only=True))
     session.add(Coupon(code="FESTIVE250", description="₹250 off on orders above ₹2,499", kind="flat", value=25000, min_order_paise=249900))
     await seed_storefront(session)
+    await session.flush()
+    from scripts.apply_demo_details import apply as apply_details  # product information and category requirements
+
+    await apply_details(session, verbose=False)
     await session.commit()
     print(f"Demo: {len(sellers)} sellers (phones 9000000001-3), {len(DEMO_PRODUCTS)} products, customer 9999900001")
 

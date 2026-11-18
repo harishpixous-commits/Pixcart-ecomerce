@@ -7,6 +7,8 @@ import "@fontsource/baloo-2/700.css";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Suspense } from "react";
+import { RouteProgress } from "@/components/route-progress";
 import { ToastProvider } from "@/components/ui";
 import { loadSiteServer } from "@/lib/server-api";
 import { SessionProvider } from "@/lib/session";
@@ -70,6 +72,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <SiteProvider site={site}>
+          <Suspense>
+            <RouteProgress />
+          </Suspense>
           <SessionProvider>
             <WishlistProvider>
               <ToastProvider>{children}</ToastProvider>

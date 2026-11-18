@@ -18,6 +18,7 @@ from app.routers.catalog import _category_tree, product_cards
 from app.services.catalog import category_descendant_ids, public_product_filter
 from app.services.cms import DEFAULT_PAGES, ensure_default_sections, get_site
 from app.integrations import get as get_integrations
+from app.services import review_settings
 from app.services.platform_settings import get_settings
 
 router = APIRouter(prefix="/api", tags=["storefront"])
@@ -35,7 +36,11 @@ async def site(session: SessionDep) -> dict:
     return {**s, "features": features, "cod_enabled": cfg["cod_enabled"], "online_payments": ic.online_payments,
             "free_shipping_threshold_paise": cfg["free_shipping_threshold_paise"],
             "gallery": {"zoom": cfg["gallery_zoom"], "zoom_level": cfg["gallery_zoom_level"] / 10,
-                        "max_video_mb": cfg["max_video_mb"], "max_videos": cfg["max_videos_per_listing"]}}
+                        "max_video_mb": cfg["max_video_mb"], "max_videos": cfg["max_videos_per_listing"]},
+            "shipping_fee_paise": cfg["shipping_fee_paise"],
+            "pdp": {k.removeprefix("pdp_"): v for k, v in cfg.items() if k.startswith("pdp_")}
+                   | {"header_pincode": cfg["header_pincode"], "page_loading_bar": cfg["page_loading_bar"]},
+            "reviews": review_settings.public(await review_settings.get(session))}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

@@ -91,7 +91,12 @@ function ShopAssistantPanel() {
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [msgs]);
   useEffect(() => () => { recRef.current?.abort(); speakerRef.current?.cancel(); abortRef.current?.abort(); }, []);
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    // Other parts of the shop open the chat, optionally with a question typed in (the customer sends it).
+    const onOpen = (e: Event) => {
+      setOpen(true);
+      const text = (e as CustomEvent<{ text?: string } | undefined>).detail?.text;
+      if (text) setInput(text);
+    };
     window.addEventListener("shop-assistant:open", onOpen);
     return () => window.removeEventListener("shop-assistant:open", onOpen);
   }, []);
@@ -219,7 +224,7 @@ function ShopAssistantPanel() {
     <>
       {!open && (
         <button type="button" onClick={() => setOpen(true)} aria-label={`Open ${cfg.name}`}
-          className="fixed bottom-20 right-4 z-40 flex items-center gap-2 rounded-full bg-peacock px-4 py-3 font-semibold text-white shadow-lg hover:bg-peacock-dark sm:bottom-6">
+          className="shop-assistant-launcher fixed bottom-20 right-4 z-40 flex items-center gap-2 rounded-full bg-peacock px-4 py-3 font-semibold text-white shadow-lg hover:bg-peacock-dark sm:bottom-6">
           <MessageCircle className="h-5 w-5" /><span className="hidden sm:inline">Help</span>
         </button>
       )}

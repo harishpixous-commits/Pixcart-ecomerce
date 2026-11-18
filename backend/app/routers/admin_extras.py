@@ -30,8 +30,10 @@ from app.models import (
     Order,
     Payout,
     Product,
+    ProductReport,
     ReturnRequest,
     Review,
+    ReviewReport,
     Seller,
     SubOrder,
     SupportTicket,
@@ -45,7 +47,8 @@ from app.routers.seller_extras import (
     _check_coupon_values,
     coupon_admin_out,
 )
-from app.services import ledger, storage
+from app.services import ledger, review_settings, storage
+from app.services.platform_settings import PRODUCT_REPORT_REASONS
 from app.services import returns as returns_svc
 from app.services.analytics import kpis
 from app.services.cms import (
@@ -126,33 +129,176 @@ async def update_coupon(coupon_id: uuid.UUID, body: AdminCouponIn, admin: Perm("
 
 
 @router.get("/reviews")
-async def reviews(admin: Perm("catalog"), session: SessionDep, status: str | None = None, rating: int | None = None, page: int = Query(default=1, ge=1),
-                  q: str = Query(default="", max_length=80)) -> dict:
-    stmt = select(Review, Product.title, User.name).join(Product, Product.id == Review.product_id).join(User, User.id == Review.user_id)
+async def reviews(admin: Perm("catalog"), session: SessionDep, status: Literal["published", "pending", "hidden"] | None = None,
+                  rating: int | None = None, page: int = Query(default=1, ge=1), q: str = Query(default="", max_length=80),
+                  reported: bool = False, media: bool = False, media_pending: bool = False, seller_id: uuid.UUID | None = None) -> dict:
+    stmt = select(Review, Product.title, Product.slug, User.name, User.phone).join(Product, Product.id == Review.product_id).join(User, User.id == Review.user_id)
     if q.strip():
         like = f"%{q.strip()}%"
-        stmt = stmt.where(or_(Product.title.ilike(like), Review.title.ilike(like), Review.body.ilike(like)))
+        stmt = stmt.where(or_(Product.title.ilike(like), Review.title.ilike(like), Review.body.ilike(like), User.name.ilike(like)))
     if status:
         stmt = stmt.where(Review.status == status)
     if rating:
         stmt = stmt.where(Review.rating == rating)
+    if reported:
+        stmt = stmt.where(Review.report_count > 0)
+    if media:
+        stmt = stmt.where(func.jsonb_array_length(Review.media) > 0)
+    if media_pending:
+        stmt = stmt.where(Review.media_status == "pending", func.jsonb_array_length(Review.media) > 0)
+    if seller_id:
+        stmt = stmt.where(Product.seller_id == seller_id)
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
-    rows = (await session.execute(stmt.order_by(Review.created_at.desc()).offset((page - 1) * 30).limit(30))).all()
-    return {"items": [{"id": str(r.id), "product": t, "author": n, "rating": r.rating, "title": r.title, "body": r.body, "status": r.status, "at": r.created_at.isoformat()} for r, t, n in rows],
-            "total": total, "page": page, "page_size": 30}
+    rows = (await session.execute(stmt.order_by(Review.report_count.desc(), Review.created_at.desc()).offset((page - 1) * 30).limit(30))).all()
+    reports: dict = {}
+    if rows:
+        for rid, reason, note in (await session.execute(
+            select(ReviewReport.review_id, ReviewReport.reason, ReviewReport.note)
+            .where(ReviewReport.review_id.in_([r.id for r, *_ in rows]), ReviewReport.status == "open"))).all():
+            reports.setdefault(rid, []).append({"reason": review_settings.REPORT_REASONS.get(reason, reason), "note": note})
+    counts = dict((await session.execute(select(Review.status, func.count()).group_by(Review.status))).all())
+    return {"items": [{"id": str(r.id), "product": t, "slug": slug, "author": n, "phone": ph, "rating": r.rating, "title": r.title, "body": r.body,
+                       "status": r.status, "verified": r.verified, "media": r.media, "media_status": r.media_status, "seller_reply": r.seller_reply,
+                       "helpful_count": r.helpful_count, "report_count": r.report_count, "reports": reports.get(r.id, []), "at": r.created_at.isoformat()}
+                      for r, t, slug, n, ph in rows],
+            "total": total, "page": page, "page_size": 30,
+            "counts": {"published": counts.get("published", 0), "pending": counts.get("pending", 0), "hidden": counts.get("hidden", 0),
+                       "reported": (await session.execute(select(func.count()).select_from(Review).where(Review.report_count > 0))).scalar_one(),
+                       "media_pending": (await session.execute(select(func.count()).select_from(Review).where(
+                           Review.media_status == "pending", func.jsonb_array_length(Review.media) > 0))).scalar_one()}}
+
+
+async def _close_reports(session, review_id: uuid.UUID, outcome: str) -> None:
+    await session.execute(update(ReviewReport).where(ReviewReport.review_id == review_id, ReviewReport.status == "open")
+                          .values(status=outcome, resolved_at=utcnow()))
 
 
 @router.post("/reviews/{review_id}/{action}")
-async def moderate_review(review_id: uuid.UUID, action: Literal["publish", "hide"], admin: Perm("catalog"), session: SessionDep) -> dict:
+async def moderate_review(review_id: uuid.UUID, action: Literal["publish", "hide", "publish-media", "hide-media", "dismiss-reports"],
+                          admin: Perm("catalog"), session: SessionDep) -> dict:
+    """publish / hide the review (publishing also closes its reports as dismissed, hiding as upheld);
+    publish-media / hide-media for its photos and videos only; dismiss-reports keeps the review as it is."""
     r = await session.get(Review, review_id)
     if r is None:
         raise NotFound("Review")
-    r.status = "published" if action == "publish" else "hidden"
+    if action == "publish":
+        r.status = "published"
+        if r.report_count:
+            await _close_reports(session, r.id, "dismissed")
+            r.report_count = 0
+    elif action == "hide":
+        r.status = "hidden"
+        if r.report_count:
+            await _close_reports(session, r.id, "upheld")
+            r.report_count = 0
+    elif action == "publish-media":
+        r.media_status = "published"
+    elif action == "hide-media":
+        r.media_status = "hidden"
+    else:
+        await _close_reports(session, r.id, "dismissed")
+        r.report_count = 0
     await session.flush()
     await refresh_ratings(session, r.product_id)
     audit(session, admin, f"review.{action}", "review", r.id)
     await session.commit()
-    return {"ok": True}
+    return {"ok": True, "status": r.status, "media_status": r.media_status}
+
+
+@router.get("/review-settings")
+async def get_review_settings(admin: Perm("catalog"), session: SessionDep) -> dict:
+    from app.services.platform_settings import get_settings
+
+    cfg = await get_settings(session)
+    return {**await review_settings.get(session), "feature_reviews": cfg["feature_reviews"], "reviews_need_approval": cfg["reviews_need_approval"],
+            "report_reasons": review_settings.REPORT_REASONS, "default_topics": review_settings.DEFAULT_TOPICS,
+            "default_guidelines": review_settings.DEFAULT_GUIDELINES}
+
+
+@router.put("/review-settings")
+async def put_review_settings(body: dict[str, Any], admin: Perm("catalog"), session: SessionDep) -> dict:
+    from app.services.platform_settings import update_settings
+
+    body = dict(body)
+    market = {k: body.pop(k) for k in ("feature_reviews", "reviews_need_approval") if k in body}
+    try:
+        if market:
+            await update_settings(session, market)
+        await review_settings.update(session, body)
+    except ValueError as exc:
+        raise ApiError(str(exc), "invalid_setting") from exc
+    audit(session, admin, "settings.reviews", "settings", "reviews", ", ".join(sorted([*market, *body]))[:200])
+    await session.commit()
+    return await get_review_settings(admin, session)
+
+
+# ----------------------------------------------------------------------------- product reports
+
+
+@router.get("/product-reports")
+async def product_reports(admin: Perm("catalog"), session: SessionDep, status: Literal["open", "resolved", "dismissed"] | None = "open",
+                          reason: str | None = None, q: str = Query(default="", max_length=80), seller_id: uuid.UUID | None = None,
+                          page: int = Query(default=1, ge=1)) -> dict:
+    stmt = (select(ProductReport, Product.title, Product.slug, Product.status, Seller.display_name, User.name, User.phone)
+            .join(Product, Product.id == ProductReport.product_id).join(Seller, Seller.id == ProductReport.seller_id)
+            .outerjoin(User, User.id == ProductReport.user_id))
+    if status:
+        stmt = stmt.where(ProductReport.status == status)
+    if reason:
+        stmt = stmt.where(ProductReport.reason == reason)
+    if seller_id:
+        stmt = stmt.where(ProductReport.seller_id == seller_id)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Product.title.ilike(like), ProductReport.note.ilike(like), Seller.display_name.ilike(like)))
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    rows = (await session.execute(stmt.order_by(ProductReport.created_at.desc()).offset((page - 1) * 30).limit(30))).all()
+    per_product = dict((await session.execute(select(ProductReport.product_id, func.count()).where(ProductReport.status == "open")
+                                              .group_by(ProductReport.product_id))).all())
+    counts = dict((await session.execute(select(ProductReport.status, func.count()).group_by(ProductReport.status))).all())
+    return {
+        "items": [{"id": str(x.id), "product_id": str(x.product_id), "product": t, "slug": slug, "product_status": pstatus, "seller": sname,
+                   "seller_id": str(x.seller_id), "customer": cname or "Deleted account", "phone": cphone or "", "reason": x.reason,
+                   "reason_label": PRODUCT_REPORT_REASONS.get(x.reason, x.reason), "note": x.note, "url": x.url, "status": x.status,
+                   "admin_note": x.admin_note, "seller_note": x.seller_note, "open_for_product": int(per_product.get(x.product_id, 0)),
+                   "at": x.created_at.isoformat(), "resolved_at": x.resolved_at.isoformat() if x.resolved_at else None}
+                  for x, t, slug, pstatus, sname, cname, cphone in rows],
+        "total": total, "page": page, "page_size": 30, "reasons": PRODUCT_REPORT_REASONS,
+        "counts": {k: counts.get(k, 0) for k in ("open", "resolved", "dismissed")},
+    }
+
+
+class ProductReportAction(BaseModel):
+    status: Literal["resolved", "dismissed"]
+    admin_note: str = Field(default="", max_length=2000)
+    take_down: bool = False  # also take the listing off the store (the seller is told why)
+    notify_seller: bool = True
+
+
+@router.post("/product-reports/{report_id}")
+async def resolve_product_report(report_id: uuid.UUID, body: ProductReportAction, admin: Perm("catalog"), session: SessionDep) -> dict:
+    from app.services.notify import notify_seller
+
+    x = await session.get(ProductReport, report_id)
+    if x is None:
+        raise NotFound("Report")
+    p = await session.get(Product, x.product_id)
+    x.status, x.admin_note, x.resolved_at, x.resolved_by = body.status, body.admin_note.strip(), utcnow(), admin.id
+    reason = PRODUCT_REPORT_REASONS.get(x.reason, x.reason)
+    if body.take_down and p.status == "approved":
+        p.status = "rejected"
+        p.rejection_reason = f"Taken down after a customer report ({reason.lower()}). {body.admin_note.strip()}".strip()
+        await notify_seller(session, p.seller_id, "listing_update", {"status": "taken down", "title": p.title,
+                            "message": f"Reason: {p.rejection_reason} Fix the listing and send it for review again."}, link=f"/seller/products/{p.id}")
+        # other open reports about the same listing are settled by the take-down
+        await session.execute(update(ProductReport).where(ProductReport.product_id == p.id, ProductReport.status == "open", ProductReport.id != x.id)
+                              .values(status="resolved", resolved_at=utcnow(), resolved_by=admin.id, admin_note="Listing taken down"))
+    elif body.status == "resolved" and body.notify_seller:
+        await notify_seller(session, p.seller_id, "listing_update", {"status": "reported by a customer", "title": p.title,
+                            "message": f"{reason}. {body.admin_note.strip() or 'Please check the listing.'}"}, link="/seller/product-reports")
+    audit(session, admin, f"product_report.{body.status}", "product", p.id, f"{reason}{' + take down' if body.take_down else ''}")
+    await session.commit()
+    return {"ok": True, "product_status": p.status}
 
 
 # ----------------------------------------------------------------------------- returns

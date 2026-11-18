@@ -47,6 +47,28 @@ DEFAULTS: dict[str, Any] = {
     "max_video_mb": 50,
     "max_videos_per_listing": 3,
     "payout_min_paise": 10000,
+    # product page modules (Admin → Product page)
+    "pdp_unit_price": True,           # ₹ per 100 g / kg / piece beside the price
+    "pdp_bought_count": True,         # "200+ bought in the past month"
+    "pdp_bought_min": 10,             # units sold in 30 days before the line appears
+    "pdp_bestseller_badge": True,     # "#1 Best seller in <category>"
+    "pdp_offers": True,               # coupons that apply to this product, with copy-code
+    "pdp_offers_max": 4,
+    "pdp_service_icons": True,        # free delivery, cash on delivery, returns, secure payment, GST invoice
+    "pdp_key_specs": True,            # up to 6 key specifications beside the price
+    "pdp_delivery_countdown": True,   # "Order within 2 hrs 10 mins" when the seller has a dispatch cut-off
+    "pdp_seller_snapshot": True,      # seller ratings, orders, on-time dispatch and years on the store
+    "top_seller_min_rating_x10": 40,  # "Top seller" badge: rating at least 4.0 ...
+    "top_seller_min_orders": 20,      # ... and this many orders in the last 90 days
+    "pdp_customer_media": True,       # customer photos and videos under the gallery
+    "pdp_share": True,
+    "pdp_report": True,               # "Report an issue with this product"
+    "pdp_ask_assistant": True,        # "Ask a question" opens the shop assistant about this product
+    "pdp_sticky_bar": True,           # phones: price and buttons stay at the bottom while scrolling
+    "pdp_similar": True,
+    "pdp_recently_viewed": True,
+    "header_pincode": True,           # "Deliver to <PIN>" in the site header
+    "page_loading_bar": True,         # thin progress bar while a page loads
 }
 
 # key -> (type, min, max)
@@ -78,6 +100,37 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "max_video_mb": (int, 5, 200),
     "max_videos_per_listing": (int, 0, 10),
     "payout_min_paise": (int, 100, 10_000_000),
+    "pdp_unit_price": (bool, 0, 1),
+    "pdp_bought_count": (bool, 0, 1),
+    "pdp_bought_min": (int, 1, 100_000),
+    "pdp_bestseller_badge": (bool, 0, 1),
+    "pdp_offers": (bool, 0, 1),
+    "pdp_offers_max": (int, 1, 10),
+    "pdp_service_icons": (bool, 0, 1),
+    "pdp_key_specs": (bool, 0, 1),
+    "pdp_delivery_countdown": (bool, 0, 1),
+    "pdp_seller_snapshot": (bool, 0, 1),
+    "top_seller_min_rating_x10": (int, 30, 50),
+    "top_seller_min_orders": (int, 1, 100_000),
+    "pdp_customer_media": (bool, 0, 1),
+    "pdp_share": (bool, 0, 1),
+    "pdp_report": (bool, 0, 1),
+    "pdp_ask_assistant": (bool, 0, 1),
+    "pdp_sticky_bar": (bool, 0, 1),
+    "pdp_similar": (bool, 0, 1),
+    "pdp_recently_viewed": (bool, 0, 1),
+    "header_pincode": (bool, 0, 1),
+    "page_loading_bar": (bool, 0, 1),
+}
+
+PRODUCT_REPORT_REASONS = {
+    "wrong_info": "Wrong or missing product information",
+    "counterfeit": "Fake or counterfeit product",
+    "unsafe": "Unsafe, expired or harmful",
+    "prohibited": "Not allowed to be sold",
+    "offensive": "Offensive images or text",
+    "price": "Lower price elsewhere / misleading price",
+    "other": "Something else",
 }
 
 RETURN_REASONS = {

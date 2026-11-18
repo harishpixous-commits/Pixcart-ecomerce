@@ -15,7 +15,7 @@ export default function SellerSettings() {
   const [g, setG] = useState({ name: "", email: "", phone: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [prefs, setPrefs] = useState<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string } | null>(null);
+  const [prefs, setPrefs] = useState<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string } | null>(null);
 
   useEffect(() => {
     api<SellerProfile>("/api/seller/me").then((s) => {
@@ -23,7 +23,7 @@ export default function SellerSettings() {
       setStore({ display_name: s.display_name, description: s.description, contact_email: s.contact_email, contact_phone: s.contact_phone });
       setG(s.grievance);
     }).catch(quietly);
-    api<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string }>("/api/seller/preferences").then(setPrefs).catch(quietly);
+    api<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string }>("/api/seller/preferences").then(setPrefs).catch(quietly);
   }, []);
 
   async function save(key: string, path: string, body: object) {
@@ -67,6 +67,15 @@ export default function SellerSettings() {
             finally { setBusy(null); }
           }}>
             <TextField label="Days to dispatch after an order" inputMode="numeric" value={String(prefs.dispatch_days)} onChange={(e) => setPrefs({ ...prefs, dispatch_days: Math.min(10, Number(e.target.value.replace(/\D/g, "")) || 0) })} hint="Used for the delivery date customers see" />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="cutoff" className="text-sm font-medium">Daily dispatch cut-off (optional)</label>
+              <div className="flex items-center gap-2">
+                <input id="cutoff" type="time" value={prefs.dispatch_cutoff} onChange={(e) => setPrefs({ ...prefs, dispatch_cutoff: e.target.value })}
+                  className="h-11 rounded-lg border border-line px-3" />
+                {prefs.dispatch_cutoff && <button type="button" onClick={() => setPrefs({ ...prefs, dispatch_cutoff: "" })} className="text-sm text-ink-faint hover:text-vermilion">Clear</button>}
+              </div>
+              <p className="text-xs text-ink-faint">Orders before this time count from today; later ones from the next working day. Shoppers see &ldquo;Order within 2 hrs 10 mins&rdquo; on your product pages.</p>
+            </div>
             <TextField label="Invoice prefix" value={prefs.invoice_prefix} maxLength={4} onChange={(e) => setPrefs({ ...prefs, invoice_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} hint="Up to 4 letters, e.g. KOV gives KOV/26-27/000001" />
             <label className="flex items-start gap-3 rounded-lg bg-marigold-light p-3 sm:col-span-2">
               <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={prefs.holiday_mode} onChange={(e) => setPrefs({ ...prefs, holiday_mode: e.target.checked })} />

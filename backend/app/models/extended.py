@@ -84,23 +84,82 @@ class WishlistItem(Base):
 
 
 class Review(IdMixin, TimestampMixin, Base):
+    """A customer's rating and review. ``status``: published (counted and shown), pending (waiting for staff:
+    held for moderation or hidden after reports) or hidden (removed by staff). Photos and videos have their
+    own ``media_status`` so staff can hold or remove them without touching the text."""
+
     __tablename__ = "reviews"
 
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
-    sub_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sub_orders.id", ondelete="CASCADE"))
+    # The delivered package that makes this a verified purchase; empty when the marketplace lets any
+    # signed-in customer review (those reviews carry no "Verified purchase" badge).
+    sub_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sub_orders.id", ondelete="CASCADE"))
+    verified: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     rating: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(120), default="")
     body: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(10), default="published")
+    media: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # [{kind, url, poster_url}]
+    media_status: Mapped[str] = mapped_column(String(10), default="published", server_default="published")
     seller_reply: Mapped[str] = mapped_column(Text, default="")
     helpful_count: Mapped[int] = mapped_column(Integer, default=0)
+    report_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # open reports
 
     __table_args__ = (
         UniqueConstraint("product_id", "user_id", name="uq_reviews_product_user"),
         CheckConstraint("rating BETWEEN 1 AND 5", name="rating"),
-        CheckConstraint("status IN ('published','hidden')", name="status"),
+        CheckConstraint("status IN ('published','pending','hidden')", name="status"),
+        CheckConstraint("media_status IN ('published','pending','hidden')", name="media_status"),
     )
+
+
+class ReviewVote(Base):
+    """One "helpful" vote per signed-in customer per review (a second click takes it back)."""
+
+    __tablename__ = "review_votes"
+
+    review_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ReviewReport(IdMixin, Base):
+    """A customer (or the product's seller) flags a review to staff."""
+
+    __tablename__ = "review_reports"
+
+    review_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    reason: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open | upheld | dismissed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("review_id", "user_id", name="uq_review_reports_review_user"),)
+
+
+class ProductReport(IdMixin, TimestampMixin, Base):
+    """'Report an issue with this product': wrong information, counterfeit, unsafe, prohibited, a lower price
+    elsewhere. Staff resolve it (and can take the listing down); the seller sees the report without the
+    customer's identity and can answer."""
+
+    __tablename__ = "product_reports"
+
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    seller_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    reason: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str] = mapped_column(String(400), default="")  # where a lower price was seen
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open | resolved | dismissed
+    admin_note: Mapped[str] = mapped_column(Text, default="")
+    seller_note: Mapped[str] = mapped_column(Text, default="")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (CheckConstraint("status IN ('open','resolved','dismissed')", name="status"),)
 
 
 class ReturnRequest(IdMixin, TimestampMixin, Base):

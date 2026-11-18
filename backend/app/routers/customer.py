@@ -2,16 +2,18 @@
 delivery estimates, privacy (DPDP) and product events for analytics."""
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, Query, Request
+from fastapi import APIRouter, BackgroundTasks, File, Query, Request, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func, select, update
 
-from app.core.deps import CurrentUser, OptionalUser, SessionDep, audit, client_ip
+from app.config import settings
+from app.core.deps import CurrentUser, OptionalUser, SessionDep, audit, client_ip, rate_limit
 from app.core.errors import ApiError, Conflict, NotFound
 from app.core.validators import validate_pincode
 from app.db import utcnow
@@ -21,9 +23,12 @@ from app.models import (
     Order,
     OrderItem,
     Product,
+    ProductReport,
     RefreshSession,
     ReturnRequest,
     Review,
+    ReviewReport,
+    ReviewVote,
     Seller,
     SubOrder,
     SupportTicket,
@@ -35,13 +40,15 @@ from app.models import (
 )
 from app.routers.catalog import product_cards
 from app.routers.orders import run_refunds
+from app.services import product_page, review_settings, storage
 from app.services import returns as returns_svc
 from app.services import support as support_svc
 from app.services.catalog import public_product_filter
 from app.services.coupons import list_for_checkout
-from app.services.delivery import estimate
+from app.core.validators import STATES
+from app.services.delivery import estimate, state_for_pin
 from app.services.invoices import credit_note_pdf, invoice_pdf
-from app.services.platform_settings import RETURN_REASONS, get_settings
+from app.services.platform_settings import PRODUCT_REPORT_REASONS, RETURN_REASONS, get_settings
 from app.services.stats import bump
 
 router = APIRouter(tags=["customer"])
@@ -86,12 +93,40 @@ async def wishlist_remove(product_id: uuid.UUID, user: CurrentUser, session: Ses
 
 
 # ----------------------------------------------------------------------------- reviews
+# Anyone can read reviews. Writing, voting "helpful" and reporting need a signed-in customer; by default
+# only customers whose order was delivered can write (Admin → Reviews → Settings).
+
+_CONTACT = re.compile(r"(https?://|www\.|\b[\w.+-]+@[\w-]+\.[\w.]+\b|(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{9}(?!\d))", re.IGNORECASE)
+
+
+def _media_ok(url: str, folder: str) -> bool:
+    return url.startswith(f"{settings.media_base_url.rstrip('/')}/{folder}/") and ".." not in url and len(url) <= 400
+
+
+class ReviewMediaIn(BaseModel):
+    kind: Literal["image", "video"]
+    url: str = Field(max_length=400)
+    poster_url: str = Field(default="", max_length=400)
+
+    @model_validator(mode="after")
+    def _urls(self) -> ReviewMediaIn:
+        if not _media_ok(self.url, "reviews" if self.kind == "image" else "review-videos"):
+            raise ValueError("Upload photos and videos here; links to other sites are not allowed")
+        if self.poster_url and not _media_ok(self.poster_url, "reviews"):
+            raise ValueError("Upload photos and videos here; links to other sites are not allowed")
+        return self
 
 
 class ReviewIn(BaseModel):
     rating: int = Field(ge=1, le=5)
     title: str = Field(default="", max_length=120)
     body: str = Field(default="", max_length=4000)
+    media: list[ReviewMediaIn] = Field(default_factory=list, max_length=12)
+
+
+class ReportIn(BaseModel):
+    reason: str = Field(max_length=20)
+    note: str = Field(default="", max_length=500)
 
 
 async def refresh_ratings(session, product_id: uuid.UUID) -> None:
@@ -111,44 +146,11 @@ async def refresh_ratings(session, product_id: uuid.UUID) -> None:
     s.rating_avg, s.rating_count = round(float(savg), 2), int(scount)
 
 
-@router.get("/api/catalog/products/{slug}/reviews")
-async def product_reviews(
-    slug: str,
-    session: SessionDep,
-    user: OptionalUser,
-    sort: Literal["recent", "helpful", "high", "low"] = "recent",
-    page: int = Query(default=1, ge=1),
-) -> dict:
+async def _product_by_slug(session, slug: str) -> Product:
     p = (await session.execute(select(Product).where(Product.slug == slug))).scalar_one_or_none()
     if p is None:
         raise NotFound("Product")
-    base = select(Review, User.name).join(User, User.id == Review.user_id).where(Review.product_id == p.id, Review.status == "published")
-    order = {"recent": Review.created_at.desc(), "helpful": Review.helpful_count.desc(), "high": Review.rating.desc(), "low": Review.rating.asc()}[sort]
-    rows = (await session.execute(base.order_by(order, Review.id).offset((page - 1) * 10).limit(10))).all()
-    dist = dict((await session.execute(select(Review.rating, func.count()).where(Review.product_id == p.id, Review.status == "published").group_by(Review.rating))).all())
-    can_review = False
-    mine = None
-    if user:
-        mine_row = (await session.execute(select(Review).where(Review.product_id == p.id, Review.user_id == user.id))).scalar_one_or_none()
-        mine = {"rating": mine_row.rating, "title": mine_row.title, "body": mine_row.body} if mine_row else None
-        can_review = (await _delivered_sub(session, user.id, p.id)) is not None
-    return {
-        "rating_avg": float(p.rating_avg or 0),
-        "rating_count": p.rating_count,
-        "distribution": {str(k): dist.get(k, 0) for k in range(5, 0, -1)},
-        "summary": p.review_summary,
-        "can_review": can_review,
-        "mine": mine,
-        "items": [
-            {
-                "id": str(r.id), "rating": r.rating, "title": r.title, "body": r.body, "author": (name or "Customer").split(" ")[0],
-                "verified": True, "seller_reply": r.seller_reply, "helpful_count": r.helpful_count, "created_at": r.created_at.isoformat(),
-            }
-            for r, name in rows
-        ],
-        "page": page,
-        "has_more": len(rows) == 10,
-    }
+    return p
 
 
 async def _delivered_sub(session, user_id: uuid.UUID, product_id: uuid.UUID) -> SubOrder | None:
@@ -163,43 +165,289 @@ async def _delivered_sub(session, user_id: uuid.UUID, product_id: uuid.UUID) -> 
     ).scalar_one_or_none()
 
 
+async def _review_gate(session, p: Product, user, cfg: dict, rcfg: dict) -> tuple[str | None, SubOrder | None]:
+    """(reason the user cannot write a review or None, the delivered package that verifies the purchase)."""
+    if not cfg["feature_reviews"]:
+        return "off", None
+    if user is None:
+        return "sign_in", None
+    seller = await session.get(Seller, p.seller_id)
+    if seller and seller.user_id == user.id:
+        return "own_product", None
+    sub = await _delivered_sub(session, user.id, p.id)
+    if sub is None and rcfg["buyers_only"]:
+        return "not_purchased", None
+    return None, sub
+
+
+def review_out(r: Review, name: str | None, *, show_media: bool, voted: set, reported: set, user_id) -> dict:
+    return {
+        "id": str(r.id), "rating": r.rating, "title": r.title, "body": r.body, "author": (name or "Customer").split(" ")[0],
+        "verified": r.verified, "seller_reply": r.seller_reply, "helpful_count": r.helpful_count, "created_at": r.created_at.isoformat(),
+        "media": r.media if show_media and r.media_status == "published" else [],
+        "voted": r.id in voted, "reported": r.id in reported, "mine": user_id is not None and r.user_id == user_id,
+    }
+
+
+@router.get("/api/catalog/products/{slug}/reviews")
+async def product_reviews(
+    slug: str,
+    session: SessionDep,
+    user: OptionalUser,
+    sort: Literal["recent", "helpful", "high", "low"] = "recent",
+    page: int = Query(default=1, ge=1, le=500),
+    star: int | None = Query(default=None, ge=1, le=5),
+    media: bool = False,
+    verified: bool = False,
+    topic: str = Query(default="", max_length=30),
+) -> dict:
+    p = await _product_by_slug(session, slug)
+    cfg = await get_settings(session)
+    rcfg = await review_settings.get(session)
+    show_media = rcfg["media_public"] or user is not None
+    conds = [Review.product_id == p.id, Review.status == "published"]
+    if star:
+        conds.append(Review.rating == star)
+    if media:
+        conds += [func.jsonb_array_length(Review.media) > 0, Review.media_status == "published"]
+    if verified:
+        conds.append(Review.verified.is_(True))
+    if topic:
+        t = next((t for t in rcfg["topics"] if t["name"].lower() == topic.lower()), None)
+        if t:
+            conds.append(func.concat(Review.title, " ", Review.body).op("~*")(review_settings.topic_pattern(t["words"])))
+    base = select(Review, User.name).join(User, User.id == Review.user_id).where(*conds)
+    order = {"recent": Review.created_at.desc(), "helpful": Review.helpful_count.desc(), "high": Review.rating.desc(), "low": Review.rating.asc()}[sort]
+    rows = (await session.execute(base.order_by(order, Review.created_at.desc(), Review.id).offset((page - 1) * 10).limit(10))).all()
+    total = (await session.execute(select(func.count()).select_from(Review).where(*conds))).scalar_one()
+    dist = dict((await session.execute(select(Review.rating, func.count()).where(Review.product_id == p.id, Review.status == "published").group_by(Review.rating))).all())
+    with_media = (await session.execute(select(func.count()).select_from(Review).where(
+        Review.product_id == p.id, Review.status == "published", Review.media_status == "published", func.jsonb_array_length(Review.media) > 0))).scalar_one()
+    verified_count = (await session.execute(select(func.count()).select_from(Review).where(Review.product_id == p.id, Review.status == "published", Review.verified.is_(True)))).scalar_one()
+    why_not, _sub = await _review_gate(session, p, user, cfg, rcfg)
+    mine = None
+    voted: set = set()
+    reported: set = set()
+    if user:
+        mine_row = (await session.execute(select(Review).where(Review.product_id == p.id, Review.user_id == user.id))).scalar_one_or_none()
+        if mine_row:
+            mine = {"rating": mine_row.rating, "title": mine_row.title, "body": mine_row.body, "media": mine_row.media,
+                    "status": mine_row.status, "media_status": mine_row.media_status}
+            if why_not in ("not_purchased",):
+                why_not = None  # an existing review can always be edited or deleted
+        ids = [r.id for r, _ in rows]
+        if ids:
+            voted = set((await session.execute(select(ReviewVote.review_id).where(ReviewVote.user_id == user.id, ReviewVote.review_id.in_(ids)))).scalars())
+            reported = set((await session.execute(select(ReviewReport.review_id).where(ReviewReport.user_id == user.id, ReviewReport.review_id.in_(ids)))).scalars())
+    gallery, media_total = (await product_page.customer_media(session, p.id, limit=12)) if show_media else ([], 0)
+    return {
+        "rating_avg": float(p.rating_avg or 0),
+        "rating_count": p.rating_count,
+        "distribution": {str(k): dist.get(k, 0) for k in range(5, 0, -1)},
+        "summary": p.review_summary,
+        "topics": await product_page.review_topics(session, rcfg["topics"], product_id=p.id) if rcfg["topics_enabled"] else [],
+        "with_media_count": with_media,
+        "verified_count": verified_count,
+        "media": gallery,
+        "media_total": media_total,
+        "media_hidden": not show_media and with_media > 0,
+        "can_review": why_not is None,
+        "cannot_review_reason": why_not,
+        "mine": mine,
+        "settings": review_settings.public(rcfg),
+        "items": [review_out(r, name, show_media=show_media, voted=voted, reported=reported, user_id=user.id if user else None) for r, name in rows],
+        "total": total,
+        "page": page,
+        "has_more": page * 10 < total,
+    }
+
+
+@router.get("/api/catalog/products/{slug}/media")
+async def product_customer_media(slug: str, session: SessionDep, user: OptionalUser, page: int = Query(default=1, ge=1, le=100)) -> dict:
+    """All customer photos and videos for the full-screen viewer, 30 at a time."""
+    p = await _product_by_slug(session, slug)
+    rcfg = await review_settings.get(session)
+    if not (rcfg["media_public"] or user is not None):
+        return {"items": [], "total": 0, "page": page, "has_more": False, "sign_in_to_see": True}
+    items, total = await product_page.customer_media(session, p.id, limit=30, offset=(page - 1) * 30)
+    return {"items": items, "total": total, "page": page, "has_more": page * 30 < total}
+
+
 @router.put("/api/catalog/products/{slug}/reviews")
 async def write_review(slug: str, body: ReviewIn, user: CurrentUser, session: SessionDep) -> dict:
     cfg = await get_settings(session)
-    if not cfg["feature_reviews"]:
+    rcfg = await review_settings.get(session)
+    p = await _product_by_slug(session, slug)
+    existing = (await session.execute(select(Review).where(Review.product_id == p.id, Review.user_id == user.id))).scalar_one_or_none()
+    why_not, sub = await _review_gate(session, p, user, cfg, rcfg)
+    if why_not == "off":
         raise ApiError("Reviews are turned off", "reviews_off")
-    p = (await session.execute(select(Product).where(Product.slug == slug))).scalar_one_or_none()
-    if p is None:
-        raise NotFound("Product")
-    sub = await _delivered_sub(session, user.id, p.id)
-    if sub is None:
+    if why_not == "own_product":
+        raise ApiError("Sellers cannot review their own products", "own_product")
+    if why_not == "not_purchased" and existing is None:
         raise ApiError("You can review a product after it has been delivered to you", "not_purchased")
-    r = (await session.execute(select(Review).where(Review.product_id == p.id, Review.user_id == user.id))).scalar_one_or_none()
+    title, text = body.title.strip(), body.body.strip()
+    if rcfg["min_body_chars"] and len(text) < rcfg["min_body_chars"]:
+        raise ApiError(f"Write at least {rcfg['min_body_chars']} characters about the product", "review_too_short")
+    photos = [m for m in body.media if m.kind == "image"]
+    videos = [m for m in body.media if m.kind == "video"]
+    if photos and not (rcfg["photos"] and rcfg["max_photos"] > 0):
+        raise ApiError("Photos in reviews are switched off", "photos_off")
+    if len(photos) > rcfg["max_photos"]:
+        raise ApiError(f"Add at most {rcfg['max_photos']} photos", "too_many_photos")
+    if videos and not rcfg["videos"]:
+        raise ApiError("Videos in reviews are switched off", "videos_off")
+    if len(videos) > 1:
+        raise ApiError("Add at most one video", "too_many_videos")
+    media = [m.model_dump() for m in body.media]
+    r = existing
     if r is None:
-        r = Review(product_id=p.id, user_id=user.id, sub_order_id=sub.id)
+        r = Review(product_id=p.id, user_id=user.id)
         session.add(r)
-    r.rating, r.title, r.body = body.rating, body.title.strip(), body.body.strip()
-    r.status = "hidden" if cfg["reviews_need_approval"] else "published"
+    media_changed = r.media != media if existing else bool(media)
+    if sub is not None or existing is None:
+        r.sub_order_id, r.verified = (sub.id if sub else None), sub is not None
+    r.rating, r.title, r.body, r.media = body.rating, title, text, media
+    # Links, emails and phone numbers are not allowed in reviews: such reviews wait for a person to check.
+    flagged = bool(_CONTACT.search(f"{title} {text}"))
+    r.status = "pending" if (cfg["reviews_need_approval"] or flagged) else "published"
+    if not media:
+        r.media_status = "published"
+    elif media_changed:
+        r.media_status = "pending" if rcfg["media_need_approval"] else "published"
     await session.flush()
     await refresh_ratings(session, p.id)
     await session.commit()
-    return {"ok": True, "status": r.status}
+    return {"ok": True, "status": r.status, "media_status": r.media_status, "held_for_check": flagged}
 
 
-_helpful_seen: dict[tuple, float] = {}
+@router.delete("/api/catalog/products/{slug}/reviews")
+async def delete_review(slug: str, user: CurrentUser, session: SessionDep) -> dict:
+    p = await _product_by_slug(session, slug)
+    r = (await session.execute(select(Review).where(Review.product_id == p.id, Review.user_id == user.id))).scalar_one_or_none()
+    if r is None:
+        raise NotFound("Review")
+    await session.delete(r)
+    await session.flush()
+    await refresh_ratings(session, p.id)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/api/reviews/media", status_code=201)
+async def upload_review_media(user: CurrentUser, session: SessionDep, file: UploadFile = File(...)) -> dict:
+    """A photo or video for a review (the review itself is saved with PUT .../reviews)."""
+    cfg = await get_settings(session)
+    rcfg = await review_settings.get(session)
+    if not cfg["feature_reviews"]:
+        raise ApiError("Reviews are turned off", "reviews_off")
+    await rate_limit(session, f"review-media:{user.id}", limit=40, window_seconds=3600)
+    video_limit = rcfg["max_video_mb"] * 1024 * 1024
+    data = await file.read(max(video_limit, settings.max_image_bytes) + 1)
+    try:
+        storage.sniff_video(data)
+        is_video = True
+    except ApiError:
+        is_video = False
+    if is_video:
+        if not rcfg["videos"]:
+            raise ApiError("Videos in reviews are switched off", "videos_off")
+        url = await storage.save_video(data, video_limit, "review-videos")
+    else:
+        if not (rcfg["photos"] and rcfg["max_photos"] > 0):
+            raise ApiError("Photos in reviews are switched off", "photos_off")
+        url = await storage.save_image(data, "reviews")
+    await session.commit()  # keep the rate-limit record
+    return {"url": url, "kind": "video" if is_video else "image"}
 
 
 @router.post("/api/reviews/{review_id}/helpful")
 async def helpful(review_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
-    key = (user.id, review_id)
-    if key in _helpful_seen:
-        return {"ok": True}
-    _helpful_seen[key] = time.time()
-    if len(_helpful_seen) > 50_000:
-        _helpful_seen.clear()
-    await session.execute(update(Review).where(Review.id == review_id).values(helpful_count=Review.helpful_count + 1))
+    """Marks a review helpful; a second call takes the vote back."""
+    r = await session.get(Review, review_id)
+    if r is None or r.status != "published":
+        raise NotFound("Review")
+    if r.user_id == user.id:
+        raise ApiError("You cannot vote on your own review", "own_review")
+    vote = await session.get(ReviewVote, (review_id, user.id))
+    if vote:
+        await session.delete(vote)
+        delta = -1
+    else:
+        session.add(ReviewVote(review_id=review_id, user_id=user.id, created_at=utcnow()))
+        delta = 1
+    await session.execute(update(Review).where(Review.id == review_id).values(helpful_count=func.greatest(Review.helpful_count + delta, 0)))
     await session.commit()
-    return {"ok": True}
+    await session.refresh(r)
+    return {"ok": True, "voted": delta == 1, "helpful_count": r.helpful_count}
+
+
+async def file_review_report(session, r: Review, user_id: uuid.UUID, body: ReportIn) -> dict:
+    if body.reason not in review_settings.REPORT_REASONS:
+        raise ApiError("Choose a reason", "invalid_reason")
+    if (await session.execute(select(ReviewReport.id).where(ReviewReport.review_id == r.id, ReviewReport.user_id == user_id))).first():
+        return {"ok": True, "already": True}
+    session.add(ReviewReport(review_id=r.id, user_id=user_id, reason=body.reason, note=body.note.strip(), status="open", created_at=utcnow()))
+    r.report_count += 1
+    rcfg = await review_settings.get(session)
+    hidden = False
+    if rcfg["report_hide_at"] and r.report_count >= rcfg["report_hide_at"] and r.status == "published":
+        r.status = "pending"  # out of sight until staff look at it
+        hidden = True
+        await session.flush()
+        await refresh_ratings(session, r.product_id)
+    await session.commit()
+    return {"ok": True, "already": False, "hidden": hidden}
+
+
+@router.post("/api/reviews/{review_id}/report")
+async def report_review(review_id: uuid.UUID, body: ReportIn, user: CurrentUser, session: SessionDep) -> dict:
+    r = await session.get(Review, review_id)
+    if r is None or r.status != "published":
+        raise NotFound("Review")
+    if r.user_id == user.id:
+        raise ApiError("You cannot report your own review", "own_review")
+    await rate_limit(session, f"review-report:{user.id}", limit=30, window_seconds=86400)
+    return await file_review_report(session, r, user.id, body)
+
+
+class ProductReportIn(BaseModel):
+    reason: str = Field(max_length=20)
+    note: str = Field(default="", max_length=2000)
+    url: str = Field(default="", max_length=400)
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, v: str) -> str:
+        v = v.strip()
+        if v and not re.match(r"^https?://[^\s]+$", v):
+            raise ValueError("Enter a web address starting with https://")
+        return v
+
+
+@router.post("/api/catalog/products/{slug}/report", status_code=201)
+async def report_product(slug: str, body: ProductReportIn, user: CurrentUser, session: SessionDep) -> dict:
+    """Report an issue with this product. Staff see it in Admin → Product reports; the seller sees it
+    without the customer's details."""
+    cfg = await get_settings(session)
+    if not cfg["pdp_report"]:
+        raise ApiError("Reporting is switched off", "reports_off")
+    if body.reason not in PRODUCT_REPORT_REASONS:
+        raise ApiError("Choose what is wrong", "invalid_reason")
+    if body.reason in ("wrong_info", "other", "counterfeit", "unsafe") and len(body.note.strip()) < 10:
+        raise ApiError("Tell us a little more (at least 10 characters)", "note_required", fields={"note": "Too short"})
+    p = (await session.execute(select(Product).where(Product.slug == slug, *public_product_filter()))).scalar_one_or_none()
+    if p is None:
+        raise NotFound("Product")
+    await rate_limit(session, f"product-report:{user.id}", limit=10, window_seconds=86400)
+    rep = (await session.execute(select(ProductReport).where(ProductReport.product_id == p.id, ProductReport.user_id == user.id,
+                                                              ProductReport.status == "open"))).scalar_one_or_none()
+    if rep is None:
+        rep = ProductReport(product_id=p.id, seller_id=p.seller_id, user_id=user.id, status="open")
+        session.add(rep)
+    rep.reason, rep.note, rep.url = body.reason, body.note.strip(), body.url
+    await session.commit()
+    return {"ok": True, "id": str(rep.id)}
 
 
 # ----------------------------------------------------------------------------- returns
@@ -421,8 +669,18 @@ async def delivery_estimate(session: SessionDep, variant_id: uuid.UUID, pincode:
     if not whs:
         return {"serviceable": False}
     cfg = await get_settings(session)
-    best = min((estimate(cfg, seller.dispatch_days, w.pincode, w.state_code, pin) for w in whs), key=lambda e: e["days_min"])
-    return {"serviceable": True, "cod_available": cfg["cod_enabled"], **best}
+    best = min((estimate(cfg, seller.dispatch_days, w.pincode, w.state_code, pin, cutoff=seller.dispatch_cutoff) for w in whs),
+               key=lambda e: e["days_min"])
+    free_from = cfg["free_shipping_threshold_paise"]
+    return {
+        "serviceable": True, **best,
+        "cod_available": cfg["cod_enabled"] and v.price_paise <= cfg["cod_max_order_paise"],
+        "order_within_min": best["order_within_min"] if cfg["pdp_delivery_countdown"] else None,
+        # delivery is charged per seller package; free once that seller's items reach the threshold
+        "delivery_fee_paise": 0 if v.price_paise >= free_from else cfg["shipping_fee_paise"],
+        "free_delivery_from_paise": free_from,
+        "state": STATES.get(state_for_pin(pin) or "", ""),
+    }
 
 
 @router.get("/api/checkout/coupons")

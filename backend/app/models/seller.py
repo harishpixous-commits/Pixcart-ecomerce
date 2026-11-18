@@ -63,6 +63,8 @@ class Seller(IdMixin, TimestampMixin, Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     razorpay_account_id: Mapped[str] = mapped_column(String(40), default="")
     dispatch_days: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
+    # "HH:MM" (IST). Orders placed after this time are packed the next working day; "" = no cut-off shown.
+    dispatch_cutoff: Mapped[str] = mapped_column(String(5), default="", server_default="")
     holiday_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     invoice_prefix: Mapped[str] = mapped_column(String(5), default="", server_default="")
     payout_contact_id: Mapped[str] = mapped_column(String(40), default="", server_default="")

@@ -140,7 +140,7 @@ class OrderItem(IdMixin, Base):
     __tablename__ = "order_items"
 
     sub_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sub_orders.id", ondelete="CASCADE"), index=True)
-    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"))
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), index=True)
     variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("variants.id", ondelete="RESTRICT"))
     title: Mapped[str] = mapped_column(String(200))
     variant_label: Mapped[str] = mapped_column(String(200), default="")

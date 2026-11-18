@@ -72,6 +72,74 @@ export interface PublicVariant {
   in_stock: boolean;
   low_stock: boolean;
   stock_left: number | null;
+  net_quantity?: string;
+  unit_price?: { paise: Paise; per: string } | null;
+}
+
+export interface ProductOffer {
+  code: string;
+  title: string;
+  terms: string;
+  description: string;
+  kind: "percent" | "flat";
+  value: number;
+  max_discount_paise: Paise | null;
+  min_order_paise: Paise;
+  first_order_only: boolean;
+  ends_at: string | null;
+  source: "platform" | "seller";
+  source_name: string;
+}
+
+export interface SellerSnapshot {
+  rating_avg: number;
+  rating_count: number;
+  positive_pct: number | null;
+  orders_90d: string | null;
+  on_time_pct: number | null;
+  since: string;
+  years: number;
+  months: number;
+  top_seller: boolean;
+  dispatch_days: number;
+}
+
+export interface ReviewMedia {
+  kind: "image" | "video";
+  url: string;
+  poster_url: string;
+}
+
+export interface CustomerMediaItem extends ReviewMedia {
+  review_id: string;
+  rating: number;
+  title: string;
+  body: string;
+  author: string;
+  verified: boolean;
+  created_at: string;
+}
+
+export interface ProductDetails {
+  net_unit: "" | "g" | "kg" | "ml" | "l" | "m" | "pcs" | "pair";
+  generic_name: string;
+  model_number: string;
+  manufacturer: string;
+  packer: string;
+  importer: string;
+  customer_care: string;
+  fssai_license: string;
+  ingredients: string;
+  directions: string;
+  safety_info: string;
+  legal_disclaimer: string;
+  shelf_life: string;
+  warranty: string;
+  in_the_box: string[];
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
+  key_specs: string[];
 }
 
 export interface ProductVideo {
@@ -110,8 +178,18 @@ export interface ProductPage {
     city: string;
     state: string;
     grievance_officer: { name: string; email: string };
+    dispatch_days?: number;
   };
   similar: ProductCard[];
+  key_specs?: { label: string; value: string }[];
+  info?: { label: string; value: string }[];
+  important?: { title: string; text: string }[];
+  first_available?: string | null;
+  bought_last_month?: string | null;
+  bestseller?: { rank: number; category: string; slug: string } | null;
+  offers?: ProductOffer[];
+  seller_snapshot?: SellerSnapshot | null;
+  returnable?: boolean;
 }
 
 export interface CartLine {
@@ -313,6 +391,7 @@ export interface SellerVariant {
   discount_pct: number;
   stock: number;
   weight_grams: number;
+  net_qty?: number | null;
   is_active: boolean;
 }
 
@@ -337,6 +416,9 @@ export interface SellerProduct {
   images: string[];
   videos?: ProductVideo[];
   variants: SellerVariant[];
+  details?: ProductDetails;
+  required_details?: string[];
+  missing_details?: string[];
   price_from: Paise;
   mrp_from: Paise;
   in_stock: boolean;
@@ -437,6 +519,41 @@ export interface Site {
   online_payments?: boolean;
   free_shipping_threshold_paise: number;
   gallery: { zoom: boolean; zoom_level: number; max_video_mb: number; max_videos: number };
+  shipping_fee_paise?: number;
+  pdp: PdpSettings;
+  reviews: ReviewSettingsPublic;
+}
+
+export interface PdpSettings {
+  unit_price: boolean;
+  bought_count: boolean;
+  bestseller_badge: boolean;
+  offers: boolean;
+  service_icons: boolean;
+  key_specs: boolean;
+  delivery_countdown: boolean;
+  seller_snapshot: boolean;
+  customer_media: boolean;
+  share: boolean;
+  report: boolean;
+  ask_assistant: boolean;
+  sticky_bar: boolean;
+  similar: boolean;
+  recently_viewed: boolean;
+  header_pincode: boolean;
+  page_loading_bar: boolean;
+}
+
+export interface ReviewSettingsPublic {
+  buyers_only: boolean;
+  photos: boolean;
+  max_photos: number;
+  videos: boolean;
+  max_video_mb: number;
+  media_public: boolean;
+  min_body_chars: number;
+  guidelines: string;
+  report_reasons: Record<string, string>;
 }
 
 export interface HomeSectionData {

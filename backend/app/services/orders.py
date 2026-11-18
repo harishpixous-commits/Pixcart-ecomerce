@@ -326,7 +326,7 @@ async def place_order(
             total=sub_items + plan["shipping"] + sub_cod - sub_seller_disc,
             taxable_total=0,
             is_interstate=interstate,
-            expected_delivery_at=datetime.fromisoformat(estimate(cfg, seller.dispatch_days, wh.pincode, wh.state_code, address.pincode)["max_date"]).replace(tzinfo=now.tzinfo),
+            expected_delivery_at=datetime.fromisoformat(estimate(cfg, seller.dispatch_days, wh.pincode, wh.state_code, address.pincode, cutoff=seller.dispatch_cutoff)["max_date"]).replace(tzinfo=now.tzinfo),
         )
         session.add(sub)
         await session.flush()

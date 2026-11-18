@@ -1,0 +1,139 @@
+{
+  "_about": "Demo product information (Legal Metrology declarations, specifications, highlights) by product title, and the product information each demo category requires. Used by seed --demo and by python -m scripts.apply_demo_details for an already-seeded database. All names, addresses and licence numbers are made-up demo values.",
+  "categories": {
+    "Snacks & Beverages": ["net_quantity", "generic_name", "manufacturer", "customer_care", "fssai_license", "ingredients", "shelf_life"],
+    "Staples": ["net_quantity", "generic_name", "manufacturer", "customer_care", "fssai_license", "shelf_life"],
+    "Skincare": ["net_quantity", "generic_name", "manufacturer", "customer_care", "ingredients", "directions"],
+    "Haircare": ["net_quantity", "generic_name", "manufacturer", "customer_care", "ingredients"],
+    "Mobile Accessories": ["generic_name", "manufacturer", "customer_care", "warranty", "in_the_box"],
+    "Headphones & Speakers": ["generic_name", "manufacturer", "customer_care", "warranty", "in_the_box"],
+    "Kitchen & Dining": ["net_quantity", "generic_name", "manufacturer", "customer_care", "warranty"]
+  },
+  "products": {
+    "Filter Coffee Powder 500g 80:20": {
+      "net_qty": 500,
+      "details": {
+        "net_unit": "g", "generic_name": "Coffee and chicory powder (filter coffee)", "model_number": "KB-FC-500",
+        "manufacturer": "Kumbakonam Brew Coffee Works (demo), 14 Big Street, Kumbakonam, Tamil Nadu 612001",
+        "customer_care": "care@kumbakonambrew.example, 1800 000 0001 (10 am to 6 pm)",
+        "fssai_license": "10000000000001", "shelf_life": "9 months from the date of packing",
+        "ingredients": "Roasted and ground coffee (80%), roasted chicory (20%).",
+        "directions": "Add 3 teaspoons to the upper chamber of a South Indian filter, pour 150 ml of boiling water and leave for 15 minutes. Mix the decoction with hot milk and sugar to taste.",
+        "safety_info": "Store in an airtight container away from moisture and sunlight. Close the pack tightly after use.",
+        "legal_disclaimer": "Actual product packaging and materials may contain more information than shown here. Read the label before use.",
+        "length_cm": 16, "width_cm": 10, "height_cm": 6, "key_specs": ["Roast", "Blend", "Grind"]
+      },
+      "specs": {"Brand": "Kumbakonam Brew", "Roast": "Medium-dark", "Blend": "80% coffee, 20% chicory", "Grind": "Fine (for filters)", "Caffeine": "Regular", "Diet type": "Vegetarian"},
+      "highlights": [
+        "Classic Kumbakonam degree coffee: 80% Peaberry and Plantation A beans with 20% chicory",
+        "Roasted in small batches and ground fine for the South Indian filter",
+        "Thick, aromatic decoction that stays strong with milk",
+        "Packed in a resealable aroma-lock pouch",
+        "Brews about 60 cups"
+      ]
+    },
+    "Organic Ponni Raw Rice 5kg": {
+      "net_qty": 5,
+      "details": {
+        "net_unit": "kg", "generic_name": "Raw rice (Ponni, organic)",
+        "manufacturer": "FarmFresh Agro Producers (demo), Thanjavur, Tamil Nadu 613001",
+        "customer_care": "hello@farmfresh.example, 1800 000 0002", "fssai_license": "10000000000002",
+        "shelf_life": "12 months from the date of packing", "ingredients": "Organic Ponni raw rice (100%).",
+        "directions": "Rinse twice, soak for 20 minutes and cook with 2.5 cups of water for every cup of rice.",
+        "key_specs": ["Variety", "Grain", "Certification"]
+      },
+      "specs": {"Brand": "FarmFresh", "Variety": "Ponni", "Grain": "Medium, aged 12 months", "Certification": "India Organic (demo)", "Diet type": "Vegetarian"},
+      "highlights": ["Aged 12 months for fluffy, separate grains", "Grown without chemical fertilisers or pesticides", "Easy to digest; ideal for everyday meals and idli batter"]
+    },
+    "Cold Pressed Coconut Hair Oil 500ml": {
+      "net_qty": 500,
+      "details": {
+        "net_unit": "ml", "generic_name": "Coconut oil (cold pressed)",
+        "manufacturer": "Kerala Naturals Oil Mills (demo), Kozhikode, Kerala 673001",
+        "customer_care": "care@keralanaturals.example, 1800 000 0003", "fssai_license": "10000000000003",
+        "shelf_life": "18 months from the date of manufacture", "ingredients": "Cold pressed coconut oil (100%).",
+        "directions": "Warm slightly and massage into the scalp. Leave on for an hour or overnight, then wash.",
+        "safety_info": "For external use. The oil may solidify below 24 °C; warm the bottle in water to melt it.",
+        "key_specs": ["Extraction", "Hair type"]
+      },
+      "specs": {"Brand": "Kerala Naturals", "Extraction": "Wooden press (chekku)", "Hair type": "All hair types", "Scent": "Natural coconut"},
+      "highlights": ["Made from sun-dried copra in a wooden press", "No added colour, fragrance or mineral oil", "Also suitable for cooking"]
+    },
+    "Vitamin C Face Serum 30ml": {
+      "net_qty": 30,
+      "details": {
+        "net_unit": "ml", "generic_name": "Face serum",
+        "manufacturer": "Glowveda Cosmetics (demo), Plot 7, Baddi, Himachal Pradesh 173205",
+        "customer_care": "support@glowveda.example, 1800 000 0004", "shelf_life": "24 months from manufacture; use within 6 months of opening",
+        "ingredients": "Aqua, ethyl ascorbic acid (10%), niacinamide, hyaluronic acid, ferulic acid, vitamin E, glycerin.",
+        "directions": "Apply 3 to 4 drops on clean skin in the morning, before moisturiser and sunscreen.",
+        "safety_info": "Patch test before first use. Avoid contact with eyes. Use sunscreen during the day.",
+        "key_specs": ["Skin type", "Key ingredient"]
+      },
+      "specs": {"Brand": "Glowveda", "Skin type": "All skin types", "Key ingredient": "10% vitamin C", "Fragrance": "Fragrance free"},
+      "highlights": ["Brightens dull skin and evens out tone", "Stable vitamin C that does not turn orange", "Light, non-sticky gel texture"]
+    },
+    "Stainless Steel Pressure Cooker 5 Litre": {
+      "net_qty": 1,
+      "details": {
+        "net_unit": "pcs", "generic_name": "Pressure cooker", "model_number": "HC-SS-5L",
+        "manufacturer": "HomeChef Appliances (demo), Rajkot, Gujarat 360001",
+        "customer_care": "service@homechef.example, 1800 000 0005", "warranty": "5 years on the body, 1 year on the gasket and safety valve",
+        "in_the_box": ["Pressure cooker with lid", "Spare gasket", "Instruction manual"],
+        "safety_info": "Check that the vent tube is clear before every use. Never open the lid while there is pressure inside.",
+        "length_cm": 38, "width_cm": 23, "height_cm": 20, "key_specs": ["Capacity", "Material", "Hob"]
+      },
+      "specs": {"Brand": "HomeChef", "Capacity": "5 litres", "Material": "Food-grade stainless steel", "Hob": "Gas and induction", "Lid": "Outer lid", "Certification": "ISI marked (demo)"},
+      "highlights": ["Tri-ply base heats evenly and works on induction", "Gasket release system for safety", "Cool-touch handles"]
+    },
+    "Copper Water Bottle 1 Litre Leak Proof": {
+      "net_qty": 1,
+      "details": {
+        "net_unit": "pcs", "generic_name": "Water bottle", "manufacturer": "Tamra Handicrafts (demo), Moradabad, Uttar Pradesh 244001",
+        "customer_care": "care@tamra.example", "warranty": "6 months against leaks",
+        "in_the_box": ["1 copper bottle"], "directions": "Fill with drinking water at night and drink in the morning. Clean with lemon and salt once a week.",
+        "safety_info": "Not for hot drinks, milk, juice or acidic liquids. Hand wash only.", "key_specs": ["Capacity", "Material"]
+      },
+      "specs": {"Brand": "Tamra", "Capacity": "1 litre", "Material": "Pure copper", "Finish": "Hammered"},
+      "highlights": ["Pure copper with a leak-proof screw cap", "Seamless joint-free body", "Traditional hammered finish"]
+    },
+    "BassPods Wireless Earbuds with ANC": {
+      "details": {
+        "generic_name": "Wireless earbuds", "model_number": "SC-BP200", "manufacturer": "SoundCraft Audio (demo), Noida, Uttar Pradesh 201301",
+        "customer_care": "support@soundcraft.example, 1800 000 0006", "warranty": "1 year manufacturer warranty",
+        "in_the_box": ["Earbuds", "Charging case", "USB-C cable", "Extra ear tips (S, L)", "User guide"],
+        "safety_info": "Keep the volume at a safe level. Do not use while driving.", "key_specs": ["Battery life", "Noise cancellation", "Bluetooth"]
+      },
+      "specs": {"Brand": "SoundCraft", "Battery life": "Up to 40 hours with the case", "Noise cancellation": "Active, up to 30 dB", "Bluetooth": "5.3", "Water resistance": "IPX5", "Charging": "USB-C, 10 min for 2 hours"},
+      "highlights": ["Active noise cancellation with transparency mode", "Low-latency mode for games", "Dual-device pairing", "Quad mics for clear calls"]
+    },
+    "20000mAh Power Bank 22.5W Fast Charge": {
+      "details": {
+        "generic_name": "Power bank", "model_number": "VL-PB20", "manufacturer": "VoltLine Electronics (demo), Chennai, Tamil Nadu 600058",
+        "customer_care": "care@voltline.example, 1800 000 0007", "warranty": "6 months manufacturer warranty",
+        "in_the_box": ["Power bank", "USB-C to USB-C cable", "User guide"], "safety_info": "Do not expose to heat or water. Do not charge overnight under a pillow.",
+        "key_specs": ["Capacity", "Output"]
+      },
+      "specs": {"Brand": "VoltLine", "Capacity": "20000 mAh", "Output": "22.5 W fast charge", "Ports": "2 USB-A, 1 USB-C", "Weight": "380 g"},
+      "highlights": ["Charges a phone about 4 times", "Charge three devices at once", "BIS registered (demo)"]
+    },
+    "Men's Pure Cotton Slim Fit Casual Shirt": {
+      "details": {
+        "generic_name": "Shirt", "manufacturer": "Chennai Silks & Co (demo), Tiruppur, Tamil Nadu 641601",
+        "customer_care": "care@chennaisilks.example", "directions": "Machine wash cold with similar colours. Do not bleach. Warm iron.",
+        "key_specs": ["Fabric", "Fit", "Sleeve"]
+      },
+      "specs": {"Brand": "Kavi", "Fabric": "100% cotton", "Fit": "Slim", "Sleeve": "Full sleeve", "Collar": "Spread", "Pattern": "Solid"},
+      "highlights": ["Breathable 100% cotton for Indian summers", "Slim fit that is not tight", "Pre-washed so it does not shrink"]
+    },
+    "Anti-Skid Yoga Mat 6mm with Strap": {
+      "details": {
+        "generic_name": "Yoga mat", "manufacturer": "FlexFit Sports (demo), Jalandhar, Punjab 144001",
+        "customer_care": "care@flexfit.example", "in_the_box": ["Yoga mat", "Carry strap"], "length_cm": 183, "width_cm": 61, "height_cm": 0.6,
+        "key_specs": ["Thickness", "Material"]
+      },
+      "specs": {"Brand": "FlexFit", "Thickness": "6 mm", "Material": "TPE, free of PVC", "Size": "183 × 61 cm"},
+      "highlights": ["Grips on both sides, even when sweaty", "Cushions knees and joints", "Light enough to carry to class"]
+    }
+  }
+}

@@ -86,12 +86,12 @@ def sniff_video(data: bytes) -> tuple[str, str]:
     raise ApiError("Upload an MP4 or WebM video", "invalid_video")
 
 
-async def save_video(data: bytes, max_bytes: int) -> str:
-    """Stores a product video as uploaded (no re-encoding) after checking its type and size."""
+async def save_video(data: bytes, max_bytes: int, folder: str = "videos") -> str:
+    """Stores a product (or review) video as uploaded (no re-encoding) after checking its type and size."""
     if len(data) > max_bytes:
         raise ApiError(f"Video must be smaller than {max_bytes // (1024 * 1024)} MB", "file_too_large")
     content_type, ext = sniff_video(data)
-    key = f"videos/{uuid.uuid4().hex}.{ext}"
+    key = f"{folder}/{uuid.uuid4().hex}.{ext}"
     if settings.storage_backend == "s3":
         await asyncio.to_thread(
             _s3().put_object, Bucket=settings.s3_bucket, Key=key, Body=data, ContentType=content_type,

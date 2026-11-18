@@ -13,7 +13,7 @@ import type { ProductVideo } from "@/lib/types";
 
 const dur = (s: number) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "");
 
-async function frameAndLength(file: File): Promise<{ poster: File | null; duration: number }> {
+export async function frameAndLength(file: File): Promise<{ poster: File | null; duration: number }> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.muted = true;

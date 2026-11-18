@@ -26,7 +26,7 @@ docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_AS
 | `core/` | auth deps, `permissions.py` (roles/permission catalogue), errors, security (hashing, Fernet), validators |
 | `models/` | Tables. `extended.py` has phase-2+ tables incl. `AdminRole`, `Assistant*`, `AiRun` |
 | `routers/` | HTTP endpoints. Admin endpoints take `Perm("<permission>")` |
-| `services/` | Business logic: orders, ledger (payouts), returns, invoices, exports, docgen (Excel/PDF), notify, cms |
+| `services/` | Business logic: orders, ledger (payouts), returns, invoices, exports, docgen (Excel/PDF), notify, cms. Product page: `product_info` (Legal Metrology details, unit price, category requirements), `product_page` (bought count, best-seller rank, seller snapshot, offers, customer media, review topics), `review_settings` (Admin → Reviews → Settings), `delivery` (dates, dispatch cut-off) |
 | `integrations/` | Third-party keys: `registry` (fields), `store` (encrypted, merged over env), `checks` (Test connection) |
 | `llm/` | Any LLM provider: `catalog` (types), `config` (connections/keys/routes), `adapters` (Anthropic + OpenAI-compatible), `router` (fallbacks) |
 | `ai/` | AI studio tasks (drafts that a person reviews) and risk briefs |
@@ -36,7 +36,9 @@ docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_AS
 
 ### Frontend map (`frontend/src`)
 
-`app/(shop)` storefront · `app/seller` seller hub · `app/admin` admin panel · `components/` shared UI
+`app/(shop)` storefront (product page: `p/[slug]/page.tsx` server sections + `buy-box.tsx` gallery/details/buy box;
+blocks in `components/pdp.tsx`, reviews and customer photos in `components/reviews.tsx`; every block reads its switch from
+`site.pdp`) · `app/seller` seller hub · `app/admin` admin panel · `components/` shared UI
 (`assistant/` dock, blocks, voice) · `lib/api.ts` (fetch with token refresh, `downloadFile`, `downloadPost`,
 `streamPost` for SSE) · `lib/speech.ts` (browser speech) · `lib/admin.tsx` (`useCan(permission)`).
 

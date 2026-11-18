@@ -29,12 +29,14 @@ from app.services.catalog import (
     videos_for,
 )
 from app.services.platform_settings import get_settings
+from app.services.product_info import REQUIRABLE, ProductDetails, details_of, effective_required, missing_required
 
 router = APIRouter(prefix="/api/seller", tags=["seller-products"])
 
 MAX_IMAGES = 8
 MAX_VARIANTS = 50
-CONTENT_FIELDS = ("category_id", "title", "brand", "description", "highlights", "specs", "hsn_code", "gst_bps", "country_of_origin", "return_window_days")
+CONTENT_FIELDS = ("category_id", "title", "brand", "description", "highlights", "specs", "hsn_code", "gst_bps", "country_of_origin", "return_window_days",
+                  "details")
 
 
 class VariantIn(BaseModel):
@@ -45,6 +47,7 @@ class VariantIn(BaseModel):
     price_paise: int = Field(gt=0, le=100_000_000)
     stock: int = Field(ge=0, le=1_000_000)
     weight_grams: int = Field(default=500, ge=1, le=100_000)
+    net_qty: float | None = Field(default=None, gt=0, le=1_000_000)  # in the listing's net quantity unit
     is_active: bool = True
 
     @field_validator("options")
@@ -109,6 +112,7 @@ class ProductIn(BaseModel):
     images: list[str] = Field(default_factory=list, max_length=MAX_IMAGES)
     videos: list[VideoIn] = Field(default_factory=list, max_length=10)
     variants: list[VariantIn] = Field(min_length=1, max_length=MAX_VARIANTS)
+    details: ProductDetails = Field(default_factory=ProductDetails)
 
     @field_validator("gst_bps")
     @classmethod
@@ -167,6 +171,7 @@ def variant_out(v: Variant) -> dict:
         "discount_pct": discount_pct(v.price_paise, v.mrp_paise),
         "stock": v.stock,
         "weight_grams": v.weight_grams,
+        "net_qty": float(v.net_qty) if v.net_qty is not None else None,
         "is_active": v.is_active,
     }
 
@@ -176,6 +181,10 @@ async def product_detail(session, p: Product) -> dict:
     imgs = (await images_for(session, [p.id])).get(p.id, [])
     vids = (await videos_for(session, [p.id])).get(p.id, [])
     cat = await session.get(Category, p.category_id)
+    details = details_of(p.details)
+    required = await required_for(session, p.category_id)
+    missing = missing_required(required, brand=p.brand, country_of_origin=p.country_of_origin, details=details,
+                               net_qtys=[v.net_qty for v in variants if v.is_active])
     return {
         "id": str(p.id),
         "slug": p.slug,
@@ -194,6 +203,9 @@ async def product_detail(session, p: Product) -> dict:
         "return_window_days": p.return_window_days,
         "images": imgs,
         "videos": vids,
+        "details": details.model_dump(),
+        "required_details": required,
+        "missing_details": missing,
         "variants": [variant_out(v) for v in variants],
         "price_from": p.price_from,
         "mrp_from": p.mrp_from,
@@ -201,6 +213,16 @@ async def product_detail(session, p: Product) -> dict:
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }
+
+
+async def required_for(session, category_id: uuid.UUID) -> list[str]:
+    """Product information the category (or a parent) makes compulsory."""
+    chain = []
+    cur = await session.get(Category, category_id)
+    while cur is not None:
+        chain.append(cur)
+        cur = await session.get(Category, cur.parent_id) if cur.parent_id else None
+    return effective_required(chain)
 
 
 async def _owned(session, seller_id: uuid.UUID, product_id: uuid.UUID, *, lock: bool = False) -> Product:
@@ -238,6 +260,7 @@ async def _apply_variants(session, seller: Seller, product: Product, items: list
         v.sku, v.options = item.sku, item.options
         v.mrp_paise, v.price_paise = item.mrp_paise, item.price_paise
         v.weight_grams, v.is_active = item.weight_grams, item.is_active
+        v.net_qty = item.net_qty
         if v.stock is None:
             v.stock = 0
         await session.flush()
@@ -258,6 +281,12 @@ async def _apply_images(session, product: Product, urls: list[str]) -> None:
     await session.execute(delete(ProductImage).where(ProductImage.product_id == product.id))
     for i, url in enumerate(urls):
         session.add(ProductImage(product_id=product.id, url=url, position=i))
+
+
+@router.get("/listing-requirements")
+async def listing_requirements(seller: SellerAccount, session: SessionDep, category_id: uuid.UUID) -> dict:
+    """What a listing in this category must include, for the product editor."""
+    return {"required": await required_for(session, category_id), "labels": REQUIRABLE}
 
 
 @router.post("/images", status_code=201)
@@ -409,10 +438,12 @@ async def update_product(product_id: uuid.UUID, body: ProductIn, seller: SellerA
         raise Conflict("Restore this product before editing it", "archived")
     await leaf_category(session, body.category_id)
     before = {f: getattr(p, f) for f in CONTENT_FIELDS}
+    before["details"] = details_of(p.details).model_dump()  # compare like with like (older rows have fewer keys)
     before_images = (await images_for(session, [p.id])).get(p.id, [])
     before_videos = [v["url"] for v in (await videos_for(session, [p.id])).get(p.id, [])]
+    dumped = body.model_dump(include=set(CONTENT_FIELDS))
     for f in CONTENT_FIELDS:
-        setattr(p, f, getattr(body, f))
+        setattr(p, f, dumped[f])
     p.title, p.brand = body.title.strip(), body.brand.strip()
     content_changed = (any(before[f] != getattr(p, f) for f in CONTENT_FIELDS) or before_images != body.images
                        or before_videos != [v.url for v in body.videos])
@@ -465,6 +496,12 @@ async def submit_product(product_id: uuid.UUID, seller: SellerAccount, user: Cur
         problems.append("add at least one active variant")
     if len(p.description.strip()) < 30:
         problems.append("write a description of at least 30 characters")
+    required = await required_for(session, p.category_id)
+    if required:
+        net = [v for v in (await session.execute(select(Variant.net_qty).where(Variant.product_id == p.id, Variant.is_active.is_(True)))).scalars()]
+        missing = missing_required(required, brand=p.brand, country_of_origin=p.country_of_origin, details=details_of(p.details), net_qtys=net)
+        if missing:
+            problems.append("fill in " + ", ".join(m.lower() for m in missing))
     if problems:
         raise ApiError("Before submitting, " + ", ".join(problems), "listing_incomplete")
     p.status = "pending"

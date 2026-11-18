@@ -23,8 +23,10 @@ from app.models import (
     Order,
     Product,
     ProductImage,
+    ProductReport,
     RefreshSession,
     Refund,
+    Review,
     Seller,
     SubOrder,
     User,
@@ -71,6 +73,17 @@ class CategoryIn(BaseModel):
     default_gst_bps: int
     position: int = Field(default=0, ge=0, le=10_000)
     is_active: bool = True
+    required_details: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("required_details")
+    @classmethod
+    def _required(cls, v: list[str]) -> list[str]:
+        from app.services.product_info import REQUIRABLE
+
+        bad = [k for k in v if k not in REQUIRABLE]
+        if bad:
+            raise ValueError(f"Unknown product information: {bad[0]}")
+        return [k for k in REQUIRABLE if k in v]
 
 
 def _page(page: int, size: int) -> tuple[int, int]:
@@ -103,6 +116,10 @@ async def dashboard(admin: Perm("dashboard"), session: SessionDep) -> dict:
         "orders_30d": gmv[1],
         "commission_30d": int(commission),
         "refunds_needing_attention": (await session.execute(select(func.count()).where(Refund.status == "failed"))).scalar_one(),
+        "reviews_needing_attention": (await session.execute(select(func.count()).select_from(Review).where(
+            (Review.status == "pending") | (Review.report_count > 0)
+            | ((Review.media_status == "pending") & (func.jsonb_array_length(Review.media) > 0))))).scalar_one(),
+        "product_reports_open": (await session.execute(select(func.count()).select_from(ProductReport).where(ProductReport.status == "open"))).scalar_one(),
         "active_sellers": (await session.execute(select(func.count()).where(Seller.status == "approved"))).scalar_one(),
         "customers": (await session.execute(select(func.count()).select_from(User))).scalar_one(),
         "live_products": (await session.execute(select(func.count()).where(Product.status == "approved"))).scalar_one(),
@@ -397,7 +414,16 @@ def _cat_out(c: Category) -> dict:
         "default_gst_bps": c.default_gst_bps,
         "position": c.position,
         "is_active": c.is_active,
+        "required_details": list(c.required_details or []),
     }
+
+
+@router.get("/categories/requirements")
+async def category_requirement_options(admin: Perm("catalog")) -> dict:
+    """The product information a category can make compulsory (for the category editor)."""
+    from app.services.product_info import REQUIRABLE
+
+    return {"options": REQUIRABLE}
 
 
 @router.get("/categories")

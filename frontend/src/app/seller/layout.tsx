@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Boxes, FileDown, IndianRupee, LayoutDashboard, MessageSquareText, Package, Settings, ShoppingBag, Tag, Undo2, Warehouse } from "lucide-react";
+import { BarChart3, Boxes, FileDown, Flag, IndianRupee, LayoutDashboard, MessageSquareText, Package, Settings, ShoppingBag, Tag, Undo2, Warehouse } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { PortalShell } from "@/components/portal-shell";
@@ -34,6 +34,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
         { href: "/seller/exports", label: "Reports and exports", icon: FileDown },
         { href: "/seller/coupons", label: "Coupons", icon: Tag },
         { href: "/seller/reviews", label: "Reviews", icon: MessageSquareText },
+        { href: "/seller/product-reports", label: "Customer reports", icon: Flag },
         { href: "/seller/settings", label: "Store settings", icon: Settings },
       ]
     : [{ href: "/seller/onboarding", label: "Registration", icon: Settings }];

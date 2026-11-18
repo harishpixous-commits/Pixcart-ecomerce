@@ -99,6 +99,25 @@ export default function AdminProductReview() {
           <dt className="text-ink-faint">Specifications</dt><dd>{Object.entries(p.specs).map(([k, v]) => `${k}: ${v}`).join("; ") || "—"}</dd>
         </dl>
       </section>
+      <section className="rounded-xl bg-white p-5" aria-labelledby="pinfo-h">
+        <h2 id="pinfo-h" className="mb-2 text-lg font-semibold">Product information</h2>
+        {(p.missing_details?.length ?? 0) > 0 ? (
+          <p className="mb-3 rounded-lg bg-marigold-light p-2 text-sm"><span className="font-semibold">Missing for this category:</span> {p.missing_details!.join(", ")}</p>
+        ) : (p.required_details?.length ?? 0) > 0 ? <p className="mb-3 text-sm text-leaf">Everything this category requires is filled in.</p> : null}
+        <dl className="grid grid-cols-[180px_1fr] gap-y-1.5 text-[15px]">
+          {([
+            ["Generic name", p.details?.generic_name], ["Model number", p.details?.model_number],
+            ["Net quantity", p.details?.net_unit ? `${p.variants.map((v) => v.net_qty ?? "?").join(" / ")} ${p.details.net_unit}` : ""],
+            ["Manufacturer", p.details?.manufacturer], ["Packer", p.details?.packer], ["Importer", p.details?.importer],
+            ["Consumer care", p.details?.customer_care], ["FSSAI licence", p.details?.fssai_license], ["Best before", p.details?.shelf_life],
+            ["Warranty", p.details?.warranty], ["In the box", p.details?.in_the_box.join(", ")],
+            ["Dimensions", p.details?.length_cm ? `${p.details.length_cm} × ${p.details.width_cm} × ${p.details.height_cm} cm` : ""],
+            ["Ingredients", p.details?.ingredients], ["Directions", p.details?.directions], ["Safety", p.details?.safety_info], ["Legal disclaimer", p.details?.legal_disclaimer],
+          ] as [string, string | undefined][]).map(([k, v]) => (
+            <div key={k} className="contents"><dt className="text-ink-faint">{k}</dt><dd className="whitespace-pre-line">{v || "—"}</dd></div>
+          ))}
+        </dl>
+      </section>
       <Table head={["Version", "SKU", "MRP", "Price", "Discount", "Stock", "On sale"]}>
         {p.variants.map((v) => (
           <tr key={v.id}>

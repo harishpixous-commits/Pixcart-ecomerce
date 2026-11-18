@@ -62,7 +62,7 @@ export function ButtonLink({ href, variant = "primary", className, children }: {
 
 /* ---------------------------------------------------------------- form fields */
 
-export function Field({ label, hint, error, children, htmlFor, className }: { label: string; hint?: string; error?: string; children: React.ReactNode; htmlFor?: string; className?: string }) {
+export function Field({ label, hint, error, children, htmlFor, className }: { label: React.ReactNode; hint?: string; error?: string; children: React.ReactNode; htmlFor?: string; className?: string }) {
   // Link the label to a single control even when the caller gave no id, so screen readers announce it.
   const autoId = useId();
   let control = children;

@@ -1,15 +1,16 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, ChevronDown, Heart, Home, LayoutGrid, Package, Search, ShoppingCart, User as UserIcon } from "lucide-react";
+import { Bell, ChevronDown, Heart, Home, LayoutGrid, MapPin, Package, Search, ShoppingCart, User as UserIcon, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { isPincode, setPincode, usePincode } from "@/lib/pincode";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
 import { fillTokens, splitBrand } from "@/lib/tokens";
-import type { CategoryNode } from "@/lib/types";
+import type { Address, CategoryNode } from "@/lib/types";
 import { ContactList, fillCopyright, SocialLinks } from "@/components/social";
 
 let categoryCache: CategoryNode[] | null = null;
@@ -104,7 +105,11 @@ function SearchBox() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setOpen(false);
-    if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`);
+    if (q.trim()) {
+      const target = `/search?q=${encodeURIComponent(q.trim())}`;
+      if (location.pathname + location.search !== target) window.dispatchEvent(new Event("route-progress:start"));
+      router.push(target);
+    }
   }
 
   return (
@@ -192,6 +197,81 @@ function AccountMenu() {
   );
 }
 
+/** "Deliver to 641001": one PIN code for the whole visit; product pages show delivery dates for it. */
+function DeliverTo() {
+  const pin = usePincode();
+  const { user } = useSession();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!user) return;
+    api<Address[]>("/api/addresses")
+      .then((list) => {
+        setAddresses(list);
+        const def = list.find((a) => a.is_default) ?? list[0];
+        if (def && !localStorage.getItem("pc_pin")) setPincode(def.pincode);
+      })
+      .catch(() => {});
+  }, [user]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  function apply(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isPincode(value)) return setError("Enter a valid 6-digit PIN code");
+    setPincode(value);
+    setOpen(false);
+  }
+  return (
+    <div className="relative shrink-0" ref={box}>
+      <button type="button" onClick={() => { setValue(pin); setError(""); setOpen((o) => !o); }} aria-expanded={open}
+        className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[14px] text-ink-soft hover:bg-peacock-light hover:text-peacock" data-testid="deliver-to">
+        <MapPin className="h-4 w-4 text-peacock" />
+        {pin ? <span>Deliver to <span className="font-semibold text-ink">{pin}</span></span> : <span className="font-semibold">Set delivery PIN</span>}
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-10 z-40 w-[300px] rounded-xl bg-white p-4 text-ink shadow-xl ring-1 ring-line">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="font-semibold">Choose your location</p>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded p-1 hover:bg-mist"><X className="h-4 w-4" /></button>
+          </div>
+          <p className="mb-3 text-sm text-ink-soft">Delivery dates, charges and cash on delivery depend on where you are.</p>
+          {addresses.length > 0 && (
+            <ul className="mb-3 flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+              {addresses.map((a) => (
+                <li key={a.id}>
+                  <button type="button" onClick={() => { setPincode(a.pincode); setOpen(false); }}
+                    className={clsx("w-full rounded-lg border px-3 py-2 text-left text-sm", a.pincode === pin ? "border-peacock bg-peacock-light" : "border-line hover:border-peacock")}>
+                    <span className="font-semibold">{a.full_name}</span> · {a.city} {a.pincode}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={apply} className="flex gap-2">
+            <label htmlFor="hdr-pin" className="sr-only">PIN code</label>
+            <input id="hdr-pin" inputMode="numeric" maxLength={6} value={value} autoFocus placeholder="Enter PIN code"
+              onChange={(e) => { setValue(e.target.value.replace(/\D/g, "")); setError(""); }}
+              className="h-10 min-w-0 flex-1 rounded-lg border border-line px-3 focus:border-peacock focus:outline-none" />
+            <button type="submit" className="h-10 rounded-lg bg-peacock px-4 font-semibold text-white hover:bg-peacock-dark">Apply</button>
+          </form>
+          {error && <p className="mt-1 text-sm text-vermilion">{error}</p>}
+          {!user && <p className="mt-3 text-xs text-ink-faint"><Link href="/login" className="font-semibold text-peacock">Sign in</Link> to use your saved addresses.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CartLink() {
   const { cartCount } = useSession();
   return (
@@ -238,13 +318,21 @@ export function ShopHeader() {
       </div>
       <div className="relative bg-white shadow-sm">
         <div className="awning absolute inset-x-0 top-0" aria-hidden />
-        <nav className="scroll-x mx-auto flex max-w-shop gap-1 overflow-x-auto px-3 pb-2 pt-4 sm:px-4" aria-label="Categories">
-          {cats.map((c) => (
-            <Link key={c.slug} href={`/c/${c.slug}`} className="shrink-0 rounded-full px-3 py-1 text-[15px] font-medium text-ink-soft hover:bg-peacock-light hover:text-peacock">
-              {c.name}
-            </Link>
-          ))}
-        </nav>
+        <div className="mx-auto flex max-w-shop items-center gap-1 px-3 pb-2 pt-4 sm:px-4">
+          {site.pdp?.header_pincode !== false && (
+            <>
+              <DeliverTo />
+              <span className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
+            </>
+          )}
+          <nav className="scroll-x flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="Categories">
+            {cats.map((c) => (
+              <Link key={c.slug} href={`/c/${c.slug}`} className="shrink-0 rounded-full px-3 py-1 text-[15px] font-medium text-ink-soft hover:bg-peacock-light hover:text-peacock">
+                {c.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </div>
     </header>
   );
