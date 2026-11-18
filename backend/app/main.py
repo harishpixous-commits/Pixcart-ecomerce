@@ -18,6 +18,7 @@ from app.integrations import runtime
 from app.routers import (
     addresses,
     admin,
+    assistant,
     admin_extras,
     ai,
     auth,
@@ -81,7 +82,7 @@ app.add_middleware(
 install_error_handlers(app)
 
 # customer before catalog: /api/catalog/delivery-estimate must not be captured by /api/catalog/products/{slug}
-for r in (auth, addresses, storefront, customer, catalog, cart, orders, seller_onboarding, seller_products, seller_orders, seller_extras, admin, admin_extras, staff, integrations_router, exports, ai, webhooks):
+for r in (auth, addresses, storefront, customer, catalog, cart, orders, seller_onboarding, seller_products, seller_orders, seller_extras, admin, admin_extras, staff, integrations_router, exports, ai, assistant, webhooks):
     app.include_router(r.router)
 
 

@@ -32,7 +32,7 @@ Everything is described in `infra/terraform` and shipped by `.github/workflows/d
    terraform apply
    ```
 4. Confirm the alarm email subscription that AWS sends you.
-5. Open Secrets Manager → `<name>/integrations` and fill in the keys you have (list at the end of this page).
+5. Keys for Razorpay, MSG91, email, WhatsApp, Shiprocket and AI are entered later in the admin panel (Admin → Integrations, Admin → AI providers). Secrets Manager `<name>/integrations` also works.
 6. Run the migration task once (the deploy workflow does this on every deploy), then create the first admin
    with ECS Exec on an API task:
    ```bash
@@ -50,8 +50,11 @@ automatically. To release by hand, run the Deploy workflow from the Actions tab.
 
 ## Integrations: where each key comes from
 
-Fill these in `<name>/integrations` (Secrets Manager), then redeploy the API (or run the Deploy workflow).
-Non-secret switches live in `app_env` in `terraform.tfvars`.
+**Easiest: enter them in Admin → Integrations** (encrypted in the database, Test connection button, no redeploy;
+AI models in Admin → AI providers). The step-by-step launch guide is `docs/GO_LIVE.md`.
+
+Alternatively fill `<name>/integrations` in Secrets Manager and redeploy the API; values saved in the admin
+panel win over these. Non-secret switches live in `app_env` in `terraform.tfvars`.
 
 | Integration | Keys | Where to get them | Also |
 |---|---|---|---|

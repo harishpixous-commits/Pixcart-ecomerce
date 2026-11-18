@@ -1,0 +1,20 @@
+# Staging: a full copy of production with test keys and its own database.
+#   cp staging.tfvars.example staging.tfvars && cp backend.hcl.example backend-staging.hcl
+#   (set key = "pixcart/staging.tfstate" in backend-staging.hcl)
+#   terraform init -backend-config=backend-staging.hcl -reconfigure
+#   terraform apply -var-file=staging.tfvars
+environment       = "staging"
+domain            = "staging.yourshop.in"
+hosted_zone       = "yourshop.in"
+media_domain      = "cdn-staging.yourshop.in"
+github_repository = "your-github-user/pixcart-marketplace"
+alarm_email       = "ops@yourshop.in"
+db_instance_class = "db.t4g.micro"
+db_multi_az       = false
+api_desired       = 1
+web_desired       = 1
+
+# Business details and all keys are entered in the admin panel after the first sign-in.
+app_env = {
+  AI_MODEL = "claude-haiku-5-5"
+}

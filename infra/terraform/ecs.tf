@@ -19,7 +19,7 @@ resource "aws_cloudwatch_log_group" "app" {
 locals {
   registry = "${data.aws_caller_identity.me.account_id}.dkr.ecr.${var.region}.amazonaws.com"
   api_env = merge({
-    ENVIRONMENT         = var.environment == "production" ? "production" : "development"
+    ENVIRONMENT         = "production" # staging runs with the same hardening; it differs only by keys and data
     PUBLIC_WEB_URL      = "https://${var.domain}"
     CORS_ORIGINS        = "https://${var.domain}"
     COOKIE_SECURE       = "true"

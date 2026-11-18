@@ -10,13 +10,15 @@ declare global {
 }
 
 let loading: Promise<void> | null = null;
+const DEFAULT_CHECKOUT = "https://checkout.razorpay.com/v1/checkout.js";
 
-function loadScript(): Promise<void> {
+/** The server says which checkout script to load: Razorpay's own, or the local simulator in development. */
+function loadScript(url = DEFAULT_CHECKOUT): Promise<void> {
   if (window.Razorpay) return Promise.resolve();
   if (!loading) {
     loading = new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = "https://checkout.razorpay.com/v1/checkout.js";
+      s.src = /^https?:\/\//.test(url) ? url : DEFAULT_CHECKOUT;
       s.async = true;
       s.onload = () => resolve();
       s.onerror = () => {
@@ -34,7 +36,7 @@ function loadScript(): Promise<void> {
  * server (which re-checks it with Razorpay), or null if the customer closed the window.
  */
 export async function payWithRazorpay(payment: CheckoutPayload): Promise<OrderDetail | null> {
-  await loadScript();
+  await loadScript(payment.checkout_url);
   return new Promise((resolve, reject) => {
     const rzp = new window.Razorpay!({
       key: payment.key_id,

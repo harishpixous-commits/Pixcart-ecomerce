@@ -10,7 +10,21 @@ customer messages. Nothing about the business is fixed in code: the brand name, 
 grievance officer flow from Admin → Storefront into the footer, the Contact us and grievance pages, emails,
 invoices, payment screens, two-step sign-in and search-engine data. Changes show at once, with no rebuild.
 
+## Start here
+
+- **Launching?** Follow `docs/GO_LIVE.md` (staging → production, step by step; also at Admin → Go-live checklist).
+- **Changing code (person or AI agent)?** Read `AGENTS.md`.
+- **AI assistant internals:** `docs/AI_ASSISTANT.md`.
+
 ## What is included
+
+- **Admin AI assistant** (Ctrl+J): chat and hands-free voice in any language, exact live figures as tables and charts,
+  file upload and comparison with live data, downloads of every answer (PDF, Excel, CSV), confirm-before-run changes,
+  memory, any LLM provider with several keys and fallbacks, and a fast decision layer (built-in rules or Laya).
+- **Integrations hub**: Razorpay, RazorpayX, MSG91, email, WhatsApp, Shiprocket, AI and Sentry keys entered in the admin
+  panel, encrypted, with Test connection; **Go-live checklist**; **roles and permissions** editor.
+- **Exports**: every report as CSV, Excel or PDF with filters and column choice; several at once as one ZIP.
+- **Razorpay simulator** (`tools/razorpay-sim`) to run online payments, webhooks and refunds end to end locally.
 
 **Customers** — search with typo tolerance, categories, product pages with delivery date by PIN code,
 ratings and reviews (with an AI summary when many reviews exist), wishlist, recently viewed, cart that

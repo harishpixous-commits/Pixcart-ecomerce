@@ -91,7 +91,7 @@ export default function StaffPage() {
       <div role="tablist" className="flex gap-1 rounded-lg bg-white p-1 text-sm font-medium w-fit">
         {(["people", "roles"] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-            className={`rounded-md px-4 py-1.5 ${tab === t ? "bg-brand text-white" : "text-ink-soft hover:bg-mist"}`}>
+            className={`rounded-md px-4 py-1.5 ${tab === t ? "bg-peacock text-white" : "text-ink-soft hover:bg-mist"}`}>
             {t === "people" ? `People (${staff.items.length})` : `Roles (${roles.length})`}
           </button>
         ))}
@@ -112,7 +112,7 @@ export default function StaffPage() {
               <td className="px-4 py-2.5">
                 {u.totp_enabled ? <Pill tone="green">On</Pill> : <Pill tone="red">Off</Pill>}
                 {u.totp_enabled && staff.can_manage_owners && !u.is_you && (
-                  <button className="ml-2 text-xs text-brand underline" onClick={() => window.confirm(`Reset two-step sign-in for ${u.name}? Use this when they lost their phone.`) && run(() => api(`/api/admin/staff/${u.id}`, { method: "PATCH", body: { reset_two_step: true } }), "Two-step sign-in reset")}>Reset</button>
+                  <button className="ml-2 text-xs text-peacock underline" onClick={() => window.confirm(`Reset two-step sign-in for ${u.name}? Use this when they lost their phone.`) && run(() => api(`/api/admin/staff/${u.id}`, { method: "PATCH", body: { reset_two_step: true } }), "Two-step sign-in reset")}>Reset</button>
                 )}
               </td>
               <td className="px-4 py-2.5 text-sm">{u.last_login_at ? dateTime(u.last_login_at) : "Never"}</td>
@@ -133,7 +133,7 @@ export default function StaffPage() {
                   <th className="py-2 text-left font-medium text-ink-faint">Permission</th>
                   {roles.map((r) => (
                     <th key={r.code} className="px-2 text-center align-bottom font-medium">
-                      <button className="hover:text-brand disabled:hover:text-ink" disabled={r.is_locked} title={r.is_locked ? "The owner role always has everything" : "Edit role"}
+                      <button className="hover:text-peacock disabled:hover:text-ink" disabled={r.is_locked} title={r.is_locked ? "The owner role always has everything" : "Edit role"}
                         onClick={() => { setError(null); setDraft({ code: r.code, name: r.name, description: r.description, permissions: r.permissions }); }}>
                         {r.name}
                       </button>

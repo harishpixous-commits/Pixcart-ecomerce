@@ -32,7 +32,11 @@ class PermissionDef:
 
 CATALOG: tuple[PermissionDef, ...] = (
     PermissionDef("dashboard", "Overview", "General", "Dashboard, KPIs and the go-live checklist."),
-    PermissionDef("assistant", "AI assistant", "General", "Chat with the AI assistant. It only sees data this role can see."),
+    PermissionDef("assistant", "AI assistant: chat", "AI assistant", "Ask questions in chat. It only reads data this role can see."),
+    PermissionDef("assistant_actions", "AI assistant: make changes", "AI assistant", "Let the assistant prepare changes (approve, cancel, coupons…). Each one still needs Confirm.", sensitive=True),
+    PermissionDef("assistant_files", "AI assistant: analyse files", "AI assistant", "Upload spreadsheets to analyse and compare with live data."),
+    PermissionDef("assistant_voice", "AI assistant: voice", "AI assistant", "Talk to the assistant and hear spoken answers."),
+    PermissionDef("ai_providers", "AI providers and models", "Administration", "Connect LLM providers, API keys and fallbacks.", sensitive=True),
     PermissionDef("sellers", "Sellers", "Marketplace", "KYC review, approve, suspend, commission."),
     PermissionDef("catalog", "Catalogue", "Marketplace", "Listings, categories and review moderation."),
     PermissionDef("orders", "Orders and returns", "Operations", "Orders, cancellations, deliveries and returns."),
@@ -53,9 +57,9 @@ OWNER = "owner"
 DEFAULT_ROLES: dict[str, tuple[str, str, set[str]]] = {
     OWNER: ("Owner", "Full access, including keys, staff and roles. Cannot be edited.", set(PERMISSIONS)),
     "operations": ("Operations", "Day-to-day orders, sellers, customers and support.",
-                   {"dashboard", "assistant", "sellers", "orders", "refunds", "customers", "support", "audit"}),
+                   {"dashboard", "assistant", "assistant_actions", "assistant_files", "assistant_voice", "sellers", "orders", "refunds", "customers", "support", "audit"}),
     "catalog": ("Catalogue manager", "Listings, categories, reviews and storefront.", {"dashboard", "assistant", "catalog", "marketing"}),
-    "finance": ("Finance", "Payouts, refunds, TCS and exports.", {"dashboard", "assistant", "payouts", "refunds", "reports", "orders", "audit"}),
+    "finance": ("Finance", "Payouts, refunds, TCS and exports.", {"dashboard", "assistant", "assistant_files", "assistant_voice", "payouts", "refunds", "reports", "orders", "audit"}),
     "support": ("Customer support", "Tickets, orders and customers.", {"dashboard", "assistant", "orders", "support", "customers"}),
     "marketing": ("Marketing", "Coupons, storefront and catalogue.", {"dashboard", "assistant", "marketing", "catalog"}),
 }

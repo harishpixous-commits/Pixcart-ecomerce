@@ -9,7 +9,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from app.ai import client as ai_client
+from app.llm import adapters as llm_adapters
 from app.config import settings
 from app.db import SessionLocal
 from app.models import AiRun, Notification, Product
@@ -29,12 +29,25 @@ def live(monkeypatch):
         seen.append({"headers": dict(req.headers), "body": json.loads(req.content)})
         if reply["status"] != 200:
             return httpx.Response(reply["status"], json={"error": {"message": "overloaded"}})
-        return httpx.Response(200, json={"model": "claude-haiku-5-5", "content": [{"type": "text", "text": reply["text"]}], "usage": reply["usage"]})
+        return httpx.Response(200, text=anthropic_sse(reply["text"], reply["usage"]), headers={"content-type": "text/event-stream"})
 
     monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
-    monkeypatch.setattr(ai_client, "transport", httpx.MockTransport(handler))
-    monkeypatch.setattr("app.ai.client.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr(llm_adapters, "transport", httpx.MockTransport(handler))
+    monkeypatch.setattr("app.llm.router.asyncio.sleep", _no_sleep)
     return seen, reply
+
+
+def anthropic_sse(text: str, usage: dict, model: str = "claude-haiku-5-5") -> str:
+    """A Messages API stream with one text block, as the real API sends it."""
+    events = [
+        {"type": "message_start", "message": {"model": model, "usage": {k: v for k, v in usage.items() if k != "output_tokens"}}},
+        {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+        {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}},
+        {"type": "content_block_stop", "index": 0},
+        {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": usage.get("output_tokens", 0)}},
+        {"type": "message_stop"},
+    ]
+    return "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events)
 
 
 async def _no_sleep(_):

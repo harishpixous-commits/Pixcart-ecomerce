@@ -148,3 +148,19 @@ async def test_export_formats_filters_and_columns(admin, client):
     assert (await admin.get("/api/admin/exports/orders.doc")).status_code == 404
     assert (await admin.get("/api/admin/exports/lookup/seller")).status_code == 200
 
+
+
+async def test_bulk_export_zip_in_chosen_order(admin):
+    import zipfile
+
+    r = await admin.post("/api/admin/exports/bulk", {"items": [
+        {"name": "products", "format": "xlsx"}, {"name": "orders", "format": "csv", "status": "placed"}, {"name": "tickets", "format": "pdf"}]})
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    names = z.namelist()
+    assert names[0].startswith("1-") and names[0].endswith(".xlsx") and names[1].startswith("2-") and names[1].endswith(".csv") and names[2].endswith(".pdf")
+    manifest = z.read("MANIFEST.csv").decode("utf-8-sig")
+    assert "Status: Placed" in manifest
+    assert (await admin.post("/api/admin/exports/bulk", {"items": [{"name": "orders", "format": "doc"}]})).status_code == 400
+    assert (await admin.post("/api/admin/exports/bulk", {"items": []})).status_code == 422
