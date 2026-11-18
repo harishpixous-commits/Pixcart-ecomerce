@@ -14,7 +14,7 @@ frontend/  Next.js 16 (App Router) + React 19 + Tailwind                      â†
 e2e/       Playwright browser tests against a running stack
 infra/     Terraform for AWS (VPC, RDS, ECS Fargate, ALB, WAF, S3+CloudFront, Secrets Manager)
 tools/     razorpay-sim (local Razorpay API + checkout + webhooks) and its smoke test
-docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_ASSISTANT
+docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_ASSISTANT, SHOP_ASSISTANT
 ```
 
 ### Backend map (`backend/app`)
@@ -30,6 +30,7 @@ docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_AS
 | `integrations/` | Third-party keys: `registry` (fields), `store` (encrypted, merged over env), `checks` (Test connection) |
 | `llm/` | Any LLM provider: `catalog` (types), `config` (connections/keys/routes), `adapters` (Anthropic + OpenAI-compatible), `router` (fallbacks) |
 | `ai/` | AI studio tasks (drafts that a person reviews) and risk briefs |
+| `shop_assistant/` | Customer chat on the storefront: `agent` (live + guided), `intents` (multilingual rules), customer-only `tools`, whitelist `views`, `kb` (help articles + public facts), `replies`, `prompts`, `settings`. Must never import `assistant/`, `ai/` or admin routers |
 | `assistant/` | Admin AI assistant: `agent` loop, `tools`, `decision` layer, `actions` (confirm-before-run), `uploads`, `downloads`, `prompts`, `sandbox`, `settings` |
 | `jobs.py` | Scheduler: expire unpaid orders, retry refunds, send notifications, cleanup |
 
@@ -67,6 +68,7 @@ docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_AS
 | Add an LLM provider | If it speaks OpenAI Chat Completions or Anthropic Messages: add a `ProviderType` in `llm/catalog.py` (no other code). Otherwise add an adapter in `llm/adapters.py` |
 | Add an export | One `ExportSpec` in `services/exports.py` (headers, query, row, filters); CSV/Excel/PDF/bulk ZIP work automatically |
 | Add an assistant tool | `@tool(...)` in `assistant/tools.py` with a permission and cards; map it to a domain in `assistant/decision.DOMAIN_TOOLS` |
+| Add a shop assistant tool | `@tool(..., login=, feature=)` in `shop_assistant/tools.py`, output through `shop_assistant/views.py` (whitelist), filtered by the session's customer; see `docs/SHOP_ASSISTANT.md` |
 | Add an assistant action | `ActionDef` + `prepare` branch + `execute` branch in `assistant/actions.py`, calling the existing endpoint function |
 | Add an admin page | `frontend/src/app/admin/<page>/page.tsx` + a nav entry with its permission in `app/admin/layout.tsx` |
 

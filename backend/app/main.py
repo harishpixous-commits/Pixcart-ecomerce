@@ -18,6 +18,7 @@ from app.integrations import runtime
 from app.routers import (
     addresses,
     admin,
+    admin_shop_assistant,
     assistant,
     admin_extras,
     ai,
@@ -32,6 +33,7 @@ from app.routers import (
     seller_onboarding,
     seller_orders,
     seller_products,
+    shop_assistant,
     staff,
     storefront,
     webhooks,
@@ -77,12 +79,12 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Request-ID", "X-Chat-Key"],
 )
 install_error_handlers(app)
 
 # customer before catalog: /api/catalog/delivery-estimate must not be captured by /api/catalog/products/{slug}
-for r in (auth, addresses, storefront, customer, catalog, cart, orders, seller_onboarding, seller_products, seller_orders, seller_extras, admin, admin_extras, staff, integrations_router, exports, ai, assistant, webhooks):
+for r in (auth, addresses, storefront, customer, catalog, cart, orders, seller_onboarding, seller_products, seller_orders, seller_extras, admin, admin_extras, staff, integrations_router, exports, ai, assistant, shop_assistant, admin_shop_assistant, webhooks):
     app.include_router(r.router)
 
 

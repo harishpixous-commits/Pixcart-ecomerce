@@ -40,6 +40,7 @@ from app.models.order import (
     WebhookEvent,
 )
 from app.models.seller import Seller, SellerDocument
+from app.models.shop_assistant import ShopChatAction, ShopChatMessage, ShopChatSession, ShopKbArticle
 from app.models.user import (
     Address,
     AuditLog,
@@ -51,6 +52,7 @@ from app.models.user import (
 
 __all__ = [
     "AdminRole", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
+    "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle",
     "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",
     "LedgerEntry", "MediaAsset", "Notification", "NotificationTemplate", "Payout", "ProductDailyStat", "ReturnItem",
     "ReturnRequest", "Review", "StockMovement", "SupportTicket", "TicketMessage", "Warehouse", "WishlistItem",

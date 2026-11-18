@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BarChart3, Bell, Bot, Cpu, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
+  BarChart3, Bell, Bot, Cpu, MessagesSquare, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
   ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -60,13 +60,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/settings", label: "Settings", icon: Settings, p: "settings" },
     { href: "/admin/ai", label: "AI studio", icon: Sparkles, p: "settings" },
     { href: "/admin/assistant", label: "AI assistant", icon: Bot, p: "settings" },
+    { href: "/admin/shop-assistant", label: "Shop assistant", icon: MessagesSquare, p: "shop_assistant", any: ["shop_assistant", "shop_assistant_kb", "shop_assistant_chats"] },
     { href: "/admin/ai-providers", label: "AI providers", icon: Cpu, p: "ai_providers" },
     { href: "/admin/go-live", label: "Go-live checklist", icon: Rocket, p: "dashboard" },
     { href: "/admin/integrations", label: "Integrations", icon: Plug, p: "integrations" },
     { href: "/admin/staff", label: "Staff and roles", icon: ShieldCheck, p: "staff" },
     { href: "/admin/audit", label: "Audit log", icon: FileClock, p: "audit" },
     { href: "/admin/account", label: "My account", icon: KeyRound, p: "dashboard" },
-  ].filter((n) => can(n.p));
+  ].filter((n) => ("any" in n && Array.isArray(n.any) ? n.any.some(can) : can(n.p)));
   return (
     <AdminCtx.Provider value={me}>
       <PortalShell title={`Admin, ${me.role_label}`} root="/admin" nav={nav}>

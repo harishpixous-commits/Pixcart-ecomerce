@@ -63,6 +63,7 @@ type Options = {
   body?: unknown;
   form?: FormData;
   query?: Record<string, string | number | boolean | string[] | undefined | null>;
+  headers?: Record<string, string>; // extra headers, e.g. the shop chat's guest key
 };
 
 function buildUrl(path: string, query?: Options["query"]) {
@@ -78,7 +79,7 @@ function buildUrl(path: string, query?: Options["query"]) {
 }
 
 export async function api<T = unknown>(path: string, opts: Options = {}, retried = false): Promise<T> {
-  const headers: Record<string, string> = { "X-Requested-With": "pixcart" };
+  const headers: Record<string, string> = { ...(opts.headers ?? {}), "X-Requested-With": "pixcart" };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let body: BodyInit | undefined;
   if (opts.form) body = opts.form;
@@ -198,10 +199,11 @@ export async function downloadPost(path: string, body: unknown, fallback = "down
  * Streams Server-Sent Events from a POST (the AI assistant). Calls onEvent for each JSON event.
  * Pass an AbortSignal to stop; the server saves what was said so far.
  */
-export async function streamPost(path: string, body: unknown, onEvent: (ev: Record<string, unknown>) => void, signal?: AbortSignal): Promise<void> {
+export async function streamPost(path: string, body: unknown, onEvent: (ev: Record<string, unknown>) => void, signal?: AbortSignal,
+  extraHeaders: Record<string, string> = {}): Promise<void> {
   const go = () => fetch(path, {
     method: "POST", credentials: "same-origin", signal,
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream", "X-Requested-With": "pixcart", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+    headers: { ...extraHeaders, "Content-Type": "application/json", Accept: "text/event-stream", "X-Requested-With": "pixcart", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
     body: JSON.stringify(body),
   });
   let res = await go();

@@ -50,6 +50,12 @@ CATALOG: tuple[PermissionDef, ...] = (
     PermissionDef("integrations", "Integrations and API keys", "Administration", "Payment, SMS, email, shipping and AI keys.", sensitive=True),
     PermissionDef("staff", "Staff and roles", "Administration", "Add staff, change roles, edit permissions.", sensitive=True),
     PermissionDef("audit", "Audit log", "Administration", "Who changed what, and when."),
+    PermissionDef("shop_assistant", "Shop assistant: settings", "Shop assistant (website chat)",
+                  "Switch the customer chat on or off, choose its features, AI use, voice, limits and budget."),
+    PermissionDef("shop_assistant_kb", "Shop assistant: help articles", "Shop assistant (website chat)",
+                  "Write, publish and hide the help articles the customer chat answers from."),
+    PermissionDef("shop_assistant_chats", "Shop assistant: customer chats", "Shop assistant (website chat)",
+                  "Read customers' chats with the website assistant, ratings and statistics.", sensitive=True),
 )
 PERMISSIONS: tuple[str, ...] = tuple(p.code for p in CATALOG)
 OWNER = "owner"
@@ -57,11 +63,12 @@ OWNER = "owner"
 DEFAULT_ROLES: dict[str, tuple[str, str, set[str]]] = {
     OWNER: ("Owner", "Full access, including keys, staff and roles. Cannot be edited.", set(PERMISSIONS)),
     "operations": ("Operations", "Day-to-day orders, sellers, customers and support.",
-                   {"dashboard", "assistant", "assistant_actions", "assistant_files", "assistant_voice", "sellers", "orders", "refunds", "customers", "support", "audit"}),
+                   {"dashboard", "assistant", "assistant_actions", "assistant_files", "assistant_voice", "sellers", "orders", "refunds", "customers", "support", "audit",
+                    "shop_assistant_kb", "shop_assistant_chats"}),
     "catalog": ("Catalogue manager", "Listings, categories, reviews and storefront.", {"dashboard", "assistant", "catalog", "marketing"}),
     "finance": ("Finance", "Payouts, refunds, TCS and exports.", {"dashboard", "assistant", "assistant_files", "assistant_voice", "payouts", "refunds", "reports", "orders", "audit"}),
-    "support": ("Customer support", "Tickets, orders and customers.", {"dashboard", "assistant", "orders", "support", "customers"}),
-    "marketing": ("Marketing", "Coupons, storefront and catalogue.", {"dashboard", "assistant", "marketing", "catalog"}),
+    "support": ("Customer support", "Tickets, orders and customers.", {"dashboard", "assistant", "orders", "support", "customers", "shop_assistant_kb", "shop_assistant_chats"}),
+    "marketing": ("Marketing", "Coupons, storefront and catalogue.", {"dashboard", "assistant", "marketing", "catalog", "shop_assistant_kb"}),
 }
 
 _TTL = 10.0

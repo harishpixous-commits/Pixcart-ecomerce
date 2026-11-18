@@ -62,4 +62,6 @@ ROUTES: dict[str, dict[str, str]] = {
     "assistant": {"label": "AI assistant (chat and voice)", "help": "Needs a model that supports tool calling."},
     "assistant_fast": {"label": "Quick answers and voice", "help": "A fast model for short questions and spoken replies. Empty = use the assistant route."},
     "studio": {"label": "AI studio drafts", "help": "Listing writer, support drafts, review summaries, business brief."},
+    "shop_assistant": {"label": "Shop assistant (customer chat on the website)",
+                       "help": "Answers customers on the storefront with customer-only tools. Needs tool calling. Empty = use the AI assistant route."},
 }

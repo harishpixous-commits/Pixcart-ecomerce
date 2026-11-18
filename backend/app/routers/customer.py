@@ -2,10 +2,8 @@
 delivery estimates, privacy (DPDP) and product events for analytics."""
 from __future__ import annotations
 
-import secrets
 import time
 import uuid
-from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
@@ -38,6 +36,7 @@ from app.models import (
 from app.routers.catalog import product_cards
 from app.routers.orders import run_refunds
 from app.services import returns as returns_svc
+from app.services import support as support_svc
 from app.services.catalog import public_product_filter
 from app.services.coupons import list_for_checkout
 from app.services.delivery import estimate
@@ -314,15 +313,7 @@ async def read_all(user: CurrentUser, session: SessionDep) -> dict:
 
 # ----------------------------------------------------------------------------- support tickets
 
-CATEGORIES = {
-    "order": "A problem with an order",
-    "delivery": "Delivery or tracking",
-    "payment": "Payment or refund",
-    "return": "Return or replacement",
-    "product": "Product quality or listing",
-    "account": "My account",
-    "other": "Something else",
-}
+CATEGORIES = support_svc.CATEGORIES
 
 
 class TicketIn(BaseModel):
@@ -373,25 +364,8 @@ async def my_tickets(user: CurrentUser, session: SessionDep) -> dict:
 
 @router.post("/api/support/tickets", status_code=201)
 async def open_ticket(body: TicketIn, user: CurrentUser, session: SessionDep) -> dict:
-    if body.category not in CATEGORIES:
-        raise ApiError("Choose what your request is about", "invalid_category")
-    if body.order_id:
-        o = await session.get(Order, body.order_id)
-        if o is None or o.user_id != user.id:
-            raise NotFound("Order")
-    open_count = (await session.execute(select(func.count()).select_from(SupportTicket).where(SupportTicket.user_id == user.id, SupportTicket.status.in_(("open", "awaiting_customer"))))).scalar_one()
-    if open_count >= 10:
-        raise ApiError("You have 10 open requests. Please wait for a reply on those first.", "too_many_tickets")
-    now = utcnow()
-    t = SupportTicket(
-        number=f"TK{now:%y%m%d}{secrets.token_hex(2).upper()}", user_id=user.id, order_id=body.order_id, category=body.category,
-        subject=body.subject.strip(), is_grievance=body.is_grievance, priority="high" if body.is_grievance else "normal",
-        # Consumer Protection (E-Commerce) Rules 2020: acknowledge within 48 hours, resolve within one month.
-        ack_due_at=now + timedelta(hours=48), resolve_due_at=now + timedelta(days=30),
-    )
-    session.add(t)
-    await session.flush()
-    session.add(TicketMessage(ticket_id=t.id, author_id=user.id, author_role="customer", body=body.message.strip(), created_at=now))
+    t = await support_svc.create_ticket(session, user, category=body.category, subject=body.subject, message=body.message,
+                                        order_id=body.order_id, is_grievance=body.is_grievance)
     await session.commit()
     return ticket_out(t, [])
 

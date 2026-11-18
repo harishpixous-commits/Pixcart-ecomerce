@@ -274,22 +274,29 @@ async def get_order(order_id: uuid.UUID, user: CurrentUser, session: SessionDep)
 @router.post("/api/orders/{order_id}/cancel")
 async def cancel(order_id: uuid.UUID, body: CancelIn, user: CurrentUser, session: SessionDep, background: BackgroundTasks) -> dict:
     o = await _own_order(session, user, order_id)
+    refund_ids = await customer_cancel(session, o, body.sub_order_id, body.reason)
+    await session.commit()
+    background.add_task(run_refunds, refund_ids)
+    return await order_detail(session, o)
+
+
+async def customer_cancel(session, o: Order, sub_order_id: uuid.UUID | None, reason: str) -> list[uuid.UUID]:
+    """Cancels the customer's cancellable packages of an order (all, or one). Ownership is the caller's check.
+    Returns refund ids to process after commit. Shared by the orders page and the shop assistant."""
     subs = list((await session.execute(select(SubOrder).where(SubOrder.order_id == o.id).order_by(SubOrder.number).with_for_update())).scalars())
-    targets = [s for s in subs if (body.sub_order_id is None or s.id == body.sub_order_id)]
-    if body.sub_order_id and not targets:
+    targets = [s for s in subs if (sub_order_id is None or s.id == sub_order_id)]
+    if sub_order_id and not targets:
         raise NotFound("Order part")
     cancellable = [s for s in targets if s.status in CUSTOMER_CANCELLABLE or s.status == "pending_payment"]
     if not cancellable:
         raise ApiError("This order can no longer be cancelled. You can return it after delivery.", "not_cancellable")
     refund_ids = []
     for s in cancellable:
-        refund = await cancel_sub_order(session, s, actor="customer", reason=body.reason)
+        refund = await cancel_sub_order(session, s, actor="customer", reason=reason)
         if refund:
             await session.flush()
             refund_ids.append(refund.id)
-    await session.commit()
-    background.add_task(run_refunds, refund_ids)
-    return await order_detail(session, o)
+    return refund_ids
 
 
 @router.post("/api/payments/razorpay/verify")

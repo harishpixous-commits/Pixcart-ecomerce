@@ -15,9 +15,16 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
 - **Launching?** Follow `docs/GO_LIVE.md` (staging → production, step by step; also at Admin → Go-live checklist).
 - **Changing code (person or AI agent)?** Read `AGENTS.md`.
 - **AI assistant internals:** `docs/AI_ASSISTANT.md`.
+- **Customer chat on the website (shop assistant):** `docs/SHOP_ASSISTANT.md`.
 
 ## What is included
 
+- **Shop assistant** (Help button on the storefront): customers chat or talk (English, Tanglish, Tamil, Hindi) to track
+  orders, cancel before shipping (with a confirm button), check returns and refunds, find products, and raise a pre-filled
+  support request with the chat attached. Works without AI (guided mode) and with any connected model. Fully separate
+  from the admin assistant: own tables, knowledge base, tools and permissions; it only sees public data and the
+  signed-in customer's own records. Admin → Shop assistant has the on/off switches, features, voice, limits, help
+  articles, customer chats and statistics.
 - **Admin AI assistant** (Ctrl+J): chat and hands-free voice in any language, exact live figures as tables and charts,
   file upload and comparison with live data, downloads of every answer (PDF, Excel, CSV), confirm-before-run changes,
   memory, any LLM provider with several keys and fallbacks, and a fast decision layer (built-in rules or Laya).
