@@ -1,4 +1,4 @@
-from app.models.catalog import Category, Product, ProductImage, Variant
+from app.models.catalog import Category, Product, ProductImage, ProductVideo, Variant
 from app.models.extended import (
     AdminRole,
     AiRun,
@@ -52,7 +52,7 @@ from app.models.user import (
 
 __all__ = [
     "AdminRole", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
-    "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle",
+    "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle", "ProductVideo",
     "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",
     "LedgerEntry", "MediaAsset", "Notification", "NotificationTemplate", "Payout", "ProductDailyStat", "ReturnItem",
     "ReturnRequest", "Review", "StockMovement", "SupportTicket", "TicketMessage", "Warehouse", "WishlistItem",

@@ -33,10 +33,10 @@ from app.models.catalog import GST_RATES_BPS
 from app.routers.orders import order_detail, run_refunds
 from app.routers.seller_onboarding import document_response, seller_profile
 from app.config import settings
-from app.routers.seller_products import MAX_IMAGES, product_detail
+from app.routers.seller_products import MAX_IMAGES, VideoIn, check_videos, product_detail
 from app.services import storage
 from app.services.notify import notify_seller
-from app.services.catalog import check_image_url, images_for
+from app.services.catalog import apply_videos, check_image_url, images_for
 from app.services.orders import cancel_sub_order, notify_refund, transition
 from app.services.platform_settings import get_settings, update_settings
 from app.services.reports import IST, tcs_report_data
@@ -319,6 +319,32 @@ async def set_product_images(product_id: uuid.UUID, body: ProductImagesIn, admin
     for i, url in enumerate(body.images):
         session.add(ProductImage(product_id=p.id, url=url, position=i))
     audit(session, admin, "product.images", "product", p.id, f"{len(body.images)} photos")
+    await session.commit()
+    data = await product_detail(session, p)
+    s = await session.get(Seller, p.seller_id)
+    data["seller"] = {"id": str(s.id), "name": s.display_name, "status": s.status}
+    return data
+
+
+class ProductVideosIn(BaseModel):
+    videos: list[VideoIn] = Field(default_factory=list, max_length=10)
+
+
+@router.post("/products/videos", status_code=201)
+async def upload_product_video(admin: Perm("catalog"), session: SessionDep, file: UploadFile = File(...)) -> dict:
+    cfg = await get_settings(session)
+    limit = cfg["max_video_mb"] * 1024 * 1024
+    data = await file.read(limit + 1)
+    return {"url": await storage.save_video(data, limit)}
+
+
+@router.put("/products/{product_id}/videos")
+async def set_product_videos(product_id: uuid.UUID, body: ProductVideosIn, admin: Perm("catalog"), session: SessionDep) -> dict:
+    """Replaces a listing's videos (order = display order). Like photos, a staff correction keeps the listing's status."""
+    p = await _product(session, product_id, lock=True)
+    await check_videos(session, body.videos)
+    await apply_videos(session, p.id, body.videos)
+    audit(session, admin, "product.videos", "product", p.id, f"{len(body.videos)} videos")
     await session.commit()
     data = await product_detail(session, p)
     s = await session.get(Seller, p.seller_id)

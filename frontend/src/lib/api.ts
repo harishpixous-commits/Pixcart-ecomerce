@@ -38,6 +38,32 @@ export function onTokenChange(fn: (token: string | null) => void) {
   };
 }
 
+/** Uploads a file with progress (fetch cannot report upload progress). Returns the JSON reply. */
+export function uploadWithProgress<T>(path: string, file: File, onProgress: (fraction: number) => void, retried = false): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("X-Requested-With", "pixcart");
+    if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    xhr.onerror = () => reject(new ApiError(0, "network", "The upload stopped. Check your connection and try again."));
+    xhr.onload = async () => {
+      if (xhr.status === 401 && !retried && (await refreshSession())) {
+        uploadWithProgress<T>(path, file, onProgress, true).then(resolve, reject);
+        return;
+      }
+      let data: { error?: { code?: string; message?: string; fields?: Record<string, string> } } & Record<string, unknown> = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
+      else reject(new ApiError(xhr.status, data.error?.code ?? "error", data.error?.message ?? (xhr.status === 413 ? "The file is too large" : `Upload failed (${xhr.status})`), data.error?.fields ?? {}));
+    };
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
+  });
+}
+
 /**
  * Catch handler for background loads (page data, lists). A lost session (401 after a failed refresh) is
  * handled by SessionProvider, which signs the person out and the layout sends them to sign in, so it is

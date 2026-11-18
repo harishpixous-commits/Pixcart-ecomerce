@@ -74,6 +74,13 @@ export interface PublicVariant {
   stock_left: number | null;
 }
 
+export interface ProductVideo {
+  url: string;
+  poster_url: string;
+  title: string;
+  duration_s: number;
+}
+
 export interface ProductPage {
   id: string;
   slug: string;
@@ -83,6 +90,7 @@ export interface ProductPage {
   highlights: string[];
   specs: Record<string, string>;
   images: string[];
+  videos?: ProductVideo[];
   country_of_origin: string;
   return_window_days: number;
   rating_avg: number;
@@ -327,6 +335,7 @@ export interface SellerProduct {
   country_of_origin: string;
   return_window_days: number;
   images: string[];
+  videos?: ProductVideo[];
   variants: SellerVariant[];
   price_from: Paise;
   mrp_from: Paise;
@@ -423,10 +432,11 @@ export interface Site {
   footer: { show_business: boolean; show_contact: boolean; show_social: boolean; show_grievance: boolean; show_gstin: boolean; copyright: string };
   seo: { title: string; description: string };
   analytics: { google_analytics_id: string; meta_pixel_id: string };
-  features: { wishlist: boolean; reviews: boolean; returns: boolean; coupons: boolean; support: boolean; ai: boolean };
+  features: { wishlist: boolean; reviews: boolean; returns: boolean; coupons: boolean; support: boolean; ai: boolean; product_videos?: boolean };
   cod_enabled: boolean;
   online_payments?: boolean;
   free_shipping_threshold_paise: number;
+  gallery: { zoom: boolean; zoom_level: number; max_video_mb: number; max_videos: number };
 }
 
 export interface HomeSectionData {

@@ -105,6 +105,13 @@ appears in production or once real SMS is connected. The same page pauses new cu
 whether the email is asked. Demo sellers sign in with 9000000001 to 9000000003, the demo customer with 9999900001.
 Staff sign in with email and password at `/admin/login`. Demo coupons: `WELCOME10` (first order) and `FESTIVE250`.
 
+**Product photos and videos.** On a computer, hovering a thumbnail shows that photo and hovering the photo opens a
+magnified view beside it; clicking opens a full-screen viewer with **Videos** and **Images** tabs (arrow keys,
+click to zoom, Esc to close). On phones the photos swipe and a tap opens the viewer. Sellers add MP4/WebM videos
+in the product editor (the browser takes the poster frame and length; nothing is re-encoded), staff in Admin →
+Listings → a listing → Videos. Admin → Marketplace settings → *Product page* switches zoom and videos on or off
+and sets the zoom strength, the largest video and the number of videos per listing.
+
 **Accounts in the admin panel.** *Customers and accounts* lists everyone (filter customers, sellers, staff, blocked);
 open one to see profile, consent, addresses, orders, returns, support requests, signed-in devices and staff
 history, and to edit name/mobile/email, sign out everywhere, block or unblock. *Add customer* creates an account

@@ -16,6 +16,7 @@ from app.services.catalog import (
     category_descendant_ids,
     discount_pct,
     images_for,
+    videos_for,
     public_product_filter,
     variant_label,
 )
@@ -226,6 +227,8 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         (await session.execute(select(Variant).where(Variant.product_id == p.id, Variant.is_active.is_(True)).order_by(Variant.price_paise, Variant.created_at))).scalars()
     )
     images = (await images_for(session, [p.id])).get(p.id, [])
+    cfg = await get_settings(session)
+    videos = (await videos_for(session, [p.id])).get(p.id, []) if cfg["feature_product_videos"] else []
     cat = await session.get(Category, p.category_id)
     breadcrumbs = []
     cur = cat
@@ -255,6 +258,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "highlights": p.highlights,
         "specs": p.specs,
         "images": images,
+        "videos": videos,
         "country_of_origin": p.country_of_origin,
         "return_window_days": p.return_window_days,
         "rating_avg": float(p.rating_avg or 0),

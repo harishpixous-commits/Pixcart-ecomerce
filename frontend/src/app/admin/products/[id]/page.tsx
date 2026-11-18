@@ -9,7 +9,8 @@ import { Button, ErrorNote, Modal, PageLoader, Pill, StatusPill, Textarea, useTo
 import { useSite } from "@/lib/site";
 import { api, ApiError } from "@/lib/api";
 import { pct, rupees } from "@/lib/format";
-import type { SellerProduct } from "@/lib/types";
+import type { ProductVideo, SellerProduct } from "@/lib/types";
+import { VideoEditor } from "@/components/video-editor";
 
 const QUICK_REASONS = [
   "Images are blurry, watermarked or show another brand's logo",
@@ -87,6 +88,7 @@ export default function AdminProductReview() {
       <div className="flex items-center gap-3"><StatusPill status={p.status} />{p.rejection_reason && <span className="text-vermilion">{p.rejection_reason}</span>}</div>
       <section className="rounded-xl bg-white p-5">
         <PhotoEditor key={p.images.join("|")} productId={id} images={p.images} onSaved={(next) => { setP(next); toast("Photos saved"); }} />
+        <VideoSection key={(p.videos ?? []).map((v) => v.url + v.title).join("|")} productId={id} videos={p.videos ?? []} onSaved={(next) => { setP(next); toast("Videos saved"); }} />
         <dl className="grid grid-cols-[150px_1fr] gap-y-1.5 text-[15px]">
           <dt className="text-ink-faint">Brand</dt><dd>{p.brand || "—"}</dd>
           <dt className="text-ink-faint">HSN / GST</dt><dd>{p.hsn_code} at {pct(p.gst_bps)}</dd>
@@ -206,6 +208,42 @@ function PhotoEditor({ productId, images, onSaved }: { productId: string; images
         )}
       </div>
       <p className="mt-2 text-sm text-ink-faint">Up to {MAX_PHOTOS} photos. The first one is the main photo. Changes go live when you save.</p>
+    </div>
+  );
+}
+
+/** Staff can add, retitle, reorder or remove a listing's videos. */
+function VideoSection({ productId, videos, onSaved }: { productId: string; videos: ProductVideo[]; onSaved: (p: SellerProduct) => void }) {
+  const site = useSite();
+  const [draft, setDraft] = useState<ProductVideo[]>(videos);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(videos);
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await api<SellerProduct>(`/api/admin/products/${productId}/videos`, { method: "PUT", body: { videos: draft } }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not save videos");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">Videos</h2>
+        {dirty && (
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setDraft(videos)} disabled={saving}>Discard</Button>
+            <Button size="sm" onClick={save} loading={saving}>Save videos</Button>
+          </div>
+        )}
+      </div>
+      <ErrorNote message={error} />
+      <VideoEditor videos={draft} onChange={setDraft} videoUploadPath="/api/admin/products/videos" imageUploadPath="/api/admin/products/images"
+        maxVideos={site.gallery?.max_videos ?? 3} maxMb={site.gallery?.max_video_mb ?? 50} />
     </div>
   );
 }

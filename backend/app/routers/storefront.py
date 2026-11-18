@@ -33,7 +33,9 @@ async def site(session: SessionDep) -> dict:
     features["ai"] = bool(ai_cfg["enabled"]) and (await ai_service.mode() == "live" or env.environment != "production")
     ic = await get_integrations(session)
     return {**s, "features": features, "cod_enabled": cfg["cod_enabled"], "online_payments": ic.online_payments,
-            "free_shipping_threshold_paise": cfg["free_shipping_threshold_paise"]}
+            "free_shipping_threshold_paise": cfg["free_shipping_threshold_paise"],
+            "gallery": {"zoom": cfg["gallery_zoom"], "zoom_level": cfg["gallery_zoom_level"] / 10,
+                        "max_video_mb": cfg["max_video_mb"], "max_videos": cfg["max_videos_per_listing"]}}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

@@ -60,8 +60,9 @@ export default async function ProductPageView({ params }: { params: Promise<{ sl
         ))}
       </nav>
       <div className="grid gap-6 rounded-xl bg-white p-4 sm:p-6 lg:grid-cols-[1.15fr_1fr]">
-        <div className="lg:sticky lg:top-36 lg:self-start">
-          <Gallery images={p.images} title={p.title} />
+        {/* z-10: the hover-zoom panel opens over the product details, under the site header (z-30). */}
+        <div className="relative z-10 lg:sticky lg:top-36 lg:self-start">
+          <Gallery images={p.images} videos={p.videos} title={p.title} />
         </div>
         <BuyBox p={p} />
       </div>

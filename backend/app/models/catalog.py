@@ -104,6 +104,19 @@ class ProductImage(IdMixin, Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class ProductVideo(IdMixin, Base):
+    """A product video (MP4 or WebM uploaded through the platform), shown in the gallery and its video player."""
+
+    __tablename__ = "product_videos"
+
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    url: Mapped[str] = mapped_column(String(400))
+    poster_url: Mapped[str] = mapped_column(String(400), default="")  # a frame captured in the browser at upload
+    title: Mapped[str] = mapped_column(String(120), default="")
+    duration_s: Mapped[int] = mapped_column(Integer, default=0)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class Variant(IdMixin, TimestampMixin, Base):
     __tablename__ = "variants"
 

@@ -75,6 +75,35 @@ async def save_image(data: bytes, folder: str) -> str:
     return f"{settings.media_base_url.rstrip('/')}/{key}"
 
 
+def sniff_video(data: bytes) -> tuple[str, str]:
+    """(content type, extension) for MP4 or WebM, by magic bytes; anything else is refused."""
+    if len(data) > 12 and data[4:8] == b"ftyp":
+        if data[8:12] == b"qt  ":
+            raise ApiError("QuickTime .mov files do not play in every browser. Export the video as MP4 (H.264).", "invalid_video")
+        return "video/mp4", "mp4"
+    if data[:4] == bytes.fromhex("1a45dfa3") and b"webm" in data[:64]:
+        return "video/webm", "webm"
+    raise ApiError("Upload an MP4 or WebM video", "invalid_video")
+
+
+async def save_video(data: bytes, max_bytes: int) -> str:
+    """Stores a product video as uploaded (no re-encoding) after checking its type and size."""
+    if len(data) > max_bytes:
+        raise ApiError(f"Video must be smaller than {max_bytes // (1024 * 1024)} MB", "file_too_large")
+    content_type, ext = sniff_video(data)
+    key = f"videos/{uuid.uuid4().hex}.{ext}"
+    if settings.storage_backend == "s3":
+        await asyncio.to_thread(
+            _s3().put_object, Bucket=settings.s3_bucket, Key=key, Body=data, ContentType=content_type,
+            CacheControl="public, max-age=31536000, immutable",
+        )
+    else:
+        path = Path(settings.media_root) / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(path.write_bytes, data)
+    return f"{settings.media_base_url.rstrip('/')}/{key}"
+
+
 def sniff_document(data: bytes) -> tuple[str, str]:
     for magic, info in DOC_TYPES.items():
         if data.startswith(magic):

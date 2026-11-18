@@ -40,6 +40,12 @@ DEFAULTS: dict[str, Any] = {
     "auto_cancel_unconfirmed_hours": 72,  # 0 = off; placed orders the seller never confirms
     # payouts
     "auto_payouts": False,
+    # product page gallery
+    "gallery_zoom": True,  # magnify the photo on hover (desktop)
+    "gallery_zoom_level": 25,  # zoom ×10: 25 = 2.5×
+    "feature_product_videos": True,  # sellers may add videos; the gallery shows them
+    "max_video_mb": 50,
+    "max_videos_per_listing": 3,
     "payout_min_paise": 10000,
 }
 
@@ -66,6 +72,11 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "transit_days_national": (int, 0, 30),
     "auto_cancel_unconfirmed_hours": (int, 0, 720),
     "auto_payouts": (bool, 0, 1),
+    "gallery_zoom": (bool, 0, 1),
+    "gallery_zoom_level": (int, 15, 40),
+    "feature_product_videos": (bool, 0, 1),
+    "max_video_mb": (int, 5, 200),
+    "max_videos_per_listing": (int, 0, 10),
     "payout_min_paise": (int, 100, 10_000_000),
 }
 

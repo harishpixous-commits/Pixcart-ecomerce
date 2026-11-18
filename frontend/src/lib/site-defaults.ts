@@ -20,6 +20,7 @@ export const FALLBACK_SITE: Site = {
   features: { wishlist: true, reviews: true, returns: true, coupons: true, support: true, ai: false },
   cod_enabled: true,
   free_shipping_threshold_paise: 49900,
+  gallery: { zoom: true, zoom_level: 2.5, max_video_mb: 50, max_videos: 3 },
 };
 
 /** Fill any missing keys from the fallback, so an older or partial API answer never breaks rendering. */

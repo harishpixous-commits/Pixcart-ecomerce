@@ -58,6 +58,37 @@ def check_image_url(url: str) -> str:
     return url
 
 
+def check_video_url(url: str) -> str:
+    """Only videos uploaded through this platform may be attached to a listing."""
+    prefix = settings.media_base_url.rstrip("/") + "/videos/"
+    if not url.startswith(prefix) or ".." in url or len(url) > 400:
+        raise ValueError("Upload videos here; external video links are not allowed")
+    return url
+
+
+async def videos_for(session: AsyncSession, product_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[dict]]:
+    from app.models import ProductVideo
+
+    if not product_ids:
+        return {}
+    rows = (await session.execute(select(ProductVideo).where(ProductVideo.product_id.in_(product_ids)).order_by(ProductVideo.position))).scalars()
+    out: dict[uuid.UUID, list[dict]] = {}
+    for v in rows:
+        out.setdefault(v.product_id, []).append({"url": v.url, "poster_url": v.poster_url, "title": v.title, "duration_s": v.duration_s})
+    return out
+
+
+async def apply_videos(session: AsyncSession, product_id: uuid.UUID, videos: list) -> None:
+    """Replaces a listing's videos (order = display order)."""
+    from sqlalchemy import delete
+
+    from app.models import ProductVideo
+
+    await session.execute(delete(ProductVideo).where(ProductVideo.product_id == product_id))
+    for i, v in enumerate(videos):
+        session.add(ProductVideo(product_id=product_id, url=v.url, poster_url=v.poster_url, title=v.title, duration_s=v.duration_s, position=i))
+
+
 async def category_descendant_ids(session: AsyncSession, root_id: uuid.UUID) -> list[uuid.UUID]:
     rows = (await session.execute(select(Category.id, Category.parent_id).where(Category.is_active.is_(True)))).all()
     children: dict[uuid.UUID | None, list[uuid.UUID]] = {}

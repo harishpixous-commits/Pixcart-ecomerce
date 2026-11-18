@@ -17,14 +17,18 @@ from app.models import Category, OrderItem, Product, ProductImage, Seller, Varia
 from app.models.catalog import GST_RATES_BPS
 from app.services import inventory, storage
 from app.services.catalog import (
+    apply_videos,
     check_image_url,
+    check_video_url,
     discount_pct,
     images_for,
     leaf_category,
     refresh_product_aggregates,
     unique_product_slug,
     variant_label,
+    videos_for,
 )
+from app.services.platform_settings import get_settings
 
 router = APIRouter(prefix="/api/seller", tags=["seller-products"])
 
@@ -63,6 +67,34 @@ class VariantIn(BaseModel):
         return self
 
 
+class VideoIn(BaseModel):
+    url: str
+    poster_url: str = ""
+    title: str = Field(default="", max_length=120)
+    duration_s: int = Field(default=0, ge=0, le=3600)
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, v: str) -> str:
+        return check_video_url(v)
+
+    @field_validator("poster_url")
+    @classmethod
+    def _poster(cls, v: str) -> str:
+        return check_image_url(v) if v else ""
+
+
+async def check_videos(session, videos: list[VideoIn]) -> None:
+    """Admin switches: videos on or off, and how many a listing may have."""
+    if not videos:
+        return
+    cfg = await get_settings(session)
+    if not cfg["feature_product_videos"]:
+        raise ApiError("Product videos are switched off on this marketplace", "videos_off")
+    if len(videos) > cfg["max_videos_per_listing"]:
+        raise ApiError(f"At most {cfg['max_videos_per_listing']} videos per listing", "too_many_videos")
+
+
 class ProductIn(BaseModel):
     category_id: uuid.UUID
     title: str = Field(min_length=10, max_length=200)
@@ -75,6 +107,7 @@ class ProductIn(BaseModel):
     country_of_origin: str = Field(default="India", min_length=2, max_length=60)
     return_window_days: int = Field(default=7, ge=0, le=30)
     images: list[str] = Field(default_factory=list, max_length=MAX_IMAGES)
+    videos: list[VideoIn] = Field(default_factory=list, max_length=10)
     variants: list[VariantIn] = Field(min_length=1, max_length=MAX_VARIANTS)
 
     @field_validator("gst_bps")
@@ -141,6 +174,7 @@ def variant_out(v: Variant) -> dict:
 async def product_detail(session, p: Product) -> dict:
     variants = list((await session.execute(select(Variant).where(Variant.product_id == p.id).order_by(Variant.created_at))).scalars())
     imgs = (await images_for(session, [p.id])).get(p.id, [])
+    vids = (await videos_for(session, [p.id])).get(p.id, [])
     cat = await session.get(Category, p.category_id)
     return {
         "id": str(p.id),
@@ -159,6 +193,7 @@ async def product_detail(session, p: Product) -> dict:
         "country_of_origin": p.country_of_origin,
         "return_window_days": p.return_window_days,
         "images": imgs,
+        "videos": vids,
         "variants": [variant_out(v) for v in variants],
         "price_from": p.price_from,
         "mrp_from": p.mrp_from,
@@ -232,6 +267,16 @@ async def upload_image(seller: SellerAccount, file: UploadFile = File(...)) -> d
     return {"url": url}
 
 
+@router.post("/videos", status_code=201)
+async def upload_video(seller: SellerAccount, session: SessionDep, file: UploadFile = File(...)) -> dict:
+    cfg = await get_settings(session)
+    if not cfg["feature_product_videos"]:
+        raise ApiError("Product videos are switched off on this marketplace", "videos_off")
+    limit = cfg["max_video_mb"] * 1024 * 1024
+    data = await file.read(limit + 1)  # never buffer more than the limit
+    return {"url": await storage.save_video(data, limit)}
+
+
 @router.get("/products")
 async def list_products(
     seller: SellerAccount,
@@ -298,8 +343,10 @@ async def create_product(body: ProductIn, seller: SellerAccount, user: CurrentUs
     p.title, p.brand = body.title.strip(), body.brand.strip()
     session.add(p)
     await session.flush()
+    await check_videos(session, body.videos)
     await _apply_variants(session, seller, p, body.variants, user.id)
     await _apply_images(session, p, body.images)
+    await apply_videos(session, p.id, body.videos)
     await refresh_product_aggregates(session, p)
     audit(session, user, "product.create", "product", p.id)
     await session.commit()
@@ -363,12 +410,17 @@ async def update_product(product_id: uuid.UUID, body: ProductIn, seller: SellerA
     await leaf_category(session, body.category_id)
     before = {f: getattr(p, f) for f in CONTENT_FIELDS}
     before_images = (await images_for(session, [p.id])).get(p.id, [])
+    before_videos = [v["url"] for v in (await videos_for(session, [p.id])).get(p.id, [])]
     for f in CONTENT_FIELDS:
         setattr(p, f, getattr(body, f))
     p.title, p.brand = body.title.strip(), body.brand.strip()
-    content_changed = any(before[f] != getattr(p, f) for f in CONTENT_FIELDS) or before_images != body.images
+    content_changed = (any(before[f] != getattr(p, f) for f in CONTENT_FIELDS) or before_images != body.images
+                       or before_videos != [v.url for v in body.videos])
+    if [v.url for v in body.videos] != before_videos:
+        await check_videos(session, body.videos)
     await _apply_variants(session, seller, p, body.variants, user.id)
     await _apply_images(session, p, body.images)
+    await apply_videos(session, p.id, body.videos)
     await refresh_product_aggregates(session, p)
     if content_changed and p.status == "approved":
         # Listing content must be re-checked before customers see it again (price/stock edits do not).

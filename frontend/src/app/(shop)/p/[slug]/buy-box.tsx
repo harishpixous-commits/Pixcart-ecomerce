@@ -5,45 +5,19 @@ import { BadgeCheck, MapPin, RotateCcw, ShieldCheck, Truck } from "lucide-react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ProductGallery } from "@/components/product-gallery";
 import { Button, Price, Rating, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { date as fmtDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
-import type { ProductPage } from "@/lib/types";
+import type { ProductPage, ProductVideo } from "@/lib/types";
 import { rememberViewed, WishlistHeart } from "@/lib/wishlist";
 
-export function Gallery({ images, title }: { images: string[]; title: string }) {
-  const [active, setActive] = useState(0);
-  const list = images.length ? images : [""];
-  return (
-    <div className="flex flex-col-reverse gap-3 sm:flex-row">
-      {list.length > 1 && (
-        <div className="scroll-x flex gap-2 overflow-x-auto sm:flex-col">
-          {list.map((src, i) => (
-            <button
-              key={src + i}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => setActive(i)}
-              className={clsx("h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white", i === active ? "border-peacock" : "border-line")}
-              aria-label={`Image ${i + 1}`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="h-full w-full object-contain" />
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="flex aspect-square flex-1 items-center justify-center overflow-hidden rounded-xl bg-white">
-        {list[active] ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={list[active]} alt={title} className="h-full w-full object-contain" />
-        ) : (
-          <span className="text-ink-faint">No image</span>
-        )}
-      </div>
-    </div>
-  );
+export function Gallery({ images, videos, title }: { images: string[]; videos?: ProductVideo[]; title: string }) {
+  const site = useSite();
+  return <ProductGallery images={images} videos={site.features.product_videos === false ? [] : videos ?? []} title={title}
+    zoom={site.gallery?.zoom ?? true} zoomLevel={site.gallery?.zoom_level ?? 2.5} />;
 }
 
 function DeliveryCheck({ variantId }: { variantId?: string }) {

@@ -10,7 +10,8 @@ import { useSite } from "@/lib/site";
 import { AiBadge } from "@/components/ai";
 import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, paiseToInput, pct, rupees, toPaise } from "@/lib/format";
-import type { SellerCategory, SellerProduct } from "@/lib/types";
+import type { ProductVideo, SellerCategory, SellerProduct } from "@/lib/types";
+import { VideoEditor } from "@/components/video-editor";
 
 type VRow = { id?: string; key: string; sku: string; options: Record<string, string>; mrp: string; price: string; stock: string; weight: string; is_active: boolean };
 
@@ -44,6 +45,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   const [origin, setOrigin] = useState(product?.country_of_origin ?? "India");
   const [returnDays, setReturnDays] = useState(String(product?.return_window_days ?? 7));
   const [images, setImages] = useState<string[]>(product?.images ?? []);
+  const [videos, setVideos] = useState<ProductVideo[]>(product?.videos ?? []);
   const [axes, setAxes] = useState<string[]>(() => {
     const first = product?.variants[0];
     return first ? Object.keys(first.options) : [];
@@ -170,6 +172,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       country_of_origin: origin.trim(),
       return_window_days: Number(returnDays),
       images,
+      videos,
       variants,
     };
   }
@@ -276,6 +279,15 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
           )}
         </div>
       </section>
+
+      {(site.features.product_videos !== false || videos.length > 0) && (
+        <section className="rounded-xl bg-white p-5">
+          <h2 className="mb-1 text-xl font-semibold">Videos <span className="text-base font-normal text-ink-faint">(optional)</span></h2>
+          <p className="mb-3 text-sm text-ink-soft">Customers watch these in the photo gallery on your product page.</p>
+          <VideoEditor videos={videos} onChange={setVideos} videoUploadPath="/api/seller/videos" imageUploadPath="/api/seller/images"
+            maxVideos={site.gallery?.max_videos ?? 3} maxMb={site.gallery?.max_video_mb ?? 50} disabled={site.features.product_videos === false} />
+        </section>
+      )}
 
       <section className="rounded-xl bg-white p-5">
         <h2 className="mb-1 text-xl font-semibold">Price, stock and options</h2>
