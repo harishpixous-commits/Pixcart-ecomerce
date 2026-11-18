@@ -28,7 +28,7 @@ function List() {
   return (
     <div>
       <PageHeader title="Listings" sub="Approve new listings and edited content before customers see them." actions={<ExportButton scope="admin" name="products" status={status || undefined} dated={false} />} />
-      <Tabs value={status} onChange={(v) => { setPage(1); router.push(`/admin/products?status=${v}`); }}
+      <Tabs value={status} onChange={(v) => { setPage(1); router.push(`/admin/products?status=${v}${sellerId ? `&seller_id=${sellerId}` : ""}`); }}
         items={[["pending", "To review"], ["approved", "Live"], ["rejected", "Rejected"], ["draft", "Drafts"], ["archived", "Archived"], ["", "All"]].map(([v, l]) => ({ value: v, label: l, count: v ? c[v] ?? 0 : undefined }))} />
       <Input placeholder="Search titles" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="mb-3 max-w-sm" aria-label="Search listings" />
       {!d ? <PageLoader /> : d.items.length === 0 ? <EmptyState title="Nothing to review" /> : (

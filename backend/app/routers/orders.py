@@ -40,6 +40,7 @@ from app.services.orders import (
     group_by_seller,
     load_cart,
     mark_paid,
+    notify_refund,
     place_order,
     process_refund,
 )
@@ -358,8 +359,11 @@ async def razorpay_webhook(request: Request, session: SessionDep, background: Ba
         r = payload.get("refund", {}).get("entity", {})
         refund = (await session.execute(select(Refund).where(Refund.provider_refund_id == r.get("id")))).scalar_one_or_none()
         if refund:
+            newly_processed = etype == "refund.processed" and refund.status != "processed"
             refund.status = "processed" if etype == "refund.processed" else "failed"
             refund.last_error = "" if etype == "refund.processed" else "Gateway reported the refund failed"
+            if newly_processed:
+                await notify_refund(session, refund)
     await session.commit()
     if refund_ids:
         background.add_task(run_refunds, refund_ids)

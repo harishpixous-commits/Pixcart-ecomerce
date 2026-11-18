@@ -17,7 +17,12 @@ export async function otpFor(phone: string): Promise<string> {
   throw new Error(`No OTP for ${phone} in ${API_LOG}`);
 }
 
+/**
+ * Signs in on the sign-in page the test is on. With a name, the number is new: it goes from the sign-in page
+ * to Create account (the same "next" is kept), fills the form and verifies the code.
+ */
 export async function otpLogin(page: Page, phone: string, name?: string) {
+  if (name) return createAccount(page, phone, name);
   const input = page.locator("input[type=tel]");
   const code = page.locator("input[autocomplete=one-time-code]");
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -36,11 +41,30 @@ export async function otpLogin(page: Page, phone: string, name?: string) {
   }
   await code.fill(await otpFor(phone));
   await page.getByRole("button", { name: "Verify and continue" }).click();
-  if (name) {
-    await expect(page.getByText("What should we call you?")).toBeVisible();
-    await page.locator("input[autocomplete=name]").fill(name);
+}
+
+export async function createAccount(page: Page, phone: string, name: string) {
+  if (!page.url().includes("/signup")) await page.getByRole("link", { name: /Create (an account|your seller account)/ }).last().click();
+  await page.waitForURL(/\/signup/);
+  const nameBox = page.locator("input[autocomplete=name]");
+  const code = page.locator("input[autocomplete=one-time-code]");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await nameBox.fill(name);
+    await page.locator("input[type=tel]").fill(phone);
+    await expect(nameBox).toHaveValue(name);
+    const terms = page.getByRole("checkbox").first();
+    if (!(await terms.isChecked())) await terms.check();
     await page.getByRole("button", { name: "Continue" }).click();
+    try {
+      await expect(code).toBeVisible({ timeout: 5_000 });
+      break;
+    } catch (e) {
+      if (attempt === 2) throw e;
+      if (await page.getByText(/wait|seconds|too many/i).count()) await page.waitForTimeout(31_000);
+    }
   }
+  await code.fill(await otpFor(phone));
+  await page.getByRole("button", { name: "Verify and create account" }).click();
 }
 
 export async function adminLogin(page: Page) {

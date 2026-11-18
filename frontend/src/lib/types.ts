@@ -291,7 +291,7 @@ export interface SellerProfile {
   submitted_at: string | null;
   approved_at: string | null;
   commission_bps_override: number | null;
-  owner?: { name: string; phone: string | null; email: string | null } | null;
+  owner?: { id: string; name: string; phone: string | null; email: string | null } | null;
   product_counts?: Record<string, number>;
 }
 

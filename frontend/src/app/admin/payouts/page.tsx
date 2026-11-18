@@ -1,17 +1,19 @@
 "use client";
 
 import { Download, Send } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Stat, Table, Tabs } from "@/components/portal-shell";
-import { Button, EmptyState, ErrorNote, Modal, PageLoader, Pill, StatusPill, TextField, useToast } from "@/components/ui";
+import { Button, EmptyState, ErrorNote, Modal, PageLoader, Pagination, Pill, StatusPill, TextField, useToast } from "@/components/ui";
 import { api, ApiError, downloadFile, latestOnly } from "@/lib/api";
 import { date, rupeesExact } from "@/lib/format";
 import { ExportButton } from "@/components/export-button";
 
 type P = { id: string; number: string; seller_name: string; amount: number; status: string; mode: string; utr: string; failure_reason: string; bank: { holder?: string; account_last4?: string; ifsc?: string }; created_at: string; paid_at: string | null };
-type D = { mode: string; razorpayx_ready: boolean; due: { seller: string; amount: number }[]; items: P[] };
+type D = { mode: string; razorpayx_ready: boolean; due: { seller: string; amount: number }[]; items: P[]; total: number };
 
-export default function AdminPayouts() {
+function AdminPayoutsInner() {
+  const sellerId = useSearchParams().get("seller_id") ?? undefined;
   const toast = useToast();
   const [status, setStatus] = useState("pending");
   const [d, setD] = useState<D | null>(null);
@@ -20,7 +22,8 @@ export default function AdminPayouts() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const track = useMemo(() => latestOnly(), []);
-  const load = useCallback(() => track(api<D>("/api/admin/payouts", { query: { status: status || undefined } }), setD), [status, track]);
+  const [page, setPage] = useState(1);
+  const load = useCallback(() => track(api<D>("/api/admin/payouts", { query: { status: status || undefined, page, seller_id: sellerId } }), setD), [status, page, sellerId, track]);
   useEffect(() => { load(); }, [load]);
 
   async function call(fn: () => Promise<unknown>, msg: string) {
@@ -68,7 +71,7 @@ export default function AdminPayouts() {
         <Stat label="Payout method" value={d.mode === "razorpayx" ? "RazorpayX" : "Bank file"} hint={d.mode === "razorpayx" && !d.razorpayx_ready ? "RazorpayX keys missing" : undefined} />
         <Stat label="Pending payouts" value={d.items.filter((p) => p.status === "pending").length} />
       </div>
-      <Tabs value={status} onChange={setStatus} items={[{ value: "pending", label: "To pay" }, { value: "processing", label: "Processing" }, { value: "paid", label: "Paid" }, { value: "failed", label: "Failed" }, { value: "", label: "All" }]} />
+      <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[{ value: "pending", label: "To pay" }, { value: "processing", label: "Processing" }, { value: "paid", label: "Paid" }, { value: "failed", label: "Failed" }, { value: "cancelled", label: "Cancelled" }, { value: "", label: "All" }]} />
       {d.items.length === 0 ? <EmptyState title="No payouts here" /> : (
         <Table head={["Payout", "Seller", "Amount", "Bank", "Created", "Status", ""]}>
           {d.items.map((p) => (
@@ -100,6 +103,7 @@ export default function AdminPayouts() {
           ))}
         </Table>
       )}
+      <Pagination page={page} pageSize={50} total={d.total} onPage={setPage} />
       <Modal open={!!paid} onClose={() => setPaid(null)} title={`Record payment ${paid?.number ?? ""}`}>
         {paid && (
           <div className="flex flex-col gap-3">
@@ -111,4 +115,8 @@ export default function AdminPayouts() {
       </Modal>
     </div>
   );
+}
+
+export default function AdminPayouts() {
+  return <Suspense fallback={<PageLoader />}><AdminPayoutsInner /></Suspense>;
 }

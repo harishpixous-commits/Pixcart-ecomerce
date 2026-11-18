@@ -11,7 +11,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, BackgroundTasks, File, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 
 from app.config import settings
 from app.core.deps import CurrentUser, SessionDep, audit
@@ -33,6 +33,7 @@ from app.models import (
     ReturnRequest,
     Review,
     Seller,
+    SubOrder,
     SupportTicket,
     TicketMessage,
     User,
@@ -125,14 +126,20 @@ async def update_coupon(coupon_id: uuid.UUID, body: AdminCouponIn, admin: Perm("
 
 
 @router.get("/reviews")
-async def reviews(admin: Perm("catalog"), session: SessionDep, status: str | None = None, rating: int | None = None, page: int = Query(default=1, ge=1)) -> dict:
+async def reviews(admin: Perm("catalog"), session: SessionDep, status: str | None = None, rating: int | None = None, page: int = Query(default=1, ge=1),
+                  q: str = Query(default="", max_length=80)) -> dict:
     stmt = select(Review, Product.title, User.name).join(Product, Product.id == Review.product_id).join(User, User.id == Review.user_id)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Product.title.ilike(like), Review.title.ilike(like), Review.body.ilike(like)))
     if status:
         stmt = stmt.where(Review.status == status)
     if rating:
         stmt = stmt.where(Review.rating == rating)
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await session.execute(stmt.order_by(Review.created_at.desc()).offset((page - 1) * 30).limit(30))).all()
-    return {"items": [{"id": str(r.id), "product": t, "author": n, "rating": r.rating, "title": r.title, "body": r.body, "status": r.status, "at": r.created_at.isoformat()} for r, t, n in rows]}
+    return {"items": [{"id": str(r.id), "product": t, "author": n, "rating": r.rating, "title": r.title, "body": r.body, "status": r.status, "at": r.created_at.isoformat()} for r, t, n in rows],
+            "total": total, "page": page, "page_size": 30}
 
 
 @router.post("/reviews/{review_id}/{action}")
@@ -152,13 +159,23 @@ async def moderate_review(review_id: uuid.UUID, action: Literal["publish", "hide
 
 
 @router.get("/returns")
-async def admin_returns(admin: Perm("orders"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1)) -> dict:
+async def admin_returns(admin: Perm("orders"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1),
+                        q: str = Query(default="", max_length=60), seller_id: uuid.UUID | None = None) -> dict:
     stmt = select(ReturnRequest)
     if status:
         stmt = stmt.where(ReturnRequest.status == status)
+    if seller_id:
+        stmt = stmt.where(ReturnRequest.seller_id == seller_id)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(ReturnRequest.number.ilike(like),
+                              ReturnRequest.sub_order_id.in_(select(SubOrder.id).where(SubOrder.number.ilike(like))),
+                              ReturnRequest.user_id.in_(select(User.id).where(or_(User.phone.ilike(like), User.name.ilike(like))))))
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = list((await session.execute(stmt.order_by(ReturnRequest.created_at.desc()).offset((page - 1) * 30).limit(30))).scalars())
     counts = dict((await session.execute(select(ReturnRequest.status, func.count()).group_by(ReturnRequest.status))).all())
-    return {"items": [await returns_svc.return_out(session, r, with_upi=True) for r in rows], "status_counts": counts}
+    return {"items": [await returns_svc.return_out(session, r, with_upi=True) for r in rows], "status_counts": counts,
+            "total": total, "page": page, "page_size": 30}
 
 
 class AdminReturnAction(BaseModel):
@@ -190,11 +207,15 @@ async def admin_return_action(return_id: uuid.UUID, body: AdminReturnAction, adm
 
 
 @router.get("/payouts")
-async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | None = None) -> dict:
+async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1),
+                  seller_id: uuid.UUID | None = None) -> dict:
     stmt = select(Payout, Seller.display_name).join(Seller, Seller.id == Payout.seller_id)
     if status:
         stmt = stmt.where(Payout.status == status)
-    rows = (await session.execute(stmt.order_by(Payout.created_at.desc()).limit(200))).all()
+    if seller_id:
+        stmt = stmt.where(Payout.seller_id == seller_id)
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    rows = (await session.execute(stmt.order_by(Payout.created_at.desc()).offset((page - 1) * 50).limit(50))).all()
     from app.models import LedgerEntry
 
     now = utcnow()
@@ -206,6 +227,7 @@ async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | Non
     ).all()
     ic = await get_integrations(session)
     return {
+        "total": total, "page": page, "page_size": 50,
         "mode": ic.payout_mode,
         "razorpayx_ready": bool(ic.razorpay_enabled and ic.razorpayx_account_number),
         "due": [{"seller": n, "amount": int(a)} for n, a in due],
@@ -278,17 +300,23 @@ async def payout_cancel(payout_id: uuid.UUID, admin: Perm("payouts"), session: S
 
 
 @router.get("/tickets")
-async def tickets(admin: Perm("support"), session: SessionDep, status: str | None = "open", overdue: bool = False, grievance: bool = False, page: int = Query(default=1, ge=1)) -> dict:
+async def tickets(admin: Perm("support"), session: SessionDep, status: str | None = "open", overdue: bool = False, grievance: bool = False,
+                  page: int = Query(default=1, ge=1), q: str = Query(default="", max_length=60)) -> dict:
     stmt = select(SupportTicket, User.name, User.phone).join(User, User.id == SupportTicket.user_id)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(SupportTicket.number.ilike(like), SupportTicket.subject.ilike(like), User.phone.ilike(like), User.name.ilike(like)))
     if status:
         stmt = stmt.where(SupportTicket.status == status)
     if overdue:
         stmt = stmt.where(SupportTicket.acknowledged_at.is_(None), SupportTicket.ack_due_at < func.now())
     if grievance:
         stmt = stmt.where(SupportTicket.is_grievance.is_(True))
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await session.execute(stmt.order_by(SupportTicket.ack_due_at).offset((page - 1) * 30).limit(30))).all()
     counts = dict((await session.execute(select(SupportTicket.status, func.count()).group_by(SupportTicket.status))).all())
-    return {"items": [ticket_out(t, staff=True) | {"customer": n or ph} for t, n, ph in rows], "status_counts": counts}
+    return {"items": [ticket_out(t, staff=True) | {"customer": n or ph} for t, n, ph in rows], "status_counts": counts,
+            "total": total, "page": page, "page_size": 30}
 
 
 @router.get("/tickets/{ticket_id}")

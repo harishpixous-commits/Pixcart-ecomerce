@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Tabs } from "@/components/portal-shell";
 import { Stars } from "@/components/reviews";
-import { Button, EmptyState, PageLoader, useToast } from "@/components/ui";
+import { Button, EmptyState, Input, PageLoader, Pagination, useToast } from "@/components/ui";
 import { api, latestOnly } from "@/lib/api";
 import { date } from "@/lib/format";
 
@@ -14,9 +14,12 @@ export default function AdminReviews() {
   const [status, setStatus] = useState("published");
   const [rating, setRating] = useState("");
   const [items, setItems] = useState<R[] | null>(null);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const track = useMemo(() => latestOnly(), []);
-  const load = useCallback(() => track(api<{ items: R[] }>("/api/admin/reviews", { query: { status, rating: rating || undefined } }), (r) => setItems(r.items)), [status, rating, track]);
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(() => track(api<{ items: R[]; total: number }>("/api/admin/reviews", { query: { status, rating: rating || undefined, q, page } }), (r) => { setItems(r.items); setTotal(r.total); }), [status, rating, q, page, track]);
+  useEffect(() => { const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load, q]);
   async function act(r: R, action: "publish" | "hide") {
     await api(`/api/admin/reviews/${r.id}/${action}`, { method: "POST" });
     toast(action === "publish" ? "Review published" : "Review hidden");
@@ -26,13 +29,14 @@ export default function AdminReviews() {
     <div>
       <PageHeader title="Reviews" sub="Hide reviews that are abusive, off-topic, contain personal details or are paid for. Ratings recalculate at once." />
       <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={status} onChange={setStatus} items={[{ value: "published", label: "Published" }, { value: "hidden", label: "Hidden or waiting" }]} />
+        <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[{ value: "published", label: "Published" }, { value: "hidden", label: "Hidden or waiting" }]} />
         <div className="mb-3 flex gap-1">
           {["", "1", "2", "3", "4", "5"].map((r) => (
-            <button key={r} onClick={() => setRating(r)} className={`rounded-full px-3 py-1 text-sm ${rating === r ? "bg-peacock text-white" : "bg-white"}`}>{r ? `${r}★` : "All"}</button>
+            <button key={r} onClick={() => { setRating(r); setPage(1); }} className={`rounded-full px-3 py-1 text-sm ${rating === r ? "bg-peacock text-white" : "bg-white"}`}>{r ? `${r}★` : "All"}</button>
           ))}
         </div>
       </div>
+      <Input placeholder="Product or review text" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="mb-3 max-w-sm" aria-label="Search reviews" />
       {!items ? <PageLoader /> : items.length === 0 ? <EmptyState title="No reviews here" /> : (
         <div className="flex flex-col gap-3">
           {items.map((r) => (
@@ -47,6 +51,7 @@ export default function AdminReviews() {
           ))}
         </div>
       )}
+      {items && <Pagination page={page} pageSize={30} total={total} onPage={setPage} />}
     </div>
   );
 }

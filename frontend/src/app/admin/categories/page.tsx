@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
+import { ImageField } from "@/components/media-picker";
+import { useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, pct } from "@/lib/format";
 
 type Cat = { id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean };
-const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true };
+const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "" };
 
 export default function AdminCategories() {
   const toast = useToast();
+  const canMedia = useCan("marketing");
   const [cats, setCats] = useState<Cat[] | null>(null);
   const [editing, setEditing] = useState<Cat | "new" | null>(null);
   const [f, setF] = useState(EMPTY);
@@ -29,13 +32,13 @@ export default function AdminCategories() {
   function open(c: Cat | "new") {
     setError(null);
     setEditing(c);
-    setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active });
+    setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active, image_url: c.image_url });
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: "" };
+    const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: f.image_url };
     try {
       if (editing === "new") await api("/api/admin/categories", { method: "POST", body });
       else if (editing) await api(`/api/admin/categories/${editing.id}`, { method: "PUT", body });
@@ -67,6 +70,8 @@ export default function AdminCategories() {
         <form onSubmit={save} className="flex flex-col gap-3">
           <ErrorNote message={error} />
           <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
+          {canMedia ? <ImageField label="Image" value={f.image_url} onChange={(url) => setF({ ...f, image_url: url })} aspect="aspect-square" hint="Shown on the home page category row" />
+            : f.image_url ? <p className="text-sm text-ink-faint">This category has an image; it is kept when you save.</p> : null}
           <Field label="Parent" htmlFor="parent">
             <Select id="parent" value={f.parent_id} onChange={(e) => setF({ ...f, parent_id: e.target.value })}>
               <option value="">None (top level)</option>

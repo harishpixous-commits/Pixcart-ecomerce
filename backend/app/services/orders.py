@@ -620,7 +620,18 @@ async def process_refund(session: AsyncSession, refund_id: uuid.UUID) -> None:
     refund.status = "processed" if data.get("status") == "processed" else "pending"
     if refund.status == "pending":
         refund.last_error = ""
+    else:
+        await notify_refund(session, refund)
     await session.commit()
+
+
+async def notify_refund(session: AsyncSession, refund: Refund) -> None:
+    """Tells the customer a refund has gone through (call once, when it becomes processed)."""
+    order = await session.get(Order, refund.order_id)
+    if order is None:
+        return
+    await notify(session, "refund_processed", await session.get(User, order.user_id),
+                 {"amount": f"₹{refund.amount_paise / 100:,.2f}", "order_number": order.number}, link=f"/orders/{order.id}")
 
 
 async def expire_unpaid_orders(session: AsyncSession) -> int:

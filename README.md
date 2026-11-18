@@ -95,9 +95,21 @@ npm ci
 API_ORIGIN=http://localhost:8000 npm run dev
 ```
 
-In development, OTPs are printed in the API log (`DEV OTP for 98xxxxxxxx: 123456`). Demo sellers sign in
-with mobiles 9000000001 to 9000000003, the demo customer with 9999900001. The admin panel is at
-`/admin/login`. Demo coupons: `WELCOME10` (first order) and `FESTIVE250`.
+**Signing in.** Customers and sellers use their mobile and a one-time code. **Sign in** (`/login`) is for existing
+accounts; a number without one is offered **Create account** (`/signup`: name, mobile, optional email, terms).
+Sellers start at **Become a seller** → *Create your seller account* → business, PAN/GST, pickup, bank, grievance
+officer, documents → *Submit*, and an admin approves them in Sellers. Until SMS (MSG91) is connected, the code is
+shown **on the screen under the code box** with a *Fill in* button, and also printed in the API log
+(`DEV OTP for 98xxxxxxxx: 123456`). Switch the on-screen code off in **Admin → Sign-in and accounts**; it never
+appears in production or once real SMS is connected. The same page pauses new customer or seller sign-ups and sets
+whether the email is asked. Demo sellers sign in with 9000000001 to 9000000003, the demo customer with 9999900001.
+Staff sign in with email and password at `/admin/login`. Demo coupons: `WELCOME10` (first order) and `FESTIVE250`.
+
+**Accounts in the admin panel.** *Customers and accounts* lists everyone (filter customers, sellers, staff, blocked);
+open one to see profile, consent, addresses, orders, returns, support requests, signed-in devices and staff
+history, and to edit name/mobile/email, sign out everywhere, block or unblock. *Add customer* creates an account
+for phone orders; *Sellers → Add seller* opens a seller account the seller then completes. Staff can correct a
+seller's business, pickup, bank (the seller is told) and grievance details at any time.
 
 **Demo product photos** are real, openly licensed photos in `backend/scripts/demo_images/` (credits and
 licences in `CREDITS.md` there; keep that file with the photos). `manifest.json` maps each demo product title

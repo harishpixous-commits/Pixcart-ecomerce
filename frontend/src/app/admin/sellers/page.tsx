@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { PageHeader, Table, Tabs } from "@/components/portal-shell";
-import { EmptyState, Input, PageLoader, Pagination, StatusPill } from "@/components/ui";
-import { api, quietly } from "@/lib/api";
+import { Plus } from "lucide-react";
+import { Button, EmptyState, ErrorNote, Input, Modal, PageLoader, Pagination, StatusPill, TextField, useToast } from "@/components/ui";
+import { api, ApiError, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
 import type { Paged } from "@/lib/types";
 import { ExportButton } from "@/components/export-button";
@@ -24,9 +25,28 @@ function List() {
     return () => clearTimeout(t);
   }, [status, q, page]);
   const c = d?.status_counts ?? {};
+  const toast = useToast();
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ phone: "", name: "", store: "", email: "" });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api<{ id: string }>("/api/admin/sellers", { method: "POST", body: { phone: f.phone, name: f.name, store_name: f.store, email: f.email.trim() || null } });
+      toast("Seller account opened. They sign in with this mobile to finish their details.");
+      router.push(`/admin/sellers/${r.id}`);
+    } catch (x) {
+      setErr(x instanceof ApiError ? x.message : "Could not create the seller");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div>
-      <PageHeader title="Sellers" actions={<ExportButton scope="admin" name="sellers" status={status || undefined} dated={false} />} />
+      <PageHeader title="Sellers" actions={<><Button onClick={() => { setAdding(true); setErr(null); setF({ phone: "", name: "", store: "", email: "" }); }}><Plus className="h-4 w-4" />Add seller</Button><ExportButton scope="admin" name="sellers" status={status || undefined} dated={false} /></>} />
       <Tabs
         value={status}
         onChange={(v) => { setPage(1); router.push(`/admin/sellers?status=${v}`); }}
@@ -50,6 +70,17 @@ function List() {
           <Pagination page={d.page} pageSize={d.page_size} total={d.total} onPage={setPage} />
         </>
       )}
+      <Modal open={adding} onClose={() => setAdding(false)} title="Add a seller">
+        <form onSubmit={add} className="flex flex-col gap-3">
+          <p className="text-sm text-ink-soft">Opens a seller account in draft. The seller signs in with a one-time code on this mobile, fills in business, PAN, GST, pickup and bank details and submits them; you then verify as usual.</p>
+          <ErrorNote message={err} />
+          <TextField label="Owner's mobile number" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} required autoFocus />
+          <TextField label="Owner's name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
+          <TextField label="Store name (shown to customers)" value={f.store} onChange={(e) => setF({ ...f, store: e.target.value })} required />
+          <TextField label="Email (optional)" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+          <Button type="submit" loading={busy} disabled={f.phone.replace(/\D/g, "").length < 10 || f.name.trim().length < 2 || f.store.trim().length < 2}>Open seller account</Button>
+        </form>
+      </Modal>
     </div>
   );
 }

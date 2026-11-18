@@ -22,7 +22,7 @@ export default async function SellPage() {
           <h1 className="text-4xl font-bold sm:text-5xl">Sell to customers across India</h1>
           <p className="max-w-md text-lg text-white/85">List your products on {brand}, ship orders from your own premises and get paid to your bank account after the return window closes.</p>
           <div className="flex flex-wrap gap-3">
-            <ButtonLink href="/login?next=/seller/onboarding" variant="cart" className="h-12 px-6">Start selling</ButtonLink>
+            <ButtonLink href="/signup?seller=1&next=/seller/onboarding" variant="cart" className="h-12 px-6">Start selling</ButtonLink>
             <ButtonLink href="/seller" variant="outlineLight" className="h-12 px-6">Go to seller dashboard</ButtonLink>
           </div>
         </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { PageHeader, Table, Tabs } from "@/components/portal-shell";
-import { EmptyState, PageLoader, Pill } from "@/components/ui";
+import { EmptyState, Input, PageLoader, Pagination, Pill } from "@/components/ui";
 import { api, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { ExportButton } from "@/components/export-button";
@@ -19,11 +19,13 @@ function Desk() {
   const status = sp.get("status") ?? "open";
   const overdue = sp.get("overdue") === "1";
   const grievance = sp.get("grievance") === "1";
-  const [d, setD] = useState<{ items: T[]; status_counts: Record<string, number> } | null>(null);
+  const [d, setD] = useState<{ items: T[]; status_counts: Record<string, number>; total: number; page: number; page_size: number } | null>(null);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
   useEffect(() => {
-    setD(null);
-    api<typeof d>("/api/admin/tickets", { query: { status: status === "all" ? "" : status, overdue: overdue || undefined, grievance: grievance || undefined } }).then(setD).catch(quietly);
-  }, [status, overdue, grievance]);
+    const t = setTimeout(() => api<typeof d>("/api/admin/tickets", { query: { status: status === "all" ? "" : status, overdue: overdue || undefined, grievance: grievance || undefined, q, page } }).then(setD).catch(quietly), q ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [status, overdue, grievance, q, page]);
   const go = (q: Record<string, string>) => router.replace(`/admin/support?${new URLSearchParams({ status, ...(overdue ? { overdue: "1" } : {}), ...(grievance ? { grievance: "1" } : {}), ...q })}`);
   const c = d?.status_counts ?? {};
   return (
@@ -34,7 +36,9 @@ function Desk() {
         <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" className="accent-peacock" checked={overdue} onChange={(e) => router.replace(`/admin/support?status=${status}${e.target.checked ? "&overdue=1" : ""}${grievance ? "&grievance=1" : ""}`)} /> Not acknowledged in time</label>
         <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" className="accent-peacock" checked={grievance} onChange={(e) => router.replace(`/admin/support?status=${status}${overdue ? "&overdue=1" : ""}${e.target.checked ? "&grievance=1" : ""}`)} /> Grievances only</label>
       </div>
+      <Input placeholder="Ticket number, subject, customer name or mobile" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="mb-3 max-w-sm" aria-label="Search tickets" />
       {!d ? <PageLoader /> : d.items.length === 0 ? <EmptyState title="Nothing waiting" body="New tickets appear here." /> : (
+        <>
         <Table head={["Ticket", "Customer", "Topic", "Opened", "Reply due", "Status"]}>
           {d.items.map((t) => (
             <tr key={t.id} className="hover:bg-mist/60">
@@ -53,6 +57,8 @@ function Desk() {
             </tr>
           ))}
         </Table>
+        <Pagination page={d.page} pageSize={d.page_size} total={d.total} onPage={setPage} />
+        </>
       )}
     </div>
   );

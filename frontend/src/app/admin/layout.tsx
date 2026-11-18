@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BarChart3, Bell, Bot, Cpu, MessagesSquare, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
+  BarChart3, Bell, Bot, Cpu, LogIn, MessagesSquare, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
   ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,7 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [user, isLogin]);
 
   useEffect(() => {
-    if (user?.is_admin && !isLogin && me?.permissions.includes("sellers"))
+    if (user?.is_admin && !isLogin && me?.permissions.includes("dashboard"))
       api<{ sellers_pending_review: number; products_pending_review: number; refunds_needing_attention: number }>("/api/admin/dashboard")
         .then((d) => setCounts({ s: d.sellers_pending_review, p: d.products_pending_review, r: d.refunds_needing_attention }))
         .catch(() => {});
@@ -41,32 +41,33 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!ready || !user?.is_admin || !me) return <PageLoader />;
   const can = (p: string) => me.permissions.includes(p);
   const nav = [
-    { href: "/admin", label: "Overview", icon: LayoutDashboard, p: "dashboard" },
-    { href: "/admin/sellers", label: "Sellers", icon: Store, badge: counts.s, p: "sellers" },
-    { href: "/admin/products", label: "Listings", icon: Package, badge: counts.p, p: "catalog" },
-    { href: "/admin/orders", label: "Orders", icon: ShoppingBag, p: "orders" },
-    { href: "/admin/returns", label: "Returns", icon: RotateCcw, p: "orders" },
-    { href: "/admin/refunds", label: "Refunds", icon: Undo2, badge: counts.r, p: "refunds" },
-    { href: "/admin/payouts", label: "Payouts", icon: IndianRupee, p: "payouts" },
-    { href: "/admin/support", label: "Support desk", icon: LifeBuoy, p: "support" },
-    { href: "/admin/customers", label: "Customers", icon: Users, p: "customers" },
-    { href: "/admin/categories", label: "Categories", icon: FolderTree, p: "catalog" },
-    { href: "/admin/reviews", label: "Reviews", icon: MessageSquareText, p: "catalog" },
-    { href: "/admin/storefront", label: "Storefront", icon: Palette, p: "marketing" },
-    { href: "/admin/coupons", label: "Coupons", icon: Tag, p: "marketing" },
-    { href: "/admin/notifications", label: "Messages", icon: Bell, p: "marketing" },
-    { href: "/admin/reports", label: "Reports", icon: BarChart3, p: "reports" },
-    { href: "/admin/exports", label: "Exports", icon: FileDown, p: "dashboard" },
-    { href: "/admin/settings", label: "Settings", icon: Settings, p: "settings" },
-    { href: "/admin/ai", label: "AI studio", icon: Sparkles, p: "settings" },
-    { href: "/admin/assistant", label: "AI assistant", icon: Bot, p: "settings" },
-    { href: "/admin/shop-assistant", label: "Shop assistant", icon: MessagesSquare, p: "shop_assistant", any: ["shop_assistant", "shop_assistant_kb", "shop_assistant_chats"] },
-    { href: "/admin/ai-providers", label: "AI providers", icon: Cpu, p: "ai_providers" },
-    { href: "/admin/go-live", label: "Go-live checklist", icon: Rocket, p: "dashboard" },
-    { href: "/admin/integrations", label: "Integrations", icon: Plug, p: "integrations" },
-    { href: "/admin/staff", label: "Staff and roles", icon: ShieldCheck, p: "staff" },
-    { href: "/admin/audit", label: "Audit log", icon: FileClock, p: "audit" },
-    { href: "/admin/account", label: "My account", icon: KeyRound, p: "dashboard" },
+    { section: "Overview", href: "/admin", label: "Overview", icon: LayoutDashboard, p: "dashboard" },
+    { section: "Overview", href: "/admin/go-live", label: "Go-live checklist", icon: Rocket, p: "dashboard" },
+    { section: "Orders and customers", href: "/admin/orders", label: "Orders", icon: ShoppingBag, p: "orders" },
+    { section: "Orders and customers", href: "/admin/returns", label: "Returns", icon: RotateCcw, p: "orders" },
+    { section: "Orders and customers", href: "/admin/refunds", label: "Refunds", icon: Undo2, badge: counts.r, p: "refunds" },
+    { section: "Orders and customers", href: "/admin/support", label: "Support desk", icon: LifeBuoy, p: "support" },
+    { section: "Orders and customers", href: "/admin/customers", label: "Customers and accounts", icon: Users, p: "customers" },
+    { section: "Sellers and catalogue", href: "/admin/sellers", label: "Sellers", icon: Store, badge: counts.s, p: "sellers" },
+    { section: "Sellers and catalogue", href: "/admin/products", label: "Listings", icon: Package, badge: counts.p, p: "catalog" },
+    { section: "Sellers and catalogue", href: "/admin/categories", label: "Categories", icon: FolderTree, p: "catalog" },
+    { section: "Sellers and catalogue", href: "/admin/reviews", label: "Reviews", icon: MessageSquareText, p: "catalog" },
+    { section: "Money and reports", href: "/admin/payouts", label: "Payouts", icon: IndianRupee, p: "payouts" },
+    { section: "Money and reports", href: "/admin/reports", label: "Reports", icon: BarChart3, p: "reports" },
+    { section: "Money and reports", href: "/admin/exports", label: "Exports", icon: FileDown, p: "dashboard" },
+    { section: "Store and marketing", href: "/admin/storefront", label: "Storefront", icon: Palette, p: "marketing" },
+    { section: "Store and marketing", href: "/admin/coupons", label: "Coupons", icon: Tag, p: "marketing" },
+    { section: "Store and marketing", href: "/admin/notifications", label: "Messages", icon: Bell, p: "marketing" },
+    { section: "AI", href: "/admin/shop-assistant", label: "Shop assistant", icon: MessagesSquare, p: "shop_assistant", any: ["shop_assistant", "shop_assistant_kb", "shop_assistant_chats"] },
+    { section: "AI", href: "/admin/assistant", label: "AI assistant", icon: Bot, p: "settings" },
+    { section: "AI", href: "/admin/ai", label: "AI studio", icon: Sparkles, p: "settings" },
+    { section: "AI", href: "/admin/ai-providers", label: "AI providers", icon: Cpu, p: "ai_providers" },
+    { section: "Administration", href: "/admin/settings", label: "Marketplace settings", icon: Settings, p: "settings" },
+    { section: "Administration", href: "/admin/sign-in", label: "Sign-in and accounts", icon: LogIn, p: "settings" },
+    { section: "Administration", href: "/admin/integrations", label: "Integrations", icon: Plug, p: "integrations" },
+    { section: "Administration", href: "/admin/staff", label: "Staff and roles", icon: ShieldCheck, p: "staff" },
+    { section: "Administration", href: "/admin/audit", label: "Audit log", icon: FileClock, p: "audit" },
+    { section: "Administration", href: "/admin/account", label: "My account", icon: KeyRound, p: "dashboard" },
   ].filter((n) => ("any" in n && Array.isArray(n.any) ? n.any.some(can) : can(n.p)));
   return (
     <AdminCtx.Provider value={me}>

@@ -27,7 +27,7 @@ from app.core.validators import (
 from app.db import utcnow
 from app.models import Seller, SellerDocument, User
 from app.models.seller import DOCUMENT_KINDS
-from app.services import inventory, storage
+from app.services import auth_settings, inventory, storage
 
 router = APIRouter(prefix="/api/seller", tags=["seller-onboarding"])
 
@@ -201,6 +201,8 @@ async def register(body: RegisterIn, user: CurrentUser, session: SessionDep) -> 
     existing = (await session.execute(select(Seller).where(Seller.user_id == user.id))).scalar_one_or_none()
     if existing:
         return await seller_profile(session, existing)
+    if not (await auth_settings.get(session))["seller_signup"]:
+        raise ApiError("New seller registrations are paused right now. Please try again later.", "seller_signup_closed", 403)
     seller = Seller(
         user_id=user.id,
         display_name=body.display_name.strip(),
@@ -223,6 +225,16 @@ async def get_me(seller: SellerAccount, session: SessionDep) -> dict:
 @router.put("/profile")
 async def update_profile(body: ProfileIn, seller: SellerAccount, session: SessionDep) -> dict:
     _require_editable(seller)
+    await apply_profile(session, seller, body)
+    await session.commit()
+    return await seller_profile(session, seller)
+
+
+# The apply_* helpers hold the rules for each section; the seller's routes (above/below) and the
+# admin's routes (routers/admin_accounts.py) both use them. Only the seller side is locked during review.
+
+
+async def apply_profile(session, seller: Seller, body: ProfileIn) -> None:
     if body.gstin[2:12] != body.pan:
         raise ApiError("The PAN inside your GSTIN (characters 3 to 12) must match the PAN you entered", "pan_gstin_mismatch", fields={"pan": "Does not match GSTIN"})
     clash = (await session.execute(select(Seller.id).where(Seller.gstin == body.gstin, Seller.id != seller.id))).first()
@@ -237,8 +249,6 @@ async def update_profile(body: ProfileIn, seller: SellerAccount, session: Sessio
     seller.pan_last4 = body.pan[-4:]
     seller.contact_email = body.contact_email.lower()
     seller.contact_phone = body.contact_phone
-    await session.commit()
-    return await seller_profile(session, seller)
 
 
 @router.put("/store")
@@ -255,37 +265,51 @@ async def update_store_info(body: StoreInfoIn, seller: SellerAccount, session: S
 @router.put("/pickup-address")
 async def update_pickup(body: PickupIn, seller: SellerAccount, session: SessionDep) -> dict:
     _require_editable(seller)
+    await apply_pickup(session, seller, body)
+    await session.commit()
+    return await seller_profile(session, seller)
+
+
+async def apply_pickup(session, seller: Seller, body: PickupIn) -> None:
     seller.pickup_line1 = body.line1.strip()
     seller.pickup_line2 = body.line2.strip()
     seller.pickup_city = body.city.strip()
     seller.pickup_state_code = body.state_code
     seller.pickup_pincode = body.pincode
     await inventory.sync_default_warehouse(session, seller)
-    await session.commit()
-    return await seller_profile(session, seller)
 
 
 @router.put("/bank")
 async def update_bank(body: BankIn, seller: SellerAccount, session: SessionDep) -> dict:
     # Bank details decide where money goes; once approved they change only through admin review.
     _require_editable(seller)
+    apply_bank(seller, body)
+    await session.commit()
+    return await seller_profile(session, seller)
+
+
+def apply_bank(seller: Seller, body: BankIn) -> None:
     if body.account_number != body.confirm_account_number:
         raise ApiError("Account numbers do not match", "account_mismatch", fields={"confirm_account_number": "Does not match"})
     seller.bank_holder_name = body.holder_name.strip()
     seller.bank_account_enc = encrypt_field(body.account_number)
     seller.bank_account_last4 = body.account_number[-4:]
     seller.bank_ifsc = body.ifsc
-    await session.commit()
-    return await seller_profile(session, seller)
+    # Payout routing (RazorpayX contact / fund account) must be set up again for the new account.
+    seller.payout_fund_account_id = ""
 
 
 @router.put("/grievance-officer")
 async def update_grievance(body: GrievanceIn, seller: SellerAccount, session: SessionDep) -> dict:
+    apply_grievance(seller, body)
+    await session.commit()
+    return await seller_profile(session, seller)
+
+
+def apply_grievance(seller: Seller, body: GrievanceIn) -> None:
     seller.grievance_name = body.name.strip()
     seller.grievance_email = body.email.lower()
     seller.grievance_phone = body.phone
-    await session.commit()
-    return await seller_profile(session, seller)
 
 
 @router.post("/documents/{kind}")

@@ -83,22 +83,28 @@ export function Field({ label, hint, error, children, htmlFor, className }: { la
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-line bg-white px-3 text-[15px] text-ink placeholder:text-ink-faint focus:border-peacock focus:outline-none focus:ring-2 focus:ring-peacock/20 disabled:bg-mist";
+  "h-10 rounded-lg border border-line bg-white px-3 text-[15px] text-ink placeholder:text-ink-faint focus:border-peacock focus:outline-none focus:ring-2 focus:ring-peacock/20 disabled:bg-mist";
+
+/** Full width unless the caller sets a width (classes are joined with clsx, so a second w-* would not win). */
+function fieldCls(...parts: (string | false | undefined)[]) {
+  const extra = parts.filter(Boolean).join(" ");
+  return clsx(inputCls, !/(^|\s)(\w+:)*w-/.test(extra) && "w-full", ...parts);
+}
 
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(function Input(
   { className, invalid, ...rest },
   ref,
 ) {
-  return <input ref={ref} className={clsx(inputCls, invalid && "border-vermilion", className)} {...rest} />;
+  return <input ref={ref} className={fieldCls(invalid && "border-vermilion", className)} {...rest} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, ...rest }, ref) {
-  return <textarea ref={ref} className={clsx(inputCls, "h-auto min-h-[96px] py-2", className)} {...rest} />;
+  return <textarea ref={ref} className={fieldCls("h-auto min-h-[96px] py-2", className)} {...rest} />;
 });
 
 export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(function Select({ className, children, ...rest }, ref) {
   return (
-    <select ref={ref} className={clsx(inputCls, "pr-8", className)} {...rest}>
+    <select ref={ref} className={fieldCls("pr-8", className)} {...rest}>
       {children}
     </select>
   );

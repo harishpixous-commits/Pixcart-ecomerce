@@ -35,8 +35,9 @@ from app.routers.seller_onboarding import document_response, seller_profile
 from app.config import settings
 from app.routers.seller_products import MAX_IMAGES, product_detail
 from app.services import storage
+from app.services.notify import notify_seller
 from app.services.catalog import check_image_url, images_for
-from app.services.orders import cancel_sub_order, transition
+from app.services.orders import cancel_sub_order, notify_refund, transition
 from app.services.platform_settings import get_settings, update_settings
 from app.services.reports import IST, tcs_report_data
 
@@ -165,7 +166,7 @@ async def get_seller(seller_id: uuid.UUID, admin: Perm("sellers"), session: Sess
     s = await _seller(session, seller_id)
     data = await seller_profile(session, s, reveal=True)
     owner = await session.get(User, s.user_id)
-    data["owner"] = {"name": owner.name, "phone": owner.phone, "email": owner.email} if owner else None
+    data["owner"] = {"id": str(owner.id), "name": owner.name, "phone": owner.phone, "email": owner.email} if owner else None
     data["product_counts"] = dict((await session.execute(select(Product.status, func.count()).where(Product.seller_id == s.id).group_by(Product.status))).all())
     audit(session, admin, "seller.view_kyc", "seller", s.id)
     await session.commit()
@@ -182,12 +183,19 @@ async def seller_document(seller_id: uuid.UUID, kind: str, admin: Perm("sellers"
 @router.post("/sellers/{seller_id}/approve")
 async def approve_seller(seller_id: uuid.UUID, admin: Perm("sellers"), session: SessionDep) -> dict:
     s = await _seller(session, seller_id, lock=True)
-    if s.status not in ("submitted", "suspended"):
+    if s.status not in ("submitted", "suspended", "rejected"):
         raise Conflict(f"A {s.status} seller cannot be approved", "invalid_status")
+    if s.status == "rejected":
+        missing = [c["label"] for c in (await seller_profile(session, s))["checklist"] if not c["done"]]
+        if missing:
+            raise Conflict("Still missing: " + ", ".join(missing), "kyc_incomplete")
+    was = s.status
     s.status = "approved"
     s.approved_at = s.approved_at or utcnow()
     s.rejection_reason = ""
-    audit(session, admin, "seller.approve", "seller", s.id)
+    audit(session, admin, "seller.approve", "seller", s.id, f"from {was}")
+    await notify_seller(session, s.id, "seller_kyc_update", {"status": "approved" if was != "suspended" else "active again",
+                        "message": "Your store is approved. You can list products and receive orders." if was != "suspended" else "Your store is active again."}, link="/seller")
     await session.commit()
     return await seller_profile(session, s, reveal=True)
 
@@ -201,6 +209,8 @@ async def reject_seller(seller_id: uuid.UUID, body: ReasonIn, admin: Perm("selle
     s.status = "rejected"
     s.rejection_reason = body.reason
     audit(session, admin, "seller.reject", "seller", s.id, body.reason)
+    await notify_seller(session, s.id, "seller_kyc_update", {"status": "sent back for changes", "message": f"Please update your details and submit again: {body.reason}"},
+                        link="/seller/onboarding")
     await session.commit()
     return await seller_profile(session, s, reveal=True)
 
@@ -213,6 +223,8 @@ async def suspend_seller(seller_id: uuid.UUID, body: ReasonIn, admin: Perm("sell
     s.status = "suspended"
     s.rejection_reason = body.reason
     audit(session, admin, "seller.suspend", "seller", s.id, body.reason)
+    await notify_seller(session, s.id, "seller_kyc_update", {"status": "suspended", "message": f"Your store is suspended: {body.reason}. Contact seller support."},
+                        link="/seller/onboarding")
     await session.commit()
     return await seller_profile(session, s, reveal=True)
 
@@ -323,6 +335,8 @@ async def approve_product(product_id: uuid.UUID, admin: Perm("catalog"), session
     p.approved_at = utcnow()
     p.rejection_reason = ""
     audit(session, admin, "product.approve", "product", p.id)
+    await notify_seller(session, p.seller_id, "listing_update", {"status": "approved", "title": p.title, "message": "It is live on the store now."},
+                        link=f"/seller/products/{p.id}")
     await session.commit()
     return await product_detail(session, p)
 
@@ -333,9 +347,12 @@ async def reject_product(product_id: uuid.UUID, body: ReasonIn, admin: Perm("cat
     p = await _product(session, product_id, lock=True)
     if p.status not in ("pending", "approved"):
         raise Conflict(f"A {p.status} product cannot be rejected", "invalid_status")
+    was_live = p.status == "approved"
     p.status = "rejected"
     p.rejection_reason = body.reason
     audit(session, admin, "product.reject", "product", p.id, body.reason)
+    await notify_seller(session, p.seller_id, "listing_update", {"status": "taken down" if was_live else "not approved", "title": p.title,
+                        "message": f"Reason: {body.reason}. Edit the listing and send it for review again."}, link=f"/seller/products/{p.id}")
     await session.commit()
     return await product_detail(session, p)
 
@@ -416,19 +433,56 @@ async def list_orders(
     admin: Perm("orders"),
     session: SessionDep,
     status: Literal["pending_payment", "placed", "cancelled"] | None = None,
-    q: str = Query(default="", max_length=40),
+    q: str = Query(default="", max_length=60),
+    payment_method: Literal["cod", "online"] | None = None,
+    payment_status: Literal["pending", "paid", "cod", "failed", "refunded", "partially_refunded"] | None = None,
+    package_status: Literal["pending_payment", "placed", "confirmed", "packed", "shipped", "delivered", "cancelled"] | None = None,
+    seller_id: uuid.UUID | None = None,
+    customer_id: uuid.UUID | None = None,
+    date_from: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    date_to: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     stmt = select(Order, User.name, User.phone).join(User, User.id == Order.user_id)
     if status:
         stmt = stmt.where(Order.status == status)
+    if payment_method:
+        stmt = stmt.where(Order.payment_method == payment_method)
+    if payment_status:
+        stmt = stmt.where(Order.payment_status == payment_status)
+    if package_status or seller_id:
+        pkg = exists().where(SubOrder.order_id == Order.id)
+        if package_status:
+            pkg = pkg.where(SubOrder.status == package_status)
+        if seller_id:
+            pkg = pkg.where(SubOrder.seller_id == seller_id)
+        stmt = stmt.where(pkg)
+    if customer_id:
+        stmt = stmt.where(Order.user_id == customer_id)
+    try:
+        if date_from:
+            stmt = stmt.where(Order.created_at >= datetime.combine(datetime.fromisoformat(date_from).date(), time.min, IST))
+        if date_to:
+            stmt = stmt.where(Order.created_at < datetime.combine(datetime.fromisoformat(date_to).date() + timedelta(days=1), time.min, IST))
+    except ValueError as exc:
+        raise ApiError("Dates must be valid (YYYY-MM-DD)", "invalid_date") from exc
     if q.strip():
-        like = f"%{q.strip()}%"
-        stmt = stmt.where(or_(Order.number.ilike(like), User.phone.ilike(like)))
+        text = q.strip()
+        like = f"%{text}%"
+        digits = "".join(ch for ch in text if ch.isdigit())
+        conds = [Order.number.ilike(like), User.phone.ilike(like), User.name.ilike(like), User.email.ilike(like),
+                 exists().where(SubOrder.order_id == Order.id, or_(SubOrder.number.ilike(like), SubOrder.tracking_number.ilike(like)))]
+        if len(digits) >= 6:
+            conds.append(Order.ship_to["phone"].astext.ilike(f"%{digits[-10:]}%"))
+        stmt = stmt.where(or_(*conds))
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     off, lim = _page(page, page_size)
     rows = (await session.execute(stmt.order_by(Order.created_at.desc()).offset(off).limit(lim))).all()
+    subs: dict[uuid.UUID, list[str]] = {}
+    if rows:
+        for oid, st in (await session.execute(select(SubOrder.order_id, SubOrder.status).where(SubOrder.order_id.in_([r.Order.id for r in rows])).order_by(SubOrder.number))).all():
+            subs.setdefault(oid, []).append(st)
     return {
         "items": [
             {
@@ -441,6 +495,7 @@ async def list_orders(
                 "payment_status": r.Order.payment_status,
                 "grand_total": r.Order.grand_total,
                 "created_at": r.Order.created_at.isoformat(),
+                "package_statuses": subs.get(r.Order.id, []),
             }
             for r in rows
         ],
@@ -501,12 +556,17 @@ async def list_refunds(
     session: SessionDep,
     status: Literal["pending", "processed", "failed"] | None = None,
     page: int = Query(default=1, ge=1),
+    q: str = Query(default="", max_length=40),
 ) -> dict:
     stmt = select(Refund, Order.number).join(Order, Order.id == Refund.order_id)
     if status:
         stmt = stmt.where(Refund.status == status)
+    if q.strip():
+        stmt = stmt.where(Order.number.ilike(f"%{q.strip()}%"))
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await session.execute(stmt.order_by(Refund.created_at.desc()).offset((page - 1) * 50).limit(50))).all()
     return {
+        "total": total, "page": page, "page_size": 50,
         "items": [
             {
                 "id": str(r.Refund.id),
@@ -538,6 +598,30 @@ async def retry_refund(refund_id: uuid.UUID, admin: Perm("refunds"), session: Se
     return {"ok": True}
 
 
+class SettleIn(BaseModel):
+    method: Literal["upi", "neft", "imps", "rtgs", "cheque", "other"]
+    reference: str = Field(min_length=4, max_length=40, pattern=r"^[A-Za-z0-9\-/ ]+$")
+
+
+@router.post("/refunds/{refund_id}/settle")
+async def settle_refund(refund_id: uuid.UUID, body: SettleIn, admin: Perm("refunds"), session: SessionDep) -> dict:
+    """Records a refund paid outside the gateway (for example by UPI after the gateway kept failing).
+    The gateway is not called; the customer is told the refund went through."""
+    r = (await session.execute(select(Refund).where(Refund.id == refund_id).with_for_update())).scalar_one_or_none()
+    if r is None:
+        raise NotFound("Refund")
+    if r.status not in ("failed", "pending"):
+        raise Conflict("Only refunds that have not gone through can be settled by hand", "invalid_status")
+    ref = f"manual:{body.method}:{' '.join(body.reference.split())}"[:40]
+    if (await session.execute(select(Refund.id).where(Refund.provider_refund_id == ref))).first():
+        raise Conflict("This reference is already recorded on another refund", "reference_used")
+    r.status, r.provider_refund_id, r.last_error = "processed", ref, ""
+    audit(session, admin, "refund.settle_manual", "refund", r.id, f"{body.method} {body.reference}")
+    await notify_refund(session, r)
+    await session.commit()
+    return {"ok": True, "status": r.status, "reference": ref}
+
+
 # ----------------------------------------------------------------------------- customers
 
 
@@ -548,8 +632,18 @@ async def list_customers(
     q: str = Query(default="", max_length=80),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
+    kind: Literal["all", "customers", "sellers", "staff", "blocked"] = "all",
 ) -> dict:
-    stmt = select(User)
+    stmt = select(User).where(User.deleted_at.is_(None))
+    has_seller = exists().where(Seller.user_id == User.id)
+    if kind == "customers":
+        stmt = stmt.where(User.is_admin.is_(False), ~has_seller)
+    elif kind == "sellers":
+        stmt = stmt.where(has_seller)
+    elif kind == "staff":
+        stmt = stmt.where(User.is_admin.is_(True))
+    elif kind == "blocked":
+        stmt = stmt.where(User.is_active.is_(False))
     if q.strip():
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(User.name.ilike(like), User.phone.ilike(like), User.email.ilike(like)))
@@ -559,6 +653,7 @@ async def list_customers(
     order_counts = dict(
         (await session.execute(select(Order.user_id, func.count()).where(Order.user_id.in_([u.id for u in users]), Order.status == "placed").group_by(Order.user_id))).all()
     ) if users else {}
+    sellers = {r.user_id: r for r in (await session.execute(select(Seller.user_id, Seller.id, Seller.status).where(Seller.user_id.in_([u.id for u in users])))).all()} if users else {}
     return {
         "items": [
             {
@@ -569,6 +664,8 @@ async def list_customers(
                 "is_admin": u.is_admin,
                 "is_active": u.is_active,
                 "orders": order_counts.get(u.id, 0),
+                "seller": {"id": str(sellers[u.id].id), "status": sellers[u.id].status} if u.id in sellers else None,
+                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
                 "created_at": u.created_at.isoformat(),
             }
             for u in users

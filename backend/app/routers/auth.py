@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -25,14 +26,20 @@ from app.core.security import (
 from app.core.validators import normalize_mobile
 from app.db import utcnow
 from app.models import OtpChallenge, RefreshSession, Seller, User
-from app.services import sms
+from app.services import auth_settings, sms
 from app.services.cms import get_site
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+Purpose = Literal["signin", "signup", "any"]
+
+
 class OtpRequest(BaseModel):
     phone: str
+    # signin: only an existing account; signup: only a new one; any: either (older clients)
+    purpose: Purpose = "any"
+    for_seller: bool = False  # creating an account to sell (checked against the seller sign-up switch)
 
     @field_validator("phone")
     @classmethod
@@ -43,6 +50,9 @@ class OtpRequest(BaseModel):
 class OtpVerify(OtpRequest):
     code: str = Field(min_length=4, max_length=8)
     name: str = Field(default="", max_length=120)
+    email: EmailStr | None = None
+    accept_terms: bool = False
+    marketing_opt_in: bool = False
 
 
 class PasswordLogin(BaseModel):
@@ -116,8 +126,29 @@ def _require_csrf_header(request: Request) -> None:
         raise Forbidden("Missing request header")
 
 
+async def _check_purpose(session, body: OtpRequest) -> User | None:
+    """Sign in needs an existing, active account; create-account needs a number that has none."""
+    user = (await session.execute(select(User).where(User.phone == body.phone))).scalar_one_or_none()
+    if body.purpose == "signin":
+        if user is None:
+            raise ApiError("No account uses this mobile number yet. Create an account to continue.", "no_account", 404)
+        if not user.is_active:
+            raise Forbidden("This account has been blocked. Contact support.")
+    elif body.purpose == "signup":
+        if user is not None:
+            raise ApiError("This mobile number already has an account. Sign in instead.", "account_exists", 409)
+        cfg = await auth_settings.get(session)
+        if not (cfg["seller_signup"] if body.for_seller else cfg["customer_signup"]):
+            raise ApiError("New accounts are paused right now. Please try again later.", "signup_closed", 403)
+    return user
+
+
 @router.post("/otp/request")
 async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -> dict:
+    # Count the attempt before telling anyone whether a number has an account (limits number probing).
+    await rate_limit(session, f"otp:ip:{client_ip(request)}", limit=30, window_seconds=3600)
+    await session.commit()
+    await _check_purpose(session, body)
     now = utcnow()
     latest = (
         await session.execute(
@@ -128,7 +159,6 @@ async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -
         wait = settings.otp_resend_cooldown_seconds - int((now - latest.created_at).total_seconds())
         raise TooManyRequests(f"Please wait {wait} seconds before requesting another OTP")
     await rate_limit(session, f"otp:phone:{body.phone}", limit=settings.otp_max_per_hour, window_seconds=3600)
-    await rate_limit(session, f"otp:ip:{client_ip(request)}", limit=30, window_seconds=3600)
 
     code = generate_otp()
     # Only the newest challenge for a phone is valid.
@@ -149,12 +179,38 @@ async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -
         await sms.send_otp(body.phone, code)
     except sms.SmsError as exc:
         raise ApiError(str(exc), "sms_failed", 503) from exc
-    return {"sent": True, "expires_in": settings.otp_ttl_seconds, "resend_in": settings.otp_resend_cooldown_seconds}
+    out = {"sent": True, "expires_in": settings.otp_ttl_seconds, "resend_in": settings.otp_resend_cooldown_seconds, "length": settings.otp_length}
+    if (await auth_settings.dev_otp_status(session))["active"]:
+        out["dev_otp"] = code  # test installs only: never in production or with real SMS (see auth_settings)
+    return out
+
+
+@router.get("/options")
+async def auth_options(session: SessionDep) -> dict:
+    """What the sign-in and create-account screens should offer."""
+    cfg = await auth_settings.get(session)
+    return {"customer_signup": cfg["customer_signup"], "seller_signup": cfg["seller_signup"], "signup_email": cfg["signup_email"],
+            "otp_length": settings.otp_length, "dev_otp": (await auth_settings.dev_otp_status(session))["active"]}
 
 
 @router.post("/otp/verify")
 async def verify_otp(body: OtpVerify, request: Request, response: Response, session: SessionDep) -> dict:
     now = utcnow()
+    signup = body.purpose == "signup"
+    name = " ".join(body.name.split())
+    email = body.email.lower() if body.email else None
+    if signup:
+        cfg = await auth_settings.get(session)
+        if len(name) < 2:
+            raise ApiError("Enter your name", "name_required", fields={"name": "Required"})
+        if not body.accept_terms:
+            raise ApiError("Please accept the terms of use and privacy policy", "terms_required", fields={"accept_terms": "Required"})
+        if cfg["signup_email"] == "required" and not email:
+            raise ApiError("Enter your email", "email_required", fields={"email": "Required"})
+        if cfg["signup_email"] == "hidden":
+            email = None
+        if email and (await session.execute(select(User.id).where(User.email == email))).first():
+            raise ApiError("This email is already used by another account", "email_taken", fields={"email": "Already in use"})
     challenge = (
         await session.execute(
             select(OtpChallenge)
@@ -178,12 +234,15 @@ async def verify_otp(body: OtpVerify, request: Request, response: Response, sess
     user = (await session.execute(select(User).where(User.phone == body.phone))).scalar_one_or_none()
     is_new = user is None
     if user is None:
-        # Signing up records acceptance of the terms and privacy notice shown on the sign-in screen.
-        user = User(phone=body.phone, name=body.name.strip(), terms_accepted_at=now)
+        if body.purpose == "signin":
+            await session.commit()
+            raise ApiError("No account uses this mobile number yet. Create an account to continue.", "no_account", 404)
+        # Creating an account records acceptance of the terms and privacy notice shown on the screen.
+        user = User(phone=body.phone, name=name, email=email, terms_accepted_at=now, marketing_opt_in=bool(signup and body.marketing_opt_in))
         session.add(user)
         await session.flush()
-    elif body.name.strip() and not user.name:
-        user.name = body.name.strip()
+    elif name and not user.name:
+        user.name = name
     if not user.is_active:
         await session.commit()
         raise Forbidden("This account has been blocked. Contact support.")

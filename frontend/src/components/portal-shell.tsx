@@ -12,6 +12,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   badge?: number;
+  section?: string; // heading shown above the first item of each section (desktop)
 }
 
 /** Shared chrome for the seller hub and the admin panel: peacock top bar with awning, side navigation. */
@@ -38,20 +39,32 @@ export function PortalShell({ title, nav, children, root }: { title: string; nav
         <div className="awning bg-mist" aria-hidden />
       </header>
       <div className="mx-auto flex max-w-[1400px] flex-col gap-4 px-3 pb-10 pt-3 sm:px-4 lg:flex-row">
-        <nav className="scroll-x -mx-3 flex gap-1 overflow-x-auto px-3 lg:sticky lg:top-24 lg:mx-0 lg:w-56 lg:shrink-0 lg:flex-col lg:self-start lg:px-0" aria-label={`${title} navigation`}>
-          {nav.map(({ href, label, icon: Icon, badge }) => (
-            <Link
-              key={href}
-              href={href}
-              className={clsx(
-                "flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 font-medium",
-                isActive(href) ? "bg-white text-peacock shadow-sm" : "text-ink-soft hover:bg-white/60",
+        {/* Phones: one row that scrolls sideways. Desktop: a card that stays in view and scrolls on its own,
+            so every item is reachable however long the menu is. */}
+        <nav
+          className="scroll-x -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1 lg:sticky lg:top-[84px] lg:mx-0 lg:max-h-[calc(100vh-96px)] lg:w-60 lg:shrink-0 lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:rounded-xl lg:bg-white lg:p-2 lg:shadow-sm lg:[scrollbar-width:thin]"
+          aria-label={`${title} navigation`}
+        >
+          {nav.map(({ href, label, icon: Icon, badge, section }, i) => (
+            <div key={href} className="contents">
+              {section && section !== nav[i - 1]?.section && (
+                <p className="hidden px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-ink-faint first:pt-1 lg:block">{section}</p>
               )}
-            >
-              <Icon className="h-[18px] w-[18px]" />
-              {label}
-              {badge ? <span className="ml-auto rounded-full bg-vermilion px-1.5 text-xs font-bold leading-5 text-white">{badge}</span> : null}
-            </Link>
+              <Link
+                href={href}
+                aria-current={isActive(href) ? "page" : undefined}
+                className={clsx(
+                  "flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] font-medium transition-colors",
+                  isActive(href)
+                    ? "bg-peacock text-white shadow-sm"
+                    : "bg-white text-ink ring-1 ring-line hover:bg-peacock-light hover:text-peacock lg:bg-transparent lg:ring-0",
+                )}
+              >
+                <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                <span className="whitespace-nowrap lg:whitespace-normal">{label}</span>
+                {badge ? <span className={clsx("ml-auto rounded-full px-1.5 text-xs font-bold leading-5", isActive(href) ? "bg-white text-peacock" : "bg-vermilion text-white")}>{badge}</span> : null}
+              </Link>
+            </div>
           ))}
         </nav>
         <main className="min-w-0 flex-1">{children}</main>
