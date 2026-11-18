@@ -3,7 +3,7 @@
 import { ImagePlus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Modal, Spinner, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 
 export type MediaItem = { id: string; url: string; label: string; at: string };
 
@@ -18,7 +18,7 @@ export function MediaGrid({ onPick, refreshKey = 0 }: { onPick?: (url: string) =
   const toast = useToast();
   const [items, setItems] = useState<MediaItem[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = () => api<MediaItem[]>("/api/admin/media").then(setItems);
+  const load = () => api<MediaItem[]>("/api/admin/media").then(setItems).catch(quietly);
   useEffect(() => { load(); }, [refreshKey]);
 
   async function upload(files: FileList) {

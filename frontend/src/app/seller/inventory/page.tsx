@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, Field, Input, Modal, PageLoader, Pagination, Select, TextField, useToast } from "@/components/ui";
-import { api, ApiError, downloadFile, latestOnly } from "@/lib/api";
+import { api, ApiError, downloadFile, latestOnly, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
 type Grid = {
@@ -135,7 +135,7 @@ function Inventory() {
                   ))}
                   <td className={it.total <= 5 ? "px-4 py-2.5 text-right font-semibold text-vermilion" : "px-4 py-2.5 text-right font-semibold"}>{it.total}</td>
                   <td className="px-2 py-2.5">
-                    <button aria-label="Stock history" className="rounded p-1.5 text-ink-faint hover:bg-mist" onClick={() => api<{ items: Move[] }>(`/api/seller/inventory/${it.variant_id}/movements`).then((r) => setMoves({ title: `${it.title} (${it.sku})`, items: r.items }))}>
+                    <button aria-label="Stock history" className="rounded p-1.5 text-ink-faint hover:bg-mist" onClick={() => api<{ items: Move[] }>(`/api/seller/inventory/${it.variant_id}/movements`).then((r) => setMoves({ title: `${it.title} (${it.sku})`, items: r.items })).catch(quietly)}>
                       <History className="h-4 w-4" />
                     </button>
                   </td>

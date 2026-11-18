@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useSite } from "@/lib/site";
 import { useCallback, useEffect, useState } from "react";
 import { Button, ErrorNote, PageLoader, Pill, Textarea } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
 type T = { id: string; number: string; subject: string; status: string; category_label: string; order_id: string | null; is_grievance: boolean; created_at: string; acknowledged_at: string | null; messages: { id: string; author_role: string; body: string; at: string }[] };
@@ -59,7 +59,7 @@ export default function TicketPage() {
           <Textarea id="reply" value={body} onChange={(e) => setBody(e.target.value)} required maxLength={5000} />
           <div className="flex gap-2">
             <Button type="submit" loading={busy}>Send</Button>
-            <Button type="button" variant="ghost" onClick={() => api<T>(`/api/support/tickets/${id}/close`, { method: "POST" }).then(setT)}>My issue is solved</Button>
+            <Button type="button" variant="ghost" onClick={() => api<T>(`/api/support/tickets/${id}/close`, { method: "POST" }).then(setT).catch(quietly)}>My issue is solved</Button>
           </div>
         </form>
       )}

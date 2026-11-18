@@ -3,7 +3,7 @@
 import { FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, ErrorNote, Field, Modal, ProductImage, Select, StatusPill, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError, downloadBlob } from "@/lib/api";
+import { api, ApiError, downloadBlob, quietly } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
 import type { ReturnableItem, ReturnView } from "@/lib/types";
 
@@ -36,7 +36,7 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   useEffect(() => {
-    if (open) api<{ reasons: { code: string; label: string }[] }>("/api/returns/reasons").then((r) => setReasons(r.reasons));
+    if (open) api<{ reasons: { code: string; label: string }[] }>("/api/returns/reasons").then((r) => setReasons(r.reasons)).catch(quietly);
   }, [open]);
   const chosen = items.filter((i) => (qty[i.order_item_id] ?? 0) > 0);
   const refund = chosen.reduce((n, i) => n + i.unit_refund * (qty[i.order_item_id] ?? 0), 0);

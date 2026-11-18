@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, PageLoader, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { paiseToInput, toPaise } from "@/lib/format";
 
 type S = {
@@ -43,7 +43,7 @@ export default function AdminSettings() {
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise),
       });
-    });
+    }).catch(quietly);
   }, []);
   const bind = (k: string) => ({ value: f[k] ?? "", onChange: (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value }) });
 

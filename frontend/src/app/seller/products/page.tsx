@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { PageHeader, Table, Tabs } from "@/components/portal-shell";
 import { ButtonLink, EmptyState, Input, PageLoader, Pagination, ProductImage, StatusPill } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
 import type { Paged } from "@/lib/types";
 import { ExportButton } from "@/components/export-button";
@@ -25,7 +25,7 @@ function List() {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      api<Paged<Row>>("/api/seller/products", { query: { status: status || undefined, q, page, low_stock: lowStock || undefined } }).then(setData);
+      api<Paged<Row>>("/api/seller/products", { query: { status: status || undefined, q, page, low_stock: lowStock || undefined } }).then(setData).catch(quietly);
     }, q ? 250 : 0);
     return () => clearTimeout(t);
   }, [status, q, page, lowStock]);

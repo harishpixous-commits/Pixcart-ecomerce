@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Button, ErrorNote, Field, PageLoader, Select, Textarea, TextField } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 function NewTicket() {
@@ -17,7 +17,7 @@ function NewTicket() {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (ready && !user) router.replace(`/login?next=${encodeURIComponent("/support/new" + (orderId ? `?order=${orderId}` : ""))}`);
-    api<{ categories: { code: string; label: string }[] }>("/api/support/categories").then((r) => setCats(r.categories));
+    api<{ categories: { code: string; label: string }[] }>("/api/support/categories").then((r) => setCats(r.categories)).catch(quietly);
   }, [ready, user, router, orderId]);
   async function submit(e: React.FormEvent) {
     e.preventDefault();

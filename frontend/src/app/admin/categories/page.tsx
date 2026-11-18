@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, pct } from "@/lib/format";
 
 type Cat = { id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean };
@@ -15,7 +15,7 @@ export default function AdminCategories() {
   const [editing, setEditing] = useState<Cat | "new" | null>(null);
   const [f, setF] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(() => api<Cat[]>("/api/admin/categories").then(setCats), []);
+  const load = useCallback(() => api<Cat[]>("/api/admin/categories").then(setCats).catch(quietly), []);
   useEffect(() => { load(); }, [load]);
 
   const ordered = useMemo(() => {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Stars } from "@/components/reviews";
 import { Button, EmptyState, PageLoader, Pill, Textarea, useToast } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
 import { AiBadge, AiDraftButton, type AiRun } from "@/components/ai";
 import { useSite } from "@/lib/site";
@@ -18,7 +18,7 @@ export default function SellerReviews() {
   const [open, setOpen] = useState<string | null>(null);
   const [runs, setRuns] = useState<Record<string, AiRun>>({});
   const site = useSite();
-  const load = useCallback(() => api<typeof d>("/api/seller/reviews").then(setD), []);
+  const load = useCallback(() => api<typeof d>("/api/seller/reviews").then(setD).catch(quietly), []);
   useEffect(() => { load(); }, [load]);
   if (!d) return <PageLoader />;
   return (

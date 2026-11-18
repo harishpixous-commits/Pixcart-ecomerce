@@ -1,8 +1,18 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, refreshSession, setAccessToken } from "./api";
+import { api, onTokenChange, refreshSession, setAccessToken } from "./api";
 import type { CartView, User } from "./types";
+
+/** The user id inside an access token (not verified here; the server verifies every request). */
+function tokenSubject(token: string): string | null {
+  try {
+    const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return (JSON.parse(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "="))) as { sub?: string }).sub ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /* ---------------------------------------------------------------- guest cart (signed out) */
 
@@ -113,6 +123,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await refreshCart();
     })();
   }, [loadUser, refreshCart]);
+
+  // The session can change outside this page: it expires, the person signs out in another tab, or signs in
+  // as someone else in another tab (one browser keeps one sign-in). Follow it instead of showing stale data.
+  useEffect(
+    () =>
+      onTokenChange((token) => {
+        const current = userRef.current;
+        if (!token) {
+          if (current) {
+            hint(false);
+            userRef.current = null;
+            setUser(null); // layouts send the person to sign in
+            refreshCart();
+          }
+          return;
+        }
+        if (current && tokenSubject(token) !== current.id) loadUser().then(() => refreshCart()).catch(() => setAccessToken(null));
+      }),
+    [loadUser, refreshCart],
+  );
 
   const signIn = useCallback(
     async (token: string, u: User) => {

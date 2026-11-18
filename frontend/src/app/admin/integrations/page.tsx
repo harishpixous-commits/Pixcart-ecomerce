@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Input, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
 import { useAdmin } from "@/lib/admin";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
 type FieldInfo = {
@@ -25,7 +25,7 @@ export default function Integrations() {
   const toast = useToast();
   const [d, setD] = useState<D | null>(null);
   const [open, setOpen] = useState<Item | null>(null);
-  const load = useCallback(() => api<D>("/api/admin/integrations").then(setD), []);
+  const load = useCallback(() => api<D>("/api/admin/integrations").then(setD).catch(quietly), []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!d || typeof window === "undefined") return;

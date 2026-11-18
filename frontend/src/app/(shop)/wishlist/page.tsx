@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ProductGrid } from "@/components/product";
 import { ButtonLink, EmptyState, PageLoader } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { ProductCard } from "@/lib/types";
 import { useWishlist } from "@/lib/wishlist";
@@ -16,7 +16,7 @@ export default function WishlistPage() {
   const [items, setItems] = useState<ProductCard[] | null>(null);
   useEffect(() => {
     if (ready && !user) router.replace("/login?next=/wishlist");
-    if (user) api<{ items: ProductCard[] }>("/api/wishlist").then((r) => setItems(r.items));
+    if (user) api<{ items: ProductCard[] }>("/api/wishlist").then((r) => setItems(r.items)).catch(quietly);
   }, [ready, user, router]);
   if (!items) return <PageLoader />;
   const shown = items.filter((p) => ids.has(p.id));

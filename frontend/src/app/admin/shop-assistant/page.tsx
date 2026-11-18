@@ -7,7 +7,7 @@ import { Markdown } from "@/components/markdown";
 import { PageHeader, Stat, Table, Tabs } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, Field, Input, Modal, PageLoader, Pagination, Pill, Select, Textarea, useToast } from "@/components/ui";
 import { useCan } from "@/lib/admin";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 
 /* Admin → Shop assistant: the customer chat on the website. Separate from the staff AI assistant. */
 
@@ -326,7 +326,7 @@ function ChatsTab() {
         <>
           <Table head={["Chat", "Customer", "Messages", "Rating", "Request", "Last message"]}>
             {data.items.map((c) => (
-              <tr key={c.id} className="cursor-pointer hover:bg-mist/60" onClick={() => api<ChatDetail>(`/api/admin/shop-assistant/chats/${c.id}`).then(setOpen)}>
+              <tr key={c.id} className="cursor-pointer hover:bg-mist/60" onClick={() => api<ChatDetail>(`/api/admin/shop-assistant/chats/${c.id}`).then(setOpen).catch(quietly)}>
                 <td className="px-4 py-2"><p className="font-medium">{c.title}</p><p className="text-xs text-ink-faint">{c.page}{c.language && c.language !== "en" ? ` · ${c.language}` : ""}</p></td>
                 <td className="px-4 py-2 text-sm">{c.customer} <span className="text-ink-faint">{c.phone}</span></td>
                 <td className="px-4 py-2 text-sm">{c.messages}</td>

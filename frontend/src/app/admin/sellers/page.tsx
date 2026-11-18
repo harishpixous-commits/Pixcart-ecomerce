@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { PageHeader, Table, Tabs } from "@/components/portal-shell";
 import { EmptyState, Input, PageLoader, Pagination, StatusPill } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
 import type { Paged } from "@/lib/types";
 import { ExportButton } from "@/components/export-button";
@@ -20,7 +20,7 @@ function List() {
   const [page, setPage] = useState(1);
   const [d, setD] = useState<Paged<Row> | null>(null);
   useEffect(() => {
-    const t = setTimeout(() => api<Paged<Row>>("/api/admin/sellers", { query: { status: status || undefined, q, page } }).then(setD), q ? 250 : 0);
+    const t = setTimeout(() => api<Paged<Row>>("/api/admin/sellers", { query: { status: status || undefined, q, page } }).then(setD).catch(quietly), q ? 250 : 0);
     return () => clearTimeout(t);
   }, [status, q, page]);
   const c = d?.status_counts ?? {};

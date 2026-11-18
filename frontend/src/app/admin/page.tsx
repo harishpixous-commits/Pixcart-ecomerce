@@ -8,7 +8,7 @@ import { PageHeader, Stat } from "@/components/portal-shell";
 import { AiBadge, type AiRun } from "@/components/ai";
 import { Button, ErrorNote, PageLoader, Select } from "@/components/ui";
 import { useAdmin } from "@/lib/admin";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { hoursLabel, rupees } from "@/lib/format";
 
 type D = { sellers_pending_review: number; products_pending_review: number; orders_today: number; gmv_30d: number; orders_30d: number; commission_30d: number; refunds_needing_attention: number; active_sellers: number; customers: number; live_products: number };
@@ -92,7 +92,7 @@ export default function AdminHome() {
   }, []);
   useEffect(() => {
     setK(null);
-    api<K>("/api/admin/analytics", { query: { days } }).then(setK);
+    api<K>("/api/admin/analytics", { query: { days } }).then(setK).catch(quietly);
   }, [days]);
   return (
     <div className="flex flex-col gap-4">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, EmptyState, PageLoader } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -17,7 +17,7 @@ export default function NotificationsPage() {
   const [items, setItems] = useState<N[] | null>(null);
   useEffect(() => {
     if (ready && !user) router.replace("/login?next=/notifications");
-    if (user) api<{ items: N[] }>("/api/notifications").then((r) => setItems(r.items));
+    if (user) api<{ items: N[] }>("/api/notifications").then((r) => setItems(r.items)).catch(quietly);
   }, [ready, user, router]);
   if (!items) return <PageLoader />;
   return (
@@ -25,7 +25,7 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between px-1">
         <h1 className="text-2xl font-semibold">Notifications</h1>
         {items.some((n) => !n.read) && (
-          <Button variant="ghost" size="sm" onClick={() => api("/api/notifications/read-all", { method: "POST" }).then(() => setItems(items.map((n) => ({ ...n, read: true }))))}>Mark all as read</Button>
+          <Button variant="ghost" size="sm" onClick={() => api("/api/notifications/read-all", { method: "POST" }).then(() => setItems(items.map((n) => ({ ...n, read: true })))).catch(quietly)}>Mark all as read</Button>
         )}
       </div>
       {items.length === 0 ? (

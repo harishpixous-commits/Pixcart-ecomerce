@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, PageLoader, Pill, Select, Textarea, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { AiBadge, AiDraftButton, type AiRun } from "@/components/ai";
 
@@ -34,7 +34,7 @@ export default function TicketDetail() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiRun, setAiRun] = useState<AiRun | null>(null);
-  const load = useCallback(() => api<T>(`/api/admin/tickets/${id}`).then(setT), [id]);
+  const load = useCallback(() => api<T>(`/api/admin/tickets/${id}`).then(setT).catch(quietly), [id]);
   useEffect(() => { load(); }, [load]);
 
   async function send() {

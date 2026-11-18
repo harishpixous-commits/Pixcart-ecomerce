@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
 import { Button, PageLoader } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
 type Row = { action: string; entity_type: string; entity_id: string; detail: string; actor: string; at: string };
@@ -12,7 +12,7 @@ export default function AuditPage() {
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<Row[] | null>(null);
   useEffect(() => {
-    api<{ items: Row[] }>("/api/admin/audit", { query: { page } }).then((d) => setRows(d.items));
+    api<{ items: Row[] }>("/api/admin/audit", { query: { page } }).then((d) => setRows(d.items)).catch(quietly);
   }, [page]);
   if (!rows) return <PageLoader />;
   return (

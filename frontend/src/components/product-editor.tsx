@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Input, Modal, Select, StatusPill, Textarea, TextField, useToast } from "@/components/ui";
 import { useSite } from "@/lib/site";
 import { AiBadge } from "@/components/ai";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, paiseToInput, pct, rupees, toPaise } from "@/lib/format";
 import type { SellerCategory, SellerProduct } from "@/lib/types";
 
@@ -87,7 +87,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   }
 
   useEffect(() => {
-    api<SellerCategory[]>("/api/seller/categories").then(setCats);
+    api<SellerCategory[]>("/api/seller/categories").then(setCats).catch(quietly);
   }, []);
 
   const cat = useMemo(() => cats.find((c) => c.id === categoryId), [cats, categoryId]);

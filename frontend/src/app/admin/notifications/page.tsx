@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Stat } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, PageLoader, Pill, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 
 type T = { event: string; channel: "inapp" | "email" | "sms" | "whatsapp"; customised: boolean; subject: string; body: string; provider_template: string; is_active: boolean };
 type D = { items: T[]; delivery: Record<string, number>; channels: { email: boolean; sms: boolean; whatsapp: boolean } };
@@ -24,7 +24,7 @@ export default function NotificationTemplates() {
   const [f, setF] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = () => api<D>("/api/admin/notifications/templates").then((x) => { setD(x); return x; });
-  useEffect(() => { load().then((x) => { const t = x.items[0]; if (t) { setSel(t); setF(t); } }); }, []);
+  useEffect(() => { load().then((x) => { const t = x.items[0]; if (t) { setSel(t); setF(t); } }).catch(quietly); }, []);
   const events = useMemo(() => Array.from(new Set(d?.items.map((t) => t.event) ?? [])), [d]);
 
   async function save() {
@@ -33,7 +33,7 @@ export default function NotificationTemplates() {
     try {
       await api(`/api/admin/notifications/templates/${f.event}/${f.channel}`, { method: "PUT", body: { subject: f.subject, body: f.body, provider_template: f.provider_template, is_active: f.is_active } });
       toast("Template saved");
-      load();
+      load().catch(quietly);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save");
     }

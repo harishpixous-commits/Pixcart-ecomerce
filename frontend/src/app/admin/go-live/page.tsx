@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { PageLoader, Pill } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 
 type Item = { key: string; label: string; done: boolean; detail: string; href: string; who: "admin" | "terraform" | "lawyer" | "ca"; required: boolean };
 type D = { environment: string; done: number; total: number; ready: boolean; sections: { title: string; items: Item[] }[] };
@@ -13,7 +13,7 @@ const WHO: Record<Item["who"], string> = { admin: "You, in this panel", terrafor
 
 export default function GoLive() {
   const [d, setD] = useState<D | null>(null);
-  useEffect(() => { api<D>("/api/admin/go-live").then(setD); }, []);
+  useEffect(() => { api<D>("/api/admin/go-live").then(setD).catch(quietly); }, []);
   if (!d) return <PageLoader />;
   const pct = Math.round((d.done / Math.max(1, d.total)) * 100);
   return (

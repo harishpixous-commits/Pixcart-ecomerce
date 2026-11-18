@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { ImageField } from "@/components/media-picker";
 import { Button, ErrorNote, Field, Input, Modal, PageLoader, Pill, Select, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
 import type { CategoryNode, ProductCard } from "@/lib/types";
 
@@ -181,7 +181,7 @@ export function SectionsEditor() {
   const [edit, setEdit] = useState<Section | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(() => api<typeof data>("/api/admin/storefront/sections").then(setData), []);
+  const load = useCallback(() => api<typeof data>("/api/admin/storefront/sections").then(setData).catch(quietly), []);
   useEffect(() => {
     load();
     api<CategoryNode[]>("/api/catalog/categories").then((t) => setCats(flatten(t))).catch(() => {});

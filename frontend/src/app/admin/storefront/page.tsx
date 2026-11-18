@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { MediaGrid } from "@/components/media-picker";
 import { PageHeader, Tabs } from "@/components/portal-shell";
 import { Button, ErrorNote, PageLoader, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import type { Site } from "@/lib/types";
 import { BrandEditor, NavEditor } from "./brand";
 import { BusinessEditor } from "./business";
@@ -31,7 +31,7 @@ function Storefront() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    api<Site>("/api/admin/storefront/site").then((s) => { setSite(s); setSaved(JSON.stringify(s)); });
+    api<Site>("/api/admin/storefront/site").then((s) => { setSite(s); setSaved(JSON.stringify(s)); }).catch(quietly);
   }, []);
   const dirty = site !== null && JSON.stringify(site) !== saved;
 

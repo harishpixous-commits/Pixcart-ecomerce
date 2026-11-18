@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AiRun } from "@/components/ai";
 import { PageHeader, Stat, Table, Tabs } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, Field, Input, Modal, PageLoader, Pagination, Pill, Select, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError, downloadFile, latestOnly } from "@/lib/api";
+import { api, ApiError, downloadFile, latestOnly, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
 type Cfg = { enabled: boolean; model: string; monthly_token_budget: number; price_input_per_mtok: number; price_output_per_mtok: number; brand_voice: string; tasks: Record<string, { enabled: boolean; instructions: string }> };
@@ -41,7 +41,7 @@ function Runs({ tasks }: { tasks: TaskInfo[] }) {
         <>
           <Table head={["When", "Feature", "By", "Outcome", "Tokens in / out", "Time", "Cost"]}>
             {d.items.map((r) => (
-              <tr key={r.id} className="cursor-pointer hover:bg-mist/60" onClick={() => api<typeof detail>(`/api/admin/ai/runs/${r.id}`).then(setDetail)}>
+              <tr key={r.id} className="cursor-pointer hover:bg-mist/60" onClick={() => api<typeof detail>(`/api/admin/ai/runs/${r.id}`).then(setDetail).catch(quietly)}>
                 <td className="px-4 py-2 text-sm">{dateTime(r.created_at)}</td>
                 <td className="px-4 py-2">{r.task_label} {r.mode === "sandbox" && <Pill tone="blue">Sandbox</Pill>}</td>
                 <td className="px-4 py-2 text-sm">{r.by}</td>

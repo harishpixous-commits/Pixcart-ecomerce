@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { STATE_OPTIONS, STATES } from "@/lib/format";
 
 type W = { id: string; code: string; name: string; line1: string; line2: string; city: string; state_code: string; pincode: string; contact_name: string; contact_phone: string; gstin: string; is_default: boolean; is_active: boolean; units: number; skus: number };
@@ -16,7 +16,7 @@ export default function WarehousesPage() {
   const [f, setF] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
-  const load = useCallback(() => api<W[]>("/api/seller/warehouses").then(setItems), []);
+  const load = useCallback(() => api<W[]>("/api/seller/warehouses").then(setItems).catch(quietly), []);
   useEffect(() => { load(); }, [load]);
   const bind = (k: keyof typeof EMPTY) => ({ value: String(f[k]), onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value }) });
 

@@ -3,7 +3,7 @@
 import { Star, ThumbsUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button, ErrorNote, Modal, Select, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
@@ -79,7 +79,7 @@ export function ProductReviews({ slug }: { slug: string }) {
   const [sort, setSort] = useState("recent");
   const [page, setPage] = useState(1);
   const [writing, setWriting] = useState(false);
-  const load = useCallback(() => api<R>(`/api/catalog/products/${slug}/reviews`, { query: { sort, page } }).then((d) => setData((prev) => (page > 1 && prev ? { ...d, items: [...prev.items, ...d.items] } : d))), [slug, sort, page]);
+  const load = useCallback(() => api<R>(`/api/catalog/products/${slug}/reviews`, { query: { sort, page } }).then((d) => setData((prev) => (page > 1 && prev ? { ...d, items: [...prev.items, ...d.items] } : d))).catch(quietly), [slug, sort, page]);
   useEffect(() => {
     load().catch(() => {});
   }, [load, user]);
@@ -134,7 +134,7 @@ export function ProductReviews({ slug }: { slug: string }) {
                 <p className="mt-1 text-xs text-ink-faint">{r.author}, verified buyer, {date(r.created_at)}</p>
                 {r.seller_reply && <p className="mt-2 rounded-lg bg-mist p-2 text-sm"><span className="font-semibold">Seller replied:</span> {r.seller_reply}</p>}
                 {user && (
-                  <button className="mt-1 inline-flex items-center gap-1 text-xs text-ink-faint hover:text-peacock" onClick={() => api(`/api/reviews/${r.id}/helpful`, { method: "POST" }).then(() => setData((d) => d && { ...d, items: d.items.map((x) => (x.id === r.id ? { ...x, helpful_count: x.helpful_count + 1 } : x)) }))}>
+                  <button className="mt-1 inline-flex items-center gap-1 text-xs text-ink-faint hover:text-peacock" onClick={() => api(`/api/reviews/${r.id}/helpful`, { method: "POST" }).then(() => setData((d) => d && { ...d, items: d.items.map((x) => (x.id === r.id ? { ...x, helpful_count: x.helpful_count + 1 } : x)) })).catch(quietly)}>
                     <ThumbsUp className="h-3.5 w-3.5" /> Helpful ({r.helpful_count})
                   </button>
                 )}

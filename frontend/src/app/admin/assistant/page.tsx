@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Input, PageLoader, Select, TextField, Textarea, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { openAssistant } from "@/lib/assistant-bus";
 
 type Settings = {
@@ -27,7 +27,7 @@ export default function AssistantSettings() {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    api<D>("/api/admin/assistant/settings").then((x) => { setD(x); setS(x.settings); });
+    api<D>("/api/admin/assistant/settings").then((x) => { setD(x); setS(x.settings); }).catch(quietly);
     api<{ notes: string[] }>("/api/admin/assistant/memory").then((m) => setNotes(m.notes.join("\n"))).catch(() => {});
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       const load = () => setVoices(window.speechSynthesis.getVoices());

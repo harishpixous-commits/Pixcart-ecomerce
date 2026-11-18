@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { PageHeader, Table, Tabs } from "@/components/portal-shell";
 import { EmptyState, PageLoader, Pill } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { ExportButton } from "@/components/export-button";
 
@@ -22,7 +22,7 @@ function Desk() {
   const [d, setD] = useState<{ items: T[]; status_counts: Record<string, number> } | null>(null);
   useEffect(() => {
     setD(null);
-    api<typeof d>("/api/admin/tickets", { query: { status: status === "all" ? "" : status, overdue: overdue || undefined, grievance: grievance || undefined } }).then(setD);
+    api<typeof d>("/api/admin/tickets", { query: { status: status === "all" ? "" : status, overdue: overdue || undefined, grievance: grievance || undefined } }).then(setD).catch(quietly);
   }, [status, overdue, grievance]);
   const go = (q: Record<string, string>) => router.replace(`/admin/support?${new URLSearchParams({ status, ...(overdue ? { overdue: "1" } : {}), ...(grievance ? { grievance: "1" } : {}), ...q })}`);
   const c = d?.status_counts ?? {};

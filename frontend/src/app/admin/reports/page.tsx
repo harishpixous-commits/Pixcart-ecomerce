@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
 import { Button, ErrorNote, Input, PageLoader } from "@/components/ui";
 import Link from "next/link";
-import { api, downloadFile } from "@/lib/api";
+import { api, downloadFile, quietly } from "@/lib/api";
 import { pct, rupeesExact } from "@/lib/format";
 
 type Row = { seller_id: string; legal_name: string; gstin: string; net_taxable_value: number; igst_tcs: number; cgst_tcs: number; sgst_tcs: number; sub_orders: number; returned_value?: number };
@@ -19,7 +19,7 @@ export default function TcsReport() {
   const [dlError, setDlError] = useState<string | null>(null);
   useEffect(() => {
     setR(null);
-    api<R>("/api/admin/reports/tcs", { query: { month } }).then(setR);
+    api<R>("/api/admin/reports/tcs", { query: { month } }).then(setR).catch(quietly);
   }, [month]);
   return (
     <div className="flex flex-col gap-4">

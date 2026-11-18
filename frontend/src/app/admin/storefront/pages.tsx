@@ -4,7 +4,7 @@ import { ExternalLink, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { Button, ErrorNote, Field, PageLoader, Pill, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
 
 type P = { slug: string; title: string; body: string; meta_description: string; is_published: boolean; saved: boolean; updated_at: string | null };
@@ -17,7 +17,7 @@ export function PagesEditor() {
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => api<P[]>("/api/admin/storefront/pages").then((p) => { setPages(p); return p; }), []);
   useEffect(() => {
-    load().then((p) => p[0] && setCur({ ...p[0], original: p[0].slug }));
+    load().then((p) => p[0] && setCur({ ...p[0], original: p[0].slug })).catch(quietly);
   }, [load]);
 
   async function save() {

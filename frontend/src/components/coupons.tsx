@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, Field, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { date, paiseToInput, rupees, toPaise } from "@/lib/format";
 
 export type CouponRow = {
@@ -30,7 +30,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   const [cats, setCats] = useState<{ id: string; path?: string; name?: string }[]>([]);
   const [f, setF] = useState({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_active: true });
   const [error, setError] = useState<string | null>(null);
-  const load = () => api<CouponRow[]>(base).then(setRows);
+  const load = () => api<CouponRow[]>(base).then(setRows).catch(quietly);
   useEffect(() => {
     load();
     if (admin) api<{ id: string; path?: string; name?: string }[]>("/api/admin/categories").then(setCats).catch(() => {});

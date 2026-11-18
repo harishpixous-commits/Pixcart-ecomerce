@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Cpu, KeyRound, PlugZap, Plus, Trash2 } from "lucide
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Input, Modal, PageLoader, Pill, Select, TextField, Textarea, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
 type Conn = { id: string; name: string; type: string; base_url: string; models: string[]; enabled: boolean; timeout_s: number; builtin: boolean;
@@ -23,7 +23,7 @@ export default function AiProviders() {
   const [tests, setTests] = useState<Record<string, { busy: boolean; ok?: boolean; message?: string }>>({});
 
   const apply = useCallback((x: D) => { setD(x); setRoutes(x.routes); }, []);
-  useEffect(() => { api<D>("/api/admin/ai-providers").then(apply); }, [apply]);
+  useEffect(() => { api<D>("/api/admin/ai-providers").then(apply).catch(quietly); }, [apply]);
 
   async function run(fn: () => Promise<D>, msg: string) {
     setError(null);

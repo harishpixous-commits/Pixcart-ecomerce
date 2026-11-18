@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ButtonLink, EmptyState, PageLoader, StatusPill } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -17,7 +17,7 @@ export default function SupportPage() {
   const [items, setItems] = useState<T[] | null>(null);
   useEffect(() => {
     if (ready && !user) router.replace("/login?next=/support");
-    if (user) api<{ items: T[] }>("/api/support/tickets").then((r) => setItems(r.items));
+    if (user) api<{ items: T[] }>("/api/support/tickets").then((r) => setItems(r.items)).catch(quietly);
   }, [ready, user, router]);
   if (!items) return <PageLoader />;
   return (

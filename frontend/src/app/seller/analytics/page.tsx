@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { DailyBars, Delta } from "@/components/charts";
 import { PageHeader, Stat, Table } from "@/components/portal-shell";
 import { PageLoader, Select } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, quietly } from "@/lib/api";
 import { hoursLabel, rupees } from "@/lib/format";
 
 type K = {
@@ -19,7 +19,7 @@ export default function SellerAnalytics() {
   const [k, setK] = useState<K | null>(null);
   useEffect(() => {
     setK(null);
-    api<K>("/api/seller/analytics", { query: { days } }).then(setK);
+    api<K>("/api/seller/analytics", { query: { days } }).then(setK).catch(quietly);
   }, [days]);
   return (
     <div className="flex flex-col gap-4">

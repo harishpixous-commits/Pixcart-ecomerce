@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader, Stat, Table, Tabs } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, PageLoader, Pill, StatusPill } from "@/components/ui";
-import { api, ApiError, downloadFile } from "@/lib/api";
+import { api, ApiError, downloadFile, quietly } from "@/lib/api";
 import { date, rupeesExact } from "@/lib/format";
 
 type P = { id: string; number: string; amount: number; status: string; mode: string; utr: string; failure_reason: string; bank: { holder?: string; account_last4?: string; ifsc?: string }; created_at: string; paid_at: string | null };
@@ -21,10 +21,10 @@ export default function PayoutsPage() {
   const [d, setD] = useState<{ balances: { available: number; upcoming: number; paid_out: number }; payouts: P[] } | null>(null);
   const [ledger, setLedger] = useState<L[] | null>(null);
   useEffect(() => {
-    api<typeof d>("/api/seller/payouts").then(setD);
+    api<typeof d>("/api/seller/payouts").then(setD).catch(quietly);
   }, []);
   useEffect(() => {
-    if (tab === "statement" && !ledger) api<{ items: L[] }>("/api/seller/ledger").then((r) => setLedger(r.items));
+    if (tab === "statement" && !ledger) api<{ items: L[] }>("/api/seller/ledger").then((r) => setLedger(r.items)).catch(quietly);
   }, [tab, ledger]);
   const [exportError, setExportError] = useState<string | null>(null);
   async function exportCsv() {

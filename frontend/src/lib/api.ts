@@ -33,7 +33,19 @@ export function hasToken() {
 
 export function onTokenChange(fn: (token: string | null) => void) {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/**
+ * Catch handler for background loads (page data, lists). A lost session (401 after a failed refresh) is
+ * handled by SessionProvider, which signs the person out and the layout sends them to sign in, so it is
+ * ignored here; anything else is logged instead of crashing the page.
+ */
+export function quietly(e: unknown): void {
+  if (e instanceof ApiError && e.status === 401) return;
+  console.error(e);
 }
 
 export async function refreshSession(): Promise<boolean> {

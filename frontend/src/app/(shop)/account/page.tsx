@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddressForm } from "@/components/address-form";
 import { Button, ErrorNote, Modal, PageLoader, Pill, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Address } from "@/lib/types";
 
@@ -62,7 +62,7 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(() => api<Address[]>("/api/addresses").then(setAddresses), []);
+  const load = useCallback(() => api<Address[]>("/api/addresses").then(setAddresses).catch(quietly), []);
   useEffect(() => {
     if (ready && !user) router.replace("/login?next=/account");
     if (user) {

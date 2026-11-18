@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, PageLoader, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { SellerProfile } from "@/lib/types";
 
@@ -22,8 +22,8 @@ export default function SellerSettings() {
       setP(s);
       setStore({ display_name: s.display_name, description: s.description, contact_email: s.contact_email, contact_phone: s.contact_phone });
       setG(s.grievance);
-    });
-    api<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string }>("/api/seller/preferences").then(setPrefs);
+    }).catch(quietly);
+    api<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string }>("/api/seller/preferences").then(setPrefs).catch(quietly);
   }, []);
 
   async function save(key: string, path: string, body: object) {
