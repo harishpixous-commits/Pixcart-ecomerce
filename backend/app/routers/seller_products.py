@@ -245,6 +245,9 @@ async def _sku_conflict(session, seller_id: uuid.UUID, sku: str, exclude_variant
 async def _apply_variants(session, seller: Seller, product: Product, items: list[VariantIn], actor_id=None) -> None:
     seller_id = seller.id
     existing = {v.id: v for v in (await session.execute(select(Variant).where(Variant.product_id == product.id))).scalars()}
+    from app.services.deals import active_variant_ids
+
+    in_deal = await active_variant_ids(session, list(existing))
     seen: set[uuid.UUID] = set()
     for item in items:
         if await _sku_conflict(session, seller_id, item.sku, item.id):
@@ -254,6 +257,8 @@ async def _apply_variants(session, seller: Seller, product: Product, items: list
             if v is None:
                 raise ApiError("A variant in this request does not belong to this product", "variant_mismatch")
             seen.add(v.id)
+            if v.id in in_deal and item.price_paise != v.price_paise:
+                raise Conflict(f"'{item.sku}' is in a running deal; change its price after the deal ends (or cancel the deal)", "deal_running")
         else:
             v = Variant(product_id=product.id, seller_id=seller_id)
             session.add(v)
@@ -469,6 +474,10 @@ async def patch_variant(variant_id: uuid.UUID, body: VariantPatch, seller: Selle
         raise NotFound("Variant")
     price = body.price_paise if body.price_paise is not None else v.price_paise
     mrp = body.mrp_paise if body.mrp_paise is not None else v.mrp_paise
+    from app.services.deals import active_variant_ids
+
+    if price != v.price_paise and v.id in await active_variant_ids(session, [v.id]):
+        raise Conflict("This version is in a running deal; change its price after the deal ends (or cancel the deal)", "deal_running")
     if price > mrp:
         raise ApiError("Selling price cannot be more than MRP", "price_above_mrp")
     v.price_paise, v.mrp_paise = price, mrp

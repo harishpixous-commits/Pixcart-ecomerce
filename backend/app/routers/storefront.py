@@ -48,6 +48,14 @@ async def _products_for(session, cfg: dict) -> list[dict]:
     source, limit = cfg.get("source", "deals"), int(cfg.get("limit", 12))
     if source == "deals":
         stmt = base.where(Product.mrp_from > Product.price_from).order_by(desc((Product.mrp_from - Product.price_from) * 100 / func.nullif(Product.mrp_from, 0)), Product.id)
+    elif source == "deals_live":
+        from app.models import Deal
+
+        live = select(Deal.product_id, func.min(Deal.ends_at).label("ends_at")).where(Deal.status == "active")
+        if cfg.get("kind"):
+            live = live.where(Deal.kind == cfg["kind"])
+        live = live.group_by(Deal.product_id).subquery()
+        stmt = base.join(live, live.c.product_id == Product.id).order_by(live.c.ends_at, Product.id)
     elif source == "bestsellers":
         stmt = base.order_by(Product.sold_count.desc(), Product.id)
     elif source == "top_rated":
@@ -92,12 +100,38 @@ async def home(session: SessionDep) -> dict:
         ).scalars()
     )
     tree = await _category_tree(session)
+    from app.services import deals as deals_svc
+
+    if await deals_svc.sync(session):
+        await session.commit()
     out = []
     for s in sections:
         data: dict = {"id": str(s.id), "kind": s.kind, "title": s.title, "device": s.device, "config": s.config}
         if s.kind == "products":
             data["products"] = await _products_for(session, s.config)
             if not data["products"]:
+                continue
+        elif s.kind == "deals":
+            data["products"] = await _products_for(session, {"source": "deals_live", "limit": s.config.get("limit", 12), "kind": s.config.get("kind")})
+            if not data["products"]:
+                continue
+        elif s.kind == "cards":
+            cards = []
+            for card in s.config.get("cards", []):
+                card = dict(card)
+                if card.get("mode") == "products":
+                    card["products"] = await _products_for(session, {"source": card.get("source", "deals"), "limit": 4,
+                                                                     "category_slug": card.get("category_slug")})
+                    if not card["products"]:
+                        continue
+                cards.append(card)
+            if not cards:
+                continue
+            data["config"] = {**s.config, "cards": cards}
+        elif s.kind == "countdown":
+            from datetime import datetime as _dt
+
+            if _dt.fromisoformat(s.config.get("ends_at")) <= now:
                 continue
         elif s.kind == "categories":
             slugs = s.config.get("slugs") or []

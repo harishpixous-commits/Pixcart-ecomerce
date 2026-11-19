@@ -142,14 +142,80 @@ function LinksEditor({ links, onChange, max }: { links: LinkItem[]; onChange: (l
   );
 }
 
+function Check({ checked, onChange, label, hint, testid }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint: string; testid?: string }) {
+  return (
+    <label className="flex items-start gap-3 rounded-lg border border-line p-3">
+      <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={checked} onChange={(e) => onChange(e.target.checked)} data-testid={testid} />
+      <span><span className="font-semibold">{label}</span><br /><span className="text-sm text-ink-soft">{hint}</span></span>
+    </label>
+  );
+}
+
+function WordsEditor({ words, onChange, max }: { words: string[]; onChange: (w: string[]) => void; max: number }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <ul className="flex flex-wrap gap-2">
+        {words.map((w, i) => (
+          <li key={`${w}-${i}`} className="flex items-center gap-1 rounded-full bg-peacock-light py-1 pl-3 pr-1 text-sm">
+            <Input value={w} maxLength={40} onChange={(e) => onChange(words.map((x, j) => (j === i ? e.target.value : x)))} aria-label="Search words"
+              className="h-7 w-36 border-0 bg-transparent px-0 focus:ring-0" />
+            <button type="button" aria-label={`Remove ${w}`} className="rounded-full p-0.5 hover:bg-white" onClick={() => onChange(words.filter((_, j) => j !== i))}><Trash2 className="h-3.5 w-3.5" /></button>
+          </li>
+        ))}
+      </ul>
+      {words.length < max && <Button type="button" size="sm" variant="ghost" className="self-start" onClick={() => onChange([...words, ""])}><Plus className="h-4 w-4" /> Add search</Button>}
+    </div>
+  );
+}
+
 export function NavEditor({ site, set }: { site: Site; set: (s: Site) => void }) {
   const cols = site.footer_columns;
+  const nav = site.nav;
+  const setNav = (n: Partial<Site["nav"]>) => set({ ...site, nav: { ...nav, ...n } });
+  const extras = site.home_extras ?? { back_to_top: true, signin_prompt: true };
   return (
     <div className="flex max-w-4xl flex-col gap-4">
+      <section className="rounded-xl bg-white p-5" data-testid="nav-editor">
+        <h2 className="mb-1 text-lg font-semibold">Navigation bar</h2>
+        <p className="mb-3 text-sm text-ink-soft">The bar under the search box: the All menu, the delivery PIN, your links and the main categories. On phones it scrolls sideways.</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Check checked={nav.all_menu} onChange={(v) => setNav({ all_menu: v })} label="All menu" hint="A side menu with every category, the deal and bestseller lists, and help." testid="nav-all-menu" />
+          <Check checked={nav.search_categories} onChange={(v) => setNav({ search_categories: v })} label="Category in search" hint="A department picker in front of the search box (large screens)." />
+          <Check checked={nav.show_categories} onChange={(v) => setNav({ show_categories: v })} label="Categories in the bar" hint="Main categories after your links." />
+        </div>
+        <h3 className="mb-2 mt-4 font-semibold">Links in the bar (up to 12)</h3>
+        <LinksEditor links={nav.links} max={12} onChange={(l) => setNav({ links: l })} />
+        <h3 className="mb-2 mt-4 font-semibold">Promotion at the end of the bar</h3>
+        <div className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end">
+          <label className="flex items-center gap-2 sm:pb-2.5"><input type="checkbox" className="h-4 w-4 accent-peacock" checked={nav.promo.enabled} onChange={(e) => setNav({ promo: { ...nav.promo, enabled: e.target.checked } })} /> Show</label>
+          <TextField label="Text" value={nav.promo.text} maxLength={60} placeholder="Diwali sale is live" onChange={(e) => setNav({ promo: { ...nav.promo, text: e.target.value } })} />
+          <TextField label="Link (optional)" value={nav.promo.link} placeholder="/deals" onChange={(e) => setNav({ promo: { ...nav.promo, link: e.target.value } })} />
+          <Field label="Colour">
+            <Select value={nav.promo.tone} onChange={(e) => setNav({ promo: { ...nav.promo, tone: e.target.value as Site["nav"]["promo"]["tone"] } })}>
+              <option value="accent">Highlight</option><option value="buy">Buy button</option><option value="primary">Main colour</option><option value="dark">Dark</option>
+            </Select>
+          </Field>
+        </div>
+      </section>
+      <section className="rounded-xl bg-white p-5">
+        <h2 className="mb-1 text-lg font-semibold">All menu: extra links</h2>
+        <p className="mb-3 text-sm text-ink-soft">Shown at the end of the All menu, after the categories. {"{brand}"} becomes your store name. Up to 10.</p>
+        <LinksEditor links={nav.drawer_links} max={10} onChange={(l) => setNav({ drawer_links: l })} />
+      </section>
+      <section className="rounded-xl bg-white p-5">
+        <h2 className="mb-1 text-lg font-semibold">Trending searches</h2>
+        <p className="mb-3 text-sm text-ink-soft">Suggested when a shopper taps the empty search box, after their own recent searches. Up to 10.</p>
+        <WordsEditor words={nav.trending} max={10} onChange={(w) => setNav({ trending: w })} />
+      </section>
       <section className="rounded-xl bg-white p-5">
         <h2 className="mb-1 text-lg font-semibold">Header links</h2>
-        <p className="mb-3 text-sm text-ink-soft">Shown next to the search box on large screens and in the menu on phones. Up to 6.</p>
+        <p className="mb-3 text-sm text-ink-soft">Shown next to the account menu on large screens and in the menu on phones, e.g. Become a seller. Up to 6.</p>
         <LinksEditor links={site.header_links} max={6} onChange={(l) => set({ ...site, header_links: l })} />
+      </section>
+      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
+        <h2 className="text-lg font-semibold sm:col-span-2">On every page</h2>
+        <Check checked={extras.back_to_top} onChange={(v) => set({ ...site, home_extras: { ...extras, back_to_top: v } })} label="Back to top" hint="A button that appears after scrolling down a long page." />
+        <Check checked={extras.signin_prompt} onChange={(v) => set({ ...site, home_extras: { ...extras, signin_prompt: v } })} label="Sign-in prompt" hint="Shows the home page's Sign-in prompt section to visitors who are not signed in. Off hides it everywhere." />
       </section>
       <section className="rounded-xl bg-white p-5">
         <h2 className="mb-1 text-lg font-semibold">Footer</h2>

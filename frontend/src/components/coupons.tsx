@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, Field, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
-import { date, paiseToInput, rupees, toPaise } from "@/lib/format";
+import { date, paiseToInput, rupees, toLocalInput, toPaise } from "@/lib/format";
 
 export type CouponRow = {
   id: string; code: string; description: string; kind: "percent" | "flat"; value: number; max_discount_paise: number | null; min_order_paise: number;
@@ -19,7 +19,8 @@ export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discoun
   return off + cap + min;
 }
 
-const toLocal = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : "");
+// The form shows the browser's local time; toISOString() would show UTC and shift the time on every save.
+const toLocal = (iso: string | null) => toLocalInput(iso);
 
 /** Coupon list and editor shared by the seller hub (seller-funded) and the admin (platform-funded). */
 export function CouponManager({ base, admin }: { base: string; admin?: boolean }) {

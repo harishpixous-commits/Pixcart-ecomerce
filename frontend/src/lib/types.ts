@@ -42,6 +42,35 @@ export interface ProductCard {
   rating_count: number;
   in_stock: boolean;
   seller_name: string;
+  deal?: DealInfo | null;
+  unit_price?: { paise: Paise; per: string } | null;
+  bought?: string | null;
+  variant_count?: number;
+  variant_id?: string | null;
+  sponsored?: boolean;
+  href?: string;
+  delivery_by?: string | null;
+  starts_at?: string;
+}
+
+export interface DealInfo {
+  kind: "lightning" | "deal_of_day" | "limited";
+  label: string;
+  ends_at: string;
+  deal_price: Paise;
+  regular_price: Paise | null;
+  claimed_pct: number | null;
+  variant_id: string;
+}
+
+export interface NavSettings {
+  all_menu: boolean;
+  search_categories: boolean;
+  show_categories: boolean;
+  links: LinkItem[];
+  promo: { enabled: boolean; text: string; link: string; tone: "accent" | "buy" | "primary" | "dark" };
+  drawer_links: LinkItem[];
+  trending: string[];
 }
 
 export interface HomeData {
@@ -181,6 +210,7 @@ export interface ProductPage {
     dispatch_days?: number;
   };
   similar: ProductCard[];
+  deal?: DealInfo | null;
   key_specs?: { label: string; value: string }[];
   info?: { label: string; value: string }[];
   important?: { title: string; text: string }[];
@@ -514,7 +544,8 @@ export interface Site {
   footer: { show_business: boolean; show_contact: boolean; show_social: boolean; show_grievance: boolean; show_gstin: boolean; copyright: string };
   seo: { title: string; description: string };
   analytics: { google_analytics_id: string; meta_pixel_id: string };
-  features: { wishlist: boolean; reviews: boolean; returns: boolean; coupons: boolean; support: boolean; ai: boolean; product_videos?: boolean };
+  features: { wishlist: boolean; reviews: boolean; returns: boolean; coupons: boolean; support: boolean; ai: boolean; product_videos?: boolean;
+    deals?: boolean; ads?: boolean; qa?: boolean; stock_alerts?: boolean; price_alerts?: boolean; compare?: boolean; bought_together?: boolean };
   cod_enabled: boolean;
   online_payments?: boolean;
   free_shipping_threshold_paise: number;
@@ -522,6 +553,8 @@ export interface Site {
   shipping_fee_paise?: number;
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
+  nav: NavSettings;
+  home_extras: { back_to_top: boolean; signin_prompt: boolean };
 }
 
 export interface PdpSettings {
@@ -558,7 +591,7 @@ export interface ReviewSettingsPublic {
 
 export interface HomeSectionData {
   id: string;
-  kind: "hero" | "categories" | "products" | "banner" | "banner_grid" | "text" | "usp" | "recent";
+  kind: "hero" | "categories" | "products" | "banner" | "banner_grid" | "text" | "usp" | "recent" | "cards" | "deals" | "sponsored" | "countdown" | "signin" | "inspired" | "buy_again";
   title: string;
   device: "all" | "mobile" | "desktop";
   config: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any

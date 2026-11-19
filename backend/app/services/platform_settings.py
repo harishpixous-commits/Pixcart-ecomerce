@@ -69,6 +69,34 @@ DEFAULTS: dict[str, Any] = {
     "pdp_recently_viewed": True,
     "header_pincode": True,           # "Deliver to <PIN>" in the site header
     "page_loading_bar": True,         # thin progress bar while a page loads
+    # deals (Admin -> Deals)
+    "feature_deals": True,
+    "deals_need_approval": True,      # sellers' deals wait for staff before they run
+    "deal_min_discount_pct": 10,      # a deal must be at least this much below the current selling price
+    "deal_max_hours_lightning": 12,
+    "deal_max_hours_day": 24,
+    "deal_max_days_limited": 14,
+    # sponsored products (Admin -> Advertising)
+    "feature_ads": True,
+    "ads_need_approval": True,
+    "ads_min_bid_paise": 300,          # lowest cost per click a seller can bid
+    "ads_min_daily_budget_paise": 10000,
+    "ads_search": True,                # placements
+    "ads_product": True,
+    "ads_home": True,
+    "ads_per_search": 2,               # sponsored results at the top of search results (0 = only the rail below)
+    "ads_per_rail": 8,                 # products in a "Sponsored" rail
+    # discovery pages
+    "new_release_days": 45,            # "Hot new releases" = approved within this many days
+    # questions and answers, alerts, compare, bought together (Admin -> Product page)
+    "feature_qa": True,                # shoppers ask questions on product pages
+    "qa_need_approval": False,         # questions and answers wait for staff before they appear
+    "qa_buyers_answer_only": False,    # only the seller and verified buyers may answer
+    "feature_stock_alerts": True,      # "Notify me when it is back"
+    "feature_price_alerts": True,      # wishlist price-drop alerts
+    "price_alert_min_drop_pct": 10,
+    "feature_compare": True,           # compare up to 4 products side by side
+    "feature_bought_together": True,   # "Frequently bought together" from real orders
 }
 
 # key -> (type, min, max)
@@ -121,6 +149,30 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "pdp_recently_viewed": (bool, 0, 1),
     "header_pincode": (bool, 0, 1),
     "page_loading_bar": (bool, 0, 1),
+    "feature_deals": (bool, 0, 1),
+    "deals_need_approval": (bool, 0, 1),
+    "deal_min_discount_pct": (int, 1, 90),
+    "deal_max_hours_lightning": (int, 1, 24),
+    "deal_max_hours_day": (int, 1, 48),
+    "deal_max_days_limited": (int, 1, 60),
+    "feature_ads": (bool, 0, 1),
+    "ads_need_approval": (bool, 0, 1),
+    "ads_min_bid_paise": (int, 100, 100_000),
+    "ads_min_daily_budget_paise": (int, 1000, 10_000_000),
+    "ads_search": (bool, 0, 1),
+    "ads_product": (bool, 0, 1),
+    "ads_home": (bool, 0, 1),
+    "ads_per_search": (int, 0, 6),
+    "ads_per_rail": (int, 4, 20),
+    "new_release_days": (int, 7, 180),
+    "feature_qa": (bool, 0, 1),
+    "qa_need_approval": (bool, 0, 1),
+    "qa_buyers_answer_only": (bool, 0, 1),
+    "feature_stock_alerts": (bool, 0, 1),
+    "feature_price_alerts": (bool, 0, 1),
+    "price_alert_min_drop_pct": (int, 1, 90),
+    "feature_compare": (bool, 0, 1),
+    "feature_bought_together": (bool, 0, 1),
 }
 
 PRODUCT_REPORT_REASONS = {

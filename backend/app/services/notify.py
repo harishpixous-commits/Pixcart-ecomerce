@@ -90,6 +90,22 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "low_stock": {
         "inapp": ("Low stock", "{{count}} of your product options have 5 or fewer units left."),
     },
+    "back_in_stock": {
+        "inapp": ("Back in stock", "{{item}} is available again. Order before it sells out."),
+        "email": ("Back in stock: {{item}}", "Hi {{name}},\n\n{{item}} is back in stock at {{price}}. Stocks can run out again, so order soon.\n\n{{link}}"),
+    },
+    "price_drop": {
+        "inapp": ("Price dropped", "{{item}} in your wishlist is now {{price}} (was {{old_price}})."),
+        "email": ("Price drop: {{item}} is now {{price}}", "Hi {{name}},\n\n{{item}}, which you saved, is now {{price}} (it was {{old_price}} when you saved it).\n\n{{link}}"),
+    },
+    "question_answered": {
+        "inapp": ("Your question was answered", "{{answerer}} answered your question about {{item}}."),
+        "email": ("Answer to your question about {{item}}", "Hi {{name}},\n\nYou asked: {{question}}\n\n{{answerer}} answered: {{answer}}\n\n{{link}}"),
+    },
+    "seller_new_question": {
+        "inapp": ("New customer question", "A shopper asked about {{item}}: {{question}}"),
+        "email": ("A shopper asked about {{item}}", "A shopper asked: {{question}}\n\nAnswer it from your seller hub so others see it too.\n\n{{link}}"),
+    },
 }
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")

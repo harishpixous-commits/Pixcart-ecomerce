@@ -224,6 +224,9 @@ async def place_order(
     if address is None or address.user_id != user.id or address.is_deleted:
         raise ApiError("Choose a delivery address", "invalid_address")
 
+    from app.services import deals as deals_svc
+
+    await deals_svc.sync(session, force=True)  # a deal that just started or ended changes the price paid
     lines = await load_cart(session, user.id, lock=True)
     if not lines:
         raise ApiError("Your cart is empty", "cart_empty")
@@ -355,6 +358,8 @@ async def place_order(
                 )
             )
             await bump(session, p.id, orders=1, units=ln.qty, revenue=value)
+            # after the item is recorded at the deal price: may end a lightning deal whose units are now gone
+            await deals_svc.record_sale(session, v.id, ln.qty)
         extra = sub.shipping_fee + sub.cod_fee
         taxable += split_inclusive_gst(extra, max_rate, interstate=interstate).taxable if extra else 0
         sub.shipping_gst_bps = max_rate

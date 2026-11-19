@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -57,6 +58,21 @@ def default_site() -> dict[str, Any]:
             "show_business": True, "show_contact": True, "show_social": True, "show_grievance": True, "show_gstin": True,
             "copyright": "© {year} {legal_name}. Products are sold by independent sellers; seller details are shown on every product page.",
         },
+        # Header navigation (Admin → Storefront → Navigation)
+        "nav": {
+            "all_menu": True,            # "All" side menu with categories, lists and help
+            "search_categories": True,   # category picker in front of the search box
+            "show_categories": True,     # top-level categories after the links in the second bar
+            "links": [
+                {"label": "Today's Deals", "href": "/deals"}, {"label": "Bestsellers", "href": "/bestsellers"},
+                {"label": "New Releases", "href": "/new-releases"}, {"label": "Coupons", "href": "/coupons"},
+                {"label": "Customer Service", "href": "/help"},
+            ],
+            "promo": {"enabled": False, "text": "", "link": "", "tone": "accent"},
+            "drawer_links": [{"label": "Sell on {brand}", "href": "/sell"}, {"label": "Help and support", "href": "/help"}],
+            "trending": ["sarees", "earbuds", "filter coffee", "pressure cooker", "smart watch"],
+        },
+        "home_extras": {"back_to_top": True, "signin_prompt": True},
         "seo": {"title": f"{brand} — Shop from trusted Indian sellers", "description": "Electronics, fashion, home and everyday essentials from verified sellers across India. Cash on delivery and easy returns."},
         "analytics": {"google_analytics_id": "", "meta_pixel_id": ""},
     }
@@ -230,6 +246,20 @@ def validate_site(data: dict) -> dict:
     if px and not re.match(r"^\d{6,20}$", px):
         raise ValueError("Meta Pixel ID is a number")
     site["seo"] = {"title": _text(site["seo"]["title"], 70), "description": _text(site["seo"]["description"], 170)}
+    n = site["nav"]
+    promo = n.get("promo") or {}
+    if promo.get("link") and not SAFE_HREF.match(str(promo["link"])):
+        raise ValueError("The promotion link must start with / or https://")
+    site["nav"] = {
+        "all_menu": bool(n.get("all_menu", True)), "search_categories": bool(n.get("search_categories", True)),
+        "show_categories": bool(n.get("show_categories", True)), "links": _links(n.get("links"), 12),
+        "promo": {"enabled": bool(promo.get("enabled")), "text": _text(promo.get("text"), 60), "link": str(promo.get("link") or "")[:300],
+                  "tone": promo.get("tone") if promo.get("tone") in ("accent", "buy", "primary", "dark") else "accent"},
+        "drawer_links": _links(n.get("drawer_links"), 10),
+        "trending": [t for t in (_text(x, 40) for x in (n.get("trending") or [])[:10]) if t],
+    }
+    h = site["home_extras"]
+    site["home_extras"] = {"back_to_top": bool(h.get("back_to_top", True)), "signin_prompt": bool(h.get("signin_prompt", True))}
     return site
 
 
@@ -263,8 +293,17 @@ SECTION_KINDS = {
     "text": "Text block",
     "usp": "Promise strip",
     "recent": "Recently viewed",
+    "cards": "Card row (up to 4 cards)",
+    "deals": "Today's deals with timers",
+    "sponsored": "Sponsored products",
+    "countdown": "Countdown banner",
+    "signin": "Sign-in prompt (visitors only)",
+    "inspired": "Inspired by your browsing history",
+    "buy_again": "Buy it again (signed-in shoppers)",
 }
-PRODUCT_SOURCES = ("deals", "bestsellers", "new", "top_rated", "category", "manual")
+PRODUCT_SOURCES = ("deals", "deals_live", "bestsellers", "new", "top_rated", "category", "manual")
+CARD_MODES = ("tiles", "products", "recent", "buy_again")
+TONES = ("accent", "primary", "dark", "buy")
 
 
 def validate_section(kind: str, config: dict) -> dict:
@@ -280,11 +319,72 @@ def validate_section(kind: str, config: dict) -> dict:
             raise ValueError("Links must start with / or https://")
         return {"image": img, "link": link, "heading": str(x.get("heading", ""))[:80], "text": str(x.get("text", ""))[:160], "cta": str(x.get("cta", ""))[:30]}
 
+    def link_only(v: object) -> str:
+        v = str(v or "")[:300]
+        if v and not SAFE_HREF.match(v):
+            raise ValueError("Links must start with / or https://")
+        return v
+
+    def image_only(v: object) -> str:
+        v = str(v or "")[:400]
+        if v and not SAFE_HREF.match(v):
+            raise ValueError("Images must be uploaded through the media library")
+        return v
+
     if kind == "hero":
-        slides = [img_link(s) for s in c.get("slides", [])][:8]
+        slides = []
+        for raw in c.get("slides", [])[:8]:
+            sl = img_link(raw)
+            sl |= {"image_mobile": image_only(raw.get("image_mobile")), "offer": _text(raw.get("offer"), 80), "note": _text(raw.get("note"), 60),
+                   "theme": "dark" if raw.get("theme") == "dark" else "light", "align": "center" if raw.get("align") == "center" else "left"}
+            slides.append(sl)
         if not slides:
             raise ValueError("Add at least one slide")
-        return {"slides": slides, "autoplay": bool(c.get("autoplay", True))}
+        return {"slides": slides, "autoplay": bool(c.get("autoplay", True)), "interval": max(3, min(10, int(c.get("interval", 5) or 5))),
+                "style": "fade" if c.get("style") == "fade" else "boxed"}
+    if kind == "cards":
+        cards = []
+        for raw in (c.get("cards") or [])[:4]:
+            mode = raw.get("mode") if raw.get("mode") in CARD_MODES else "tiles"
+            card = {"title": _text(raw.get("title"), 60), "link": link_only(raw.get("link")), "link_text": _text(raw.get("link_text"), 30) or "See more",
+                    "mode": mode}
+            if not card["title"]:
+                raise ValueError("Every card needs a title")
+            if mode == "tiles":
+                tiles = [{"image": image_only(t.get("image")), "label": _text(t.get("label"), 30), "link": link_only(t.get("link")),
+                          "badge": _text(t.get("badge"), 20)} for t in (raw.get("tiles") or [])[:4]]
+                if not tiles:
+                    raise ValueError(f"Add 1 to 4 tiles to '{card['title']}'")
+                card["tiles"] = tiles
+            elif mode == "products":
+                src = raw.get("source", "deals")
+                if src not in ("deals", "deals_live", "bestsellers", "new", "top_rated", "category"):
+                    raise ValueError("Choose where the card's products come from")
+                card["source"] = src
+                if src == "category":
+                    card["category_slug"] = str(raw.get("category_slug", ""))[:90]
+                    if not card["category_slug"]:
+                        raise ValueError(f"Choose a category for '{card['title']}'")
+            cards.append(card)
+        if not cards:
+            raise ValueError("Add at least one card")
+        return {"cards": cards}
+    if kind == "deals":
+        k = c.get("kind") if c.get("kind") in ("lightning", "deal_of_day", "limited") else ""
+        return {"limit": max(4, min(24, int(c.get("limit", 12) or 12))), "kind": k}
+    if kind in ("sponsored", "inspired", "buy_again"):
+        return {"limit": max(4, min(20, int(c.get("limit", 10) or 10)))}
+    if kind == "signin":
+        return {"heading": _text(c.get("heading"), 80) or "See personalised recommendations", "text": _text(c.get("text"), 160)}
+    if kind == "countdown":
+        try:
+            ends = datetime.fromisoformat(str(c.get("ends_at", "")))
+        except ValueError as exc:
+            raise ValueError("Choose when the countdown ends") from exc
+        if ends.tzinfo is None:
+            ends = ends.replace(tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        return {"heading": _text(c.get("heading"), 80), "text": _text(c.get("text"), 160), "ends_at": ends.isoformat(), "link": link_only(c.get("link")),
+                "cta": _text(c.get("cta"), 30), "image": image_only(c.get("image")), "tone": c.get("tone") if c.get("tone") in TONES else "buy"}
     if kind == "banner":
         return img_link(c)
     if kind == "banner_grid":
@@ -296,7 +396,8 @@ def validate_section(kind: str, config: dict) -> dict:
         source = c.get("source", "deals")
         if source not in PRODUCT_SOURCES:
             raise ValueError("Choose where the products come from")
-        out = {"source": source, "limit": max(4, min(24, int(c.get("limit", 12)))), "layout": "grid" if c.get("layout") == "grid" else "row"}
+        out = {"source": source, "limit": max(4, min(24, int(c.get("limit", 12)))), "layout": "grid" if c.get("layout") == "grid" else "row",
+               "show_add": bool(c.get("show_add", False)), "ranked": bool(c.get("ranked", False)), "see_all": link_only(c.get("see_all"))}
         if source == "category":
             out["category_slug"] = str(c.get("category_slug", ""))[:90]
             if not out["category_slug"]:
@@ -314,13 +415,23 @@ def validate_section(kind: str, config: dict) -> dict:
 
 
 DEFAULT_SECTIONS = [
+    ("cards", "", {"cards": [
+        {"title": "Keep shopping for", "link": "", "link_text": "View your browsing history", "mode": "recent"},
+        {"title": "Today's top deals", "link": "/deals", "link_text": "See all deals", "mode": "products", "source": "deals"},
+        {"title": "Bestsellers", "link": "/bestsellers", "link_text": "See more", "mode": "products", "source": "bestsellers"},
+        {"title": "New on the store", "link": "/new-releases", "link_text": "Explore", "mode": "products", "source": "new"},
+    ]}),
     ("categories", "Shop by category", {"slugs": [], "style": "tiles"}),
+    ("deals", "Today's deals", {"limit": 12, "kind": ""}),
     ("products", "Deals of the day", {"source": "deals", "limit": 12, "layout": "row"}),
     ("usp", "", {"items": [{"icon": "badge", "text": "Every seller is KYC-verified"}, {"icon": "wallet", "text": "Cash on delivery available"}, {"icon": "truck", "text": "Free delivery over {free_delivery_amount} per seller"}, {"icon": "return", "text": "Easy returns"}]}),
     ("products", "Bestsellers", {"source": "bestsellers", "limit": 12, "layout": "row"}),
     ("recent", "Recently viewed", {}),
     ("products", "Top rated", {"source": "top_rated", "limit": 12, "layout": "row"}),
+    ("sponsored", "Sponsored products", {"limit": 10}),
+    ("inspired", "Inspired by your browsing history", {"limit": 12}),
     ("products", "New arrivals", {"source": "new", "limit": 10, "layout": "grid"}),
+    ("signin", "", {"heading": "See personalised recommendations", "text": ""}),
 ]
 
 

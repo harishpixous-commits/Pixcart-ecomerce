@@ -78,7 +78,8 @@ async def wishlist_add(product_id: uuid.UUID, user: CurrentUser, session: Sessio
         count = (await session.execute(select(func.count()).select_from(WishlistItem).where(WishlistItem.user_id == user.id))).scalar_one()
         if count >= 200:
             raise ApiError("Your wishlist is full (200 items)", "wishlist_full")
-        session.add(WishlistItem(user_id=user.id, product_id=product_id, created_at=utcnow()))
+        product = await session.get(Product, product_id)
+        session.add(WishlistItem(user_id=user.id, product_id=product_id, created_at=utcnow(), price_at_add=product.price_from if product else None))
         await session.commit()
     return {"ok": True}
 

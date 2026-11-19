@@ -33,6 +33,16 @@ SUB_ORDER_STATUSES = (
 )
 
 
+class SavedItem(Base):
+    """'Saved for later': versions a signed-in shopper moved out of the cart to buy another time."""
+
+    __tablename__ = "saved_items"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("variants.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class CartItem(IdMixin, TimestampMixin, Base):
     __tablename__ = "cart_items"
 
@@ -124,6 +134,13 @@ class SubOrder(IdMixin, TimestampMixin, Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_by: Mapped[str] = mapped_column(String(10), default="")
     cancel_reason: Mapped[str] = mapped_column(String(300), default="")
+    # Own delivery fleet (shipping_provider = 'fleet'): the seller marks the package ready, a delivery partner picks it
+    # up with the pickup code and hands it over against the customer's OTP.
+    ready_for_pickup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pickup_code: Mapped[str] = mapped_column(String(6), default="", server_default="")
+    delivery_otp: Mapped[str] = mapped_column(String(6), default="", server_default="")
+    delivery_zone_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_zones.id", ondelete="SET NULL"))
+    fleet_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # staff told that nobody took it
 
     __table_args__ = (
         CheckConstraint(

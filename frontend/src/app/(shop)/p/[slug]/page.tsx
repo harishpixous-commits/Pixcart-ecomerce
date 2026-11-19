@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductRail } from "@/components/product";
+import { BoughtTogether } from "@/components/bought-together";
+import { SponsoredRail } from "@/components/pdp";
+import { ProductQuestions } from "@/components/qa";
 import { ProductReviews } from "@/components/reviews";
 import { date as fmtDate } from "@/lib/format";
 import { serverGet } from "@/lib/server-api";
@@ -132,8 +135,11 @@ export default async function ProductPageView({ params }: { params: Promise<{ sl
         </section>
       )}
 
+      <BoughtTogether slug={p.slug} />
       <ProductReviews slug={p.slug} />
+      <ProductQuestions slug={p.slug} title={p.title} />
       {p.similar.length > 0 && <ProductRail title="Customers also viewed" items={p.similar} />}
+      <SponsoredRail slug={p.slug} />
       <BrowsingHistory currentId={p.id} />
     </div>
   );

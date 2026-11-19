@@ -37,6 +37,25 @@ export function dateTime(iso: string | null | undefined): string {
   return iso ? dateTimeFmt.format(new Date(iso)) : "";
 }
 
+/** A time as the value of an <input type="datetime-local"> (the browser's own time zone, not UTC). */
+export function toLocalInput(when: string | Date | null | undefined): string {
+  if (!when) return "";
+  const d = typeof when === "string" ? new Date(when) : when;
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** "3 hours", "2 days", "1 day 4 hours" for a length of time in milliseconds. */
+export function duration(ms: number): string {
+  const hours = Math.max(0, Math.round(ms / 3_600_000));
+  const days = Math.floor(hours / 24);
+  const rest = hours % 24;
+  const h = (n: number) => `${n} hour${n === 1 ? "" : "s"}`;
+  if (days === 0) return ms < 3_600_000 ? `${Math.max(1, Math.round(ms / 60_000))} min` : h(hours);
+  return `${days} day${days === 1 ? "" : "s"}${rest ? ` ${h(rest)}` : ""}`;
+}
+
 export const STATES: Record<string, string> = {
   "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
   "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim",

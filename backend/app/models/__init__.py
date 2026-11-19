@@ -39,9 +39,22 @@ from app.models.order import (
     Payment,
     PlatformSetting,
     Refund,
+    SavedItem,
     SubOrder,
     WebhookEvent,
 )
+from app.models.delivery import (
+    DeliveryAssignment,
+    DeliveryBoy,
+    DeliveryCashDeposit,
+    DeliveryComplaint,
+    DeliveryPayout,
+    DeliveryZone,
+    OrderStatusLog,
+    PushToken,
+)
+from app.models.engagement import AnswerVote, ProductAnswer, ProductQuestion, StockAlert
+from app.models.promotions import AdCampaign, AdCampaignProduct, AdClick, AdStat, Deal
 from app.models.seller import Seller, SellerDocument
 from app.models.shop_assistant import ShopChatAction, ShopChatMessage, ShopChatSession, ShopKbArticle
 from app.models.user import (
@@ -54,6 +67,10 @@ from app.models.user import (
 )
 
 __all__ = [
+    "DeliveryAssignment", "DeliveryBoy", "DeliveryCashDeposit", "DeliveryComplaint", "DeliveryPayout", "DeliveryZone",
+    "OrderStatusLog", "PushToken",
+    "AdCampaign", "AdCampaignProduct", "AdClick", "AdStat", "Deal", "SavedItem",
+    "AnswerVote", "ProductAnswer", "ProductQuestion", "StockAlert",
     "AdminRole", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
     "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle", "ProductVideo",
     "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",

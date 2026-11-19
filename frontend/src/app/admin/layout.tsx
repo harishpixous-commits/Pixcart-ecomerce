@@ -2,7 +2,7 @@
 
 import {
   BarChart3, Bell, Bot, Cpu, LogIn, MessagesSquare, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
-  ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw, Flag, PanelsTopLeft,
+  ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw, Flag, PanelsTopLeft, Zap, Megaphone, MessageCircleQuestion,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const isLogin = pathname === "/admin/login";
   const [me, setMe] = useState<AdminMe | null>(null);
-  const [counts, setCounts] = useState<{ s: number; p: number; r: number; rv: number; pr: number }>({ s: 0, p: 0, r: 0, rv: 0, pr: 0 });
+  const [counts, setCounts] = useState({ s: 0, p: 0, r: 0, rv: 0, pr: 0, dl: 0, ad: 0, qa: 0 });
 
   useEffect(() => {
     if (!ready || isLogin) return;
@@ -32,8 +32,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (user?.is_admin && !isLogin && me?.permissions.includes("dashboard"))
-      api<{ sellers_pending_review: number; products_pending_review: number; refunds_needing_attention: number; reviews_needing_attention?: number; product_reports_open?: number }>("/api/admin/dashboard")
-        .then((d) => setCounts({ s: d.sellers_pending_review, p: d.products_pending_review, r: d.refunds_needing_attention, rv: d.reviews_needing_attention ?? 0, pr: d.product_reports_open ?? 0 }))
+      api<{
+        sellers_pending_review: number; products_pending_review: number; refunds_needing_attention: number; reviews_needing_attention?: number;
+        product_reports_open?: number; deals_pending?: number; ads_pending?: number; questions_pending?: number;
+      }>("/api/admin/dashboard")
+        .then((d) => setCounts({
+          s: d.sellers_pending_review, p: d.products_pending_review, r: d.refunds_needing_attention, rv: d.reviews_needing_attention ?? 0,
+          pr: d.product_reports_open ?? 0, dl: d.deals_pending ?? 0, ad: d.ads_pending ?? 0, qa: d.questions_pending ?? 0,
+        }))
         .catch(() => {});
   }, [user, isLogin, pathname, me]);
 
@@ -52,6 +58,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { section: "Sellers and catalogue", href: "/admin/products", label: "Listings", icon: Package, badge: counts.p, p: "catalog" },
     { section: "Sellers and catalogue", href: "/admin/categories", label: "Categories", icon: FolderTree, p: "catalog" },
     { section: "Sellers and catalogue", href: "/admin/reviews", label: "Reviews", icon: MessageSquareText, badge: counts.rv, p: "catalog" },
+    { section: "Sellers and catalogue", href: "/admin/questions", label: "Questions", icon: MessageCircleQuestion, badge: counts.qa, p: "catalog" },
     { section: "Sellers and catalogue", href: "/admin/product-reports", label: "Product reports", icon: Flag, badge: counts.pr, p: "catalog" },
     { section: "Money and reports", href: "/admin/payouts", label: "Payouts", icon: IndianRupee, p: "payouts" },
     { section: "Money and reports", href: "/admin/reports", label: "Reports", icon: BarChart3, p: "reports" },
@@ -59,6 +66,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { section: "Store and marketing", href: "/admin/storefront", label: "Storefront", icon: Palette, p: "marketing" },
     { section: "Store and marketing", href: "/admin/product-page", label: "Product page", icon: PanelsTopLeft, p: "settings" },
     { section: "Store and marketing", href: "/admin/coupons", label: "Coupons", icon: Tag, p: "marketing" },
+    { section: "Store and marketing", href: "/admin/deals", label: "Deals", icon: Zap, badge: counts.dl, p: "catalog" },
+    { section: "Store and marketing", href: "/admin/advertising", label: "Advertising", icon: Megaphone, badge: counts.ad, p: "marketing" },
     { section: "Store and marketing", href: "/admin/notifications", label: "Messages", icon: Bell, p: "marketing" },
     { section: "AI", href: "/admin/shop-assistant", label: "Shop assistant", icon: MessagesSquare, p: "shop_assistant", any: ["shop_assistant", "shop_assistant_kb", "shop_assistant_chats"] },
     { section: "AI", href: "/admin/assistant", label: "AI assistant", icon: Bot, p: "settings" },

@@ -27,6 +27,8 @@ docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_AS
 | `models/` | Tables. `extended.py` has phase-2+ tables incl. `AdminRole`, `Assistant*`, `AiRun` |
 | `routers/` | HTTP endpoints. Admin endpoints take `Perm("<permission>")` |
 | `services/` | Business logic: orders, ledger (payouts), returns, invoices, exports, docgen (Excel/PDF), notify, cms. Product page: `product_info` (Legal Metrology details, unit price, category requirements), `product_page` (bought count, best-seller rank, seller snapshot, offers, customer media, review topics), `review_settings` (Admin → Reviews → Settings), `delivery` (dates, dispatch cut-off) |
+| `routers/promotions.py`, `services/deals.py`, `services/ads.py` | Deals (the deal price *is* the selling price while a deal runs; `deals.sync` starts/ends them, checkout calls it), sponsored products (serve, signed click links, daily billing to the ledger, attribution), Today's Deals / Bestsellers / New releases / Coupons APIs |
+| `routers/engagement.py`, `services/engagement.py` | Product Q&A, back-in-stock and wishlist price-drop alerts (jobs), compare, frequently bought together |
 | `integrations/` | Third-party keys: `registry` (fields), `store` (encrypted, merged over env), `checks` (Test connection) |
 | `llm/` | Any LLM provider: `catalog` (types), `config` (connections/keys/routes), `adapters` (Anthropic + OpenAI-compatible), `router` (fallbacks) |
 | `ai/` | AI studio tasks (drafts that a person reviews) and risk briefs |

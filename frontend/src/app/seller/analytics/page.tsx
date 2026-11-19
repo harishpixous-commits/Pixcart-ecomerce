@@ -16,11 +16,14 @@ type K = {
 
 export default function SellerAnalytics() {
   const [days, setDays] = useState(30);
-  const [k, setK] = useState<K | null>(null);
+  // the figures remember their period, so a new period shows the loader until its own figures arrive
+  const [res, setRes] = useState<{ days: number; k: K } | null>(null);
   useEffect(() => {
-    setK(null);
-    api<K>("/api/seller/analytics", { query: { days } }).then(setK).catch(quietly);
+    let live = true;
+    api<K>("/api/seller/analytics", { query: { days } }).then((k) => { if (live) setRes({ days, k }); }).catch(quietly);
+    return () => { live = false; };
   }, [days]);
+  const k = res && res.days === days ? res.k : null;
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Analytics" actions={

@@ -145,6 +145,44 @@ length, topics and the review guidelines. Admin → **Product reports** handles 
 the listing down); sellers see reports about their listings without the customer's details under *Customer reports*,
 and can answer, reply to reviews and ask staff to check a review.
 
+**Deals.** Sellers propose a deal on one product version in *Seller hub → Deals*: a **Lightning deal** (a set number of
+units for a few hours, with a "% claimed" bar), a **Deal of the Day** or a **Limited time deal** (up to two weeks). Staff
+approve, reject or stop deals in *Admin → Deals*, where the rules live (minimum discount below the current price, the
+longest each kind may run, approval on/off). While a deal runs the version's selling price *is* the deal price, so cart,
+checkout, GST invoices, commission and payouts need no special case; the regular price comes back when it ends, when its
+units are gone or when it is stopped, and sellers cannot change that version's price meanwhile. A job starts and ends
+deals every minute, and checkout re-checks them. Shoppers see deal badges with live countdowns on every product card, the
+product page and **Today's Deals** (`/deals`: lightning, deal of the day, limited, upcoming, top discounts, department,
+discount, rating and price filters).
+
+**Sponsored products.** Sellers run cost-per-click campaigns in *Seller hub → Advertising*: products, placements (search
+results, other product pages, home page), optional keywords (otherwise automatic targeting), bid, daily and total
+budget, dates. Ads are ranked by bid and rating, shown only while there is budget, labelled "Sponsored", and every click
+goes through a signed link: the first click by a shopper in 24 hours is charged, repeats are free. Sellers see
+impressions, clicks, CTR, spend, orders and sales attributed within 7 days of a click, and ACoS. Each finished day's spend
+plus GST goes to the seller ledger (hourly job, or *Bill now*) and comes off the next payout. *Admin → Advertising* approves,
+pauses or ends campaigns, shows ad revenue, and sets minimum bid and budget, placements and how many ads appear.
+
+**Discovery pages and header.** **Bestsellers** and **Hot new releases** (`/bestsellers`, `/new-releases`, ranked by units
+sold in the last 30 days, per department and category), **Coupons** (`/coupons`, every offer with copy-code) and a **Help**
+centre (`/help`). The header has a category picker in the search box with recent and trending searches, an **All** side
+menu (categories, popular pages, programmes, help), *Returns & Orders*, and a second bar of links with an optional
+promotion; the home page adds Amazon-style card rows, a deals rail with a timer, sponsored products, countdown banners,
+"Inspired by your browsing history", "Buy it again", a sign-in prompt for visitors and *Back to top*. All of it is edited in
+*Admin → Storefront* (Navigation tab and home sections). `python -m scripts.demo_promotions` adds demo deals and campaigns
+(`seed --demo` does it too; `--clear` removes them).
+
+**Questions, alerts, compare and bundles.** Product pages have **Questions and answers**: signed-in shoppers ask, and the
+seller (badge "Seller"), verified buyers and other shoppers answer; the asker is told when an answer arrives, posts with
+contact details or several reports wait for staff (*Admin → Questions*), and sellers answer from *Seller hub → Questions*.
+**Notify me** on an out-of-stock version sends one alert when it is back; products saved to the wishlist send a
+**price-drop alert** when they get cheaper by the set percentage (*Your alerts*, `/alerts`; a job checks every 10 minutes).
+**Compare** puts up to 4 products side by side (`/compare`, with "show only differences"), and **Frequently bought
+together** comes from real orders with "Add all to cart". The cart has **Save for later**. Each of these has a switch in
+*Admin → Product page* (plus "only the seller and buyers may answer" and "hold questions for a check"). The seller hub
+and admin menus show counts of what needs attention: orders to confirm, unanswered questions and open customer reports
+for sellers; deals, ad campaigns and questions waiting for a check for staff.
+
 **Accounts in the admin panel.** *Customers and accounts* lists everyone (filter customers, sellers, staff, blocked);
 open one to see profile, consent, addresses, orders, returns, support requests, signed-in devices and staff
 history, and to edit name/mobile/email, sign out everywhere, block or unblock. *Add customer* creates an account

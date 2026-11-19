@@ -1,15 +1,16 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, ChevronDown, Heart, Home, LayoutGrid, MapPin, Package, Search, ShoppingCart, User as UserIcon, X } from "lucide-react";
+import { Bell, ChevronDown, Heart, Home, LayoutGrid, MapPin, Package, ShoppingCart, User as UserIcon, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { isPincode, setPincode, usePincode } from "@/lib/pincode";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
 import { fillTokens, splitBrand } from "@/lib/tokens";
+import { NavBar, ReturnsOrders, SearchBox } from "@/components/shop-nav";
 import type { Address, CategoryNode } from "@/lib/types";
 import { ContactList, fillCopyright, SocialLinks } from "@/components/social";
 
@@ -75,104 +76,36 @@ export function NotificationBell({ dark }: { dark?: boolean }) {
   );
 }
 
-function SearchBox() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [q, setQ] = useState(params.get("q") ?? "");
-  const [open, setOpen] = useState(false);
-  const [sugg, setSugg] = useState<{ products: { title: string; slug: string }[]; categories: { name: string; slug: string }[] }>({ products: [], categories: [] });
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  useEffect(() => setQ(params.get("q") ?? ""), [params]);
-
-  function onChange(v: string) {
-    setQ(v);
-    clearTimeout(timer.current);
-    if (v.trim().length < 2) {
-      setSugg({ products: [], categories: [] });
-      return;
-    }
-    timer.current = setTimeout(() => {
-      api<typeof sugg>("/api/catalog/suggest", { query: { q: v.trim() } })
-        .then((s) => {
-          setSugg(s);
-          setOpen(true);
-        })
-        .catch(() => {});
-    }, 180);
-  }
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setOpen(false);
-    if (q.trim()) {
-      const target = `/search?q=${encodeURIComponent(q.trim())}`;
-      if (location.pathname + location.search !== target) window.dispatchEvent(new Event("route-progress:start"));
-      router.push(target);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} role="search" className="relative w-full">
-      <label htmlFor="site-search" className="sr-only">
-        Search products
-      </label>
-      <input
-        id="site-search"
-        value={q}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => sugg.products.length && setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Search for phones, sarees, cookware and more"
-        autoComplete="off"
-        className="h-11 w-full rounded-lg border-0 bg-white pl-4 pr-12 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-marigold"
-      />
-      <button type="submit" aria-label="Search" className="absolute right-1 top-1 flex h-9 w-10 items-center justify-center rounded-md bg-marigold text-ink hover:bg-marigold-dark">
-        <Search className="h-5 w-5" />
-      </button>
-      {open && (sugg.products.length > 0 || sugg.categories.length > 0) && (
-        <ul className="absolute left-0 right-0 top-12 z-40 overflow-hidden rounded-lg bg-white py-1 shadow-xl ring-1 ring-line">
-          {sugg.categories.map((c) => (
-            <li key={c.slug}>
-              <Link href={`/c/${c.slug}`} className="flex items-center gap-2 px-4 py-2 text-ink hover:bg-mist">
-                <LayoutGrid className="h-4 w-4 text-ink-faint" />
-                {c.name}
-              </Link>
-            </li>
-          ))}
-          {sugg.products.map((p) => (
-            <li key={p.slug}>
-              <Link href={`/p/${p.slug}`} className="flex items-center gap-2 px-4 py-2 text-ink hover:bg-mist">
-                <Search className="h-4 w-4 text-ink-faint" />
-                <span className="truncate">{p.title}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </form>
-  );
-}
-
 function AccountMenu() {
   const site = useSite();
   const { user, ready, signOut } = useSession();
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  useEffect(() => setOpen(false), [pathname]);
+  const [path, setPath] = useState(pathname);
+  if (pathname !== path) {
+    // a new page: close the menu
+    setPath(pathname);
+    setOpen(false);
+  }
   if (!ready) return <div className="h-10 w-24" />;
   if (!user)
     return (
-      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="flex h-10 items-center gap-2 rounded-lg px-3 font-semibold text-white hover:bg-white/10">
-        <UserIcon className="h-5 w-5" />
-        <span className="hidden sm:inline">Sign in</span>
+      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="flex h-10 items-center gap-2 rounded-lg px-2 text-white hover:bg-white/10 sm:px-3" data-testid="account-signin">
+        <UserIcon className="h-5 w-5 sm:hidden" />
+        <span className="hidden flex-col leading-tight sm:flex">
+          <span className="text-xs text-white/80">Hello, sign in</span>
+          <span className="text-sm font-semibold">Account &amp; Lists</span>
+        </span>
       </Link>
     );
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="flex h-10 items-center gap-1.5 rounded-lg px-3 font-semibold text-white hover:bg-white/10" aria-expanded={open}>
-        <UserIcon className="h-5 w-5" />
-        <span className="hidden max-w-[120px] truncate sm:inline">{user.name || "Account"}</span>
+      <button onClick={() => setOpen((o) => !o)} className="flex h-10 items-center gap-1.5 rounded-lg px-2 text-left text-white hover:bg-white/10 sm:px-3" aria-expanded={open}>
+        <UserIcon className="h-5 w-5 sm:hidden" />
+        <span className="hidden flex-col leading-tight sm:flex">
+          <span className="max-w-[130px] truncate text-xs text-white/80">Hello, {user.name?.split(" ")[0] || "there"}</span>
+          <span className="text-sm font-semibold">Account &amp; Lists</span>
+        </span>
         <ChevronDown className="h-4 w-4" />
       </button>
       {open && (
@@ -296,7 +229,7 @@ export function ShopHeader() {
           <Logo />
           <div className="order-last w-full sm:order-none sm:flex-1">
             <Suspense>
-              <SearchBox />
+              <SearchBox categories={cats} />
             </Suspense>
           </div>
           <nav className="ml-auto flex items-center gap-1 sm:ml-0">
@@ -312,27 +245,14 @@ export function ShopHeader() {
             )}
             <NotificationBell />
             <AccountMenu />
+            <ReturnsOrders />
             <CartLink />
           </nav>
         </div>
       </div>
       <div className="relative bg-white shadow-sm">
         <div className="awning absolute inset-x-0 top-0" aria-hidden />
-        <div className="mx-auto flex max-w-shop items-center gap-1 px-3 pb-2 pt-4 sm:px-4">
-          {site.pdp?.header_pincode !== false && (
-            <>
-              <DeliverTo />
-              <span className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
-            </>
-          )}
-          <nav className="scroll-x flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="Categories">
-            {cats.map((c) => (
-              <Link key={c.slug} href={`/c/${c.slug}`} className="shrink-0 rounded-full px-3 py-1 text-[15px] font-medium text-ink-soft hover:bg-peacock-light hover:text-peacock">
-                {c.name}
-              </Link>
-            ))}
-          </nav>
-        </div>
+        <NavBar categories={cats} deliverTo={site.pdp?.header_pincode !== false ? <DeliverTo /> : null} />
       </div>
     </header>
   );

@@ -30,6 +30,9 @@ _LOCK_UNCONFIRMED = 7_201_005
 _LOCK_PAYOUTS = 7_201_006
 _LOCK_SUMMARIES = 7_201_007
 _LOCK_LOWSTOCK = 7_201_008
+_LOCK_DEALS = 7_201_009
+_LOCK_ADS = 7_201_010
+_LOCK_ALERTS = 7_201_011
 
 
 async def _with_lock(lock_id: int, fn) -> None:
@@ -156,6 +159,41 @@ async def low_stock_job() -> None:
     await _with_lock(_LOCK_LOWSTOCK, run)
 
 
+async def deals_job() -> None:
+    """Starts and ends deals on time (the selling price switches to and from the deal price)."""
+    from app.services import deals
+
+    async def run(session):
+        if await deals.sync(session, force=True):
+            await session.commit()
+
+    await _with_lock(_LOCK_DEALS, run)
+
+
+async def ads_billing_job() -> None:
+    """Posts each finished day's sponsored-product spend to the sellers' ledgers."""
+    from app.services import ads
+
+    async def run(session):
+        n = await ads.bill(session)
+        if n:
+            log.info("billed sponsored products for %d seller-day(s)", n)
+
+    await _with_lock(_LOCK_ADS, run)
+
+
+async def alerts_job() -> None:
+    """Back-in-stock and wishlist price-drop alerts."""
+    from app.services import engagement
+
+    async def run(session):
+        n = await engagement.send_stock_alerts(session) + await engagement.send_price_drops(session)
+        if n:
+            log.info("sent %d shopper alert(s)", n)
+
+    await _with_lock(_LOCK_ALERTS, run)
+
+
 def start_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(expire_job, "interval", minutes=2, id="expire_unpaid", max_instances=1, coalesce=True)
@@ -166,5 +204,8 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(payouts_job, "cron", day_of_week="mon", hour=4, minute=30, id="payouts", max_instances=1, coalesce=True)  # 10:00 IST
     scheduler.add_job(review_summary_job, "interval", hours=1, id="review_summaries", max_instances=1, coalesce=True)
     scheduler.add_job(low_stock_job, "cron", hour=3, minute=0, id="low_stock", max_instances=1, coalesce=True)  # 08:30 IST
+    scheduler.add_job(deals_job, "interval", minutes=1, id="deals", max_instances=1, coalesce=True)
+    scheduler.add_job(ads_billing_job, "interval", hours=1, id="ads_billing", max_instances=1, coalesce=True)
+    scheduler.add_job(alerts_job, "interval", minutes=10, id="alerts", max_instances=1, coalesce=True)
     scheduler.start()
     return scheduler

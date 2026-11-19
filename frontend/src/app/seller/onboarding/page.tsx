@@ -198,14 +198,10 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setProfile(await api<SellerProfile>("/api/seller/me"));
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 403) setProfile(null);
-      else setError(e instanceof Error ? e.message : "Could not load");
-    }
-  }, []);
+  const load = useCallback(() => api<SellerProfile>("/api/seller/me").then(setProfile).catch((e) => {
+    if (e instanceof ApiError && e.status === 403) setProfile(null);
+    else setError(e instanceof Error ? e.message : "Could not load");
+  }), []);
   useEffect(() => {
     if (user) load();
   }, [user, load]);

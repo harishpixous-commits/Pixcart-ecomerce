@@ -286,6 +286,10 @@ async def seed_demo(session, cats: dict[str, Category]) -> None:
     from scripts.apply_demo_details import apply as apply_details  # product information and category requirements
 
     await apply_details(session, verbose=False)
+    await session.flush()
+    from scripts.demo_promotions import create as demo_promotions  # running deals and sponsored campaigns
+
+    await demo_promotions(session)
     await session.commit()
     print(f"Demo: {len(sellers)} sellers (phones 9000000001-3), {len(DEMO_PRODUCTS)} products, customer 9999900001")
 
@@ -317,7 +321,9 @@ async def seed_storefront(session) -> None:
         url = await storage.save_image(banner_image(color), "products")
         session.add(MediaAsset(url=url, label=title, created_at=utcnow()))
         slides.append({"image": url, "link": link, "heading": title, "text": sub, "cta": "Shop now"})
-    session.add(HomeSection(kind="hero", title="", config={"slides": slides, "autoplay": True}, position=-10))  # above the default sections, which start at 0
+    slides[0] |= {"offer": "10% off your first order with code WELCOME10", "note": "T&C apply"}
+    session.add(HomeSection(kind="hero", title="", config={"slides": slides, "autoplay": True, "interval": 5, "style": "fade"},
+                            position=-10))  # above the default sections, which start at 0
 
 
 async def main() -> None:

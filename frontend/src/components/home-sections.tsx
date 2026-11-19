@@ -1,69 +1,20 @@
 "use client";
 
 import clsx from "clsx";
-import { BadgeCheck, Check, ChevronLeft, ChevronRight, Gift, Headphones, RotateCcw, ShieldCheck, Truck, Wallet } from "lucide-react";
+import { BadgeCheck, Check, Gift, Headphones, RotateCcw, ShieldCheck, Truck, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { CategoryIcon } from "@/components/category-icon";
+import {
+  BuyAgainRail, CardRow, CountdownBanner, DealsRail, HeroCarousel, InspiredRail, SigninPrompt, SponsoredHomeRail, useViewed,
+} from "@/components/home-blocks";
 import { Markdown } from "@/components/markdown";
 import { ProductGrid, ProductRail } from "@/components/product";
 import { rupees } from "@/lib/format";
 import type { HomeSectionData } from "@/lib/types";
 import { useSite } from "@/lib/site";
 import { fillTokens } from "@/lib/tokens";
-import { readViewed } from "@/lib/wishlist";
 
 const USP_ICONS = { badge: BadgeCheck, wallet: Wallet, truck: Truck, return: RotateCcw, shield: ShieldCheck, gift: Gift, support: Headphones, check: Check };
-
-function Hero({ slides, autoplay }: { slides: { image: string; link: string; heading: string; text: string; cta: string }[]; autoplay: boolean }) {
-  const t = useT();
-  const [i, setI] = useState(0);
-  const [paused, setPaused] = useState(false);
-  useEffect(() => {
-    if (!autoplay || paused || slides.length < 2) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setInterval(() => setI((x) => (x + 1) % slides.length), 5000);
-    return () => clearInterval(t);
-  }, [autoplay, paused, slides.length]);
-  const s = slides[i];
-  const go = (d: number) => setI((x) => (x + d + slides.length) % slides.length);
-  return (
-    <section className="relative overflow-hidden rounded-xl bg-peacock" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} aria-roledescription="carousel">
-      <Link href={s.link || "#"} className="block">
-        <div className="relative aspect-[16/7] w-full sm:aspect-[16/5]">
-          {s.image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={s.image} alt={s.heading ? "" : "Offer"} className="absolute inset-0 h-full w-full object-cover" />
-          )}
-          {s.heading && (
-            <div className="absolute inset-0 flex flex-col justify-center gap-2 bg-gradient-to-r from-ink/60 to-transparent p-6 text-white sm:p-12">
-              {s.heading && <p className="max-w-lg font-display text-2xl font-bold sm:text-5xl">{t(s.heading)}</p>}
-              {s.text && <p className="max-w-md text-white/90 sm:text-lg">{t(s.text)}</p>}
-            </div>
-          )}
-          {s.cta && (
-            <span className="absolute bottom-4 left-6 rounded-lg bg-marigold px-4 py-2 text-sm font-semibold text-ink sm:bottom-8 sm:left-12 sm:text-base">{t(s.cta)}</span>
-          )}
-        </div>
-      </Link>
-      {slides.length > 1 && (
-        <>
-          <button onClick={() => go(-1)} className="absolute left-2 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-ink hover:bg-white sm:flex" aria-label="Previous slide">
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button onClick={() => go(1)} className="absolute right-2 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 text-ink hover:bg-white sm:flex" aria-label="Next slide">
-            <ChevronRight className="h-5 w-5" />
-          </button>
-          <div className="absolute bottom-2 right-3 flex gap-1.5">
-            {slides.map((_, n) => (
-              <button key={n} onClick={() => setI(n)} aria-label={`Slide ${n + 1}`} aria-current={n === i} className={clsx("h-2 rounded-full transition-all", n === i ? "w-6 bg-white" : "w-2 bg-white/60")} />
-            ))}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
 
 function Banner({ image, link, heading, text, cta, compact }: { image: string; link: string; heading?: string; text?: string; cta?: string; compact?: boolean }) {
   const t = useT();
@@ -96,8 +47,7 @@ function useT() {
 }
 
 function Recent({ title }: { title: string }) {
-  const [items, setItems] = useState<ReturnType<typeof readViewed>>([]);
-  useEffect(() => setItems(readViewed()), []);
+  const items = useViewed();
   if (items.length < 2) return null;
   return (
     <section className="rounded-xl bg-white p-4">
@@ -116,8 +66,14 @@ function Recent({ title }: { title: string }) {
   );
 }
 
+const SOURCE_LINK: Record<string, string> = {
+  deals: "/deals?tab=discounts", deals_live: "/deals", bestsellers: "/bestsellers", top_rated: "/search?sort=rating", new: "/new-releases",
+};
+
 export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
   const t = useT();
+  // Amazon-style: the block after a "fade" banner rides up over its lower edge (computers only).
+  const lifted = new Set(sections.filter((s, i) => i > 0 && s.kind !== "hero" && sections[i - 1].kind === "hero" && sections[i - 1].config.style === "fade").map((s) => s.id));
   return (
     <div className="flex flex-col gap-4">
       {sections.map((s) => {
@@ -126,7 +82,7 @@ export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
         const c = s.config;
         switch (s.kind) {
           case "hero":
-            body = <Hero slides={c.slides ?? []} autoplay={c.autoplay !== false} />;
+            body = <HeroCarousel slides={c.slides ?? []} autoplay={c.autoplay !== false} interval={c.interval ?? 5} style={c.style === "fade" ? "fade" : "boxed"} />;
             break;
           case "categories":
             body = (
@@ -154,19 +110,25 @@ export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
               </section>
             );
             break;
-          case "products":
+          case "products": {
+            const href = c.see_all || (c.source === "category" ? `/c/${c.category_slug}` : SOURCE_LINK[c.source]);
             if (c.layout === "grid") {
               body = (
                 <section className="flex flex-col gap-3">
-                  {s.title && <h2 className="px-1 text-xl font-semibold">{s.title}</h2>}
-                  <ProductGrid items={s.products ?? []} />
+                  {s.title && (
+                    <div className="flex items-baseline justify-between px-1">
+                      <h2 className="text-xl font-semibold">{s.title}</h2>
+                      {href && <Link href={href} className="text-sm font-semibold text-peacock hover:underline">See all</Link>}
+                    </div>
+                  )}
+                  <ProductGrid items={s.products ?? []} showAdd={Boolean(c.show_add)} ranked={Boolean(c.ranked)} />
                 </section>
               );
             } else {
-              const href = c.source === "category" ? `/c/${c.category_slug}` : c.source === "deals" ? "/search?sort=discount" : c.source === "bestsellers" ? "/search?sort=popular" : c.source === "top_rated" ? "/search?sort=rating" : c.source === "new" ? "/search?sort=newest" : undefined;
-              body = <ProductRail title={s.title} items={s.products ?? []} href={href} />;
+              body = <ProductRail title={s.title} items={s.products ?? []} href={href} showAdd={Boolean(c.show_add)} ranked={Boolean(c.ranked)} />;
             }
             break;
+          }
           case "banner":
             body = <Banner image={c.image} link={c.link} heading={c.heading} text={c.text} cta={c.cta} />;
             break;
@@ -203,8 +165,29 @@ export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
           case "recent":
             body = <Recent title={s.title} />;
             break;
+          case "cards":
+            body = <CardRow cards={c.cards ?? []} />;
+            break;
+          case "deals":
+            body = <DealsRail title={s.title} items={s.products ?? []} />;
+            break;
+          case "sponsored":
+            body = <SponsoredHomeRail title={s.title} limit={c.limit ?? 10} />;
+            break;
+          case "countdown":
+            body = <CountdownBanner title={s.title} cfg={c as Parameters<typeof CountdownBanner>[0]["cfg"]} />;
+            break;
+          case "signin":
+            body = <SigninPrompt heading={c.heading ?? ""} text={c.text ?? ""} />;
+            break;
+          case "inspired":
+            body = <InspiredRail title={s.title} limit={c.limit ?? 12} />;
+            break;
+          case "buy_again":
+            body = <BuyAgainRail title={s.title} limit={c.limit ?? 12} />;
+            break;
         }
-        return body ? <div key={s.id} className={vis}>{body}</div> : null;
+        return body ? <div key={s.id} className={clsx(vis, lifted.has(s.id) && "relative z-10 lg:-mt-40")}>{body}</div> : null;
       })}
     </div>
   );

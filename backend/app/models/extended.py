@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -43,6 +44,9 @@ class Warehouse(IdMixin, TimestampMixin, Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     shiprocket_pickup_name: Mapped[str] = mapped_column(String(40), default="")
+    # map position for the delivery fleet (set by the seller, or learnt the first time a partner reaches the store)
+    lat: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    lng: Mapped[float | None] = mapped_column(Numeric(9, 6))
 
     __table_args__ = (UniqueConstraint("seller_id", "code", name="uq_warehouses_seller_code"),)
 
@@ -81,6 +85,8 @@ class WishlistItem(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    price_at_add: Mapped[int | None] = mapped_column(BigInteger)  # for "price dropped" alerts
+    alerted_price: Mapped[int | None] = mapped_column(BigInteger)  # the price we last told the shopper about
 
 
 class Review(IdMixin, TimestampMixin, Base):
@@ -111,6 +117,7 @@ class Review(IdMixin, TimestampMixin, Base):
         CheckConstraint("rating BETWEEN 1 AND 5", name="rating"),
         CheckConstraint("status IN ('published','pending','hidden')", name="status"),
         CheckConstraint("media_status IN ('published','pending','hidden')", name="media_status"),
+        Index("ix_reviews_product_status", "product_id", "status"),  # created by migration 0008
     )
 
 
@@ -260,7 +267,7 @@ class LedgerEntry(IdMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('sale','commission','commission_gst','tcs','tds','return','commission_reversal','commission_gst_reversal','tcs_reversal','tds_reversal','adjustment','payout_reversal')",
+            "kind IN ('sale','commission','commission_gst','tcs','tds','return','commission_reversal','commission_gst_reversal','tcs_reversal','tds_reversal','adjustment','payout_reversal','ad_spend')",
             name="kind",
         ),
     )
@@ -385,7 +392,7 @@ class HomeSection(IdMixin, TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('hero','categories','products','banner','banner_grid','text','usp','recent')", name="kind"
+            "kind IN ('hero','categories','products','banner','banner_grid','text','usp','recent','cards','deals','sponsored','countdown','signin','inspired','buy_again')", name="kind"
         ),
         CheckConstraint("device IN ('all','mobile','desktop')", name="device"),
     )

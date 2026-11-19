@@ -21,12 +21,26 @@ const KIND_HELP: Record<string, string> = {
   text: "A paragraph, heading or note, written in simple formatting",
   usp: "A strip of short promises such as cash on delivery or easy returns",
   recent: "Products the shopper looked at recently (only shown if there are any)",
+  cards: "Up to 4 cards side by side, each with 4 picture tiles or products, like the top of the big stores",
+  deals: "Running deals with live countdowns and claimed bars",
+  sponsored: "Products sellers pay to promote, marked Sponsored",
+  countdown: "A banner with a live countdown to the end of a sale",
+  signin: "Asks visitors to sign in for recommendations (hidden once signed in)",
+  inspired: "Popular products from the categories the shopper browsed",
+  buy_again: "Products the shopper ordered before (signed-in shoppers)",
 };
 
 const STARTER: Record<string, Record<string, any>> = {
-  hero: { slides: [{ image: "", heading: "", text: "", cta: "Shop now", link: "/search" }], autoplay: true },
+  hero: { slides: [{ image: "", heading: "", text: "", cta: "Shop now", link: "/search", image_mobile: "", offer: "", note: "", theme: "light", align: "left" }], autoplay: true, interval: 5, style: "fade" },
   categories: { slugs: [], style: "tiles" },
-  products: { source: "deals", limit: 12, layout: "row" },
+  products: { source: "deals", limit: 12, layout: "row", show_add: false, ranked: false, see_all: "" },
+  cards: { cards: [{ title: "Top picks for you", link: "/search", link_text: "See more", mode: "tiles", tiles: [{ image: "", label: "", link: "/search", badge: "" }] }] },
+  deals: { limit: 12, kind: "" },
+  sponsored: { limit: 10 },
+  countdown: { heading: "The big sale ends soon", text: "", ends_at: "", link: "/deals", cta: "Shop the sale", image: "", tone: "buy" },
+  signin: { heading: "See personalised recommendations", text: "" },
+  inspired: { limit: 12 },
+  buy_again: { limit: 12 },
   banner: { image: "", heading: "", text: "", cta: "", link: "/search" },
   banner_grid: { items: [{ image: "", link: "/search", heading: "", text: "", cta: "" }, { image: "", link: "/search", heading: "", text: "", cta: "" }] },
   text: { markdown: "## A heading\n\nWrite something for your shoppers.", align: "left" },
@@ -35,7 +49,10 @@ const STARTER: Record<string, Record<string, any>> = {
 };
 
 const ICONS = [["badge", "Verified badge"], ["wallet", "Wallet"], ["truck", "Delivery truck"], ["return", "Return arrow"], ["shield", "Shield"], ["gift", "Gift"], ["support", "Headset"], ["check", "Tick"]];
-const SOURCES = [["deals", "Biggest discounts"], ["bestsellers", "Bestsellers"], ["new", "Newest"], ["top_rated", "Top rated"], ["category", "From one category"], ["manual", "Products I pick"]];
+const SOURCES = [["deals", "Biggest discounts"], ["deals_live", "Running deals (with timers)"], ["bestsellers", "Bestsellers"], ["new", "Newest"], ["top_rated", "Top rated"], ["category", "From one category"], ["manual", "Products I pick"]];
+const CARD_SOURCES = SOURCES.filter(([v]) => v !== "manual");
+const CARD_MODES = [["tiles", "4 picture tiles"], ["products", "4 products"], ["recent", "Recently viewed (the shopper's own)"], ["buy_again", "Buy it again (the shopper's own)"]];
+const DEAL_KIND_LABEL = [["", "All kinds"], ["lightning", "Lightning deals"], ["deal_of_day", "Deal of the Day"], ["limited", "Limited time deals"]];
 
 const toLocal = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
 
@@ -43,28 +60,90 @@ function flatten(nodes: CategoryNode[], prefix = ""): { slug: string; label: str
   return nodes.flatMap((n) => [{ slug: n.slug, label: prefix + n.name }, ...flatten(n.children ?? [], `${prefix}${n.name} › `)]);
 }
 
-function Slide({ v, onChange, onRemove }: { v: any; onChange: (v: any) => void; onRemove?: () => void }) {
+function Slide({ v, onChange, onRemove, hero }: { v: any; onChange: (v: any) => void; onRemove?: () => void; hero?: boolean }) {
   return (
     <div className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2">
-      <div className="sm:col-span-2"><ImageField label="Image" value={v.image} onChange={(u) => onChange({ ...v, image: u })} hint="Keep words out of the image; add them below so they stay sharp on phones" /></div>
+      <div className={hero ? "" : "sm:col-span-2"}><ImageField label={hero ? "Image (computers and tablets)" : "Image"} value={v.image} onChange={(u) => onChange({ ...v, image: u })} hint={hero ? "Wide, about 3000 × 1000 px. Keep words out of the image." : "Keep words out of the image; add them below so they stay sharp on phones"} /></div>
+      {hero && <ImageField label="Phone image (optional)" value={v.image_mobile ?? ""} onChange={(u) => onChange({ ...v, image_mobile: u })} hint="Taller, about 1200 × 900 px. Empty: the wide image is used" />}
       <TextField label="Heading" value={v.heading} maxLength={80} onChange={(e) => onChange({ ...v, heading: e.target.value })} />
       <TextField label="Short text" value={v.text} maxLength={160} onChange={(e) => onChange({ ...v, text: e.target.value })} />
       <TextField label="Button text" value={v.cta} maxLength={30} onChange={(e) => onChange({ ...v, cta: e.target.value })} />
       <TextField label="Link" value={v.link} placeholder="/c/fashion or /search?q=saree" onChange={(e) => onChange({ ...v, link: e.target.value })} />
+      {hero && (
+        <>
+          <TextField label="Offer line (optional)" value={v.offer ?? ""} maxLength={80} placeholder="Up to 10% off with bank cards" onChange={(e) => onChange({ ...v, offer: e.target.value })} />
+          <TextField label="Small print (optional)" value={v.note ?? ""} maxLength={60} placeholder="T&C apply" onChange={(e) => onChange({ ...v, note: e.target.value })} />
+          <Field label="Text colour">
+            <Select value={v.theme ?? "light"} onChange={(e) => onChange({ ...v, theme: e.target.value })}><option value="light">Dark text on a light image</option><option value="dark">White text on a dark image</option></Select>
+          </Field>
+          <Field label="Text position">
+            <Select value={v.align ?? "left"} onChange={(e) => onChange({ ...v, align: e.target.value })}><option value="left">Left</option><option value="center">Centre</option></Select>
+          </Field>
+        </>
+      )}
       {onRemove && <Button type="button" size="sm" variant="ghost" className="self-start" onClick={onRemove}><Trash2 className="h-4 w-4" /> Remove</Button>}
+    </div>
+  );
+}
+
+function CardEditor({ card, onChange, onRemove, cats }: { card: any; onChange: (c: any) => void; onRemove?: () => void; cats: { slug: string; label: string }[] }) {
+  const tiles: any[] = card.tiles ?? [];
+  const setTile = (i: number, t: any) => onChange({ ...card, tiles: tiles.map((x, j) => (j === i ? t : x)) });
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="Card title" value={card.title} maxLength={60} onChange={(e) => onChange({ ...card, title: e.target.value })} required />
+        <Field label="Shows">
+          <Select value={card.mode} onChange={(e) => onChange({ ...card, mode: e.target.value, tiles: e.target.value === "tiles" && !tiles.length ? [{ image: "", label: "", link: "/search", badge: "" }] : card.tiles })}>
+            {CARD_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select>
+        </Field>
+        <TextField label="Link at the bottom" value={card.link} placeholder="/deals" onChange={(e) => onChange({ ...card, link: e.target.value })} />
+        <TextField label="Link text" value={card.link_text} maxLength={30} placeholder="See more" onChange={(e) => onChange({ ...card, link_text: e.target.value })} />
+        {card.mode === "products" && (
+          <Field label="Products from">
+            <Select value={card.source ?? "deals"} onChange={(e) => onChange({ ...card, source: e.target.value })}>{CARD_SOURCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>
+          </Field>
+        )}
+        {card.mode === "products" && card.source === "category" && (
+          <Field label="Category">
+            <Select value={card.category_slug ?? ""} onChange={(e) => onChange({ ...card, category_slug: e.target.value })}><option value="">Choose</option>{cats.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}</Select>
+          </Field>
+        )}
+      </div>
+      {card.mode === "tiles" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {tiles.map((t, i) => (
+            <div key={i} className="flex flex-col gap-2 rounded-lg bg-mist p-2">
+              <ImageField label={`Tile ${i + 1} image`} value={t.image} onChange={(u) => setTile(i, { ...t, image: u })} />
+              <div className="grid grid-cols-2 gap-2">
+                <Input value={t.label} maxLength={30} placeholder="Label" aria-label={`Tile ${i + 1} label`} onChange={(e) => setTile(i, { ...t, label: e.target.value })} />
+                <Input value={t.badge ?? ""} maxLength={20} placeholder="Badge, e.g. 40% off" aria-label={`Tile ${i + 1} badge`} onChange={(e) => setTile(i, { ...t, badge: e.target.value })} />
+              </div>
+              <Input value={t.link} placeholder="/c/fashion" aria-label={`Tile ${i + 1} link`} onChange={(e) => setTile(i, { ...t, link: e.target.value })} />
+              {tiles.length > 1 && <button type="button" className="self-start text-sm text-vermilion hover:underline" onClick={() => onChange({ ...card, tiles: tiles.filter((_, j) => j !== i) })}>Remove tile</button>}
+            </div>
+          ))}
+          {tiles.length < 4 && <Button type="button" size="sm" variant="ghost" className="self-start" onClick={() => onChange({ ...card, tiles: [...tiles, { image: "", label: "", link: "/search", badge: "" }] })}><Plus className="h-4 w-4" /> Add tile</Button>}
+        </div>
+      )}
+      {(card.mode === "recent" || card.mode === "buy_again") && <p className="text-sm text-ink-soft">Each shopper sees their own products. When they have none, the card is left out.</p>}
+      {onRemove && <Button type="button" size="sm" variant="ghost" className="self-start" onClick={onRemove}><Trash2 className="h-4 w-4" /> Remove card</Button>}
     </div>
   );
 }
 
 function ProductPicker({ ids, onChange }: { ids: string[]; onChange: (ids: string[]) => void }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<ProductCard[]>([]);
+  // results remember the words they are for, so clearing the box shows nothing without resetting state in an effect
+  const [found, setFound] = useState<{ q: string; items: ProductCard[] }>({ q: "", items: [] });
   const [picked, setPicked] = useState<Record<string, string>>({});
   useEffect(() => {
-    if (q.trim().length < 2) return setResults([]);
-    const t = setTimeout(() => api<{ items: ProductCard[] }>("/api/catalog/products", { query: { q, page_size: 8 } }).then((r) => setResults(r.items)).catch(() => {}), 250);
+    if (q.trim().length < 2) return;
+    const t = setTimeout(() => api<{ items: ProductCard[] }>("/api/catalog/products", { query: { q, page_size: 8 } }).then((r) => setFound({ q, items: r.items })).catch(() => {}), 250);
     return () => clearTimeout(t);
   }, [q]);
+  const results = q.trim().length >= 2 && found.q === q ? found.items : [];
   return (
     <div className="sm:col-span-2">
       <p className="mb-1 font-medium">Products ({ids.length} of 24)</p>
@@ -99,11 +178,75 @@ function ConfigEditor({ kind, c, set, cats }: { kind: string; c: Record<string, 
   if (kind === "hero")
     return (
       <div className="flex flex-col gap-3">
+        <div className="grid gap-3 rounded-lg bg-mist p-3 sm:grid-cols-3">
+          <Field label="Style">
+            <Select value={c.style ?? "boxed"} onChange={(e) => set({ ...c, style: e.target.value })}>
+              <option value="fade">Full width, fading into the page (the next section overlaps it)</option>
+              <option value="boxed">Banner in a rounded box</option>
+            </Select>
+          </Field>
+          <TextField label="Seconds per slide (3 to 10)" inputMode="numeric" value={String(c.interval ?? 5)} onChange={(e) => set({ ...c, interval: Math.max(3, Math.min(10, Number(e.target.value.replace(/\D/g, "")) || 5)) })} disabled={c.autoplay === false} />
+          <label className="flex items-center gap-2 self-end pb-2.5"><input type="checkbox" className="accent-peacock" checked={c.autoplay !== false} onChange={(e) => set({ ...c, autoplay: e.target.checked })} /> Move on automatically</label>
+        </div>
         {(c.slides ?? []).map((s: any, i: number) => (
-          <Slide key={i} v={s} onChange={(v) => set({ ...c, slides: c.slides.map((x: any, j: number) => (j === i ? v : x)) })} onRemove={c.slides.length > 1 ? () => set({ ...c, slides: c.slides.filter((_: any, j: number) => j !== i) }) : undefined} />
+          <Slide key={i} hero v={s} onChange={(v) => set({ ...c, slides: c.slides.map((x: any, j: number) => (j === i ? v : x)) })} onRemove={c.slides.length > 1 ? () => set({ ...c, slides: c.slides.filter((_: any, j: number) => j !== i) }) : undefined} />
         ))}
         {(c.slides ?? []).length < 8 && <Button type="button" size="sm" variant="secondary" className="self-start" onClick={() => set({ ...c, slides: [...(c.slides ?? []), { ...STARTER.hero.slides[0] }] })}><Plus className="h-4 w-4" /> Add slide</Button>}
-        <label className="flex items-center gap-2"><input type="checkbox" className="accent-peacock" checked={c.autoplay !== false} onChange={(e) => set({ ...c, autoplay: e.target.checked })} /> Move to the next slide automatically</label>
+      </div>
+    );
+  if (kind === "cards")
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-ink-soft">On computers the cards sit side by side; on phones they scroll sideways.</p>
+        {(c.cards ?? []).map((card: any, i: number) => (
+          <CardEditor key={i} card={card} cats={cats} onChange={(v) => set({ ...c, cards: c.cards.map((x: any, j: number) => (j === i ? v : x)) })}
+            onRemove={c.cards.length > 1 ? () => set({ ...c, cards: c.cards.filter((_: any, j: number) => j !== i) }) : undefined} />
+        ))}
+        {(c.cards ?? []).length < 4 && <Button type="button" size="sm" variant="secondary" className="self-start" onClick={() => set({ ...c, cards: [...(c.cards ?? []), structuredClone(STARTER.cards.cards[0])] })}><Plus className="h-4 w-4" /> Add card</Button>}
+      </div>
+    );
+  if (kind === "deals")
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Deals to show"><Select value={c.kind ?? ""} onChange={(e) => set({ ...c, kind: e.target.value })}>{DEAL_KIND_LABEL.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
+        <TextField label="How many (4 to 24)" inputMode="numeric" value={String(c.limit ?? 12)} onChange={(e) => set({ ...c, limit: Number(e.target.value.replace(/\D/g, "")) || 4 })} />
+        <p className="text-sm text-ink-soft sm:col-span-2">Hidden when no deal is running. Sellers create deals; approve them in Admin → Deals.</p>
+      </div>
+    );
+  if (kind === "sponsored" || kind === "inspired" || kind === "buy_again")
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="How many (4 to 20)" inputMode="numeric" value={String(c.limit ?? 10)} onChange={(e) => set({ ...c, limit: Number(e.target.value.replace(/\D/g, "")) || 4 })} />
+        <p className="self-end text-sm text-ink-soft">
+          {kind === "sponsored" ? "Ads from running campaigns, marked Sponsored. Hidden when none are running or ads are off (Admin → Advertising)."
+            : kind === "inspired" ? "Built from the products this shopper opened. Hidden for first-time visitors."
+            : "Each signed-in shopper's own past orders. Hidden for visitors and new shoppers."}
+        </p>
+      </div>
+    );
+  if (kind === "signin")
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="Heading" value={c.heading ?? ""} maxLength={80} onChange={(e) => set({ ...c, heading: e.target.value })} />
+        <TextField label="Short text (optional)" value={c.text ?? ""} maxLength={160} onChange={(e) => set({ ...c, text: e.target.value })} />
+        <p className="text-sm text-ink-soft sm:col-span-2">Only visitors who are not signed in see this.</p>
+      </div>
+    );
+  if (kind === "countdown")
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="Heading" value={c.heading ?? ""} maxLength={80} onChange={(e) => set({ ...c, heading: e.target.value })} required />
+        <TextField label="Short text" value={c.text ?? ""} maxLength={160} onChange={(e) => set({ ...c, text: e.target.value })} />
+        <TextField label="Counts down to" type="datetime-local" value={toLocal(c.ends_at || null)} onChange={(e) => set({ ...c, ends_at: e.target.value ? new Date(e.target.value).toISOString() : "" })} required />
+        <Field label="Colour">
+          <Select value={c.tone ?? "buy"} onChange={(e) => set({ ...c, tone: e.target.value })}>
+            <option value="buy">Buy button colour</option><option value="accent">Highlight colour</option><option value="primary">Main colour</option><option value="dark">Dark</option>
+          </Select>
+        </Field>
+        <TextField label="Button text" value={c.cta ?? ""} maxLength={30} onChange={(e) => set({ ...c, cta: e.target.value })} />
+        <TextField label="Link" value={c.link ?? ""} placeholder="/deals" onChange={(e) => set({ ...c, link: e.target.value })} />
+        <div className="sm:col-span-2"><ImageField label="Picture (optional)" value={c.image ?? ""} onChange={(u) => set({ ...c, image: u })} hint="Shown beside the countdown on computers" /></div>
+        <p className="text-sm text-ink-soft sm:col-span-2">The banner hides itself when the time is up.</p>
       </div>
     );
   if (kind === "banner") return <Slide v={c} onChange={set} />;
@@ -122,6 +265,9 @@ function ConfigEditor({ kind, c, set, cats }: { kind: string; c: Record<string, 
         <Field label="Show" htmlFor="src"><Select id="src" value={c.source} onChange={(e) => set({ ...c, source: e.target.value })}>{SOURCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
         <Field label="Layout" htmlFor="lay"><Select id="lay" value={c.layout} onChange={(e) => set({ ...c, layout: e.target.value })}><option value="row">Scrolling row</option><option value="grid">Grid</option></Select></Field>
         <TextField label="How many (4 to 24)" inputMode="numeric" value={String(c.limit ?? 12)} onChange={(e) => set({ ...c, limit: Number(e.target.value.replace(/\D/g, "")) || 4 })} />
+        <TextField label="'See all' link (optional)" value={c.see_all ?? ""} placeholder="/bestsellers" onChange={(e) => set({ ...c, see_all: e.target.value })} />
+        <label className="flex items-center gap-2"><input type="checkbox" className="accent-peacock" checked={Boolean(c.show_add)} onChange={(e) => set({ ...c, show_add: e.target.checked })} /> Add to cart buttons on the cards</label>
+        <label className="flex items-center gap-2"><input type="checkbox" className="accent-peacock" checked={Boolean(c.ranked)} onChange={(e) => set({ ...c, ranked: e.target.checked })} /> Number the products (#1, #2, ...)</label>
         {c.source === "category" && (
           <Field label="Category" htmlFor="pcat"><Select id="pcat" value={c.category_slug ?? ""} onChange={(e) => set({ ...c, category_slug: e.target.value })}><option value="">Choose</option>{cats.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}</Select></Field>
         )}
@@ -242,7 +388,10 @@ export function SectionsEditor() {
                 <p className="text-sm text-ink-soft">
                   {s.kind_label}
                   {s.kind === "products" && `: ${SOURCES.find(([v]) => v === s.config.source)?.[1] ?? ""}`}
-                  {s.kind === "hero" && `: ${s.config.slides?.length ?? 0} slides`}
+                  {s.kind === "hero" && `: ${s.config.slides?.length ?? 0} slides${s.config.style === "fade" ? ", full width" : ""}`}
+                  {s.kind === "cards" && `: ${s.config.cards?.length ?? 0} cards`}
+                  {s.kind === "deals" && `: ${DEAL_KIND_LABEL.find(([v]) => v === (s.config.kind ?? ""))?.[1] ?? ""}`}
+                  {s.kind === "countdown" && s.config.ends_at && `: ends ${date(s.config.ends_at)}`}
                 </p>
               </button>
               {s.device !== "all" && (s.device === "mobile" ? <Smartphone className="h-4 w-4 text-ink-faint" aria-label="Phones only" /> : <Monitor className="h-4 w-4 text-ink-faint" aria-label="Computers only" />)}
@@ -260,7 +409,14 @@ export function SectionsEditor() {
         <ul className="grid gap-2 sm:grid-cols-2">
           {Object.entries(data.kinds).map(([k, label]) => (
             <li key={k}>
-              <button className="h-full w-full rounded-lg border border-line p-3 text-left hover:border-peacock hover:bg-peacock-light" onClick={() => { setAdding(false); setError(null); setEdit({ id: "new", kind: k, kind_label: label, title: k === "usp" || k === "hero" || k === "text" || k === "banner" ? "" : label, config: structuredClone(STARTER[k]), is_active: true, device: "all", starts_at: null, ends_at: null }); }}>
+              <button className="h-full w-full rounded-lg border border-line p-3 text-left hover:border-peacock hover:bg-peacock-light" onClick={() => {
+                setAdding(false);
+                setError(null);
+                const config = structuredClone(STARTER[k] ?? {});
+                if (k === "countdown") config.ends_at = new Date(Date.now() + 3 * 86_400_000).toISOString(); // three days from now
+                const untitled = ["usp", "hero", "text", "banner", "cards", "countdown", "signin"].includes(k);
+                setEdit({ id: "new", kind: k, kind_label: label, title: untitled ? "" : label, config, is_active: true, device: "all", starts_at: null, ends_at: null });
+              }}>
                 <p className="font-semibold">{label}</p>
                 <p className="text-sm text-ink-soft">{KIND_HELP[k]}</p>
               </button>

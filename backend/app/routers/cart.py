@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.integrations import get as get_integrations
 from app.core.deps import CurrentUser, SessionDep
 from app.core.errors import ApiError, NotFound
-from app.models import CartItem, Product, Seller, Variant
+from app.models import CartItem, Product, SavedItem, Seller, Variant
 from app.services.orders import cart_payload, group_by_seller, load_cart
 from app.services.platform_settings import get_settings
 
@@ -101,3 +101,65 @@ async def merge_guest_cart(body: MergeIn, user: CurrentUser, session: SessionDep
             continue
     await session.commit()
     return await _view(session, user)
+
+
+# ----------------------------------------------------------------------------- saved for later
+
+
+async def _saved_view(session, user) -> dict:
+    from app.services.catalog import images_for, variant_label
+
+    rows = (await session.execute(
+        select(SavedItem, Variant, Product).join(Variant, Variant.id == SavedItem.variant_id).join(Product, Product.id == Variant.product_id)
+        .where(SavedItem.user_id == user.id).order_by(SavedItem.created_at.desc()))).all()
+    imgs = await images_for(session, list({p.id for _, _, p in rows}))
+    items = []
+    for s, v, p in rows:
+        available = p.status == "approved" and v.is_active
+        items.append({"variant_id": str(v.id), "product_id": str(p.id), "slug": p.slug, "title": p.title, "variant_label": variant_label(v.options),
+                      "image": (imgs.get(p.id) or [""])[0], "price": v.price_paise, "mrp": v.mrp_paise, "in_stock": available and v.stock > 0,
+                      "available": available, "saved_at": s.created_at.isoformat()})
+    return {"items": items}
+
+
+@router.get("/saved")
+async def saved_for_later(user: CurrentUser, session: SessionDep) -> dict:
+    return await _saved_view(session, user)
+
+
+@router.post("/items/{variant_id}/save-for-later")
+async def save_for_later(variant_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
+    """Moves a cart line to "Saved for later" (it keeps its place even when out of stock)."""
+    from app.db import utcnow
+
+    item = (await session.execute(select(CartItem).where(CartItem.user_id == user.id, CartItem.variant_id == variant_id))).scalar_one_or_none()
+    if item is None:
+        raise NotFound("Cart item")
+    await session.delete(item)
+    if await session.get(SavedItem, (user.id, variant_id)) is None:
+        count = len((await session.execute(select(SavedItem.variant_id).where(SavedItem.user_id == user.id))).all())
+        if count >= 100:
+            raise ApiError("You can save up to 100 items for later", "saved_full")
+        session.add(SavedItem(user_id=user.id, variant_id=variant_id, created_at=utcnow()))
+    await session.commit()
+    return {"cart": await _view(session, user), "saved": await _saved_view(session, user)}
+
+
+@router.post("/saved/{variant_id}/move-to-cart")
+async def move_to_cart(variant_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
+    saved = await session.get(SavedItem, (user.id, variant_id))
+    if saved is None:
+        raise NotFound("Saved item")
+    await _set(session, user, variant_id, 1, add=True)
+    await session.delete(saved)
+    await session.commit()
+    return {"cart": await _view(session, user), "saved": await _saved_view(session, user)}
+
+
+@router.delete("/saved/{variant_id}")
+async def delete_saved(variant_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
+    saved = await session.get(SavedItem, (user.id, variant_id))
+    if saved:
+        await session.delete(saved)
+        await session.commit()
+    return await _saved_view(session, user)

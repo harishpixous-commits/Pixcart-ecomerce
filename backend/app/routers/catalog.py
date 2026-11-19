@@ -11,6 +11,7 @@ from app.integrations import get as get_integrations
 from app.core.deps import SessionDep
 from app.core.errors import NotFound
 from app.core.validators import STATES
+from app.db import utcnow
 from app.models import Category, Product, Seller, Variant
 from app.services.catalog import (
     category_descendant_ids,
@@ -29,14 +30,41 @@ router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 SORTS = Literal["relevance", "price_asc", "price_desc", "newest", "rating", "discount", "popular"]
 
 
-async def product_cards(session, products: list[Product]) -> list[dict]:
-    imgs = await images_for(session, [p.id for p in products])
-    sellers = {}
-    if products:
-        rows = (await session.execute(select(Seller.id, Seller.display_name, Seller.slug).where(Seller.id.in_({p.seller_id for p in products})))).all()
-        sellers = {r.id: r for r in rows}
-    return [
-        {
+async def product_cards(session, products: list[Product], *, sponsored: dict | None = None, delivery: dict | None = None) -> list[dict]:
+    """Cards for listings. Besides price and rating: the running deal, unit price, "bought in the past month", the
+    version to add straight to the cart (when there is only one), and for ads the "Sponsored" link."""
+    from datetime import timedelta
+
+    from app.models import OrderItem, SubOrder
+    from app.services import deals as deals_svc
+    from app.services.product_info import details_of, unit_price
+    from app.services.product_page import LIVE_PACKAGE, bucket
+
+    if not products:
+        return []
+    ids = [p.id for p in products]
+    imgs = await images_for(session, ids)
+    rows = (await session.execute(select(Seller.id, Seller.display_name, Seller.slug).where(Seller.id.in_({p.seller_id for p in products})))).all()
+    sellers = {r.id: r for r in rows}
+    cfg = await get_settings(session)
+    deal_map = await deals_svc.active_for_products(session, ids) if cfg["feature_deals"] else {}
+    variants: dict = {}
+    for v in (await session.execute(select(Variant).where(Variant.product_id.in_(ids), Variant.is_active.is_(True)).order_by(Variant.price_paise))).scalars():
+        variants.setdefault(v.product_id, []).append(v)
+    bought: dict = {}
+    if cfg["pdp_bought_count"]:
+        since = utcnow() - timedelta(days=30)
+        bought = dict((await session.execute(
+            select(OrderItem.product_id, func.sum(OrderItem.qty)).join(SubOrder, SubOrder.id == OrderItem.sub_order_id)
+            .where(OrderItem.product_id.in_(ids), SubOrder.status.in_(LIVE_PACKAGE), SubOrder.created_at >= since)
+            .group_by(OrderItem.product_id))).all())
+    out = []
+    for p in products:
+        vs = variants.get(p.id, [])
+        cheapest = next((v for v in vs if v.stock > 0), vs[0] if vs else None)
+        unit = details_of(p.details).net_unit
+        units = int(bought.get(p.id) or 0)
+        card = {
             "id": str(p.id),
             "slug": p.slug,
             "title": p.title,
@@ -49,9 +77,19 @@ async def product_cards(session, products: list[Product]) -> list[dict]:
             "rating_count": p.rating_count,
             "in_stock": p.in_stock,
             "seller_name": sellers[p.seller_id].display_name if p.seller_id in sellers else "",
+            "deal": deal_map.get(p.id),
+            "unit_price": unit_price(cheapest.price_paise, cheapest.net_qty, unit) if (cheapest and cfg["pdp_unit_price"]) else None,
+            "bought": f"{bucket(units)} bought in past month" if units >= cfg["pdp_bought_min"] else None,
+            "variant_count": len(vs),
+            "variant_id": str(cheapest.id) if cheapest and len(vs) == 1 and cheapest.stock > 0 else None,
         }
-        for p in products
-    ]
+        if sponsored and p.id in sponsored:
+            card["sponsored"] = True
+            card["href"] = f"/api/ads/click?t={sponsored[p.id]}"
+        if delivery is not None:
+            card["delivery_by"] = delivery.get(p.seller_id)
+        out.append(card)
+    return out
 
 
 def _prefix_tsquery(q: str) -> str | None:
@@ -115,6 +153,26 @@ async def home(session: SessionDep) -> dict:
     }
 
 
+async def seller_delivery(session, seller_ids: list, pin: str) -> dict:
+    """Fastest delivery estimate per seller to this PIN code: {seller_id: {"days": n, "date": "YYYY-MM-DD"}}."""
+    from app.models import Warehouse
+    from app.services.delivery import estimate
+
+    if not seller_ids:
+        return {}
+    cfg = await get_settings(session)
+    sellers = {s.id: s for s in (await session.execute(select(Seller).where(Seller.id.in_(seller_ids)))).scalars()}
+    out: dict = {}
+    for w in (await session.execute(select(Warehouse).where(Warehouse.seller_id.in_(seller_ids), Warehouse.is_active.is_(True)))).scalars():
+        s = sellers.get(w.seller_id)
+        if s is None:
+            continue
+        e = estimate(cfg, s.dispatch_days, w.pincode, w.state_code, pin, cutoff=s.dispatch_cutoff)
+        if w.seller_id not in out or e["days_min"] < out[w.seller_id]["days"]:
+            out[w.seller_id] = {"days": e["days_min"], "date": e["min_date"]}
+    return out
+
+
 @router.get("/products")
 async def search(
     session: SessionDep,
@@ -130,7 +188,13 @@ async def search(
     sort: SORTS = "relevance",
     page: int = Query(default=1, ge=1, le=500),
     page_size: int = Query(default=24, ge=1, le=60),
+    pincode: str | None = Query(default=None, pattern=r"^[1-9][0-9]{5}$"),
+    delivery: int | None = Query(default=None, ge=1, le=7),  # arrives within this many days at the PIN code
+    deal: bool = False,
 ) -> dict:
+    from app.models import Deal
+    from app.services import ads as ads_svc
+
     conds = list(public_product_filter())
     rank = literal(0.0)
     breadcrumbs: list[dict] = []
@@ -173,6 +237,14 @@ async def search(
         conds.append((Product.mrp_from - Product.price_from) * 100 >= Product.mrp_from * min_discount)
     if in_stock:
         conds.append(Product.in_stock.is_(True))
+    if deal:
+        conds.append(Product.id.in_(select(Deal.product_id).where(Deal.status == "active")))
+    eta: dict = {}
+    if pincode:
+        seller_ids = list((await session.execute(select(Product.seller_id).where(and_(*facet_conds)).distinct())).scalars())
+        eta = await seller_delivery(session, seller_ids, pincode)
+        if delivery:
+            conds.append(Product.seller_id.in_([sid for sid, e in eta.items() if e["days"] <= delivery] or [None]))
 
     order = {
         "relevance": [Product.in_stock.desc(), desc(rank), Product.sold_count.desc(), Product.id],
@@ -195,8 +267,23 @@ async def search(
         )
     ).all()
     price_range = (await session.execute(select(func.min(Product.price_from), func.max(Product.price_from)).where(facet_where))).one()
+    cat_counts = (await session.execute(
+        select(Category.name, Category.slug, func.count()).join(Product, Product.category_id == Category.id)
+        .where(facet_where).group_by(Category.name, Category.slug).order_by(func.count().desc()).limit(8))).all()
+    sponsored: list[dict] = []
+    sponsored_rail: list[dict] = []
+    if text and page == 1:
+        cfg = await get_settings(session)
+        served = await ads_svc.serve(session, "search", query=text, limit=cfg["ads_per_search"] + cfg["ads_per_rail"])
+        if served:
+            cards = await product_cards(session, [x[0] for x in served], sponsored={x[0].id: x[1] for x in served},
+                                        delivery={k: v["date"] for k, v in eta.items()} if pincode else None)
+            sponsored, sponsored_rail = cards[: cfg["ads_per_search"]], cards[cfg["ads_per_search"]:]
     return {
-        "items": await product_cards(session, rows),
+        "items": await product_cards(session, rows, delivery={k: v["date"] for k, v in eta.items()} if pincode else None),
+        "sponsored": sponsored,
+        "sponsored_rail": sponsored_rail,
+        "categories": [{"name": n, "slug": sl, "count": c} for n, sl, c in cat_counts],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -231,6 +318,10 @@ async def suggest(session: SessionDep, q: str = Query(min_length=1, max_length=6
 
 @router.get("/products/{slug}")
 async def product_page(slug: str, session: SessionDep) -> dict:
+    from app.services import deals as deals_svc
+
+    if await deals_svc.sync(session):
+        await session.commit()
     p = (await session.execute(select(Product).where(Product.slug == slug, *public_product_filter()))).scalar_one_or_none()
     if p is None:
         raise NotFound("Product")
@@ -315,6 +406,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "offers": await pp.offers_for(session, p, seller, cfg["pdp_offers_max"]) if cfg["pdp_offers"] and cfg["feature_coupons"] else [],
         "seller_snapshot": await pp.seller_snapshot(session, seller, cfg) if cfg["pdp_seller_snapshot"] else None,
         "returnable": p.return_window_days > 0,
+        "deal": (await deals_svc.active_for_products(session, [p.id])).get(p.id) if cfg["feature_deals"] else None,
         # Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.
         "seller": {
             "name": seller.display_name,

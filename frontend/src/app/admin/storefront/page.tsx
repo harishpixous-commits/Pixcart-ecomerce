@@ -15,7 +15,7 @@ import { SectionsEditor } from "./sections";
 const TABS = [
   { value: "home", label: "Home page" },
   { value: "brand", label: "Brand and colours" },
-  { value: "nav", label: "Menus and footer" },
+  { value: "nav", label: "Navigation and footer" },
   { value: "business", label: "Business, contact and social" },
   { value: "pages", label: "Pages" },
   { value: "media", label: "Media library" },

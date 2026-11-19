@@ -18,11 +18,15 @@ from app.core.permissions import Perm
 from app.core.validators import STATES, slugify
 from app.db import utcnow
 from app.models import (
+    AdCampaign,
     AuditLog,
     Category,
+    Deal,
     Order,
     Product,
+    ProductAnswer,
     ProductImage,
+    ProductQuestion,
     ProductReport,
     RefreshSession,
     Refund,
@@ -120,6 +124,10 @@ async def dashboard(admin: Perm("dashboard"), session: SessionDep) -> dict:
             (Review.status == "pending") | (Review.report_count > 0)
             | ((Review.media_status == "pending") & (func.jsonb_array_length(Review.media) > 0))))).scalar_one(),
         "product_reports_open": (await session.execute(select(func.count()).select_from(ProductReport).where(ProductReport.status == "open"))).scalar_one(),
+        "deals_pending": (await session.execute(select(func.count()).select_from(Deal).where(Deal.status == "pending"))).scalar_one(),
+        "ads_pending": (await session.execute(select(func.count()).select_from(AdCampaign).where(AdCampaign.status == "pending"))).scalar_one(),
+        "questions_pending": (await session.execute(select(func.count()).select_from(ProductQuestion).where(ProductQuestion.status == "pending"))).scalar_one()
+        + (await session.execute(select(func.count()).select_from(ProductAnswer).where(ProductAnswer.status == "pending"))).scalar_one(),
         "active_sellers": (await session.execute(select(func.count()).where(Seller.status == "approved"))).scalar_one(),
         "customers": (await session.execute(select(func.count()).select_from(User))).scalar_one(),
         "live_products": (await session.execute(select(func.count()).where(Product.status == "approved"))).scalar_one(),

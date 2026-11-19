@@ -167,6 +167,14 @@ def _product_data(c: dict[str, Any]) -> dict[str, Any]:
             "seller": c["seller_name"], "link": f"/p/{c['slug']}"}
 
 
+# The chat shows only these product fields (a whitelist: new fields on store cards do not reach the chat by accident).
+CARD_FIELDS = ("id", "slug", "title", "brand", "image", "price", "mrp", "discount_pct", "rating_avg", "rating_count", "in_stock", "seller_name")
+
+
+def _card_view(card: dict) -> dict:
+    return {k: card[k] for k in CARD_FIELDS if k in card}
+
+
 @tool("search_products", "Finding products", "Search the store's products by words, with optional price limits in rupees. "
       "Use for 'show me running shoes under 2000', 'do you have pressure cookers'. Returns at most 6 products.",
       {"query": {"type": "string", "description": "product words, e.g. 'running shoes'"},
@@ -177,7 +185,7 @@ async def search_products(ctx: Ctx, a: dict[str, Any]) -> Out:
     query = str(a.get("query") or "")[:100]
     rows = await find_products(ctx.session, query, min_price=_rupees_to_paise(a.get("min_price_rupees")),
                                max_price=_rupees_to_paise(a.get("max_price_rupees")), sort=str(a.get("sort") or "relevance"))
-    cards = await product_cards(ctx.session, rows)
+    cards = [_card_view(c) for c in await product_cards(ctx.session, rows)]
     if not cards:
         return Out({"products": [], "note": "No matching products."})
     link = f"/search?q={query.replace(' ', '+')}" if query else "/search"
@@ -198,7 +206,7 @@ async def product_info(ctx: Ctx, a: dict[str, Any]) -> Out:
         p = found[0] if found else None
     if p is None:
         return Out({"error": "No such product in the store."})
-    card = (await product_cards(ctx.session, [p]))[0]
+    card = _card_view((await product_cards(ctx.session, [p]))[0])
     facts = await kb.public_facts(ctx.session)
     data = _product_data(card) | {
         "highlights": [str(h) for h in (p.highlights or [])][:6],

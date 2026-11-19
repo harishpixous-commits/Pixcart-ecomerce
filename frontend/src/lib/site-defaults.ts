@@ -27,6 +27,12 @@ export const FALLBACK_SITE: Site = {
     recently_viewed: true, header_pincode: true, page_loading_bar: true,
   },
   reviews: { buyers_only: true, photos: true, max_photos: 5, videos: true, max_video_mb: 30, media_public: true, min_body_chars: 0, guidelines: "", report_reasons: {} },
+  nav: {
+    all_menu: true, search_categories: true, show_categories: true,
+    links: [{ label: "Today's Deals", href: "/deals" }, { label: "Bestsellers", href: "/bestsellers" }, { label: "New Releases", href: "/new-releases" }, { label: "Coupons", href: "/coupons" }],
+    promo: { enabled: false, text: "", link: "", tone: "accent" }, drawer_links: [], trending: [],
+  },
+  home_extras: { back_to_top: true, signin_prompt: true },
 };
 
 /** Fill any missing keys from the fallback, so an older or partial API answer never breaks rendering. */

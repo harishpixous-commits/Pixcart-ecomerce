@@ -49,6 +49,31 @@ const GROUPS: { title: string; sub: string; items: [string, string, string][] }[
     ],
   },
   {
+    title: "Questions and answers",
+    sub: "Shoppers ask on the product page; the seller and other shoppers answer. Posts with phone numbers, emails or links always wait for a check in Questions.",
+    items: [
+      ["feature_qa", "Questions and answers", "A Q&A section on every product page. Only signed-in shoppers can ask, answer or vote; guests can read."],
+      ["qa_need_approval", "Check every post first", "Questions and answers wait in Admin → Questions before they appear."],
+      ["qa_buyers_answer_only", "Only the seller and buyers answer", "Shoppers who have not received the product cannot answer questions."],
+    ],
+  },
+  {
+    title: "Alerts",
+    sub: "Sent by email, SMS or push, following each shopper's notification choices.",
+    items: [
+      ["feature_stock_alerts", "Notify me when it is back", "Out-of-stock versions show a Notify me button; signed-in shoppers get a message when stock returns."],
+      ["feature_price_alerts", "Wishlist price drops", "Shoppers get a message when a product in their wishlist gets cheaper."],
+    ],
+  },
+  {
+    title: "Compare and bundles",
+    sub: "",
+    items: [
+      ["feature_compare", "Compare products", "\"Add to compare\" on product cards and product pages, a compare tray, and up to 4 products side by side."],
+      ["feature_bought_together", "Frequently bought together", "Products often ordered together, worked out from real orders, with one click to add them all."],
+    ],
+  },
+  {
     title: "More products",
     sub: "",
     items: [
@@ -81,10 +106,20 @@ export default function ProductPageSettings() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!s) return;
+    const newDays = Number(s.new_release_days);
+    if (!Number.isInteger(newDays) || newDays < 7 || newDays > 180) {
+      setError("Hot new releases: enter 7 to 180 days");
+      return;
+    }
+    const drop = Number(s.price_alert_min_drop_pct);
+    if (!Number.isInteger(drop) || drop < 1 || drop > 90) {
+      setError("Price drop alerts: enter 1 to 90 percent");
+      return;
+    }
     setBusy(true);
     setError(null);
     const keys = [...GROUPS.flatMap((g) => g.items.map(([k]) => k)), "pdp_bought_min", "pdp_offers_max", "top_seller_min_rating_x10", "top_seller_min_orders",
-      "gallery_zoom", "gallery_zoom_level", "feature_product_videos", "max_video_mb", "max_videos_per_listing"];
+      "gallery_zoom", "gallery_zoom_level", "feature_product_videos", "max_video_mb", "max_videos_per_listing", "new_release_days", "price_alert_min_drop_pct"];
     try {
       setS(await api<S>("/api/admin/settings", { method: "PUT", body: Object.fromEntries(keys.map((k) => [k, s[k]])) }));
       toast("Product page settings saved");
@@ -118,12 +153,15 @@ export default function ProductPageSettings() {
       </section>
 
       {GROUPS.map((g) => (
-        <section key={g.title} className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
+        <section key={g.title} id={g.title === "Questions and answers" ? "qa" : undefined} className="grid scroll-mt-24 gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <h2 className="text-lg font-semibold">{g.title}</h2>
             {g.sub && <p className="text-sm text-ink-soft">{g.sub}</p>}
           </div>
           {g.items.map(([k, label, hint]) => <Toggle key={k} k={k} label={label} hint={hint} s={s} set={set} />)}
+          {g.title === "Alerts" && (
+            <TextField label="Price drop: at least (%)" {...num("price_alert_min_drop_pct")} hint="Smaller drops are not sent. 1 to 90." disabled={!s.feature_price_alerts} />
+          )}
           {g.title === "Price and buying" && (
             <TextField label="Offers shown at most" {...num("pdp_offers_max")} hint="1 to 10" disabled={!s.pdp_offers} />
           )}
@@ -137,12 +175,22 @@ export default function ProductPageSettings() {
         </section>
       ))}
 
+      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <h2 className="text-lg font-semibold">Discovery pages</h2>
+          <p className="text-sm text-ink-soft">Bestsellers and Hot new releases rank products by units sold in the last 30 days.</p>
+        </div>
+        <TextField label="Hot new releases: products launched in the last N days" {...num("new_release_days")} hint="7 to 180 days, counted from when the listing went live" />
+      </section>
+
       <section className="rounded-xl bg-white p-5 text-sm text-ink-soft">
         <h2 className="mb-1 text-lg font-semibold text-ink">Related settings</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li><Link href="/admin/reviews" className="font-semibold text-peacock">Reviews → Settings</Link>: who can review, customer photos and videos, moderation, topics and guidelines.</li>
           <li><Link href="/admin/categories" className="font-semibold text-peacock">Categories</Link>: the product information (net quantity, manufacturer, FSSAI licence and more) each category requires before a listing can be submitted.</li>
           <li><Link href="/admin/coupons" className="font-semibold text-peacock">Coupons</Link>: coupons marked &ldquo;show in the offers list&rdquo; appear on product pages.</li>
+          <li><Link href="/admin/deals" className="font-semibold text-peacock">Deals → Rules</Link> and <Link href="/admin/advertising" className="font-semibold text-peacock">Advertising → Settings</Link>: deal badges, countdowns and Sponsored rows on product pages.</li>
+          <li><Link href="/admin/questions" className="font-semibold text-peacock">Questions</Link>: check, publish or hide questions and answers.</li>
           <li><Link href="/admin/settings" className="font-semibold text-peacock">Marketplace settings</Link>: delivery fee, free-delivery amount, cash on delivery and transit days used in delivery dates.</li>
           <li>Seller identity, GSTIN, grievance officer and country of origin are always shown, as the Consumer Protection (E-Commerce) Rules require.</li>
         </ul>

@@ -8,7 +8,7 @@
 
 import clsx from "clsx";
 import {
-  Award, BadgeCheck, Ban, Banknote, Check, ChevronDown, Clock, Copy, FileText, Flag, Link2, Mail, MessageCircleQuestion, RotateCcw,
+  Award, BadgeCheck, Ban, Banknote, Bell, BellRing, Check, ChevronDown, Clock, Copy, FileText, Flag, Link2, Mail, MessageCircleQuestion, RotateCcw,
   Share2, ShieldCheck, Star, Tag, ThumbsUp, Truck,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,7 +19,8 @@ import { api, ApiError } from "@/lib/api";
 import { date as fmtDate, rupees } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
-import type { ProductOffer, ProductPage, SellerSnapshot } from "@/lib/types";
+import { ProductRail } from "@/components/product";
+import type { ProductCard, ProductOffer, ProductPage, SellerSnapshot } from "@/lib/types";
 import { readViewed } from "@/lib/wishlist";
 
 export function UnitPrice({ up, className }: { up?: { paise: number; per: string } | null; className?: string }) {
@@ -370,5 +371,62 @@ export function RecentlyViewedRail({ currentId }: { currentId: string }) {
         ))}
       </div>
     </section>
+  );
+}
+
+/* ---------------------------------------------------------------- sponsored rail and notify me */
+
+export function SponsoredRail({ slug }: { slug: string }) {
+  const [items, setItems] = useState<ProductCard[]>([]);
+  useEffect(() => {
+    let live = true;
+    api<{ items: ProductCard[] }>("/api/ads/serve", { query: { placement: "product", product: slug, limit: 10 } })
+      .then((r) => { if (live) setItems(r.items); }).catch(() => {});
+    return () => { live = false; };
+  }, [slug]);
+  if (!items.length) return null;
+  return <ProductRail title="Sponsored products related to this item" items={items} note="Sponsored" />;
+}
+
+/** "Notify me when available" for an out-of-stock version. */
+export function NotifyMe({ variantId }: { variantId: string }) {
+  const { user, ready } = useSession();
+  const pathname = usePathname();
+  const toast = useToast();
+  const [state, setState] = useState<{ id: string; on: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!ready || !user) return;
+    let live = true;
+    api<{ stock: { variant_id: string }[] }>("/api/alerts", { query: { variant_id: variantId } })
+      .then((r) => { if (live) setState({ id: variantId, on: r.stock.length > 0 }); }).catch(() => {});
+    return () => { live = false; };
+  }, [ready, user, variantId]);
+  const on = state?.id === variantId && state.on;
+  if (!user) {
+    return <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="flex h-12 w-full items-center justify-center gap-2 rounded-full border-2 border-peacock font-semibold text-peacock hover:bg-peacock-light" data-testid="notify-me">
+      <Bell className="h-5 w-5" /> Sign in to get notified
+    </Link>;
+  }
+  async function toggle() {
+    setBusy(true);
+    try {
+      if (on) await api(`/api/alerts/stock/${variantId}`, { method: "DELETE" });
+      else await api("/api/alerts/stock", { method: "POST", body: { variant_id: variantId } });
+      setState({ id: variantId, on: !on });
+      toast(on ? "Alert removed" : "We will tell you as soon as it is back");
+    } catch (x) {
+      toast(x instanceof ApiError ? x.message : "Could not update the alert", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return on ? (
+    <div className="flex flex-col gap-1 rounded-xl bg-leaf-light p-3 text-sm" data-testid="notify-me">
+      <p className="flex items-center gap-1.5 font-semibold text-leaf"><BellRing className="h-4 w-4" /> We will notify you when it is back</p>
+      <button type="button" onClick={toggle} disabled={busy} className="self-start text-ink-soft hover:text-vermilion">Stop this alert</button>
+    </div>
+  ) : (
+    <Button variant="secondary" size="lg" onClick={toggle} loading={busy} className="w-full rounded-full" data-testid="notify-me"><Bell className="h-5 w-5" /> Notify me when available</Button>
   );
 }

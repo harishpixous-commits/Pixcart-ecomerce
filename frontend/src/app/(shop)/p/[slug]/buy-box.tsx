@@ -9,6 +9,9 @@ import {
   AboutThisItem, AskAboutProduct, KeySpecs, OffersBlock, RecentlyViewedRail, ReportProduct, SellerSnapshotCard, ServiceIcons, ShareButton,
   StickyBuyBar, UnitPrice,
 } from "@/components/pdp";
+import { CompareToggle } from "@/components/compare";
+import { NotifyMe } from "@/components/pdp";
+import { DealBadge } from "@/components/product";
 import { ProductGallery } from "@/components/product-gallery";
 import { CustomerMediaStrip, Stars } from "@/components/reviews";
 import { Button, useToast } from "@/components/ui";
@@ -124,6 +127,15 @@ export function ProductMain({ p }: { p: ProductPage }) {
   const [qty, setQty] = useState(1);
   const [busy, setBusy] = useState<"cart" | "buy" | null>(null);
   const buttons = useRef<HTMLDivElement>(null);
+  // Opened from a sponsored product: link the click to this shopper so an order counts as an ad sale.
+  const claimed = useRef(false);
+  useEffect(() => {
+    if (!user || claimed.current) return;
+    const click = new URLSearchParams(window.location.search).get("sp");
+    if (!click || !/^[0-9a-f-]{36}$/i.test(click)) return;
+    claimed.current = true;
+    api(`/api/ads/clicks/${click}/claim`, { method: "POST" }).catch(() => {});
+  }, [user]);
 
   const variant = useMemo(
     () => p.variants.find((v) => Object.entries(chosen).every(([k, val]) => v.options[k] === val) && Object.keys(v.options).length === Object.keys(chosen).length),
@@ -158,6 +170,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
   }
 
   const shown = variant ?? firstAvailable;
+  const dealHere = Boolean(p.deal && shown && shown.id === p.deal.variant_id);
   const maxQty = Math.min(10, variant?.stock_left ?? 10);
   const netRow = shown?.net_quantity ? [{ label: "Net quantity", value: shown.net_quantity }] : [];
   const stock = variant ? (variant.in_stock
@@ -212,6 +225,14 @@ export function ProductMain({ p }: { p: ProductPage }) {
                   <UnitPrice up={pdp.unit_price ? shown.unit_price : null} className="text-sm" />
                 </div>
                 {shown.mrp > shown.price && <p className="mt-1 text-sm text-ink-faint">M.R.P.: <span className="line-through">{rupees(shown.mrp)}</span></p>}
+                {dealHere && (
+                  <div className="mt-2 flex flex-col gap-1 rounded-lg bg-vermilion-light/60 p-3" data-testid="pdp-deal">
+                    <DealBadge deal={p.deal!} discount={shown.discount_pct} size="md" />
+                    <p className="text-sm text-ink-soft">
+                      Deal price {rupees(shown.price)}{p.deal!.regular_price && p.deal!.regular_price > shown.price ? <> · was <span className="line-through">{rupees(p.deal!.regular_price)}</span></> : null}
+                    </p>
+                  </div>
+                )}
               </>
             )}
             <p className="text-sm text-ink-soft">Inclusive of all taxes</p>
@@ -255,6 +276,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
               <div>
                 <span className="font-display text-[28px] font-bold leading-none">{rupees(shown.price)}</span>{" "}
                 <UnitPrice up={pdp.unit_price ? shown.unit_price : null} className="text-sm" />
+                {dealHere && <div className="mt-1.5"><DealBadge deal={p.deal!} discount={shown.discount_pct} /></div>}
               </div>
             )}
             <Delivery variant={variant} />
@@ -266,8 +288,14 @@ export function ProductMain({ p }: { p: ProductPage }) {
               </select>
             </div>
             <div ref={buttons} className="flex flex-col gap-2">
-              <Button variant="cart" size="lg" onClick={() => add("cart")} loading={busy === "cart"} disabled={!variant?.in_stock || busy !== null} className="w-full rounded-full">Add to cart</Button>
-              <Button variant="buy" size="lg" onClick={() => add("buy")} loading={busy === "buy"} disabled={!variant?.in_stock || busy !== null} className="w-full rounded-full">Buy now</Button>
+              {variant && !variant.in_stock && site.features.stock_alerts !== false ? (
+                <NotifyMe variantId={variant.id} />
+              ) : (
+                <>
+                  <Button variant="cart" size="lg" onClick={() => add("cart")} loading={busy === "cart"} disabled={!variant?.in_stock || busy !== null} className="w-full rounded-full">Add to cart</Button>
+                  <Button variant="buy" size="lg" onClick={() => add("buy")} loading={busy === "buy"} disabled={!variant?.in_stock || busy !== null} className="w-full rounded-full">Buy now</Button>
+                </>
+              )}
             </div>
             <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1 text-[13px]">
               <dt className="text-ink-faint">Ships from</dt><dd>{p.seller.city}{p.seller.state ? `, ${p.seller.state}` : ""}</dd>
@@ -280,6 +308,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
               {site.features.wishlist && <span className="text-sm text-ink-soft">Save for later</span>}
               {pdp.share && <div className="ml-auto"><ShareButton title={p.title} /></div>}
             </div>
+            <CompareToggle item={{ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? "" }} className="text-sm" />
           </div>
           {pdp.seller_snapshot && p.seller_snapshot && <div className="hidden xl:block"><SellerSnapshotCard seller={p.seller} snap={p.seller_snapshot} /></div>}
           <div className="flex flex-col gap-2 rounded-xl bg-mist p-4 text-[13px] text-ink-soft">

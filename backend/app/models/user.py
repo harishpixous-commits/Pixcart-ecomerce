@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
 )
@@ -78,6 +79,9 @@ class Address(IdMixin, TimestampMixin, Base):
     kind: Mapped[str] = mapped_column(String(10), default="home")
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # optional map pin ("use my current location"): lets delivery partners navigate to the exact door
+    lat: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    lng: Mapped[float | None] = mapped_column(Numeric(9, 6))
 
 
 class RateLimitEvent(Base):
