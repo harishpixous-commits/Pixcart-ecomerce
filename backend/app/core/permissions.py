@@ -70,6 +70,8 @@ DEFAULT_ROLES: dict[str, tuple[str, str, set[str]]] = {
     "finance": ("Finance", "Payouts, refunds, TCS and exports.", {"dashboard", "assistant", "assistant_files", "assistant_voice", "payouts", "refunds", "reports", "orders", "audit"}),
     "support": ("Customer support", "Tickets, orders and customers.", {"dashboard", "assistant", "orders", "support", "customers", "shop_assistant_kb", "shop_assistant_chats"}),
     "marketing": ("Marketing", "Coupons, storefront and catalogue.", {"dashboard", "assistant", "marketing", "catalog", "shop_assistant_kb"}),
+    "delivery_manager": ("Delivery manager", "Delivery partners, zones, assignment, live tracking and cash; orders and customers to help them.",
+                         {"dashboard", "assistant", "delivery", "orders", "customers", "support"}),
 }
 
 _TTL = 10.0

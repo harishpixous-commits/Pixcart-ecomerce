@@ -22,6 +22,7 @@ from app.models import (
     AuditLog,
     Category,
     Deal,
+    DeliveryBoy,
     Order,
     Product,
     ProductAnswer,
@@ -128,6 +129,7 @@ async def dashboard(admin: Perm("dashboard"), session: SessionDep) -> dict:
         "ads_pending": (await session.execute(select(func.count()).select_from(AdCampaign).where(AdCampaign.status == "pending"))).scalar_one(),
         "questions_pending": (await session.execute(select(func.count()).select_from(ProductQuestion).where(ProductQuestion.status == "pending"))).scalar_one()
         + (await session.execute(select(func.count()).select_from(ProductAnswer).where(ProductAnswer.status == "pending"))).scalar_one(),
+        "delivery_kyc_pending": (await session.execute(select(func.count()).select_from(DeliveryBoy).where(DeliveryBoy.kyc_status == "submitted"))).scalar_one(),
         "active_sellers": (await session.execute(select(func.count()).where(Seller.status == "approved"))).scalar_one(),
         "customers": (await session.execute(select(func.count()).select_from(User))).scalar_one(),
         "live_products": (await session.execute(select(func.count()).where(Product.status == "approved"))).scalar_one(),

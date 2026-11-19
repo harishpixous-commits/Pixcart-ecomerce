@@ -158,3 +158,107 @@ async def test_full_registration_helper(client):
     rider = await register_partner(client, "9600000404", "Arun Raj", zone_id)
     p = (await rider.get("/api/delivery/me")).json()
     assert p["zone"]["id"] == zone_id and p["docs"] == {"license": True, "id_proof": True, "vehicle_rc": False} and p["bank"]["account_last4"] == "9012"
+
+
+# ---------------------------------------------------------------------------- step 3: admin partners, KYC, zones, settings, roles
+
+
+async def staff_with_role(client, role: str, email: str) -> Api:
+    from app.core.security import hash_password
+    from app.models import User
+
+    async with SessionLocal() as s:
+        s.add(User(email=email, name=f"{role} staff", password_hash=hash_password("Staff@12345"), is_admin=True, admin_role=role))
+        await s.commit()
+    r = await client.post("/api/auth/login", json={"email": email, "password": "Staff@12345"})
+    assert r.status_code == 200, r.text
+    client.cookies.clear()
+    return Api(client, r.json()["access_token"], r.json()["user"])
+
+
+async def test_admin_reviews_partners_zones_and_settings(client, admin):
+    zone_id = await make_zone()
+    rider = await register_partner(client, "9600000501", "Priya Das", aadhaar="345678901234")
+    rider2 = await login_phone(client, "9600000502", name="Mani Vel")  # a PAN partner, to see the stored (encrypted) number
+    await rider2.post("/api/delivery/register", {"name": "Mani Vel", "city": "Coimbatore", "id_proof_type": "pan", "id_proof_no": "abcde1234f"})
+
+    listing = (await admin.get("/api/admin/delivery/partners")).json()
+    assert listing["items"][0]["name"] == "Priya Das" and listing["counts"]["submitted"] == 1 and listing["counts"]["draft"] == 1
+    pid = listing["items"][0]["id"]
+    detail = (await admin.get(f"/api/admin/delivery/partners/{pid}")).json()
+    assert detail["id_proof_no"] == "" and detail["id_proof_last4"] == "1234"  # Aadhaar: never stored
+    pan_id = next(i["id"] for i in listing["items"] if i["name"] == "Mani Vel")
+    assert (await admin.get(f"/api/admin/delivery/partners/{pan_id}")).json()["id_proof_no"] == "ABCDE1234F"
+    doc = await admin.get(f"/api/admin/delivery/partners/{pid}/docs/license")
+    assert doc.status_code == 200 and doc.headers["content-type"] == "application/pdf"
+    bank = (await admin.get(f"/api/admin/delivery/partners/{pid}/bank")).json()
+    assert bank["account_number"] == "123456789012" and bank["ifsc"] == "SBIN0001234"
+    actions = {a["action"] for a in (await admin.get("/api/admin/audit", params={"entity_id": pid})).json()["items"]}
+    assert {"delivery.kyc_view", "delivery.bank_view"} <= actions
+
+    # asking for changes needs a note; the partner can edit again and is told
+    assert (await admin.post(f"/api/admin/delivery/partners/{pid}/kyc", {"action": "reject", "note": "no"})).json()["error"]["code"] == "note_required"
+    r = (await admin.post(f"/api/admin/delivery/partners/{pid}/kyc", {"action": "reject", "note": "Licence photo is blurred, upload again"})).json()
+    assert r["kyc_status"] == "rejected" and r["editable"] is True
+    assert (await rider.get("/api/notifications")).json()["items"][0]["title"] == "Delivery partner account needs changes"
+    assert (await rider.post("/api/delivery/me/submit")).json()["kyc_status"] == "submitted"
+
+    # approval needs complete documents and a zone
+    assert (await admin.post(f"/api/admin/delivery/partners/{pan_id}/kyc", {"action": "approve", "zone_id": zone_id})).json()["error"]["code"] == "incomplete"
+    async with SessionLocal() as s:
+        row = (await s.execute(select(DeliveryBoy).where(DeliveryBoy.phone == "9600000501"))).scalar_one()
+        row.zone_id = None
+        await s.commit()
+    assert (await admin.post(f"/api/admin/delivery/partners/{pid}/kyc", {"action": "approve"})).json()["error"]["code"] == "zone_required"
+    r = (await admin.post(f"/api/admin/delivery/partners/{pid}/kyc", {"action": "approve", "zone_id": zone_id})).json()
+    assert r["kyc_status"] == "approved" and r["zone"]["id"] == zone_id
+    assert (await rider.get("/api/auth/me")).json()["delivery"]["kyc_status"] == "approved"
+    assert (await rider.post("/api/delivery/me/online", {"online": True})).json()["is_online"] is True
+    assert (await rider.post("/api/delivery/me/location", {"lat": 11.0168, "lng": 76.9558})).json()["ok"] is True
+
+    # switching a partner off takes them offline and blocks the app
+    assert (await admin.post(f"/api/admin/delivery/partners/{pid}/active", {"active": False})).json()["error"]["code"] == "reason_required"
+    r = (await admin.post(f"/api/admin/delivery/partners/{pid}/active", {"active": False, "reason": "Repeated late deliveries"})).json()
+    assert r["is_active"] is False and r["is_online"] is False
+    assert (await rider.post("/api/delivery/me/online", {"online": True})).status_code == 403
+    assert (await admin.post(f"/api/admin/delivery/partners/{pid}/active", {"active": True})).json()["is_active"] is True
+    assert (await admin.get("/api/admin/delivery/partners", params={"status": "approved"})).json()["total"] == 1
+
+    # zones: a PIN code cannot be in two active zones; switching a zone off takes its partners offline
+    bad = await admin.post("/api/admin/delivery/zones", {"name": "Peelamedu", "city": "Coimbatore", "pincodes": "641004, 64100"})
+    assert bad.json()["error"]["code"] == "invalid_pin"
+    clash = await admin.post("/api/admin/delivery/zones", {"name": "Peelamedu", "city": "Coimbatore", "pincodes": "641004 641002"})
+    assert clash.status_code == 409 and clash.json()["error"]["code"] == "pin_overlap"
+    z2 = (await admin.post("/api/admin/delivery/zones", {"name": "Peelamedu", "city": "Coimbatore", "pincodes": "641004\n641014,641004"})).json()
+    assert z2["pincodes"] == ["641004", "641014"]
+    await rider.post("/api/delivery/me/online", {"online": True})
+    zl = {z["name"]: z for z in (await admin.get("/api/admin/delivery/zones")).json()}
+    assert zl["Coimbatore Central"]["online"] == 1 and zl["Coimbatore Central"]["approved"] == 1
+    await admin.put(f"/api/admin/delivery/zones/{zone_id}", {"name": "Coimbatore Central", "city": "Coimbatore", "pincodes": ["641001", "641002"], "is_active": False})
+    assert (await rider.get("/api/delivery/me")).json()["is_online"] is False
+    assert (await admin.delete(f"/api/admin/delivery/zones/{zone_id}")).status_code == 409  # partners still in it
+    assert (await admin.post(f"/api/admin/delivery/zones/{z2['id']}/partners", {"partner_ids": [pid]})).json()["moved"] == 1
+    assert (await admin.delete(f"/api/admin/delivery/zones/{zone_id}")).status_code == 200
+
+    # staff add a partner by mobile number; the partner signs in with it and finishes the registration
+    added = await admin.post("/api/admin/delivery/partners", {"phone": "+91 96000 00503", "name": "Walk In", "vehicle_type": "cycle"})
+    assert added.status_code == 201 and added.json()["kyc_status"] == "draft"
+    walk = await login_phone(client, "9600000503")
+    assert (await walk.get("/api/delivery/me")).json()["name"] == "Walk In"
+
+    # settings
+    s = (await admin.get("/api/admin/delivery/settings")).json()
+    assert s["values"]["offer_seconds"] == 30 and "zones" in s["fleet_modes"]
+    assert (await admin.put("/api/admin/delivery/settings", {"offer_seconds": 5})).json()["error"]["code"] == "invalid_setting"
+    assert (await admin.put("/api/admin/delivery/settings", {"fleet_mode": "everywhere"})).json()["error"]["code"] == "invalid_setting"
+    assert (await admin.put("/api/admin/delivery/settings", {"fee_min_paise": 9000, "fee_max_paise": 5000})).json()["error"]["code"] == "invalid_setting"
+    v = (await admin.put("/api/admin/delivery/settings", {"offer_seconds": 45, "fleet_mode": "all", "support_phone": "9876543210"})).json()["values"]
+    assert v["offer_seconds"] == 45 and v["fleet_mode"] == "all"
+    assert (await client.get("/api/delivery/options")).json()["support_phone"] == "9876543210"
+
+    # roles: without the delivery permission staff cannot open these pages; the delivery manager can
+    marketing = await staff_with_role(client, "marketing", "mkt@pixcart.in")
+    assert (await marketing.get("/api/admin/delivery/partners")).status_code == 403
+    manager = await staff_with_role(client, "delivery_manager", "dm@pixcart.in")
+    assert (await manager.get("/api/admin/delivery/partners")).status_code == 200
+    assert (await manager.get(f"/api/admin/delivery/partners/{pid}/bank")).status_code == 403  # bank numbers need the payouts permission

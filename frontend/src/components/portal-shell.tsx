@@ -13,13 +13,15 @@ export interface NavItem {
   icon: LucideIcon;
   badge?: number;
   section?: string; // heading shown above the first item of each section (desktop)
+  exact?: boolean; // active only on this exact path (an overview whose sub-pages have their own items)
 }
 
 /** Shared chrome for the seller hub and the admin panel: peacock top bar with awning, side navigation. */
 export function PortalShell({ title, nav, children, root }: { title: string; nav: NavItem[]; children: React.ReactNode; root: string }) {
   const pathname = usePathname();
   const { user, signOut } = useSession();
-  const isActive = (href: string) => (href === root ? pathname === root : pathname.startsWith(href));
+  const exact = new Set(nav.filter((n) => n.exact).map((n) => n.href));
+  const isActive = (href: string) => (href === root || exact.has(href) ? pathname === href : pathname.startsWith(href));
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30">

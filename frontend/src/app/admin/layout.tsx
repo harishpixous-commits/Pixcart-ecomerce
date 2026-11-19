@@ -3,6 +3,7 @@
 import {
   BarChart3, Bell, Bot, Cpu, LogIn, MessagesSquare, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
   ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw, Flag, PanelsTopLeft, Zap, Megaphone, MessageCircleQuestion,
+  Truck, Bike, MapPinned, SlidersHorizontal,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -19,7 +20,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const isLogin = pathname === "/admin/login";
   const [me, setMe] = useState<AdminMe | null>(null);
-  const [counts, setCounts] = useState({ s: 0, p: 0, r: 0, rv: 0, pr: 0, dl: 0, ad: 0, qa: 0 });
+  const [counts, setCounts] = useState({ s: 0, p: 0, r: 0, rv: 0, pr: 0, dl: 0, ad: 0, qa: 0, dk: 0 });
 
   useEffect(() => {
     if (!ready || isLogin) return;
@@ -34,11 +35,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (user?.is_admin && !isLogin && me?.permissions.includes("dashboard"))
       api<{
         sellers_pending_review: number; products_pending_review: number; refunds_needing_attention: number; reviews_needing_attention?: number;
-        product_reports_open?: number; deals_pending?: number; ads_pending?: number; questions_pending?: number;
+        product_reports_open?: number; deals_pending?: number; ads_pending?: number; questions_pending?: number; delivery_kyc_pending?: number;
       }>("/api/admin/dashboard")
         .then((d) => setCounts({
           s: d.sellers_pending_review, p: d.products_pending_review, r: d.refunds_needing_attention, rv: d.reviews_needing_attention ?? 0,
           pr: d.product_reports_open ?? 0, dl: d.deals_pending ?? 0, ad: d.ads_pending ?? 0, qa: d.questions_pending ?? 0,
+          dk: d.delivery_kyc_pending ?? 0,
         }))
         .catch(() => {});
   }, [user, isLogin, pathname, me]);
@@ -54,6 +56,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { section: "Orders and customers", href: "/admin/refunds", label: "Refunds", icon: Undo2, badge: counts.r, p: "refunds" },
     { section: "Orders and customers", href: "/admin/support", label: "Support desk", icon: LifeBuoy, p: "support" },
     { section: "Orders and customers", href: "/admin/customers", label: "Customers and accounts", icon: Users, p: "customers" },
+    { section: "Delivery fleet", href: "/admin/delivery", label: "Delivery overview", icon: Truck, p: "delivery", exact: true },
+    { section: "Delivery fleet", href: "/admin/delivery/partners", label: "Delivery partners", icon: Bike, badge: counts.dk, p: "delivery" },
+    { section: "Delivery fleet", href: "/admin/delivery/zones", label: "Delivery zones", icon: MapPinned, p: "delivery" },
+    { section: "Delivery fleet", href: "/admin/delivery/settings", label: "Delivery settings", icon: SlidersHorizontal, p: "delivery" },
     { section: "Sellers and catalogue", href: "/admin/sellers", label: "Sellers", icon: Store, badge: counts.s, p: "sellers" },
     { section: "Sellers and catalogue", href: "/admin/products", label: "Listings", icon: Package, badge: counts.p, p: "catalog" },
     { section: "Sellers and catalogue", href: "/admin/categories", label: "Categories", icon: FolderTree, p: "catalog" },
