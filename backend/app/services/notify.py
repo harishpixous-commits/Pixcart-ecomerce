@@ -106,6 +106,57 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("New customer question", "A shopper asked about {{item}}: {{question}}"),
         "email": ("A shopper asked about {{item}}", "A shopper asked: {{question}}\n\nAnswer it from your seller hub so others see it too.\n\n{{link}}"),
     },
+    # ---- own delivery fleet
+    "delivery_kyc_update": {
+        "inapp": ("Delivery partner account {{status}}", "{{message}}"),
+        "sms": ("", "{{brand}} delivery partner account {{status}}. {{message}}"),
+    },
+    "delivery_new_offer": {
+        "inapp": ("New delivery request", "Pick up from {{store}} ({{pickup_area}}) and deliver to {{drop_area}}. {{fee}}{{cod}}. Accept within {{seconds}} seconds."),
+    },
+    "delivery_assigned": {
+        "inapp": ("Delivery assigned to you", "{{order_number}}: pick up from {{store}} ({{pickup_area}}) and deliver to {{drop_area}}."),
+    },
+    "delivery_partner_assigned": {  # customer
+        "inapp": ("Delivery partner assigned", "{{partner}} will deliver {{item}}. You can track the delivery on your order page."),
+    },
+    "seller_pickup_assigned": {
+        "inapp": ("Pickup assigned: {{order_number}}", "{{partner}} ({{vehicle}}) will pick up {{order_number}}. Give the package against pickup code {{code}}."),
+    },
+    "delivery_out_for_delivery": {
+        "inapp": ("Out for delivery", "{{item}} is on the way with {{partner}}. Share OTP {{otp}} only when you receive the package."),
+        "sms": ("", "{{brand}}: {{item}} is out for delivery with {{partner}}. Share OTP {{otp}} only when you receive it."),
+        "email": ("Out for delivery: {{item}}", "Hi {{name}},\n\n{{item}} is on the way with {{partner}}.\n\nYour delivery OTP is {{otp}}. Share it only when you have the package in your hands.\n\nTrack it here: {{link}}"),
+    },
+    "delivery_arriving": {
+        "inapp": ("Your delivery partner has arrived", "{{partner}} is at your address with {{item}}. Keep OTP {{otp}} ready."),
+    },
+    "seller_package_delivered": {
+        "inapp": ("Delivered: {{order_number}}", "{{partner}} delivered {{order_number}} to the customer."),
+    },
+    "delivery_rate": {
+        "inapp": ("How was your delivery?", "Rate {{partner}}'s delivery of {{item}}. It takes a second."),
+    },
+    "delivery_failed": {
+        "inapp": ("Delivery attempt failed", "We could not deliver {{item}}: {{reason}}. We will try again or contact you."),
+        "sms": ("", "{{brand}}: we could not deliver {{item}} ({{reason}}). We will contact you."),
+    },
+    "delivery_payout_paid": {
+        "inapp": ("Payout {{amount}} paid", "Your earnings for {{period}} were paid. Reference {{reference}}."),
+        "sms": ("", "{{brand}}: your delivery earnings {{amount}} for {{period}} were paid. Ref {{reference}}."),
+    },
+    "staff_delivery_kyc": {
+        "inapp": ("Delivery partner to verify", "{{name}} ({{city}}) submitted documents. Check them in Delivery → Partners."),
+    },
+    "staff_delivery_bank": {
+        "inapp": ("Partner payout details changed", "{{name}} ({{phone}}) changed their bank or UPI details. Check them before the next payout."),
+    },
+    "staff_delivery_unassigned": {
+        "inapp": ("No delivery partner took {{order_number}}", "{{reason}} Assign it by hand in Delivery → Queue."),
+    },
+    "staff_delivery_stuck": {
+        "inapp": ("Delivery stuck: {{order_number}}", "It has been '{{status}}' for {{minutes}} minutes with {{partner}}."),
+    },
 }
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
@@ -181,6 +232,20 @@ async def notify_seller(session: AsyncSession, seller_id: uuid.UUID, event: str,
         return
     user = await session.get(User, seller.user_id)
     await notify(session, event, user, variables, link=link)
+
+
+async def notify_staff(session: AsyncSession, permission: str, event: str, variables: dict, *, link: str = "") -> int:
+    """Tells every active staff member whose role has ``permission`` (in-app). Returns how many were told."""
+    from app.core.permissions import load_roles, permissions_for
+
+    await load_roles(session)
+    staff = (await session.execute(select(User).where(User.is_admin.is_(True), User.is_active.is_(True), User.deleted_at.is_(None)))).scalars().all()
+    told = 0
+    for u in staff:
+        if permission in permissions_for(u):
+            await notify(session, event, u, variables, link=link, channels=("inapp", "push"))
+            told += 1
+    return told
 
 
 # ----------------------------------------------------------------------------- providers

@@ -25,7 +25,7 @@ from app.core.security import (
 )
 from app.core.validators import normalize_mobile
 from app.db import utcnow
-from app.models import OtpChallenge, RefreshSession, Seller, User
+from app.models import DeliveryBoy, OtpChallenge, RefreshSession, Seller, User
 from app.services import auth_settings, sms
 from app.services.cms import get_site
 
@@ -77,7 +77,10 @@ class ProfileUpdate(BaseModel):
 
 async def user_payload(session, user: User) -> dict:
     seller = (await session.execute(select(Seller).where(Seller.user_id == user.id))).scalar_one_or_none()
+    partner = (await session.execute(select(DeliveryBoy).where(DeliveryBoy.user_id == user.id))).scalar_one_or_none()
     return {
+        # delivery partner summary: the web app sends partners to /delivery with it
+        "delivery": {"id": str(partner.id), "kyc_status": partner.kyc_status, "is_active": partner.is_active} if partner else None,
         "id": str(user.id),
         "name": user.name,
         "phone": user.phone,

@@ -18,6 +18,8 @@ export interface User {
   marketing_opt_in?: boolean;
   totp_enabled?: boolean;
   seller: SellerRef | null;
+  /** Set when this account is a delivery partner (the /delivery app). */
+  delivery?: { id: string; kyc_status: "draft" | "submitted" | "approved" | "rejected"; is_active: boolean } | null;
 }
 
 export interface CategoryNode {

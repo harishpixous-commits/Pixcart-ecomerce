@@ -27,7 +27,7 @@ export function safeNext(raw: string | null) {
 }
 
 const digits = (v: string) => v.replace(/\D/g, "").slice(-10);
-const pretty = (v: string) => { const d = digits(v); return d.length === 10 ? `+91 ${d.slice(0, 5)} ${d.slice(5)}` : v; };
+export const pretty = (v: string) => { const d = digits(v); return d.length === 10 ? `+91 ${d.slice(0, 5)} ${d.slice(5)}` : v; };
 
 function useOptions() {
   const [o, setO] = useState<Options | null>(null);
@@ -35,7 +35,7 @@ function useOptions() {
   return o;
 }
 
-function useCountdown() {
+export function useCountdown() {
   const [wait, setWait] = useState(0);
   useEffect(() => {
     if (wait <= 0) return;
@@ -83,7 +83,7 @@ function DevOtp({ code, onUse }: { code: string; onUse: () => void }) {
   );
 }
 
-function CodeStep({ phone, length, devOtp, wait, busy, onVerify, onResend, onChange, verifyLabel }: {
+export function CodeStep({ phone, length, devOtp, wait, busy, onVerify, onResend, onChange, verifyLabel }: {
   phone: string; length: number; devOtp?: string; wait: number; busy: boolean; verifyLabel: string;
   onVerify: (code: string) => void; onResend: () => void; onChange: () => void;
 }) {

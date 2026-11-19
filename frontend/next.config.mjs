@@ -5,8 +5,9 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // Microphone only for this site's own pages (the admin assistant's dictation and voice mode).
-  { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
+  // Microphone (the admin assistant's dictation and voice mode) and location (the delivery partner app's live
+  // position, "use my location" for addresses) only for this site's own pages.
+  { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(self)" },
 ];
 
 const nextConfig = {
