@@ -17,6 +17,7 @@ export default function AdminAccount() {
   const [totpOn, setTotpOn] = useState(me?.totp_enabled ?? false);
   const [setup, setSetup] = useState<{ secret: string; qr: string } | null>(null);
   const [code, setCode] = useState("");
+  const [offPassword, setOffPassword] = useState("");
   const [tError, setTError] = useState<string | null>(null);
 
   async function changePassword(e: React.FormEvent) {
@@ -43,10 +44,11 @@ export default function AdminAccount() {
   async function confirmTotp(enable: boolean) {
     setTError(null);
     try {
-      await api(`/api/auth/totp/${enable ? "enable" : "disable"}`, { method: "POST", body: { code } });
+      await api(`/api/auth/totp/${enable ? "enable" : "disable"}`, { method: "POST", body: enable ? { code } : { code, password: offPassword } });
       setTotpOn(enable);
       setSetup(null);
       setCode("");
+      setOffPassword("");
       toast(enable ? "Two-step sign-in is on" : "Two-step sign-in is off");
     } catch (err) {
       setTError(err instanceof ApiError ? err.message : "That code did not work");
@@ -78,11 +80,13 @@ export default function AdminAccount() {
           </div>
         )}
         {totpOn && (
-          <div className="flex items-end gap-2">
-            <TextField label="Current code, to turn it off" inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
-            <Button variant="danger" disabled={code.length !== 6} onClick={() => confirmTotp(false)}>Turn off</Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <TextField label="Your password" type="password" autoComplete="current-password" value={offPassword} onChange={(e) => setOffPassword(e.target.value)} />
+            <TextField label="Current code" inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+            <Button variant="danger" disabled={code.length !== 6 || !offPassword} onClick={() => confirmTotp(false)}>Turn off</Button>
           </div>
         )}
+        {totpOn && <p className="mt-2 text-xs text-ink-faint">Turning it off needs your password and a current code. You get an email when it is turned off.</p>}
       </section>
       <section className="rounded-xl bg-white p-5">
         <h2 className="mb-3 text-lg font-semibold">Change password</h2>

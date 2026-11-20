@@ -16,8 +16,8 @@ from sqlalchemy import func, select, update
 
 from app.config import settings as env
 from app.core.deps import SessionDep, audit
-from app.core.errors import ApiError, Conflict, NotFound
-from app.core.permissions import Perm
+from app.core.errors import ApiError, Conflict, Forbidden, NotFound
+from app.core.permissions import Perm, permissions_for
 from app.core.validators import STATES, normalize_mobile, slugify
 from app.db import utcnow
 from app.integrations import get as get_integrations
@@ -49,7 +49,7 @@ from app.routers.seller_onboarding import (
 )
 from app.services import auth_settings
 from app.services import returns as returns_svc
-from app.services.notify import notify_seller
+from app.services.notify import notify, notify_seller
 
 router = APIRouter(prefix="/api/admin", tags=["admin-accounts"])
 
@@ -192,25 +192,32 @@ async def edit_customer(user_id: uuid.UUID, body: CustomerPatch, admin: Perm("cu
         raise NotFound("Customer")
     if u.is_admin and u.id != admin.id:
         raise Conflict("Staff accounts are edited in Staff and roles", "invalid_target")
+    new_phone = _mobile(body.phone) if body.phone is not None else u.phone
+    new_email = None if body.clear_email else (body.email.lower() if body.email is not None else u.email)
+    sign_in_changes = [x for x, changed in (("mobile number", new_phone != u.phone), ("email", new_email != u.email)) if changed]
+    if sign_in_changes and (await session.execute(select(Seller.id).where(Seller.user_id == u.id))).first() and "sellers" not in permissions_for(admin):
+        # whoever controls the owner's mobile signs in as the seller: only staff who manage sellers may change it
+        raise Forbidden("This person owns a seller account. Only staff who manage sellers can change their mobile number or email.")
+    if sign_in_changes:
+        # told on the old number and email before they change, so a change nobody asked for is noticed
+        await notify(session, "security_notice", u, {"what": "sign-in details changed",
+                     "message": f"Our team changed the {' and '.join(sign_in_changes)} you use to sign in."}, channels=("inapp", "email", "sms"))
     changes = []
     if body.name is not None:
         u.name = " ".join(body.name.split())
         changes.append("name")
-    if body.phone is not None:
-        phone = _mobile(body.phone)
-        if phone != u.phone:
-            await _phone_free(session, phone, u.id)
-            u.phone = phone
-            changes.append("mobile")
-            # A new number must sign in again with an OTP sent to it.
-            await session.execute(update(RefreshSession).where(RefreshSession.user_id == u.id, RefreshSession.revoked_at.is_(None)).values(revoked_at=utcnow()))
-    if body.clear_email:
+    if new_phone != u.phone:
+        await _phone_free(session, new_phone, u.id)
+        u.phone = new_phone
+        changes.append("mobile")
+        # A new number must sign in again with an OTP sent to it.
+        await session.execute(update(RefreshSession).where(RefreshSession.user_id == u.id, RefreshSession.revoked_at.is_(None)).values(revoked_at=utcnow()))
+    if body.clear_email and u.email:
         u.email = None
         changes.append("email removed")
-    elif body.email is not None:
-        email = body.email.lower()
-        await _email_free(session, email, u.id)
-        u.email = email
+    elif new_email != u.email and new_email:
+        await _email_free(session, new_email, u.id)
+        u.email = new_email
         changes.append("email")
     if body.marketing_opt_in is not None:
         u.marketing_opt_in = body.marketing_opt_in
@@ -225,6 +232,8 @@ async def sign_out_customer(user_id: uuid.UUID, admin: Perm("customers"), sessio
     u = await session.get(User, user_id)
     if u is None:
         raise NotFound("Customer")
+    if u.is_admin:
+        raise Conflict("Staff accounts are managed in Staff and roles", "invalid_target")
     n = (await session.execute(update(RefreshSession).where(RefreshSession.user_id == u.id, RefreshSession.revoked_at.is_(None)).values(revoked_at=utcnow()))).rowcount
     audit(session, admin, "user.sign_out", "user", u.id, f"{n} session(s)")
     await session.commit()

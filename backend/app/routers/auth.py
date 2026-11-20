@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 
 from app.config import settings
 from app.core import totp
-from app.core.deps import CurrentUser, SessionDep, client_ip, rate_limit
+from app.core.deps import CurrentUser, SessionDep, audit, client_ip, rate_limit
 from app.core.errors import ApiError, Forbidden, TooManyRequests, Unauthorized
 from app.core.security import (
     create_access_token,
@@ -28,6 +28,7 @@ from app.db import utcnow
 from app.models import DeliveryBoy, OtpChallenge, RefreshSession, Seller, User
 from app.services import auth_settings, sms
 from app.services.cms import get_site
+from app.services.notify import notify
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -68,6 +69,7 @@ class PasswordChange(BaseModel):
 
 class TotpCode(BaseModel):
     code: str = Field(min_length=6, max_length=8)
+    password: str = Field(default="", max_length=200)  # needed to turn two-step sign-in off (accounts with a password)
 
 
 class ProfileUpdate(BaseModel):
@@ -295,20 +297,37 @@ async def totp_setup(user: CurrentUser, session: SessionDep) -> dict:
     return {"secret": secret, "uri": totp.uri(secret, user.email or user.phone or str(user.id), issuer=(await get_site(session))["brand_name"])}
 
 
+async def _totp_attempt(session, user: User) -> None:
+    """Counts a code attempt (kept even when the code is wrong): 5 per 15 minutes, so codes cannot be guessed."""
+    await rate_limit(session, f"totp:{user.id}", limit=5, window_seconds=900)
+    await session.commit()
+
+
 @router.post("/totp/enable")
 async def totp_enable(body: TotpCode, user: CurrentUser, session: SessionDep) -> dict:
+    await _totp_attempt(session, user)
     if not user.totp_secret_enc or not totp.verify(decrypt_field(user.totp_secret_enc), body.code):
         raise ApiError("That code is not correct. Check the time on your phone and try again.", "totp_invalid")
     user.totp_enabled = True
+    audit(session, user, "account.totp_on", "user", user.id)
     await session.commit()
     return {"ok": True}
 
 
 @router.post("/totp/disable")
 async def totp_disable(body: TotpCode, user: CurrentUser, session: SessionDep) -> dict:
+    """Turning two-step sign-in off needs the current code and, for accounts with a password, the password too; the
+    account holder is told on every channel, so a stolen session cannot quietly remove it."""
+    await _totp_attempt(session, user)
+    if user.password_hash and not verify_password(body.password, user.password_hash):
+        raise ApiError("Enter your current password to turn off two-step sign-in", "wrong_password", fields={"password": "Incorrect"})
     if not user.totp_enabled or not totp.verify(decrypt_field(user.totp_secret_enc), body.code):
         raise ApiError("That code is not correct", "totp_invalid")
     user.totp_enabled, user.totp_secret_enc = False, None
+    audit(session, user, "account.totp_off", "user", user.id)
+    await notify(session, "security_notice", user, {"what": "two-step sign-in turned off",
+                 "message": "Two-step sign-in was turned off on your account. Only your password is now needed to sign in."},
+                 channels=("inapp", "email", "sms"))
     await session.commit()
     return {"ok": True}
 

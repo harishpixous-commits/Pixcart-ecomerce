@@ -87,6 +87,12 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("{{subject}}", "{{message}}"),
         "email": ("{{subject}}", "Hi {{name}},\n\n{{message}}\n\n{{link}}"),
     },
+    "security_notice": {
+        "inapp": ("Security notice: {{what}}", "{{message}} If this was not you or someone you asked, contact {{brand}} support at once."),
+        "email": ("Security notice from {{brand}}: {{what}}",
+                  "Hi {{name}},\n\n{{message}}\n\nIf this was not you or someone you asked, contact {{brand}} support at once so we can secure your account."),
+        "sms": ("", "{{brand}} security notice: {{what}}. Not you? Contact support at once."),
+    },
     "low_stock": {
         "inapp": ("Low stock", "{{count}} of your product options have 5 or fewer units left."),
     },

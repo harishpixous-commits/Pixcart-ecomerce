@@ -770,6 +770,8 @@ async def unblock_user(user_id: uuid.UUID, admin: Perm("customers"), session: Se
     u = await session.get(User, user_id)
     if u is None:
         raise NotFound("User")
+    if u.is_admin:  # staff (and owners) are switched on and off only in Staff and roles
+        raise Conflict("Staff accounts are managed in Staff and roles", "invalid_target")
     u.is_active = True
     audit(session, admin, "user.unblock", "user", u.id)
     await session.commit()
