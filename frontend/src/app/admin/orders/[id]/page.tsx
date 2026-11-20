@@ -1,12 +1,14 @@
 "use client";
 
+import { Bike, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Modal, PageLoader, StatusPill, Textarea, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
-import type { OrderDetail } from "@/lib/types";
+import type { FleetTracking, OrderDetail } from "@/lib/types";
 import { CustomerMessage } from "./message";
 import { RiskBrief } from "@/components/ai";
 
@@ -58,7 +60,13 @@ export default function AdminOrderDetail() {
             <h2 className="font-semibold">{s.number}, {s.seller?.name}</h2>
             <StatusPill status={s.status} label={SUB_STATUS_LABEL[s.status]} />
             <div className="ml-auto flex gap-2">
-              {s.status === "shipped" && <Button size="sm" onClick={() => act(`/api/admin/sub-orders/${s.id}/deliver`, undefined, "Marked delivered")} loading={busy}>Mark delivered</Button>}
+              {s.status === "shipped" && (
+                <Button size="sm" loading={busy} onClick={() => {
+                  const withPartner = !!o.fleet?.[s.id]?.assignment && !["delivered", "failed"].includes(o.fleet[s.id].assignment!.status);
+                  if (withPartner && !window.confirm("Our delivery partner has this package. Mark it delivered without the customer's OTP? Do this only when you know it was handed over; the partner's trip is closed and any cash counts as collected by them.")) return;
+                  act(`/api/admin/sub-orders/${s.id}/deliver`, undefined, "Marked delivered");
+                }}>Mark delivered</Button>
+              )}
               {["pending_payment", "placed", "confirmed", "packed"].includes(s.status) && <Button size="sm" variant="danger" onClick={() => setCancelId(s.id)}>Cancel and refund</Button>}
             </div>
           </div>
@@ -69,6 +77,7 @@ export default function AdminOrderDetail() {
             Total {rupeesExact(s.total)}; commission {rupeesExact(s.commission ?? 0)} + GST {rupeesExact(s.commission_gst ?? 0)}; TCS {rupeesExact(s.tcs ?? 0)}; TDS {rupeesExact(s.tds ?? 0)}; seller payout {rupeesExact(s.seller_payout ?? 0)} ({s.settlement_status})
           </p>
           {s.tracking_number && <p className="text-sm">Tracking: {s.courier_name} {s.tracking_number}</p>}
+          {o.fleet?.[s.id] && <FleetLine f={o.fleet[s.id]} />}
           {s.cancel_reason && <p className="text-sm text-vermilion">Cancelled by {s.cancelled_by}: {s.cancel_reason}</p>}
         </section>
       ))}
@@ -93,6 +102,31 @@ export default function AdminOrderDetail() {
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason shown to the customer and seller" aria-label="Reason" />
         <Button className="mt-3" variant="buy" disabled={reason.trim().length < 5} loading={busy} onClick={() => act(`/api/admin/sub-orders/${cancelId}/cancel`, { reason }, "Cancelled")}>Cancel and refund</Button>
       </Modal>
+    </div>
+  );
+}
+
+/** Own delivery fleet on the admin order: the step, the partner, and a link to the trip (or the assignment queue). */
+function FleetLine({ f }: { f: FleetTracking }) {
+  const a = f.assignment;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-peacock-light/50 px-3 py-2 text-sm" data-testid="admin-order-fleet">
+      <Bike className="h-4 w-4 shrink-0 text-peacock" aria-hidden />
+      <span className="font-semibold">Own delivery partner:</span>
+      {a ? (
+        <>
+          <span>{a.status_label}</span>
+          {f.partner && <span className="text-ink-soft">· {f.partner.name}{f.partner.vehicle_no ? `, ${f.partner.vehicle_no}` : ""}</span>}
+          <Link href={`/admin/delivery/trips/${a.id}`} className="ml-auto inline-flex items-center gap-0.5 font-semibold text-peacock">Open trip <ChevronRight className="h-4 w-4" aria-hidden /></Link>
+        </>
+      ) : f.ready_for_pickup_at ? (
+        <>
+          <span>Ready for pickup, waiting for a partner</span>
+          <Link href="/admin/delivery/queue" className="ml-auto inline-flex items-center gap-0.5 font-semibold text-peacock">Assign <ChevronRight className="h-4 w-4" aria-hidden /></Link>
+        </>
+      ) : (
+        <span>the seller has not handed it over yet</span>
+      )}
     </div>
   );
 }

@@ -44,7 +44,7 @@ from app.models.delivery import ACTIVE as DELIVERY_ACTIVE
 from app.routers.orders import order_detail, run_refunds
 from app.routers.seller_onboarding import document_response, seller_profile
 from app.routers.seller_products import MAX_IMAGES, VideoIn, check_videos, product_detail
-from app.services import storage
+from app.services import fleet, storage
 from app.services.catalog import apply_videos, check_image_url, images_for
 from app.services.notify import notify_seller
 from app.services.orders import cancel_sub_order, notify_refund, transition
@@ -614,7 +614,12 @@ async def admin_cancel(sub_id: uuid.UUID, body: ReasonIn, admin: Perm("orders"),
 @router.post("/sub-orders/{sub_id}/deliver")
 async def admin_deliver(sub_id: uuid.UUID, admin: Perm("orders"), session: SessionDep) -> dict:
     s = await _sub(session, sub_id)
-    await transition(session, s, "delivered", "admin", "Marked delivered by admin")
+    trip = await fleet.active_assignment(session, s.id) if s.shipping_provider == "fleet" else None
+    if trip is not None:
+        # our delivery partner has it: close the trip too (fee, tip, cash counted as with the partner)
+        await fleet.staff_deliver(session, trip, admin)
+    else:
+        await transition(session, s, "delivered", "admin", "Marked delivered by admin")
     audit(session, admin, "suborder.admin_deliver", "sub_order", s.id)
     await session.commit()
     return await order_detail(session, await session.get(Order, s.order_id), for_admin=True)

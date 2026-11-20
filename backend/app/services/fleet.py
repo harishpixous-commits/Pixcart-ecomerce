@@ -575,6 +575,28 @@ async def deliver(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy
                  channels=("inapp", "push"))
 
 
+async def staff_deliver(session: AsyncSession, a: DeliveryAssignment, user: User) -> None:
+    """Staff confirm a hand-over the partner could not record (phone switched off, app trouble): the trip ends as
+    delivered with the partner's fee and tip, and any cash due counts as collected by the partner."""
+    from app.services.orders import collect_amount, transition
+
+    if a.kind != "delivery" or a.status not in ("picked", "on_the_way", "reached"):
+        raise Conflict("Only a package the partner is carrying can be marked delivered", "invalid_step")
+    cfg = await delivery_settings.get(session)
+    sub = await session.get(SubOrder, a.sub_order_id)
+    order = await session.get(Order, a.order_id)
+    boy = await session.get(DeliveryBoy, a.delivery_boy_id)
+    due = await collect_amount(session, sub, order)
+    now = utcnow()
+    a.status, a.delivered_at, a.status_at, a.ended_at = "delivered", now, now, now
+    a.cod_collected, a.cod_method = (due, "cash") if due else (0, "")
+    a.fee_paise = fee_for(cfg, float(a.distance_km) if a.distance_km is not None else None)
+    a.tip_paise = order.tip_paise if await is_fee_carrier(session, sub) else 0
+    await transition(session, sub, "delivered", "admin", f"Delivered by {boy.name if boy else 'the partner'} (confirmed by staff)")
+    log_status(session, order_id=a.order_id, sub_order_id=sub.id, assignment_id=a.id, status="delivered", actor="admin", user_id=user.id,
+               note="Marked delivered by staff" + (f"; {rupees(due)} cash counted as collected by the partner" if due else ""))
+
+
 async def fail(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, reason: str, note: str, lat: float | None, lng: float | None) -> None:
     from app.services.notify import notify, notify_staff
 

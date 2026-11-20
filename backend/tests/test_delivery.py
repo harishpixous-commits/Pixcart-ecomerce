@@ -573,3 +573,27 @@ async def test_switching_a_partner_off_mid_trip_keeps_packages_in_hand(client, a
     assert (await rider.post(f"/api/delivery/trips/{picked['id']}/status", {"to": "on_the_way"})).status_code == 200
     failed = await rider.post(f"/api/delivery/trips/{picked['id']}/fail", {"reason": "not_available"})
     assert failed.status_code == 200 and failed.json()["status"] == "failed"
+
+
+async def test_staff_mark_delivered_closes_the_partners_trip(client, admin, categories):
+    zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
+    await admin.put("/api/admin/delivery/settings", {"auto_assign": False, "fleet_mode": "zones"})
+    tn, _ka, shirt, _ = await setup(client, admin, categories)
+    rider = await ready_partner(client, admin, "9600000971", "Phone Off Rider", zone_id, 13.083, 80.271)
+    _, o = await cod_order(client, shirt, "9600000972")
+    sid = o["sub_orders"][0]["id"]
+    await tn.post(f"/api/seller/orders/{sid}/confirm")
+    await tn.post(f"/api/seller/orders/{sid}/ready-for-pickup")
+    trip = (await admin.post("/api/admin/delivery/assign", {"sub_order_id": sid, "partner_id": rider.partner_id, "direct": True})).json()
+    code = (await tn.get(f"/api/seller/orders/{sid}")).json()["fleet"]["pickup_code"]
+    assert (await rider.post(f"/api/delivery/trips/{trip['id']}/status", {"to": "picked", "code": code})).status_code == 200
+
+    # the partner's phone died after handing over: staff confirm it from the order page
+    r = await admin.post(f"/api/admin/sub-orders/{sid}/deliver")
+    assert r.status_code == 200, r.text
+    assert r.json()["sub_orders"][0]["status"] == "delivered"
+    done = (await admin.get(f"/api/admin/delivery/trips/{trip['id']}")).json()
+    assert done["status"] == "delivered" and done["fee"] == 3000 and done["cod_collected"] == done["cod_amount"] > 0
+    assert any(x["note"].startswith("Marked delivered by staff") for x in done["log"])
+    feed = (await rider.get("/api/delivery/feed")).json()
+    assert feed["active"] == [] and feed["cash_in_hand"] == done["cod_amount"] and feed["today"]["trips"] == 1
