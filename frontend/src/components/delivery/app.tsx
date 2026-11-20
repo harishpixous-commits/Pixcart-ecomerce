@@ -11,6 +11,8 @@ import { Bell, HelpCircle, History, Home, LogOut, Loader2, UserRound, Wallet } f
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { FeedProvider, OfferPopup, unlockAudio, useFeed } from "@/components/delivery/feed";
+import { PushPrompt } from "@/components/push-prompt";
 import { Logo } from "@/components/shop-chrome";
 import { useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -180,8 +182,28 @@ function useUnread() {
   return n;
 }
 
-/** The approved partner's app: top bar with the online switch, tabs at the bottom (phones) or on the side. */
+/** The approved partner's app: top bar with the online switch, tabs at the bottom (phones) or on the side. New
+ * delivery requests pop up over whichever screen is open. */
 export function DeliveryShell({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    // sound for new requests needs one tap on the page first (a browser rule)
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+  return (
+    <FeedProvider>
+      <ShellFrame>{children}</ShellFrame>
+      <OfferPopup />
+    </FeedProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const unread = useUnread();
   const active = (href: string) => (href === "/delivery" ? pathname === "/delivery" : pathname.startsWith(href));
@@ -214,7 +236,13 @@ export function DeliveryShell({ children }: { children: React.ReactNode }) {
           </Link>
           <SignOut className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 font-semibold text-ink-soft hover:bg-mist" />
         </nav>
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="flex min-w-0 flex-1 flex-col gap-4">
+          {pathname === "/delivery" && (
+            <PushPrompt app="delivery" showBlocked title="Get delivery requests even when the app is closed"
+              text="Turn on notifications so a new request rings your phone. You can still only accept from the app." />
+          )}
+          <div>{children}</div>
+        </main>
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden" aria-label="Partner app">
         <div className="mx-auto grid max-w-md grid-cols-4">
@@ -236,6 +264,7 @@ export function DeliveryShell({ children }: { children: React.ReactNode }) {
 
 export function OnlineSwitch({ large }: { large?: boolean }) {
   const { partner, set } = usePartner();
+  const { refresh } = useFeed();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   if (!partner) return null;
@@ -243,9 +272,11 @@ export function OnlineSwitch({ large }: { large?: boolean }) {
   async function flip() {
     if (!partner) return;
     setBusy(true);
+    unlockAudio();
     try {
       const r = await api<{ is_online: boolean }>("/api/delivery/me/online", { method: "POST", body: { online: !on } });
       set({ ...partner, is_online: r.is_online });
+      refresh();
       toast(r.is_online ? "You are online. New delivery requests will pop up here." : "You are offline. You will not get new requests.");
     } catch (x) {
       toast(x instanceof ApiError ? x.message : "Could not change your status", "error");

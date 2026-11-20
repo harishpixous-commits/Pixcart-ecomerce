@@ -14,10 +14,10 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations import get as get_integrations
 from app.core.errors import ApiError
 from app.core.validators import STATES
 from app.db import utcnow
+from app.integrations import get as get_integrations
 from app.models import (
     IntegrationToken,
     Order,
@@ -96,6 +96,11 @@ async def book(session: AsyncSession, sub: SubOrder) -> None:
     weight_kg = max(0.1, sum(weights.get(i.variant_id, 500) * i.qty for i in items) / 1000)
     pickup = await ensure_pickup(session, seller, wh)
     st = order.ship_to
+    from app.services.orders import collect_amount
+
+    # Cash on delivery: the courier collects what the customer owes for this package (a discount the marketplace
+    # funded is taken off; the marketplace's fees and the tip ride with the first package).
+    extra = (await collect_amount(session, sub, order)) - (sub.total - sub.platform_discount) if order.payment_method == "cod" else 0
     created = await _call(session, "POST", "/orders/create/adhoc", {
         "order_id": sub.number, "order_date": sub.created_at.strftime("%Y-%m-%d %H:%M"), "pickup_location": pickup,
         "billing_customer_name": st.get("full_name", ""), "billing_last_name": "", "billing_address": st.get("line1", ""),
@@ -105,6 +110,7 @@ async def book(session: AsyncSession, sub: SubOrder) -> None:
         "order_items": [{"name": i.title[:100], "sku": i.sku, "units": i.qty, "selling_price": f"{i.unit_price / 100:.2f}", "hsn": i.hsn_code} for i in items],
         "payment_method": "COD" if order.payment_method == "cod" else "Prepaid",
         "shipping_charges": f"{sub.shipping_fee / 100:.2f}", "sub_total": f"{(sub.total - sub.shipping_fee) / 100:.2f}",
+        "total_discount": f"{sub.platform_discount / 100:.2f}", "transaction_charges": f"{max(0, extra) / 100:.2f}",
         "length": 20, "breadth": 15, "height": 10, "weight": round(weight_kg, 2),
     })
     sub.provider_order_id = str(created.get("order_id", ""))

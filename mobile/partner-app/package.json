@@ -1,0 +1,24 @@
+{
+  "name": "pixcart-partner-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PixCart delivery partner app for Android: the partner web app (/delivery) in a native shell with push notifications, location and camera.",
+  "scripts": {
+    "add:android": "cap add android",
+    "sync": "cap sync android",
+    "patch": "node scripts/patch-android.mjs",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/push-notifications": "8.1.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

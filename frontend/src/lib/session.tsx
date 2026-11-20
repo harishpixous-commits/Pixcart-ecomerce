@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, onTokenChange, refreshSession, setAccessToken } from "./api";
+import { removePushToken } from "./push";
 import type { CartView, User } from "./types";
 
 /** The user id inside an access token (not verified here; the server verifies every request). */
@@ -166,6 +167,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    await removePushToken(); // this device stops getting the account's notifications
     try {
       await api("/api/auth/logout", { method: "POST" });
     } catch {

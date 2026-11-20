@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PixCart Partner</title>
+  <style>
+    :root { color-scheme: light; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box;
+      background: #EEF2F4; color: #1B2430; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center;
+    }
+    .card { max-width: 340px; background: #fff; border-radius: 24px; padding: 28px 22px; box-shadow: 0 8px 30px rgba(11, 85, 99, 0.12); }
+    .logo { width: 64px; height: 64px; border-radius: 18px; background: #0B5563; color: #fff; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 34px; margin: 0 auto 14px; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    p { margin: 0 0 18px; color: #4A5565; }
+    button { appearance: none; border: 0; border-radius: 999px; background: #0B5563; color: #fff; font: 600 16px system-ui, sans-serif; padding: 12px 28px; }
+  </style>
+</head>
+<body data-url="__PIXCART_URL__">
+  <div class="card">
+    <div class="logo" aria-hidden="true">P</div>
+    <h1>You are offline</h1>
+    <p>Check your mobile data or Wi-Fi. Your trips and requests are safe and show again when you are back online.</p>
+    <button type="button" onclick="location.href = document.body.dataset.url.indexOf('http') === 0 ? document.body.dataset.url : '/'">Try again</button>
+  </div>
+</body>
+</html>

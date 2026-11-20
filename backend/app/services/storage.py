@@ -104,6 +104,41 @@ async def save_video(data: bytes, max_bytes: int, folder: str = "videos") -> str
     return f"{settings.media_base_url.rstrip('/')}/{key}"
 
 
+APK_TYPE = "application/vnd.android.package-archive"
+
+
+def check_apk(data: bytes) -> None:
+    """An Android app package is a ZIP with a manifest and compiled code; anything else is refused."""
+    import zipfile
+
+    if not data.startswith(b"PK\x03\x04"):
+        raise ApiError("Upload the Android app file (.apk)", "invalid_apk")
+    try:
+        names = set(zipfile.ZipFile(io.BytesIO(data)).namelist())
+    except zipfile.BadZipFile as exc:
+        raise ApiError("This .apk file is damaged. Download it again.", "invalid_apk") from exc
+    if "AndroidManifest.xml" not in names or not any(n.startswith("classes") and n.endswith(".dex") for n in names):
+        raise ApiError("This is not an Android app file (.apk). Upload the APK the build produced.", "invalid_apk")
+
+
+async def save_app_package(data: bytes, max_bytes: int, name: str) -> str:
+    """Stores the partner Android app (APK) publicly so partners can download it from the app's download page."""
+    if len(data) > max_bytes:
+        raise ApiError(f"The app file must be smaller than {max_bytes // (1024 * 1024)} MB", "file_too_large")
+    await asyncio.to_thread(check_apk, data)
+    key = f"apps/{name}-{uuid.uuid4().hex[:8]}.apk"
+    if settings.storage_backend == "s3":
+        await asyncio.to_thread(
+            _s3().put_object, Bucket=settings.s3_bucket, Key=key, Body=data, ContentType=APK_TYPE,
+            ContentDisposition=f'attachment; filename="{name}.apk"', CacheControl="public, max-age=31536000, immutable",
+        )
+    else:
+        path = Path(settings.media_root) / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(path.write_bytes, data)
+    return f"{settings.media_base_url.rstrip('/')}/{key}"
+
+
 def sniff_document(data: bytes) -> tuple[str, str]:
     for magic, info in DOC_TYPES.items():
         if data.startswith(magic):

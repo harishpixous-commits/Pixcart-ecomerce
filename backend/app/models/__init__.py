@@ -1,4 +1,15 @@
 from app.models.catalog import Category, Product, ProductImage, ProductVideo, Variant
+from app.models.delivery import (
+    DeliveryAssignment,
+    DeliveryBoy,
+    DeliveryCashDeposit,
+    DeliveryComplaint,
+    DeliveryPayout,
+    DeliveryZone,
+    OrderStatusLog,
+    PushToken,
+)
+from app.models.engagement import AnswerVote, ProductAnswer, ProductQuestion, StockAlert
 from app.models.extended import (
     AdminRole,
     AiRun,
@@ -43,17 +54,6 @@ from app.models.order import (
     SubOrder,
     WebhookEvent,
 )
-from app.models.delivery import (
-    DeliveryAssignment,
-    DeliveryBoy,
-    DeliveryCashDeposit,
-    DeliveryComplaint,
-    DeliveryPayout,
-    DeliveryZone,
-    OrderStatusLog,
-    PushToken,
-)
-from app.models.engagement import AnswerVote, ProductAnswer, ProductQuestion, StockAlert
 from app.models.promotions import AdCampaign, AdCampaignProduct, AdClick, AdStat, Deal
 from app.models.seller import Seller, SellerDocument
 from app.models.shop_assistant import ShopChatAction, ShopChatMessage, ShopChatSession, ShopKbArticle

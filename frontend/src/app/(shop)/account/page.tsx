@@ -1,5 +1,6 @@
 "use client";
 
+import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddressForm } from "@/components/address-form";
@@ -62,14 +63,18 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // fill the form from the signed-in account once (and again only if another account signs in)
+  const [seeded, setSeeded] = useState<string | null>(null);
+  if (user && seeded !== user.id) {
+    setSeeded(user.id);
+    setName(user.name);
+    setEmail(user.email ?? "");
+  }
+
   const load = useCallback(() => api<Address[]>("/api/addresses").then(setAddresses).catch(quietly), []);
   useEffect(() => {
     if (ready && !user) router.replace("/login?next=/account");
-    if (user) {
-      setName(user.name);
-      setEmail(user.email ?? "");
-      load();
-    }
+    if (user) load();
   }, [ready, user, router, load]);
 
   async function saveProfile(e: React.FormEvent) {
@@ -123,10 +128,15 @@ export default function AccountPage() {
           <ul className="divide-y divide-line">
             {addresses.map((a) => (
               <li key={a.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                <div>
-                  <p className="font-semibold">{a.full_name} {a.is_default && <Pill tone="blue">Default</Pill>} <Pill>{a.kind}</Pill></p>
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-1.5 font-semibold">
+                    {a.full_name} <Pill>{a.label?.trim() || ({ home: "Home", work: "Work", other: "Other" } as const)[a.kind]}</Pill>
+                    {a.is_default && <Pill tone="blue">Default</Pill>}
+                    {a.lat != null && <Pill tone="green"><MapPin className="mr-0.5 h-3 w-3" aria-hidden />Pinned</Pill>}
+                  </p>
                   <p className="text-ink-soft">{[a.line1, a.line2, a.landmark, a.city].filter(Boolean).join(", ")}, {a.state} {a.pincode}</p>
                   <p className="text-sm text-ink-faint">{a.phone}</p>
+                  {a.instructions && <p className="mt-1 text-sm text-ink-soft"><span className="font-semibold text-ink">Instructions:</span> {a.instructions}</p>}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(a)}>Edit</Button>

@@ -48,7 +48,6 @@ from app.routers.seller_extras import (
     coupon_admin_out,
 )
 from app.services import ledger, review_settings, storage
-from app.services.platform_settings import PRODUCT_REPORT_REASONS
 from app.services import returns as returns_svc
 from app.services.analytics import kpis
 from app.services.cms import (
@@ -61,6 +60,7 @@ from app.services.cms import (
     validate_section,
 )
 from app.services.notify import EVENTS, notify
+from app.services.platform_settings import PRODUCT_REPORT_REASONS
 from app.services.reports import IST
 
 router = APIRouter(prefix="/api/admin", tags=["admin-extras"])

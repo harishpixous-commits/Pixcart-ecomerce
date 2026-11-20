@@ -8,6 +8,7 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -15,7 +16,11 @@ from sqlalchemy.exc import IntegrityError
 from app.core.deps import CurrentUser, SessionDep
 from app.core.errors import ApiError, NotFound
 from app.db import SessionLocal, utcnow
+from app.integrations import get as get_integrations
 from app.models import (
+    DeliveryAssignment,
+    DeliveryBoy,
+    DeliveryComplaint,
     Order,
     OrderEvent,
     OrderItem,
@@ -27,8 +32,8 @@ from app.models import (
     WebhookEvent,
 )
 from app.routers.addresses import get_owned_address
-from app.integrations import get as get_integrations
-from app.services import razorpay
+from app.services import fees as fees_svc
+from app.services import fleet, razorpay
 from app.services.cms import get_site
 from app.services.coupons import evaluate
 from app.services.orders import (
@@ -54,11 +59,16 @@ class QuoteIn(BaseModel):
     address_id: uuid.UUID
     payment_method: Literal["cod", "online"] = "online"
     coupon_code: str | None = Field(default=None, max_length=30)
+    tip_paise: int = Field(default=0, ge=0, le=500_000)
 
 
 class PlaceIn(QuoteIn):
     idempotency_key: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9\-_]+$")
     expected_total: int | None = None
+    buyer_gstin: str = Field(default="", max_length=20)
+    buyer_business: str = Field(default="", max_length=160)
+    instructions: str | None = Field(default=None, max_length=300)  # empty: the address's saved instructions
+    no_bag: bool = False
 
 
 class VerifyIn(BaseModel):
@@ -117,6 +127,11 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
         "items_total": o.items_total,
         "shipping_total": o.shipping_total,
         "cod_fee": o.cod_fee,
+        "fees": o.fees or [],
+        "fees_total": o.fees_total,
+        "tip": o.tip_paise,
+        "buyer_gstin": o.buyer_gstin,
+        "buyer_business": o.buyer_business,
         "grand_total": o.grand_total,
         "refunded_total": o.refunded_total,
         "discount_total": o.discount_total,
@@ -186,6 +201,8 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
             for e in events
         ],
         "refunds": [{"amount": r.amount_paise, "status": r.status, "reason": r.reason, "created_at": r.created_at.isoformat()} for r in refunds],
+        # packages carried by the own delivery fleet: partner, steps, OTP while on the way, live position
+        "fleet": await fleet.customer_tracking(session, o),
     }
     return out
 
@@ -201,10 +218,19 @@ async def _own_order(session, user, order_id: uuid.UUID) -> Order:
 async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     address = await get_owned_address(session, user.id, body.address_id)
     cfg = await get_settings(session)
-    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg), cfg, (await get_integrations(session)).online_payments)
+    ck = await fees_svc.get(session)
+    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg), cfg, (await get_integrations(session)).online_payments, ck)
     cod_fee = cfg["cod_fee_paise"] if body.payment_method == "cod" else 0
     view["summary"]["cod_fee"] = cod_fee
     view["summary"]["grand_total"] += cod_fee
+    try:
+        tip = fees_svc.tip_amount(ck, body.tip_paise)
+    except ValueError:
+        tip = 0
+    view["summary"]["tip"] = tip
+    view["summary"]["grand_total"] += tip
+    view["address"] = {"instructions": address.instructions, "lat": float(address.lat) if address.lat is not None else None,
+                       "lng": float(address.lng) if address.lng is not None else None}
     view["coupon"] = None
     if body.coupon_code and body.coupon_code.strip():
         lines = await load_cart(session, user.id)
@@ -231,6 +257,11 @@ async def create_order(body: PlaceIn, user: CurrentUser, session: SessionDep) ->
             idempotency_key=body.idempotency_key,
             expected_total=body.expected_total,
             coupon_code=(body.coupon_code or "").strip() or None,
+            tip_paise=body.tip_paise,
+            buyer_gstin=body.buyer_gstin,
+            buyer_business=body.buyer_business,
+            instructions=body.instructions,
+            no_bag=body.no_bag,
         )
     except IntegrityError:
         # Same idempotency key submitted twice at the same moment: return the winner.
@@ -279,6 +310,76 @@ async def cancel(order_id: uuid.UUID, body: CancelIn, user: CurrentUser, session
     await session.commit()
     background.add_task(run_refunds, refund_ids)
     return await order_detail(session, o)
+
+
+async def _delivered_trip(session, o: Order, sub_order_id: uuid.UUID) -> DeliveryAssignment:
+    sub = await session.get(SubOrder, sub_order_id)
+    if sub is None or sub.order_id != o.id:
+        raise NotFound("Order part")
+    a = (await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.sub_order_id == sub.id, DeliveryAssignment.kind == "delivery",
+                                                                DeliveryAssignment.status == "delivered").limit(1).with_for_update())).scalar_one_or_none()
+    if a is None:
+        raise ApiError("You can rate the delivery once it is delivered", "not_delivered")
+    return a
+
+
+class DeliveryRatingIn(BaseModel):
+    sub_order_id: uuid.UUID
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=500)
+
+
+@router.post("/api/orders/{order_id}/delivery-rating")
+async def rate_delivery(order_id: uuid.UUID, body: DeliveryRatingIn, user: CurrentUser, session: SessionDep) -> dict:
+    o = await _own_order(session, user, order_id)
+    a = await _delivered_trip(session, o, body.sub_order_id)
+    boy = (await session.execute(select(DeliveryBoy).where(DeliveryBoy.id == a.delivery_boy_id).with_for_update())).scalar_one()
+    old = a.rating
+    a.rating, a.rating_comment, a.rated_at = body.rating, " ".join(body.comment.split()), utcnow()
+    total = float(boy.rating_avg or 0) * boy.rating_count - (old or 0) + body.rating
+    boy.rating_count += 0 if old else 1
+    boy.rating_avg = round(total / boy.rating_count, 2) if boy.rating_count else 0
+    await session.commit()
+    return {"ok": True, "rating": a.rating}
+
+
+class DeliveryComplaintIn(BaseModel):
+    sub_order_id: uuid.UUID
+    category: Literal["late", "rude", "damaged", "not_received", "extra_money", "other"]
+    text: str = Field(default="", max_length=1000)
+
+
+@router.post("/api/orders/{order_id}/delivery-complaint", status_code=201)
+async def delivery_complaint(order_id: uuid.UUID, body: DeliveryComplaintIn, user: CurrentUser, session: SessionDep) -> dict:
+    from app.core.deps import rate_limit
+    from app.services.notify import notify_staff
+
+    o = await _own_order(session, user, order_id)
+    await rate_limit(session, f"dcomplaint:{user.id}", limit=10, window_seconds=86400)
+    a = (await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.sub_order_id == body.sub_order_id, DeliveryAssignment.order_id == o.id,
+                                                                DeliveryAssignment.kind == "delivery", DeliveryAssignment.status.in_(("delivered", "failed")))
+                                .order_by(DeliveryAssignment.created_at.desc()).limit(1))).scalar_one_or_none()
+    if a is None:
+        raise ApiError("There is no delivery to complain about yet", "no_delivery")
+    c = DeliveryComplaint(assignment_id=a.id, delivery_boy_id=a.delivery_boy_id, user_id=user.id, category=body.category, text=" ".join(body.text.split()),
+                          status="open", created_at=utcnow())
+    session.add(c)
+    await notify_staff(session, "delivery", "staff_message", {"subject": f"Delivery complaint on {o.number}", "message": body.text[:200] or body.category},
+                       link="/admin/delivery/feedback")
+    await session.commit()
+    return {"ok": True, "id": str(c.id)}
+
+
+@router.get("/api/orders/{order_id}/delivery-proof/{sub_order_id}")
+async def delivery_proof(order_id: uuid.UUID, sub_order_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> Response:
+    from app.routers.delivery import proof_response
+
+    o = await _own_order(session, user, order_id)
+    a = (await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.sub_order_id == sub_order_id, DeliveryAssignment.order_id == o.id,
+                                                                DeliveryAssignment.status == "delivered", DeliveryAssignment.kind == "delivery").limit(1))).scalar_one_or_none()
+    if a is None:
+        raise NotFound("Delivery photo")
+    return await proof_response(a)
 
 
 async def customer_cancel(session, o: Order, sub_order_id: uuid.UUID | None, reason: str) -> list[uuid.UUID]:

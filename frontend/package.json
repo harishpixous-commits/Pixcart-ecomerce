@@ -12,7 +12,10 @@
   "dependencies": {
     "@fontsource/baloo-2": "^5.1.0",
     "@fontsource/mukta": "^5.1.0",
+    "@types/leaflet": "^1.9.12",
     "clsx": "^2.1.1",
+    "firebase": "^10.14.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.447.0",
     "next": "^16.4.6",
     "qrcode": "^1.5.4",

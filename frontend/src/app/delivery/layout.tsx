@@ -4,6 +4,10 @@ import { DeliveryApp } from "@/components/delivery/app";
 export const metadata: Metadata = {
   title: { default: "Delivery partner", template: "%s | Delivery partner" },
   description: "Deliver orders near you on your own time and get paid every week.",
+  // installs as its own app, separate from the shop
+  manifest: "/delivery/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Partner", statusBarStyle: "default" },
+  icons: { apple: "/app-icon/partner-192" },
 };
 
 export default function DeliveryLayout({ children }: { children: React.ReactNode }) {

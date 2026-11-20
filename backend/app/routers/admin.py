@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import exists, func, or_, select, update
 
+from app.config import settings
 from app.core.deps import SessionDep, audit
 from app.core.errors import ApiError, Conflict, NotFound
 from app.core.permissions import Perm
@@ -22,7 +23,9 @@ from app.models import (
     AuditLog,
     Category,
     Deal,
+    DeliveryAssignment,
     DeliveryBoy,
+    DeliveryComplaint,
     Order,
     Product,
     ProductAnswer,
@@ -37,13 +40,13 @@ from app.models import (
     User,
 )
 from app.models.catalog import GST_RATES_BPS
+from app.models.delivery import ACTIVE as DELIVERY_ACTIVE
 from app.routers.orders import order_detail, run_refunds
 from app.routers.seller_onboarding import document_response, seller_profile
-from app.config import settings
 from app.routers.seller_products import MAX_IMAGES, VideoIn, check_videos, product_detail
 from app.services import storage
-from app.services.notify import notify_seller
 from app.services.catalog import apply_videos, check_image_url, images_for
+from app.services.notify import notify_seller
 from app.services.orders import cancel_sub_order, notify_refund, transition
 from app.services.platform_settings import get_settings, update_settings
 from app.services.reports import IST, tcs_report_data
@@ -130,6 +133,11 @@ async def dashboard(admin: Perm("dashboard"), session: SessionDep) -> dict:
         "questions_pending": (await session.execute(select(func.count()).select_from(ProductQuestion).where(ProductQuestion.status == "pending"))).scalar_one()
         + (await session.execute(select(func.count()).select_from(ProductAnswer).where(ProductAnswer.status == "pending"))).scalar_one(),
         "delivery_kyc_pending": (await session.execute(select(func.count()).select_from(DeliveryBoy).where(DeliveryBoy.kyc_status == "submitted"))).scalar_one(),
+        # packages ready for pickup with no partner yet, and delivery complaints nobody has handled
+        "delivery_waiting": (await session.execute(select(func.count()).select_from(SubOrder).where(
+            SubOrder.shipping_provider == "fleet", SubOrder.status == "packed", SubOrder.ready_for_pickup_at.is_not(None),
+            SubOrder.id.not_in(select(DeliveryAssignment.sub_order_id).where(DeliveryAssignment.status.in_(DELIVERY_ACTIVE)))))).scalar_one(),
+        "delivery_complaints_open": (await session.execute(select(func.count()).select_from(DeliveryComplaint).where(DeliveryComplaint.status == "open"))).scalar_one(),
         "active_sellers": (await session.execute(select(func.count()).where(Seller.status == "approved"))).scalar_one(),
         "customers": (await session.execute(select(func.count()).select_from(User))).scalar_one(),
         "live_products": (await session.execute(select(func.count()).where(Product.status == "approved"))).scalar_one(),

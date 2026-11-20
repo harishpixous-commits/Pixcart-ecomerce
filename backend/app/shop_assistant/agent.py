@@ -390,7 +390,7 @@ async def run(chat_id: uuid.UUID, user_id: uuid.UUID | None, text: str, *, voice
                         messages += pre
                         turn_msgs += pre
                     text_parts: list[str] = []
-                    for step in range(cfg["max_steps"]):
+                    for _step in range(cfg["max_steps"]):
                         turn = None
                         step_text: list[str] = []
                         async for kind, val in llm_router.stream(session, ROUTE, system=system, messages=messages, tools=specs,

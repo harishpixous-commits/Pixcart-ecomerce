@@ -5,7 +5,7 @@ import logging
 from datetime import timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import delete, update, text
+from sqlalchemy import delete, text, update
 
 from app.core.deps import prune_rate_limits
 from app.db import SessionLocal, engine, utcnow
@@ -33,6 +33,9 @@ _LOCK_LOWSTOCK = 7_201_008
 _LOCK_DEALS = 7_201_009
 _LOCK_ADS = 7_201_010
 _LOCK_ALERTS = 7_201_011
+_LOCK_DELIVERY_SWEEP = 7_201_012
+_LOCK_DELIVERY_ALERTS = 7_201_013
+_LOCK_DELIVERY_PAYOUTS = 7_201_014
 
 
 async def _with_lock(lock_id: int, fn) -> None:
@@ -194,8 +197,48 @@ async def alerts_job() -> None:
     await _with_lock(_LOCK_ALERTS, run)
 
 
+async def delivery_sweep_job() -> None:
+    """Delivery requests whose accept time ran out move to the next partner (or the admin queue)."""
+    from app.services import fleet
+
+    async def run(session):
+        if await fleet.sweep(session):
+            await session.commit()
+
+    await _with_lock(_LOCK_DELIVERY_SWEEP, run)
+
+
+async def delivery_alerts_job() -> None:
+    """Tells staff about deliveries stuck in one step and packages nobody took."""
+    from app.services import fleet
+
+    async def run(session):
+        if await fleet.stuck_check(session):
+            await session.commit()
+
+    await _with_lock(_LOCK_DELIVERY_ALERTS, run)
+
+
+async def delivery_payouts_job() -> None:
+    """Every Monday: last week's earnings for each delivery partner, ready for staff to pay."""
+    from datetime import datetime
+
+    from app.services import fleet
+
+    async def run(session):
+        n = await fleet.generate_payouts(session, datetime.now(fleet.IST).date() - timedelta(days=7))
+        await session.commit()
+        if n:
+            log.info("created %d delivery partner payout(s)", n)
+
+    await _with_lock(_LOCK_DELIVERY_PAYOUTS, run)
+
+
 def start_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler.add_job(delivery_sweep_job, "interval", seconds=10, id="delivery_sweep", max_instances=1, coalesce=True)
+    scheduler.add_job(delivery_alerts_job, "interval", minutes=1, id="delivery_alerts", max_instances=1, coalesce=True)
+    scheduler.add_job(delivery_payouts_job, "cron", day_of_week="mon", hour=4, minute=45, id="delivery_payouts", max_instances=1, coalesce=True)  # 10:15 IST
     scheduler.add_job(expire_job, "interval", minutes=2, id="expire_unpaid", max_instances=1, coalesce=True)
     scheduler.add_job(refunds_job, "interval", minutes=5, id="retry_refunds", max_instances=1, coalesce=True)
     scheduler.add_job(cleanup_job, "interval", hours=6, id="cleanup", max_instances=1, coalesce=True)

@@ -6,12 +6,12 @@ import pathlib
 import uuid
 
 import httpx
-
-from app.llm import adapters
-from app.shop_assistant import intents
 from conftest import add_address, login_phone
 from test_assistant import _live, anthropic_events
 from test_phase2_money import key, setup
+
+from app.llm import adapters
+from app.shop_assistant import intents
 
 H = {"X-Requested-With": "pixcart"}
 APP = pathlib.Path(__file__).resolve().parents[1] / "app"

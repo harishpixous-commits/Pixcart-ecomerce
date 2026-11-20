@@ -1,15 +1,17 @@
 "use client";
 
-import { FileText, Printer, Truck } from "lucide-react";
+import clsx from "clsx";
+import { Bike, FileText, KeyRound, PackageCheck, Phone, Printer, Truck } from "lucide-react";
 import { openPdf } from "@/components/order-returns";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { telUrl, usePolling } from "@/components/delivery/trip";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Modal, PageLoader, ProductImage, Select, StatusPill, TextField, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { dateTime, pct, rupees, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import type { SellerOrder } from "@/lib/types";
+import type { SellerFleet, SellerOrder } from "@/lib/types";
 
 const REJECT_REASONS = [
   ["out_of_stock", "Out of stock"],
@@ -52,6 +54,9 @@ export default function SellerOrderDetail() {
   useEffect(() => {
     load();
   }, [load]);
+  // while our delivery partner is on the way, keep the partner and step fresh
+  const following = !!o?.fleet?.active && ["packed", "shipped"].includes(o.status);
+  usePolling(load, 20_000, following);
 
   async function act(path: string, body?: object, msg?: string) {
     setBusy(true);
@@ -72,6 +77,10 @@ export default function SellerOrderDetail() {
   if (!o) return error ? <ErrorNote message={error} /> : <PageLoader />;
   const a = o.ship_to;
   const b = o.breakdown;
+  const f = o.fleet;
+  // Our own delivery partners carry this order: either it is already with the fleet, or the fleet must take it.
+  const fleetOnly = !!f && (f.active || (f.eligible && !f.choice));
+  const canHandOver = !!f && f.eligible && !f.active && ["confirmed", "packed"].includes(o.status);
   return (
     <div className="flex flex-col gap-4">
       <div className="print:hidden">
@@ -81,12 +90,20 @@ export default function SellerOrderDetail() {
           actions={
             <>
               {o.status === "placed" && <Button onClick={() => act("confirm", undefined, "Order confirmed")} loading={busy}>Confirm order</Button>}
-              {o.status === "confirmed" && <Button onClick={() => act("pack", undefined, "Marked as packed")} loading={busy}>Mark as packed</Button>}
-              {o.status === "packed" && provider === "shiprocket" && <Button onClick={bookCourier} loading={busy}><Truck className="h-4 w-4" /> Book courier pickup</Button>}
-              {o.status === "packed" && <Button variant={provider === "shiprocket" ? "secondary" : "primary"} onClick={() => setShipOpen(true)}>{provider === "shiprocket" ? "Ship on my own" : "Add shipping details"}</Button>}
+              {canHandOver && (
+                <Button onClick={() => act("ready-for-pickup", undefined, "Ready for pickup. A delivery partner is on the way.")} loading={busy} data-testid="ready-for-pickup">
+                  <PackageCheck className="h-4 w-4" /> Ready for pickup
+                </Button>
+              )}
+              {o.status === "confirmed" && <Button variant={canHandOver ? "secondary" : "primary"} onClick={() => act("pack", undefined, "Marked as packed")} loading={busy}>Mark as packed</Button>}
+              {o.status === "packed" && !fleetOnly && provider === "shiprocket" && <Button variant={canHandOver ? "secondary" : "primary"} onClick={bookCourier} loading={busy}><Truck className="h-4 w-4" /> Book courier pickup</Button>}
+              {o.status === "packed" && !fleetOnly && <Button variant={provider === "shiprocket" || canHandOver ? "secondary" : "primary"} onClick={() => setShipOpen(true)}>{provider === "shiprocket" ? "Ship on my own" : "Add shipping details"}</Button>}
+              {f?.active && f.choice && o.status === "packed" && !f.partner && (
+                <Button variant="secondary" onClick={() => act("use-courier", undefined, "Taken back from the delivery partners. Ship it by courier.")} loading={busy}><Truck className="h-4 w-4" /> Use courier instead</Button>
+              )}
               {o.label_url && <a href={o.label_url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-white px-4 font-semibold">Shipping label</a>}
               {o.invoice_number && <Button variant="secondary" onClick={() => openPdf(`/api/seller/orders/${o.id}/invoice.pdf`, (m) => toast(m, "error"))}><FileText className="h-4 w-4" /> Invoice {o.invoice_number}</Button>}
-              {o.status === "shipped" && <Button onClick={() => act("deliver", undefined, "Marked as delivered")} loading={busy}>Mark as delivered</Button>}
+              {o.status === "shipped" && !f?.active && <Button onClick={() => act("deliver", undefined, "Marked as delivered")} loading={busy}>Mark as delivered</Button>}
               {["confirmed", "packed", "shipped", "delivered"].includes(o.status) && (
                 <Button variant="secondary" onClick={() => window.print()}><Printer className="h-4 w-4" /> Packing slip</Button>
               )}
@@ -118,6 +135,7 @@ export default function SellerOrderDetail() {
             {o.cancel_reason && <p className="border-t border-line pt-3 text-sm text-vermilion">Cancelled: {o.cancel_reason}</p>}
           </section>
           <div className="flex flex-col gap-4">
+            {f && (f.active || f.eligible) && !["cancelled", "pending_payment"].includes(o.status) && <FleetCard f={f} status={o.status} />}
             <section className="rounded-xl bg-white p-4">
               <h2 className="mb-2 text-lg font-semibold">Ship to</h2>
               {a ? (
@@ -206,5 +224,65 @@ export default function SellerOrderDetail() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+/** Our own delivery partner on the seller's order: what happens next, the pickup code and who is coming. */
+function FleetCard({ f, status }: { f: SellerFleet; status: string }) {
+  const step = f.step;
+  const delivered = status === "delivered";
+  return (
+    <section className="overflow-hidden rounded-xl bg-white ring-1 ring-peacock/20" data-testid="fleet-card">
+      <div className="flex items-center gap-3 bg-peacock-light/60 px-4 py-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-peacock text-white"><Bike className="h-5 w-5" aria-hidden /></span>
+        <div className="min-w-0">
+          <h2 className="font-semibold">Delivered by our partner</h2>
+          <p className="text-sm text-ink-soft">
+            {!f.active
+              ? f.choice
+                ? "Hand it to our delivery partner (tap Ready for pickup), or ship it by courier yourself."
+                : "Pack the order and tap Ready for pickup. Our delivery partner collects it from you."
+              : delivered
+                ? "Delivered to the customer."
+                : step?.label ?? "With the delivery team"}
+          </p>
+        </div>
+      </div>
+      {f.active && !delivered && (
+        <div className="flex flex-col gap-3 p-4">
+          {f.pickup_code && (
+            <div className="flex items-center gap-3 rounded-xl bg-marigold-light/70 p-3">
+              <KeyRound className="h-5 w-5 shrink-0 text-marigold-dark" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Pickup code</p>
+                <p className="font-mono text-3xl font-bold tracking-[0.3em]" data-testid="pickup-code-seller">{f.pickup_code}</p>
+                <p className="text-xs text-ink-soft">Tell this to the delivery partner only when you hand over the package.</p>
+              </div>
+            </div>
+          )}
+          {f.partner ? (
+            <div className="flex items-center gap-3">
+              {f.partner.photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={f.partner.photo} alt="" className="h-12 w-12 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-peacock-light font-bold text-peacock">{f.partner.name.slice(0, 1)}</span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{f.partner.name}</p>
+                <p className="text-sm text-ink-soft">{f.partner.vehicle}{f.partner.vehicle_no ? ` · ${f.partner.vehicle_no}` : ""}</p>
+              </div>
+              <a href={telUrl(f.partner.phone)} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-peacock px-3 text-sm font-semibold text-white"><Phone className="h-4 w-4" aria-hidden /> Call</a>
+            </div>
+          ) : (
+            <p className={clsx("flex items-center gap-2 text-sm", step?.status === "offered" ? "text-marigold-dark" : "text-ink-soft")}>
+              <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-marigold/60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-marigold" /></span>
+              Finding a delivery partner near you…
+            </p>
+          )}
+          {f.ready_for_pickup_at && <p className="text-xs text-ink-faint">Ready for pickup since {dateTime(f.ready_for_pickup_at)}</p>}
+        </div>
+      )}
+    </section>
   );
 }

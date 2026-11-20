@@ -70,6 +70,12 @@ class Order(IdMixin, TimestampMixin, Base):
     cod_fee: Mapped[int] = mapped_column(BigInteger, default=0)
     discount_total: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     coupon_code: Mapped[str] = mapped_column(String(30), default="", server_default="")
+    # The marketplace's own fees (handling, small cart, platform; GST included) as billed, and their sum.
+    fees: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    fees_total: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    tip_paise: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")  # goes to the delivery partner
+    buyer_gstin: Mapped[str] = mapped_column(String(15), default="", server_default="")  # business purchase: on the tax invoices
+    buyer_business: Mapped[str] = mapped_column(String(160), default="", server_default="")
     grand_total: Mapped[int] = mapped_column(BigInteger)
     refunded_total: Mapped[int] = mapped_column(BigInteger, default=0)
     idempotency_key: Mapped[str] = mapped_column(String(64))
@@ -84,7 +90,8 @@ class Order(IdMixin, TimestampMixin, Base):
         CheckConstraint(
             "payment_status IN ('pending','paid','cod','failed','refunded','partially_refunded')", name="payment_status"
         ),
-        CheckConstraint("grand_total = items_total + shipping_total + cod_fee - discount_total", name="totals"),
+        CheckConstraint("grand_total = items_total + shipping_total + cod_fee + fees_total + tip_paise - discount_total", name="totals"),
+        CheckConstraint("fees_total >= 0 AND tip_paise >= 0", name="fees"),
     )
 
 

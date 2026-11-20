@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, PageLoader, TextField, useToast } from "@/components/ui";
-import { api, ApiError, quietly } from "@/lib/api";
+import { api, ApiError, quietly, uploadWithProgress } from "@/lib/api";
 import { paiseToInput, rupees, toPaise } from "@/lib/format";
 
 type Values = Record<string, boolean | number | string>;
@@ -24,6 +24,59 @@ function Toggle({ k, v, set, label, hint }: { k: string; v: Values; set: (k: str
       <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={Boolean(v[k])} onChange={(e) => set(k, e.target.checked)} data-testid={`toggle-${k}`} />
       <span><span className="font-semibold">{label}</span><br /><span className="text-sm text-ink-soft">{hint}</span></span>
     </label>
+  );
+}
+
+/** Upload the partner APK: checked by the server, published at /media/apps/…, and set as the download link. */
+function AppUpload({ current, version, onUploaded }: { current: string; version: string; onUploaded: (values: Values) => void }) {
+  const toast = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [ver, setVer] = useState("");
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function upload() {
+    if (!file) return;
+    setError(null);
+    setProgress(0);
+    try {
+      const r = await uploadWithProgress<{ values: Values; size: number }>(`/api/admin/delivery/app?version=${encodeURIComponent(ver.trim())}`, file, setProgress);
+      onUploaded({ android_apk_url: r.values.android_apk_url, app_version: r.values.app_version });
+      toast(`App published (${(r.size / 1024 / 1024).toFixed(1)} MB). Partners can download it now.`);
+      setFile(null);
+      setVer("");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Upload failed");
+    } finally {
+      setProgress(null);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-dashed border-line p-4 sm:col-span-2">
+      {current ? (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-leaf-light px-2.5 py-0.5 text-xs font-semibold text-leaf">Published</span>
+          <span className="font-semibold">{version ? `Version ${version}` : "Current app"}</span>
+          <a href={current} className="break-all font-semibold text-peacock" download>Download to check</a>
+        </p>
+      ) : (
+        <p className="text-sm text-ink-soft">No app uploaded yet. Partners can still use the web app and add it to their home screen.</p>
+      )}
+      <ErrorNote message={error} />
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
+          New APK file
+          <input type="file" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-peacock-light file:px-3 file:py-2 file:font-semibold file:text-peacock" data-testid="apk-file" />
+        </label>
+        <div className="w-32"><TextField label="Version" value={ver} onChange={(e) => setVer(e.target.value)} placeholder="1.0.1" maxLength={20} /></div>
+        <Button type="button" onClick={upload} disabled={!file || progress !== null} loading={progress !== null}>Upload and publish</Button>
+      </div>
+      {progress !== null && (
+        <div className="h-2 overflow-hidden rounded-full bg-mist" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label="Upload progress">
+          <div className="h-full rounded-full bg-peacock transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -152,10 +205,31 @@ export default function DeliverySettings() {
         <div className="sm:col-span-2"><h2 className="text-lg font-semibold">Partner support and app</h2></div>
         <TextField label="Delivery team phone" value={String(v.support_phone)} onChange={(e) => set("support_phone", e.target.value)} hint="Shown in the partner app's Help" />
         <TextField label="Delivery team WhatsApp" value={String(v.support_whatsapp)} onChange={(e) => set("support_whatsapp", e.target.value)} />
-        <TextField label="Android app download link" value={String(v.android_apk_url)} onChange={(e) => set("android_apk_url", e.target.value)} hint="https:// link to the APK, or empty" />
-        <TextField label="Google Play link" value={String(v.play_store_url)} onChange={(e) => set("play_store_url", e.target.value)} />
-        <TextField label="App version shown" value={String(v.app_version)} onChange={(e) => set("app_version", e.target.value)} placeholder="1.0.0" />
         <Toggle k="require_vehicle_doc" v={v} set={set} label="Vehicle registration (RC) is required" hint="Otherwise it is optional during registration." />
+      </section>
+
+      <section className={card} data-testid="partner-app-settings">
+        <div className="sm:col-span-2">
+          <h2 className="text-lg font-semibold">Partner Android app</h2>
+          <p className="text-sm text-ink-soft">
+            Partners download it from <a href="/delivery/download" target="_blank" rel="noreferrer" className="font-semibold text-peacock">/delivery/download</a> and
+            from the partner app. Upload the APK here, or paste a link to it (a GitHub release or Google Play).
+          </p>
+        </div>
+        <AppUpload onUploaded={(values) => setV({ ...v, ...values })} current={String(v.android_apk_url)} version={String(v.app_version)} />
+        <TextField label="Android app download link" value={String(v.android_apk_url)} onChange={(e) => set("android_apk_url", e.target.value)} hint="Filled in when you upload. Or https:// link to the APK." />
+        <TextField label="Google Play link" value={String(v.play_store_url)} onChange={(e) => set("play_store_url", e.target.value)} hint="When the app is on Google Play" />
+        <TextField label="App version shown" value={String(v.app_version)} onChange={(e) => set("app_version", e.target.value)} placeholder="1.0.0" />
+        <details className="rounded-xl bg-mist px-4 py-3 text-sm sm:col-span-2">
+          <summary className="cursor-pointer font-semibold">How to build the app</summary>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-ink-soft">
+            <li>In your code repository on GitHub, open <b>Actions → Android partner app → Run workflow</b>.</li>
+            <li>Enter your live website address (for example https://pixcart.in) and a version, like 1.0.0.</li>
+            <li>When it finishes (about 10 minutes), download <b>pixcart-partner.apk</b> from the run or from <b>Releases</b>.</li>
+            <li>Upload it above. Partners get the new version from the download page.</li>
+          </ol>
+          <p className="mt-2 text-ink-soft">For notifications in the app, add your Firebase <b>google-services.json</b> as the repository secret <code>GOOGLE_SERVICES_JSON</code> (base64). For a signed release, add the keystore secrets listed in <code>mobile/partner-app/README.md</code>.</p>
+        </details>
       </section>
 
       <div className="sticky bottom-0 -mx-1 flex justify-end bg-gradient-to-t from-mist via-mist/90 to-transparent px-1 pb-2 pt-6">

@@ -7,21 +7,21 @@ from typing import Literal
 from fastapi import APIRouter, Query
 from sqlalchemy import and_, desc, func, literal, or_, select
 
-from app.integrations import get as get_integrations
 from app.core.deps import SessionDep
 from app.core.errors import NotFound
 from app.core.validators import STATES
 from app.db import utcnow
+from app.integrations import get as get_integrations
 from app.models import Category, Product, Seller, Variant
+from app.services import product_page as pp
 from app.services.catalog import (
     category_descendant_ids,
     discount_pct,
     images_for,
-    videos_for,
     public_product_filter,
     variant_label,
+    videos_for,
 )
-from app.services import product_page as pp
 from app.services.platform_settings import get_settings
 from app.services.product_info import details_of, fmt_qty, important_info, info_rows, unit_price
 

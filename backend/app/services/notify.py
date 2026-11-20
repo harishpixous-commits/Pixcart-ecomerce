@@ -20,8 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, settings
-from app.integrations import get as get_integrations
 from app.db import utcnow
+from app.integrations import get as get_integrations
 from app.models import Notification, NotificationTemplate, Seller, User
 
 log = logging.getLogger("pixcart.notify")
@@ -117,6 +117,9 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "delivery_assigned": {
         "inapp": ("Delivery assigned to you", "{{order_number}}: pick up from {{store}} ({{pickup_area}}) and deliver to {{drop_area}}."),
     },
+    "delivery_trip_cancelled": {
+        "inapp": ("Delivery cancelled: {{order_number}}", "{{message}}"),
+    },
     "delivery_partner_assigned": {  # customer
         "inapp": ("Delivery partner assigned", "{{partner}} will deliver {{item}}. You can track the delivery on your order page."),
     },
@@ -157,6 +160,15 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "staff_delivery_stuck": {
         "inapp": ("Delivery stuck: {{order_number}}", "It has been '{{status}}' for {{minutes}} minutes with {{partner}}."),
     },
+    "staff_delivery_ready": {
+        "inapp": ("Ready for pickup: {{order_number}}", "{{store}} has a package ready for pickup ({{pickup_area}} to {{drop_area}}). Assign a partner in Delivery → Queue."),
+    },
+    "staff_delivery_failed": {
+        "inapp": ("Delivery failed: {{order_number}}", "{{partner}} could not deliver: {{reason}}. Choose to try again or return it to the seller."),
+    },
+    "seller_package_returned": {
+        "inapp": ("Package returned: {{order_number}}", "{{partner}} returned {{order_number}} to your store ({{reason}}). The stock is back in your inventory."),
+    },
 }
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
@@ -179,8 +191,11 @@ async def _template(session: AsyncSession, event: str, channel: str) -> tuple[st
 
 
 async def notify(
-    session: AsyncSession, event: str, user: User | None, variables: dict, *, link: str = "", channels: tuple[str, ...] = ("inapp", "email", "sms", "whatsapp")
+    session: AsyncSession, event: str, user: User | None, variables: dict, *, link: str = "",
+    channels: tuple[str, ...] = ("inapp", "push", "email", "sms", "whatsapp"),
 ) -> None:
+    """Sends one event to a user on each channel that has an active template. "push" reaches the phones and browsers
+    where the user turned notifications on (nothing happens until Firebase is set up in Admin → Integrations)."""
     if user is None or user.deleted_at is not None:
         return
     from app.services.cms import get_site, public_business
@@ -190,6 +205,16 @@ async def notify(
     variables = {"name": user.name or "there", "brand": business["brand"], "link": f"{settings.public_web_url}{link}" if link.startswith("/") else link, **variables}
     now = utcnow()
     for channel in channels:
+        if channel == "push":
+            # the in-app text, sent to the user's phones and browsers after this transaction commits
+            from app.services import push
+
+            tpl = await _template(session, event, "push") or await _template(session, event, "inapp")
+            if tpl is None or not tpl[3] or not push.configured(cfg):
+                continue
+            push.queue(session, user.id, render(tpl[0], variables)[:120], render(tpl[1], variables)[:400], link,
+                       {"event": event, **({"urgent": "1"} if event == "delivery_new_offer" else {})})
+            continue
         tpl = await _template(session, event, channel)
         if tpl is None:
             continue

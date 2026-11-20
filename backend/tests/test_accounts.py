@@ -1,8 +1,9 @@
 """Separate sign-in and create-account flows, the on-screen dev OTP and its switch, sign-up switches,
 and admin account management (customer detail, edit, create, sign out; sellers created by staff)."""
-from app.services import sms
 from conftest import add_address, login_phone
 from test_phase2_money import key, setup
+
+from app.services import sms
 
 H = {"X-Requested-With": "pixcart"}
 

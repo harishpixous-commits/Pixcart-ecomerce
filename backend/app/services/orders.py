@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, settings
 from app.core.errors import ApiError, Conflict
 from app.core.money import apply_bps, compute_settlement, split_inclusive_gst
-from app.core.validators import STATES
+from app.core.validators import STATES, validate_gstin
 from app.db import utcnow
 from app.integrations import get as get_integrations
 from app.models import (
@@ -43,6 +43,7 @@ from app.models import (
     Variant,
     Warehouse,
 )
+from app.services import fees as fees_svc
 from app.services import inventory, razorpay
 from app.services.catalog import images_for, refresh_product_aggregates, variant_label
 from app.services.coupons import CouponResult, evaluate
@@ -138,11 +139,14 @@ def group_by_seller(lines: list[CartLine], cfg: dict) -> list[SellerGroup]:
     return list(groups.values())
 
 
-def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool) -> dict:
+def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, ck: dict | None = None) -> dict:
+    """The cart and its bill. With the checkout settings (``ck``) the marketplace's fees and the nudges are included."""
     items_total = sum(g.items_total for g in groups)
     shipping = sum(g.shipping_fee for g in groups)
     mrp_total = sum(line.variant.mrp_paise * line.qty for g in groups for line in g.lines if not line.problem)
-    return {
+    fee_lines = fees_svc.order_fees(ck, items_total) if ck else []
+    fees_total = sum(f["amount"] for f in fee_lines)
+    view = {
         "groups": [
             {
                 "seller": {"id": str(g.seller.id), "name": g.seller.display_name, "slug": g.seller.slug},
@@ -153,6 +157,7 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool) -
                     {
                         "id": str(line.cart_item_id),
                         "variant_id": str(line.variant.id),
+                        "product_id": str(line.product.id),
                         "product_slug": line.product.slug,
                         "title": line.product.title,
                         "variant_label": variant_label(line.variant.options),
@@ -174,7 +179,10 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool) -
             "discount": mrp_total - items_total,
             "items_total": items_total,
             "shipping_total": shipping,
-            "grand_total": items_total + shipping,
+            "fees": fee_lines,
+            "fees_total": fees_total,
+            "fee_savings": sum(f["list_amount"] - f["amount"] for f in fee_lines if f["list_amount"]),
+            "grand_total": items_total + shipping + fees_total,
             "item_count": sum(line.qty for g in groups for line in g.lines if not line.problem),
             "has_problems": any(line.problem for g in groups for line in g.lines),
         },
@@ -182,6 +190,10 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool) -
         "cod_max_order_paise": cfg["cod_max_order_paise"],
         "online_available": online_available,
     }
+    if ck:
+        view["hints"] = fees_svc.hints(ck, cfg, items_total, view["groups"])
+        view["checkout"] = fees_svc.public(ck)
+    return view
 
 
 # ----------------------------------------------------------------------------- numbering / events
@@ -211,6 +223,11 @@ async def place_order(
     idempotency_key: str,
     expected_total: int | None,
     coupon_code: str | None = None,
+    tip_paise: int = 0,
+    buyer_gstin: str = "",
+    buyer_business: str = "",
+    instructions: str | None = None,
+    no_bag: bool = False,
 ) -> tuple[Order, Payment | None]:
     existing = (
         await session.execute(select(Order).where(Order.user_id == user.id, Order.idempotency_key == idempotency_key))
@@ -269,7 +286,25 @@ async def place_order(
     shipping_total = sum(p["shipping"] for p in plans)
     cod_fee = cfg["cod_fee_paise"] if payment_method == "cod" else 0
     discount_total = coupon.discount if coupon else 0
-    grand_total = items_total + shipping_total + cod_fee - discount_total
+    ck = await fees_svc.get(session)
+    fee_lines = fees_svc.order_fees(ck, items_total)
+    fees_total = sum(f["amount"] for f in fee_lines)
+    try:
+        tip = fees_svc.tip_amount(ck, tip_paise)
+    except ValueError as exc:
+        raise ApiError(str(exc), "invalid_tip") from exc
+    gstin = ""
+    business = ""
+    if buyer_gstin.strip():
+        if not ck["gstin_enabled"]:
+            raise ApiError("Business invoices are not available right now", "gstin_off")
+        try:
+            gstin = validate_gstin(buyer_gstin)
+            business = fees_svc.check_business(buyer_business)
+        except ValueError as exc:
+            raise ApiError(str(exc), "invalid_gstin", fields={"buyer_gstin": "Invalid"}) from exc
+    note = " ".join((instructions if instructions is not None else address.instructions or "").split())[:300] if ck["instructions_enabled"] else ""
+    grand_total = items_total + shipping_total + cod_fee + fees_total + tip - discount_total
 
     if payment_method == "cod":
         if not cfg["cod_enabled"]:
@@ -290,13 +325,20 @@ async def place_order(
         ship_to={
             "full_name": address.full_name, "phone": address.phone, "line1": address.line1, "line2": address.line2,
             "landmark": address.landmark, "city": address.city, "state_code": address.state_code,
-            "state": STATES.get(address.state_code, ""), "pincode": address.pincode,
+            "state": STATES.get(address.state_code, ""), "pincode": address.pincode, "label": address.label, "kind": address.kind,
+            "lat": float(address.lat) if address.lat is not None else None, "lng": float(address.lng) if address.lng is not None else None,
+            "instructions": note, "no_bag": bool(no_bag and ck["no_bag_enabled"]),
         },
         items_total=items_total,
         shipping_total=shipping_total,
         cod_fee=cod_fee,
         discount_total=discount_total,
         coupon_code=coupon.coupon.code if coupon else "",
+        fees=fee_lines,
+        fees_total=fees_total,
+        tip_paise=tip,
+        buyer_gstin=gstin,
+        buyer_business=business,
         grand_total=grand_total,
         idempotency_key=idempotency_key,
         payment_expires_at=now + timedelta(minutes=settings.payment_window_minutes) if is_online else None,
@@ -504,7 +546,9 @@ async def _first_title(session: AsyncSession, sub: SubOrder) -> str:
     return titles[0] + (f" and {len(titles) - 1} more" if len(titles) > 1 else "") if titles else sub.number
 
 
-async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str, note: str = "") -> None:
+async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str, note: str = "", *, announce: bool = True) -> None:
+    """Moves a package to its next status. ``announce=False`` skips the "shipped" message (the own delivery fleet
+    sends "out for delivery" with the OTP instead)."""
     if not can_transition(sub.status, dst):
         raise Conflict(f"Cannot move this order from '{sub.status}' to '{dst}'", "illegal_transition")
     src = sub.status
@@ -519,12 +563,13 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
         await assign_invoice(session, sub)
         order = await session.get(Order, sub.order_id)
         seller = await session.get(Seller, sub.seller_id)
-        await notify(
-            session, "order_shipped", await session.get(User, order.user_id),
-            {"order_number": order.number, "item": await _first_title(session, sub), "courier": sub.courier_name or "courier",
-             "awb": sub.tracking_number, "seller": seller.display_name if seller else ""},
-            link=f"/orders/{order.id}",
-        )
+        if announce:
+            await notify(
+                session, "order_shipped", await session.get(User, order.user_id),
+                {"order_number": order.number, "item": await _first_title(session, sub), "courier": sub.courier_name or "courier",
+                 "awb": sub.tracking_number, "seller": seller.display_name if seller else ""},
+                link=f"/orders/{order.id}",
+            )
     elif dst == "delivered":
         sub.delivered_at = now
         windows = (
@@ -544,6 +589,21 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
             link=f"/orders/{order.id}",
         )
     add_event(session, sub.order_id, sub, src, dst, actor, note)
+
+
+async def collect_amount(session: AsyncSession, sub: SubOrder, order: Order) -> int:
+    """What the customer pays when this package is handed over (0 for prepaid orders). The seller's part is the package
+    total less any discount the marketplace funded; the marketplace's fees and the tip ride with the first live
+    package (lowest number), so they are collected once."""
+    if order.payment_method != "cod":
+        return 0
+    amount = sub.total - sub.platform_discount
+    if order.fees_total or order.tip_paise:
+        first = (await session.execute(select(SubOrder.id).where(SubOrder.order_id == order.id, SubOrder.status != "cancelled")
+                                       .order_by(SubOrder.number).limit(1))).scalar_one_or_none()
+        if first == sub.id:
+            amount += order.fees_total + order.tip_paise
+    return amount
 
 
 async def _sync_cod_status(session: AsyncSession, order: Order) -> None:
@@ -568,9 +628,20 @@ async def cancel_sub_order(session: AsyncSession, sub: SubOrder, *, actor: str, 
     sub.settlement_status = "void"
     add_event(session, order.id, sub, src, "cancelled", actor, reason)
     await _release_stock(session, sub)
+    if sub.shipping_provider == "fleet":
+        from app.services import fleet  # the delivery fleet stops (or returns) a cancelled package
+
+        await fleet.on_cancelled(session, sub, reason)
 
     refund = None
     paid_share = sub.total - sub.platform_discount  # what the customer actually paid for this part
+    others_live = (
+        await session.execute(select(func.count()).where(SubOrder.order_id == order.id, SubOrder.status != "cancelled", SubOrder.id != sub.id))
+    ).scalar_one()
+    if others_live == 0 and (order.fees_total or order.tip_paise):
+        # nothing of the order will be delivered: the marketplace's fees and the tip go back too (when switched on)
+        if (await fees_svc.get(session))["fees_refund_on_cancel"]:
+            paid_share += order.fees_total + order.tip_paise
     if order.payment_method == "online" and order.payment_status in ("paid", "partially_refunded"):
         payment = (
             await session.execute(select(Payment).where(Payment.order_id == order.id, Payment.status == "captured").order_by(Payment.created_at).limit(1))

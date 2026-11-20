@@ -5,12 +5,13 @@ import json
 
 import httpx
 import pytest
+from conftest import add_address, login_phone
 from openpyxl import load_workbook
+from test_phase2_money import key, setup
 
 from app.assistant import decision
-from app.llm import adapters, router as llm_router
-from conftest import add_address, login_phone
-from test_phase2_money import key, setup
+from app.llm import adapters
+from app.llm import router as llm_router
 
 PW = "Admin@12345"
 

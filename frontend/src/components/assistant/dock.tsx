@@ -163,13 +163,16 @@ export function AssistantDock() {
     }
   }, [convId, pathname, loadConvs]);
 
-  // Messages typed while an answer is streaming wait their turn.
+  // Messages typed while an answer is streaming wait their turn; the next one goes out once the answer is done (on the
+  // next tick, so it uses the conversation the previous message may have just created).
   useEffect(() => {
-    if (!busy && queue.length) {
-      const [next, ...rest] = queue;
-      setQueue(rest);
+    if (busy || !queue.length) return;
+    const next = queue[0];
+    const t = setTimeout(() => {
+      setQueue((q) => q.slice(1));
       send(next.text, next.uploads, next.voice);
-    }
+    }, 0);
+    return () => clearTimeout(t);
   }, [busy, queue, send]);
 
   function submit(text = input, voice = false) {

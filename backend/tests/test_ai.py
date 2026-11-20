@@ -9,9 +9,9 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from app.llm import adapters as llm_adapters
 from app.config import settings
 from app.db import SessionLocal
+from app.llm import adapters as llm_adapters
 from app.models import AiRun, Notification, Product
 from tests.conftest import add_address, login_phone, make_seller
 from tests.test_phase2_money import key, setup

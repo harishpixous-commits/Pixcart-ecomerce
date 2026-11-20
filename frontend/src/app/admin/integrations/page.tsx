@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, CircleDashed, Copy, ExternalLink, KeyRound, PlugZap, Server } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Input, Modal, PageLoader, Pill, Select, TextField, useToast } from "@/components/ui";
 import { useAdmin } from "@/lib/admin";
@@ -25,14 +25,23 @@ export default function Integrations() {
   const toast = useToast();
   const [d, setD] = useState<D | null>(null);
   const [open, setOpen] = useState<Item | null>(null);
-  const load = useCallback(() => api<D>("/api/admin/integrations").then(setD).catch(quietly), []);
+  const hashOpened = useRef(false);
+  const load = useCallback(
+    () =>
+      api<D>("/api/admin/integrations")
+        .then((x) => {
+          setD(x);
+          // a link like /admin/integrations#firebase opens that provider once the list has loaded
+          if (!hashOpened.current && typeof window !== "undefined") {
+            hashOpened.current = true;
+            const it = x.items.find((i) => i.key === window.location.hash.slice(1));
+            if (it) setOpen(it);
+          }
+        })
+        .catch(quietly),
+    [],
+  );
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!d || typeof window === "undefined") return;
-    const hash = window.location.hash.slice(1);
-    const it = d.items.find((i) => i.key === hash);
-    if (it) setOpen(it);
-  }, [d]);
   if (!d) return <PageLoader />;
   const groups = Object.entries(d.groups);
   const live = d.items.filter((i) => i.ready).length;

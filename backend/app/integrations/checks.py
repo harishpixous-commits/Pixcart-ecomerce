@@ -181,12 +181,28 @@ async def sentry(cfg: Settings, **_) -> CheckResult:
     return CheckResult(True, "A test event was sent. It shows up in Sentry → Issues within a minute.")
 
 
+async def firebase(cfg: Settings, **_) -> CheckResult:
+    from app.services import push
+
+    if not push.configured(cfg):
+        return CheckResult(False, "Enter the project ID, service account email and private key first.")
+    try:
+        push._token = None  # always ask Google again
+        await push.access_token(cfg)
+    except (ValueError, TypeError) as exc:  # the key text is not a valid PEM key
+        return CheckResult(False, f"The private key could not be read: {str(exc)[:120]}. Copy private_key from the JSON file again.")
+    except RuntimeError as exc:
+        return CheckResult(False, str(exc)[:200])
+    return CheckResult(True, f"Signed in to Firebase project {cfg.firebase_project_id}. Devices can now receive push notifications.")
+
+
 CHECKS = {
     "razorpay": razorpay,
     "razorpayx": razorpayx,
     "msg91": msg91,
     "email": email,
     "whatsapp": whatsapp,
+    "firebase": firebase,
     "shiprocket": shiprocket,
     "ai": ai,
     "sentry": sentry,

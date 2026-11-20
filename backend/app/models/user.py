@@ -82,6 +82,8 @@ class Address(IdMixin, TimestampMixin, Base):
     # optional map pin ("use my current location"): lets delivery partners navigate to the exact door
     lat: Mapped[float | None] = mapped_column(Numeric(9, 6))
     lng: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    label: Mapped[str] = mapped_column(String(40), default="", server_default="")  # the shopper's own name, e.g. "Amma's house"
+    instructions: Mapped[str] = mapped_column(String(300), default="", server_default="")  # for the delivery partner or courier
 
 
 class RateLimitEvent(Base):

@@ -15,12 +15,12 @@ type R = { month: string; tcs_rate_bps: number; note: string; items: Row[]; tota
 export default function TcsReport() {
   const now = new Date();
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-  const [r, setR] = useState<R | null>(null);
+  const [rv, setRv] = useState<{ month: string; data: R } | null>(null);
   const [dlError, setDlError] = useState<string | null>(null);
   useEffect(() => {
-    setR(null);
-    api<R>("/api/admin/reports/tcs", { query: { month } }).then(setR).catch(quietly);
+    api<R>("/api/admin/reports/tcs", { query: { month } }).then((data) => setRv({ month, data })).catch(quietly);
   }, [month]);
+  const r = rv && rv.month === month ? rv.data : null; // a new month shows the loader, not last month's numbers
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Reports" sub="GST TCS for GSTR-8 (due by the 10th of the next month) and data exports for your accountant." actions={r && r.items.length > 0 ? <Button variant="secondary" onClick={() => { setDlError(null); downloadFile("/api/admin/exports/tcs.csv", { month }, `tcs-${month}.csv`).catch((e) => setDlError(e.message)); }}>Download CSV</Button> : undefined} />

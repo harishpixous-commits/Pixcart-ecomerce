@@ -15,7 +15,7 @@ from sqlalchemy import func, select, update
 from app.config import settings
 from app.core.deps import CurrentUser, OptionalUser, SessionDep, audit, client_ip, rate_limit
 from app.core.errors import ApiError, Conflict, NotFound
-from app.core.validators import validate_pincode
+from app.core.validators import STATES, validate_pincode
 from app.db import utcnow
 from app.models import (
     Address,
@@ -45,7 +45,6 @@ from app.services import returns as returns_svc
 from app.services import support as support_svc
 from app.services.catalog import public_product_filter
 from app.services.coupons import list_for_checkout
-from app.core.validators import STATES
 from app.services.delivery import estimate, state_for_pin
 from app.services.invoices import credit_note_pdf, invoice_pdf
 from app.services.platform_settings import PRODUCT_REPORT_REASONS, RETURN_REASONS, get_settings

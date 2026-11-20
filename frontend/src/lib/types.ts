@@ -227,6 +227,7 @@ export interface ProductPage {
 export interface CartLine {
   id: string;
   variant_id: string;
+  product_id?: string;
   product_slug: string;
   title: string;
   variant_label: string;
@@ -247,6 +248,31 @@ export interface CartGroup {
   lines: CartLine[];
 }
 
+/** One of the marketplace's own fees on the bill (handling, small cart, platform). GST is included in amount. */
+export interface FeeLine {
+  code: "handling" | "small_cart" | "platform" | string;
+  label: string;
+  info: string;
+  amount: Paise;
+  list_amount: Paise; // shown struck through when higher (a discounted fee)
+  taxable: Paise;
+  gst: Paise;
+  gst_bps: number;
+  hint: string;
+}
+
+export interface CheckoutOptions {
+  tip_enabled: boolean;
+  tip_presets: Paise[];
+  tip_max_paise: Paise;
+  gstin_enabled: boolean;
+  instructions_enabled: boolean;
+  no_bag_enabled: boolean;
+  cancellation_note: string;
+  delivery_label: string;
+  delivery_info: string;
+}
+
 export interface CartView {
   groups: CartGroup[];
   summary: {
@@ -258,11 +284,18 @@ export interface CartView {
     item_count: number;
     has_problems: boolean;
     cod_fee?: Paise;
+    fees?: FeeLine[];
+    fees_total?: Paise;
+    fee_savings?: Paise;
+    tip?: Paise;
+    coupon_discount?: Paise;
   };
   cod_available: boolean;
   cod_max_order_paise: Paise;
   online_available: boolean;
   cod_allowed?: boolean;
+  hints?: string[];
+  checkout?: CheckoutOptions;
 }
 
 export interface Address {
@@ -278,6 +311,10 @@ export interface Address {
   pincode: string;
   kind: "home" | "work" | "other";
   is_default: boolean;
+  label?: string;
+  instructions?: string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export type SubStatus = "pending_payment" | "placed" | "confirmed" | "packed" | "shipped" | "delivered" | "cancelled";
@@ -353,6 +390,11 @@ export interface OrderDetail {
   items_total: Paise;
   shipping_total: Paise;
   cod_fee: Paise;
+  fees?: FeeLine[];
+  fees_total?: Paise;
+  tip?: Paise;
+  buyer_gstin?: string;
+  buyer_business?: string;
   grand_total: Paise;
   refunded_total: Paise;
   discount_total?: Paise;
@@ -365,6 +407,42 @@ export interface OrderDetail {
   refunds: { id?: string; amount: Paise; status: string; reason: string; created_at?: string; attempts?: number; last_error?: string }[];
   payment?: CheckoutPayload | null;
   customer?: { id: string; name: string; phone: string | null; email: string | null };
+  /** Packages our own delivery partners carry, by sub-order id. */
+  fleet?: Record<string, FleetTracking>;
+}
+
+/** Tracking for one package our own delivery partner carries (the customer's view). */
+export interface FleetTracking {
+  ready_for_pickup_at: string | null;
+  assignment: {
+    id: string;
+    status: "accepted" | "at_store" | "picked" | "on_the_way" | "reached" | "delivered" | "failed";
+    status_label: string;
+    kind: "delivery" | "return";
+    mode: string;
+    assigned_at: string;
+    accepted_at: string | null;
+    at_store_at: string | null;
+    picked_at: string | null;
+    on_the_way_at: string | null;
+    reached_at: string | null;
+    delivered_at: string | null;
+    status_at: string;
+    fail_reason: string;
+    cod_amount: number;
+    distance_km: number | null;
+    rating: number | null;
+    rating_comment: string;
+    has_proof: boolean;
+    expires_at: string | null;
+  } | null;
+  partner: { name: string; photo: string; phone: string; vehicle: string; vehicle_no: string; rating_avg: number; rating_count: number } | null;
+  /** the code to tell the partner at the door (while the package is on its way) */
+  otp: string | null;
+  /** the partner's live position (while on the way, if shared in the last 15 minutes) */
+  location: { lat: number; lng: number; at: string } | null;
+  drop: { lat: number | null; lng: number | null };
+  can_rate?: boolean;
 }
 
 export interface OrderSummary {
@@ -499,6 +577,21 @@ export interface SellerOrder {
   settlement_status?: string;
   settlement_due_at?: string | null;
   timeline?: { from: string; to: string; actor: string; note: string; at: string }[];
+  /** Own delivery fleet: whether the marketplace's partners deliver this order, its pickup code and partner. */
+  fleet?: SellerFleet;
+}
+
+export interface SellerFleet {
+  eligible: boolean;
+  /** the seller may still ship it by courier instead */
+  choice: boolean;
+  /** handed to the fleet ("Ready for pickup" was tapped) */
+  active: boolean;
+  ready_for_pickup_at?: string | null;
+  /** the code the seller gives the partner at pickup (only while packed) */
+  pickup_code?: string;
+  partner?: { name: string; phone: string; photo: string; vehicle: string; vehicle_no: string } | null;
+  step?: { status: string; label: string; kind: "delivery" | "return" } | null;
 }
 
 export interface PlatformInfo {

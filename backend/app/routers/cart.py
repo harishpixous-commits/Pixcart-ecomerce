@@ -6,10 +6,11 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.integrations import get as get_integrations
 from app.core.deps import CurrentUser, SessionDep
 from app.core.errors import ApiError, NotFound
+from app.integrations import get as get_integrations
 from app.models import CartItem, Product, SavedItem, Seller, Variant
+from app.services import fees as fees_svc
 from app.services.orders import cart_payload, group_by_seller, load_cart
 from app.services.platform_settings import get_settings
 
@@ -29,7 +30,8 @@ class MergeIn(BaseModel):
 
 async def _view(session, user) -> dict:
     cfg = await get_settings(session)
-    return cart_payload(group_by_seller(await load_cart(session, user.id), cfg), cfg, (await get_integrations(session)).online_payments)
+    ck = await fees_svc.get(session)
+    return cart_payload(group_by_seller(await load_cart(session, user.id), cfg), cfg, (await get_integrations(session)).online_payments, ck)
 
 
 async def _purchasable(session, variant_id: uuid.UUID) -> Variant:

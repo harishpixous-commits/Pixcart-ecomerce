@@ -21,7 +21,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db import SessionLocal, engine
 from app.models import Category, Product, Variant
-from app.services.product_info import ProductDetails, REQUIRABLE
+from app.services.product_info import REQUIRABLE, ProductDetails
 
 DETAILS_FILE = Path(__file__).with_name("demo_details.json")
 

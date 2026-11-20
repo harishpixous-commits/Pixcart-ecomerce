@@ -77,6 +77,10 @@ export default function AdminSettings() {
       <ErrorNote message={error} />
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
         <h2 className="text-lg font-semibold sm:col-span-2">Delivery</h2>
+        <p className="text-sm text-ink-soft sm:col-span-2">
+          Delivery, cash on delivery and all other fees on the customer&apos;s bill can also be set in{" "}
+          <Link href="/admin/checkout" className="font-semibold text-peacock">Checkout and fees</Link>, with a live preview.
+        </p>
         <TextField label="Delivery fee per seller package (₹)" {...bind("shipping")} />
         <TextField label="Free delivery from (₹, per seller)" {...bind("free")} />
         <TextField label="Maximum quantity per item" {...bind("qty")} />

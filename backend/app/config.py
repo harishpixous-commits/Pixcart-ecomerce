@@ -71,6 +71,17 @@ class Settings(BaseSettings):
     whatsapp_api_version: str = "v21.0"
     whatsapp_api_base: str = "https://graph.facebook.com"
 
+    # --- push notifications (Firebase Cloud Messaging) --------------------------------------
+    firebase_project_id: str = ""
+    firebase_client_email: str = ""
+    firebase_private_key: str = ""  # the service account's private_key, as in the JSON file (\n escapes allowed)
+    firebase_api_key: str = ""      # web app config (public)
+    firebase_sender_id: str = ""
+    firebase_app_id: str = ""
+    firebase_vapid_key: str = ""    # Cloud Messaging → Web Push certificates (public key)
+    firebase_oauth_url: str = "https://oauth2.googleapis.com/token"
+    firebase_fcm_base: str = "https://fcm.googleapis.com"
+
     # --- shipping ----------------------------------------------------------------------
     shipping_provider: Literal["manual", "shiprocket"] = "manual"
     shiprocket_email: str = ""

@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.core.deps import CurrentUser, SessionDep, rate_limit
@@ -21,9 +22,10 @@ from app.core.errors import ApiError, Conflict, Forbidden, NotFound
 from app.core.security import encrypt_field
 from app.core.validators import validate_account_number, validate_ifsc
 from app.db import utcnow
-from app.models import DeliveryBoy, DeliveryZone
-from app.services import fleet as svc
+from app.models import DeliveryAssignment, DeliveryBoy, DeliveryZone, Order, OrderStatusLog, SubOrder
+from app.models.delivery import ACTIVE, ON_TRIP
 from app.services import delivery_settings, storage
+from app.services import fleet as svc
 from app.services.notify import notify_staff
 
 router = APIRouter(prefix="/api/delivery", tags=["delivery"])
@@ -276,3 +278,172 @@ async def set_location(body: LocationIn, b: ApprovedPartner, session: SessionDep
     b.lat, b.lng, b.location_at = round(body.lat, 6), round(body.lng, 6), utcnow()
     await session.commit()
     return {"ok": True}
+
+
+# ============================================================================ requests and trips
+
+
+async def _own_trip(session, assignment_id: uuid.UUID, b: DeliveryBoy, *, lock: bool = True) -> DeliveryAssignment:
+    stmt = select(DeliveryAssignment).where(DeliveryAssignment.id == assignment_id)
+    if lock:
+        stmt = stmt.with_for_update()
+    a = (await session.execute(stmt)).scalar_one_or_none()
+    if a is None or a.delivery_boy_id != b.id:
+        raise NotFound("Delivery")
+    return a
+
+
+@router.get("/feed")
+async def feed(b: ApprovedPartner, session: SessionDep) -> dict:
+    """What the app polls every few seconds: new requests (with seconds left), trips in progress and today's numbers."""
+    if await svc.sweep(session):
+        await session.commit()
+    now = utcnow()
+    offers = list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status == "offered",
+                                                                          DeliveryAssignment.expires_at > now).order_by(DeliveryAssignment.assigned_at))).scalars())
+    active = list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status.in_(ON_TRIP))
+                                         .order_by(DeliveryAssignment.accepted_at))).scalars())
+    day = svc.ist_day_start(datetime.now(svc.IST).date())
+    trips, earned = (await session.execute(select(func.count(), func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0)).where(
+        DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status == "delivered", DeliveryAssignment.delivered_at >= day))).one()
+    cfg = await delivery_settings.get(session)
+    out_offers = []
+    for a in offers:
+        v = await svc.trip_view(session, a)
+        v["seconds_left"] = max(0, int((a.expires_at - now).total_seconds()))
+        out_offers.append(v)
+    return {"offers": out_offers, "active": [await svc.trip_view(session, a) for a in active], "is_online": b.is_online,
+            "today": {"trips": int(trips), "earned": int(earned)}, "cash_in_hand": await svc.cash_in_hand(session, b.id), "cash_limit": cfg["cod_limit_paise"],
+            "offer_seconds": cfg["offer_seconds"], "server_time": now.isoformat()}
+
+
+@router.post("/offers/{assignment_id}/accept")
+async def accept_offer(assignment_id: uuid.UUID, b: ApprovedPartner, session: SessionDep) -> dict:
+    a = await _own_trip(session, assignment_id, b)
+    try:
+        await svc.accept(session, a, b)
+    except Conflict:
+        await session.commit()  # an expired offer was moved on; keep that
+        raise
+    await session.commit()
+    return await svc.trip_view(session, a)
+
+
+class RejectIn(BaseModel):
+    reason: Literal["too_far", "vehicle", "busy", "ending_shift", "unsafe", "other"] = "other"
+    note: str = Field(default="", max_length=200)
+
+
+@router.post("/offers/{assignment_id}/reject")
+async def reject_offer(assignment_id: uuid.UUID, body: RejectIn, b: ApprovedPartner, session: SessionDep) -> dict:
+    a = await _own_trip(session, assignment_id, b)
+    await svc.reject(session, a, b, body.reason, body.note)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.get("/trips/{assignment_id}")
+async def trip(assignment_id: uuid.UUID, b: Partner, session: SessionDep) -> dict:
+    a = await _own_trip(session, assignment_id, b, lock=False)
+    view = await svc.trip_view(session, a)
+    logs = (await session.execute(select(OrderStatusLog).where(OrderStatusLog.assignment_id == a.id).order_by(OrderStatusLog.created_at))).scalars()
+    view["log"] = [{"status": x.status, "note": x.note, "at": x.created_at.isoformat()} for x in logs]
+    return view
+
+
+class StepIn(BaseModel):
+    to: Literal["at_store", "picked", "on_the_way", "reached"]
+    code: str = Field(default="", max_length=8)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+@router.post("/trips/{assignment_id}/status")
+async def trip_step(assignment_id: uuid.UUID, body: StepIn, b: ApprovedPartner, session: SessionDep) -> dict:
+    a = await _own_trip(session, assignment_id, b)
+    await svc.advance(session, a, b, body.to, code=body.code, lat=body.lat, lng=body.lng)
+    await session.commit()
+    return await svc.trip_view(session, a)
+
+
+@router.post("/trips/{assignment_id}/deliver")
+async def trip_deliver(assignment_id: uuid.UUID, b: ApprovedPartner, session: SessionDep, otp: str = Form(default="", max_length=8),
+                       cod_collected: int = Form(default=0, ge=0, le=100_000_000), cod_method: str = Form(default="", max_length=6),
+                       lat: float | None = Form(default=None), lng: float | None = Form(default=None), photo: UploadFile | None = File(default=None)) -> dict:
+    a = await _own_trip(session, assignment_id, b)
+    key = ""
+    if photo is not None and photo.filename:
+        key, _ = await storage.save_private(await photo.read(settings.max_document_bytes + 1), f"delivery-proof/{a.id}")
+    await svc.deliver(session, a, b, otp=otp, proof_key=key, cod_collected=cod_collected, cod_method=cod_method, lat=lat, lng=lng)
+    await session.commit()
+    return await svc.trip_view(session, a)
+
+
+class FailIn(BaseModel):
+    reason: Literal["not_available", "wrong_address", "refused", "no_cash", "damaged", "other"]
+    note: str = Field(default="", max_length=200)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+@router.post("/trips/{assignment_id}/fail")
+async def trip_fail(assignment_id: uuid.UUID, body: FailIn, b: ApprovedPartner, session: SessionDep) -> dict:
+    a = await _own_trip(session, assignment_id, b)
+    await svc.fail(session, a, b, body.reason, body.note, body.lat, body.lng)
+    await session.commit()
+    return await svc.trip_view(session, a)
+
+
+class ReturnedIn(BaseModel):
+    code: str = Field(default="", max_length=8)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+@router.post("/trips/{assignment_id}/returned")
+async def trip_returned(assignment_id: uuid.UUID, body: ReturnedIn, b: ApprovedPartner, session: SessionDep) -> dict:
+    a = await _own_trip(session, assignment_id, b)
+    await svc.returned(session, a, b, code=body.code, lat=body.lat, lng=body.lng)
+    await session.commit()
+    return await svc.trip_view(session, a)
+
+
+async def proof_response(a: DeliveryAssignment) -> Response:
+    if not a.proof_photo:
+        raise NotFound("Delivery photo")
+    data = await storage.read_private(a.proof_photo)
+    ext = a.proof_photo.rsplit(".", 1)[-1]
+    return Response(data, media_type={"png": "image/png", "webp": "image/webp", "pdf": "application/pdf"}.get(ext, "image/jpeg"),
+                    headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@router.get("/trips/{assignment_id}/proof")
+async def trip_proof(assignment_id: uuid.UUID, b: Partner, session: SessionDep) -> Response:
+    return await proof_response(await _own_trip(session, assignment_id, b, lock=False))
+
+
+@router.get("/earnings")
+async def my_earnings(b: Partner, session: SessionDep) -> dict:
+    return await svc.earnings(session, b)
+
+
+@router.get("/history")
+async def history(b: Partner, session: SessionDep, start: date | None = Query(default=None, alias="from"), end: date | None = Query(default=None, alias="to"),
+                  status: Literal["", "delivered", "failed", "rejected", "expired", "cancelled"] = "", page: int = Query(default=1, ge=1)) -> dict:
+    stmt = select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status.not_in(ACTIVE))
+    if status:
+        stmt = stmt.where(DeliveryAssignment.status == status)
+    if start:
+        stmt = stmt.where(DeliveryAssignment.assigned_at >= svc.ist_day_start(start))
+    if end:
+        stmt = stmt.where(DeliveryAssignment.assigned_at < svc.ist_day_start(end + timedelta(days=1)))
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    rows = list((await session.execute(stmt.order_by(DeliveryAssignment.assigned_at.desc()).offset((page - 1) * 20).limit(20))).scalars())
+    subs = {s.id: s for s in (await session.execute(select(SubOrder).where(SubOrder.id.in_([a.sub_order_id for a in rows])))).scalars()} if rows else {}
+    orders = {o.id: o for o in (await session.execute(select(Order).where(Order.id.in_([a.order_id for a in rows])))).scalars()} if rows else {}
+    items = []
+    for a in rows:
+        st = (orders.get(a.order_id).ship_to if orders.get(a.order_id) else {}) or {}
+        items.append({**svc.assignment_brief(a), "order_number": subs[a.sub_order_id].number if a.sub_order_id in subs else "",
+                      "drop_area": ", ".join(x for x in (st.get("city", ""), st.get("pincode", "")) if x)})
+    return {"items": items, "total": total, "page": page, "page_size": 20}

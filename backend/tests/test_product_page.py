@@ -6,12 +6,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.services.delivery import IST, estimate
-from app.services.product_page import bucket, topic_stats
 from app.services.product_info import unit_price
+from app.services.product_page import bucket, topic_stats
 from app.services.review_settings import DEFAULT_TOPICS
 from tests.conftest import add_address, login_phone, png_bytes
-from tests.test_phase2_money import key, setup, ship_and_deliver
 from tests.test_gallery import body_from
+from tests.test_phase2_money import key, setup, ship_and_deliver
 
 
 async def buy(client, product, phone):

@@ -10,10 +10,9 @@ import secrets
 import uuid
 from typing import Any
 
+from fastapi import APIRouter
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func, select, update
-
-from fastapi import APIRouter
 
 from app.config import settings as env
 from app.core.deps import SessionDep, audit

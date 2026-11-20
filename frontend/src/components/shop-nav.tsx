@@ -258,7 +258,7 @@ export function NavBar({ categories, deliverTo }: { categories: CategoryNode[]; 
 
 export function ReturnsOrders() {
   return (
-    <Link href="/orders" className="hidden h-10 flex-col justify-center rounded-lg px-2 leading-tight text-white hover:bg-white/10 md:flex">
+    <Link href="/orders" className="hidden h-10 flex-col justify-center rounded-lg px-2 leading-tight text-white hover:bg-white/10 lg:flex">
       <span className="text-xs text-white/80">Returns</span>
       <span className="text-sm font-semibold">&amp; Orders</span>
     </Link>

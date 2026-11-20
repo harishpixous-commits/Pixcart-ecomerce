@@ -9,31 +9,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
+from app import integrations
 from app.config import settings
 from app.core.errors import install_error_handlers
 from app.core.observability import RequestContextMiddleware, configure_logging
 from app.db import SessionLocal, engine
-from app import integrations
 from app.integrations import runtime
 from app.routers import (
     addresses,
     admin,
     admin_accounts,
-    admin_shop_assistant,
-    assistant,
     admin_extras,
+    admin_shop_assistant,
     ai,
+    assistant,
     auth,
     cart,
     catalog,
+    checkout_admin,
     customer,
     delivery,
     delivery_admin,
     engagement,
     exports,
-    integrations as integrations_router,
     orders,
     promotions,
+    push,
     seller_extras,
     seller_onboarding,
     seller_orders,
@@ -42,6 +43,9 @@ from app.routers import (
     staff,
     storefront,
     webhooks,
+)
+from app.routers import (
+    integrations as integrations_router,
 )
 
 log = logging.getLogger("pixcart")
@@ -89,7 +93,7 @@ app.add_middleware(
 install_error_handlers(app)
 
 # customer before catalog: /api/catalog/delivery-estimate must not be captured by /api/catalog/products/{slug}
-for r in (auth, addresses, storefront, customer, promotions, engagement, catalog, cart, orders, seller_onboarding, seller_products, seller_orders, seller_extras, admin, admin_extras, admin_accounts, staff, integrations_router, exports, ai, assistant, shop_assistant, admin_shop_assistant, webhooks, delivery, delivery_admin):
+for r in (auth, addresses, storefront, customer, promotions, engagement, catalog, cart, orders, seller_onboarding, seller_products, seller_orders, seller_extras, admin, admin_extras, admin_accounts, staff, integrations_router, exports, ai, assistant, shop_assistant, admin_shop_assistant, webhooks, delivery, delivery_admin, checkout_admin, push):
     app.include_router(r.router)
 
 

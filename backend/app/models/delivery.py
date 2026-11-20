@@ -90,6 +90,7 @@ class DeliveryAssignment(IdMixin, Base):
     delivery_boy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_boys.id", ondelete="RESTRICT"), index=True)
     assigned_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))  # empty = auto
     mode: Mapped[str] = mapped_column(String(6), default="manual")  # manual | auto
+    kind: Mapped[str] = mapped_column(String(8), default="delivery", server_default="delivery")  # delivery | return (back to the seller)
     status: Mapped[str] = mapped_column(String(10), default="offered", index=True)
     reject_reason: Mapped[str] = mapped_column(String(200), default="")
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -113,6 +114,7 @@ class DeliveryAssignment(IdMixin, Base):
     drop_lng: Mapped[float | None] = mapped_column(Numeric(9, 6))
     distance_km: Mapped[float | None] = mapped_column(Numeric(7, 2))
     fee_paise: Mapped[int] = mapped_column(BigInteger, default=0)
+    tip_paise: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")  # the customer's tip, paid to the partner in full
     payout_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_payouts.id", ondelete="SET NULL"), index=True)
     fail_reason: Mapped[str] = mapped_column(String(200), default="")
     rating: Mapped[int | None] = mapped_column(SmallInteger)
@@ -123,6 +125,7 @@ class DeliveryAssignment(IdMixin, Base):
     __table_args__ = (
         CheckConstraint(f"status IN {ASSIGNMENT_STATUSES}", name="status"),
         CheckConstraint("mode IN ('manual','auto')", name="mode"),
+        CheckConstraint("kind IN ('delivery','return')", name="kind"),
         CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="rating"),
         CheckConstraint("cod_collected >= 0 AND cod_amount >= 0 AND fee_paise >= 0", name="money"),
         # one live offer or trip per package at a time, even when two staff assign at once

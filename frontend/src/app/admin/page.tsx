@@ -84,16 +84,17 @@ function BusinessBrief({ days }: { days: number }) {
 
 export default function AdminHome() {
   const [d, setD] = useState<D | null>(null);
-  const [k, setK] = useState<K | null>(null);
+  // analytics for the chosen period; while another period loads, the loader shows instead of old numbers
+  const [kv, setKv] = useState<{ days: number; data: K } | null>(null);
   const [days, setDays] = useState(30);
   const [metric, setMetric] = useState<"gmv" | "orders">("gmv");
   useEffect(() => {
     api<D>("/api/admin/dashboard").then(setD).catch(() => {});
   }, []);
   useEffect(() => {
-    setK(null);
-    api<K>("/api/admin/analytics", { query: { days } }).then(setK).catch(quietly);
+    api<K>("/api/admin/analytics", { query: { days } }).then((data) => setKv({ days, data })).catch(quietly);
   }, [days]);
+  const k = kv && kv.days === days ? kv.data : null;
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Overview" actions={

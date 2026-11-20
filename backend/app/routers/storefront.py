@@ -13,12 +13,12 @@ from app.config import settings as env
 from app.core.deps import SessionDep
 from app.core.errors import NotFound
 from app.db import utcnow
+from app.integrations import get as get_integrations
 from app.models import Category, CmsPage, HomeSection, Product
 from app.routers.catalog import _category_tree, product_cards
+from app.services import review_settings
 from app.services.catalog import category_descendant_ids, public_product_filter
 from app.services.cms import DEFAULT_PAGES, ensure_default_sections, get_site
-from app.integrations import get as get_integrations
-from app.services import review_settings
 from app.services.platform_settings import get_settings
 
 router = APIRouter(prefix="/api", tags=["storefront"])

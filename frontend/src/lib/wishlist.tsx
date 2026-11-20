@@ -2,7 +2,7 @@
 
 import { Heart } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { useSession } from "./session";
 import { useSite } from "./site";
@@ -11,14 +11,16 @@ const Ctx = createContext<{ ids: Set<string>; toggle: (id: string) => Promise<vo
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const { user } = useSession();
-  const [ids, setIds] = useState<Set<string>>(new Set());
+  // The saved ids belong to one account; after signing out (or switching accounts) the old set is simply not shown.
+  const [saved, setSaved] = useState<{ uid: string | null; ids: Set<string> }>({ uid: null, ids: new Set() });
+  const ids = useMemo(() => (user && saved.uid === user.id ? saved.ids : new Set<string>()), [user, saved]);
+  const setIds = useCallback((next: Set<string> | ((cur: Set<string>) => Set<string>)) => {
+    setSaved((s) => ({ uid: user?.id ?? null, ids: typeof next === "function" ? next(user && s.uid === user.id ? s.ids : new Set()) : next }));
+  }, [user]);
   const router = useRouter();
   useEffect(() => {
-    if (!user) {
-      setIds(new Set());
-      return;
-    }
-    api<{ ids: string[] }>("/api/wishlist").then((r) => setIds(new Set(r.ids))).catch(() => {});
+    if (!user) return;
+    api<{ ids: string[] }>("/api/wishlist").then((r) => setSaved({ uid: user.id, ids: new Set(r.ids) })).catch(() => {});
   }, [user]);
   const toggle = useCallback(
     async (id: string) => {
@@ -44,7 +46,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [ids, user, router],
+    [ids, user, router, setIds],
   );
   return <Ctx.Provider value={{ ids, toggle }}>{children}</Ctx.Provider>;
 }

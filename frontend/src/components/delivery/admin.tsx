@@ -3,7 +3,8 @@
 /* Pieces shared by the admin's delivery pages: status pills, partner avatar and the private document viewer. */
 
 import clsx from "clsx";
-import { FileText, Loader2, Star } from "lucide-react";
+import { FileText, Loader2, Star, type LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Modal, Pill } from "@/components/ui";
 import { downloadBlob } from "@/lib/api";
@@ -38,6 +39,35 @@ export function PartnerAvatar({ p, size = "md" }: { p: Pick<Partner, "photo" | "
   ) : (
     <span className={clsx(cls, "flex shrink-0 items-center justify-center rounded-full bg-peacock-light font-bold text-peacock")}>{p.name.slice(0, 1).toUpperCase()}</span>
   );
+}
+
+const KPI_TONE = {
+  green: "bg-leaf-light text-leaf",
+  blue: "bg-peacock-light text-peacock",
+  amber: "bg-marigold-light text-marigold-dark",
+  red: "bg-vermilion-light text-vermilion",
+  gray: "bg-mist text-ink-soft",
+};
+
+/** A number tile with an icon, for the delivery dashboards. `alert` paints it red (e.g. stuck trips). */
+export function Kpi({ icon: Icon, label, value, hint, tone = "blue", href, alert, pulse, testId }: {
+  icon: LucideIcon; label: string; value: string | number; hint?: string; tone?: keyof typeof KPI_TONE; href?: string; alert?: boolean; pulse?: boolean; testId?: string;
+}) {
+  const body = (
+    <>
+      <span className="flex items-start justify-between gap-2">
+        <span className={clsx("text-sm font-medium", alert ? "text-vermilion" : "text-ink-soft")}>{label}</span>
+        <span className={clsx("relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", alert ? KPI_TONE.red : KPI_TONE[tone])}>
+          {pulse && <span className="absolute inset-0 animate-ping rounded-xl bg-leaf/25 motion-reduce:animate-none" aria-hidden />}
+          <Icon className="relative h-5 w-5" aria-hidden />
+        </span>
+      </span>
+      <span className={clsx("font-display text-3xl font-bold leading-none", alert ? "text-vermilion" : "text-ink")} data-testid={testId}>{value}</span>
+      {hint && <span className="text-xs text-ink-faint">{hint}</span>}
+    </>
+  );
+  const cls = clsx("flex min-w-0 flex-col gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1", alert ? "ring-vermilion/40" : "ring-black/5");
+  return href ? <Link href={href} className={clsx(cls, "transition hover:ring-peacock/30 hover:shadow-md")}>{body}</Link> : <div className={cls}>{body}</div>;
 }
 
 export function Stars({ value, count }: { value: number; count: number }) {

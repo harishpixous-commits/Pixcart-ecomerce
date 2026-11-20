@@ -33,6 +33,16 @@ class AddressIn(BaseModel):
     pincode: str
     kind: Literal["home", "work", "other"] = "home"
     is_default: bool = False
+    label: str = Field(default="", max_length=40)  # the shopper's own name for it, e.g. "Amma's house"
+    instructions: str = Field(default="", max_length=300)  # for the delivery partner or courier
+    # map pin (from "use my current location" or dragging the pin); India only
+    lat: float | None = Field(default=None, ge=6.0, le=38.0)
+    lng: float | None = Field(default=None, ge=68.0, le=98.0)
+
+    @field_validator("label", "instructions")
+    @classmethod
+    def _tidy(cls, v: str) -> str:
+        return " ".join(v.split())
 
     @field_validator("phone")
     @classmethod
@@ -69,6 +79,10 @@ def address_out(a: Address) -> dict:
         "pincode": a.pincode,
         "kind": a.kind,
         "is_default": a.is_default,
+        "label": a.label,
+        "instructions": a.instructions,
+        "lat": float(a.lat) if a.lat is not None else None,
+        "lng": float(a.lng) if a.lng is not None else None,
     }
 
 
@@ -99,8 +113,30 @@ async def create_address(body: AddressIn, user: CurrentUser, session: SessionDep
     make_default = body.is_default or count == 0
     if make_default:
         await session.execute(update(Address).where(Address.user_id == user.id).values(is_default=False))
-    a = Address(user_id=user.id, **body.model_dump(exclude={"is_default"}), is_default=make_default)
+    a = Address(user_id=user.id, **_coords(body.model_dump(exclude={"is_default"})), is_default=make_default)
     session.add(a)
+    await session.commit()
+    return address_out(a)
+
+
+def _coords(data: dict) -> dict:
+    """Both or neither: a pin needs latitude and longitude, rounded to about 10 cm."""
+    if data.get("lat") is None or data.get("lng") is None:
+        data["lat"] = data["lng"] = None
+    else:
+        data["lat"], data["lng"] = round(data["lat"], 6), round(data["lng"], 6)
+    return data
+
+
+class InstructionsIn(BaseModel):
+    instructions: str = Field(default="", max_length=300)
+
+
+@router.patch("/{address_id}/instructions")
+async def set_instructions(address_id: uuid.UUID, body: InstructionsIn, user: CurrentUser, session: SessionDep) -> dict:
+    """Saves delivery instructions for next time (from checkout)."""
+    a = await get_owned_address(session, user.id, address_id)
+    a.instructions = " ".join(body.instructions.split())
     await session.commit()
     return address_out(a)
 
@@ -108,7 +144,7 @@ async def create_address(body: AddressIn, user: CurrentUser, session: SessionDep
 @router.put("/{address_id}")
 async def update_address(address_id: uuid.UUID, body: AddressIn, user: CurrentUser, session: SessionDep) -> dict:
     a = await get_owned_address(session, user.id, address_id)
-    for k, v in body.model_dump(exclude={"is_default"}).items():
+    for k, v in _coords(body.model_dump(exclude={"is_default"})).items():
         setattr(a, k, v)
     if body.is_default and not a.is_default:
         await session.execute(update(Address).where(Address.user_id == user.id).values(is_default=False))

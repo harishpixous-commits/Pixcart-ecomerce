@@ -29,17 +29,22 @@ export default function StaffPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [s, r, p] = await Promise.all([
-      api<Staff>("/api/admin/staff"),
-      api<{ items: Role[] }>("/api/admin/roles"),
-      api<{ items: Perm[] }>("/api/admin/permissions"),
-    ]);
-    setStaff(s);
-    setRoles(r.items);
-    setPerms(p.items);
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(
+    () =>
+      Promise.all([
+        api<Staff>("/api/admin/staff"),
+        api<{ items: Role[] }>("/api/admin/roles"),
+        api<{ items: Perm[] }>("/api/admin/permissions"),
+      ]).then(([s, r, p]) => {
+        setStaff(s);
+        setRoles(r.items);
+        setPerms(p.items);
+      }),
+    [],
+  );
+  useEffect(() => {
+    load().catch((e) => setError(e instanceof ApiError ? e.message : "Could not load staff and roles"));
+  }, [load]);
 
   const groups = useMemo(() => {
     const g = new Map<string, Perm[]>();

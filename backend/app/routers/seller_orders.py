@@ -12,8 +12,9 @@ from sqlalchemy import case, func, or_, select
 from app.core.deps import ApprovedSeller, CurrentUser, SellerAccount, SessionDep, audit
 from app.core.errors import ApiError, NotFound
 from app.db import utcnow
-from app.models import Order, OrderEvent, OrderItem, Product, SubOrder, Variant
+from app.models import DeliveryBoy, Order, OrderEvent, OrderItem, Product, SubOrder, Variant
 from app.routers.orders import run_refunds
+from app.services import delivery_settings, fleet
 from app.services.orders import cancel_sub_order, transition
 
 router = APIRouter(prefix="/api/seller", tags=["seller-orders"])
@@ -141,23 +142,84 @@ async def list_orders(
     }
 
 
+async def fleet_info(session, s: SubOrder, o: Order) -> dict:
+    """Own delivery fleet on the seller's order: whether to show "Ready for pickup", the pickup code and the partner."""
+    if s.status in ("pending_payment", "cancelled", "delivered") and s.shipping_provider != "fleet":
+        return {"eligible": False, "choice": False, "active": False}
+    r = await fleet.route(session, s, o) if s.shipping_provider != "fleet" else {"eligible": True, "choice": False}
+    out = {"eligible": r["eligible"], "choice": r["choice"], "active": s.shipping_provider == "fleet",
+           "ready_for_pickup_at": s.ready_for_pickup_at.isoformat() if s.ready_for_pickup_at else None,
+           "pickup_code": s.pickup_code if s.shipping_provider == "fleet" and s.status == "packed" else "", "partner": None, "step": None}
+    if s.shipping_provider == "fleet":
+        cfg = await delivery_settings.get(session)
+        out["choice"] = cfg["fleet_mode"] == "seller_choice"
+        a = await fleet.active_assignment(session, s.id)
+        if a is not None and a.status != "offered":
+            boy = await session.get(DeliveryBoy, a.delivery_boy_id)
+            out["partner"] = {"name": boy.name, "phone": boy.phone, "photo": boy.photo, "vehicle": fleet.VEHICLE_LABELS.get(boy.vehicle_type, ""), "vehicle_no": boy.vehicle_no}
+            out["step"] = {"status": a.status, "label": fleet.STEP_LABEL.get(a.status, a.status), "kind": a.kind}
+        elif a is not None:
+            out["step"] = {"status": "offered", "label": "Finding a delivery partner", "kind": a.kind}
+        elif s.status == "packed":
+            out["step"] = {"status": "waiting", "label": "Waiting for a delivery partner", "kind": "delivery"}
+    return out
+
+
 @router.get("/orders/{sub_id}")
 async def get_order(sub_id: uuid.UUID, seller: SellerAccount, session: SessionDep) -> dict:
     s, o = await _own_sub(session, seller.id, sub_id, lock=False)
     data = sub_out(s, o, (await _items(session, [s.id])).get(s.id, []), full=True)
     events = (await session.execute(select(OrderEvent).where(OrderEvent.sub_order_id == s.id).order_by(OrderEvent.created_at))).scalars()
     data["timeline"] = [{"from": e.from_status, "to": e.to_status, "actor": e.actor, "note": e.note, "at": e.created_at.isoformat()} for e in events]
+    data["fleet"] = await fleet_info(session, s, o)
     return data
 
 
 async def _act(session, seller, user, sub_id: uuid.UUID, dst: str, note: str = "", **fields) -> dict:
     s, o = await _own_sub(session, seller.id, sub_id)
+    if dst in ("shipped", "delivered"):
+        if s.shipping_provider == "fleet":
+            raise ApiError("Our delivery partner picks up and delivers this order; the steps update by themselves", "fleet_order")
+        if dst == "shipped":
+            r = await fleet.route(session, s, o)
+            if r["eligible"] and not r["choice"]:
+                raise ApiError("Our delivery partners deliver this order. Mark it Ready for pickup instead of shipping by courier.", "fleet_order")
     for k, v in fields.items():
         setattr(s, k, v)
     await transition(session, s, dst, "seller", note)
     audit(session, user, f"suborder.{dst}", "sub_order", s.id, note)
     await session.commit()
-    return sub_out(s, o, (await _items(session, [s.id])).get(s.id, []), full=True)
+    data = sub_out(s, o, (await _items(session, [s.id])).get(s.id, []), full=True)
+    data["fleet"] = await fleet_info(session, s, o)
+    return data
+
+
+@router.post("/orders/{sub_id}/ready-for-pickup")
+async def ready_for_pickup(sub_id: uuid.UUID, seller: ApprovedSeller, user: CurrentUser, session: SessionDep) -> dict:
+    """Hands the packed order to the own delivery fleet (staff or auto-assign find a partner)."""
+    s, o = await _own_sub(session, seller.id, sub_id)
+    await fleet.ready_for_pickup(session, s, user)
+    audit(session, user, "suborder.ready_for_pickup", "sub_order", s.id)
+    await session.commit()
+    data = sub_out(s, o, (await _items(session, [s.id])).get(s.id, []), full=True)
+    data["fleet"] = await fleet_info(session, s, o)
+    return data
+
+
+@router.post("/orders/{sub_id}/use-courier")
+async def use_courier(sub_id: uuid.UUID, seller: ApprovedSeller, user: CurrentUser, session: SessionDep) -> dict:
+    """Takes the order back from the fleet before pickup to ship it by courier (only when the marketplace lets sellers choose)."""
+    s, o = await _own_sub(session, seller.id, sub_id)
+    if (await delivery_settings.get(session))["fleet_mode"] != "seller_choice":
+        raise ApiError("Our delivery partners deliver this order; contact the marketplace team to change it", "fleet_order")
+    if s.shipping_provider != "fleet":
+        raise ApiError("This order is not with the delivery fleet", "not_fleet")
+    await fleet.use_courier(session, s, user, actor="seller")
+    audit(session, user, "suborder.use_courier", "sub_order", s.id)
+    await session.commit()
+    data = sub_out(s, o, (await _items(session, [s.id])).get(s.id, []), full=True)
+    data["fleet"] = await fleet_info(session, s, o)
+    return data
 
 
 @router.post("/orders/{sub_id}/confirm")

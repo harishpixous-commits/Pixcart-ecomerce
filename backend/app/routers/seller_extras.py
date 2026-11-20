@@ -40,14 +40,13 @@ from app.models import (
     Warehouse,
 )
 from app.routers.orders import run_refunds
-from app.services import inventory, shipping
+from app.services import inventory, product_page, review_settings, shipping
 from app.services import returns as returns_svc
 from app.services.analytics import kpis, product_performance
 from app.services.catalog import refresh_product_aggregates
 from app.services.invoices import credit_note_pdf, invoice_pdf
 from app.services.ledger import balances, payout_out
 from app.services.orders import transition
-from app.services import product_page, review_settings
 from app.services.platform_settings import PRODUCT_REPORT_REASONS
 
 router = APIRouter(prefix="/api/seller", tags=["seller-extras"])
@@ -575,6 +574,13 @@ async def book_courier(sub_id: uuid.UUID, seller: ApprovedSeller, user: CurrentU
         raise NotFound("Order")
     if sub.status != "packed":
         raise Conflict("Pack the order before booking the courier", "not_packed")
+    from app.services import fleet
+
+    if sub.shipping_provider == "fleet":
+        raise ApiError("Our delivery partner picks up this order", "fleet_order")
+    r = await fleet.route(session, sub)
+    if r["eligible"] and not r["choice"]:
+        raise ApiError("Our delivery partners deliver this order. Mark it Ready for pickup instead.", "fleet_order")
     await shipping.book(session, sub)
     await transition(session, sub, "shipped", "seller", f"Booked with {sub.courier_name} {sub.tracking_number}")
     audit(session, user, "suborder.book_courier", "sub_order", sub.id)

@@ -4,7 +4,7 @@ import { Bot, Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AiRun } from "@/components/ai";
 import { PageHeader, Stat, Table, Tabs } from "@/components/portal-shell";
-import { Button, EmptyState, ErrorNote, Field, Input, Modal, PageLoader, Pagination, Pill, Select, Textarea, TextField, useToast } from "@/components/ui";
+import { Button, EmptyState, ErrorNote, Field, Modal, PageLoader, Pagination, Pill, Select, Textarea, TextField, useToast } from "@/components/ui";
 import { api, ApiError, downloadFile, latestOnly, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 

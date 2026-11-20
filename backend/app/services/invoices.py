@@ -190,7 +190,8 @@ async def invoice_pdf(session: AsyncSession, sub: SubOrder) -> bytes:
     parties = [
         [
             "<b>Sold by</b><br/>" + _addr([seller.legal_name, wh.line1 if wh else seller.pickup_line1, f"{wh.city if wh else seller.pickup_city}, {STATES.get(origin_state, '')} {wh.pincode if wh else seller.pickup_pincode}", f"GSTIN: {gstin}"]),
-            "<b>Bill to / Ship to</b><br/>" + _addr([st.get("full_name", ""), st.get("line1", ""), st.get("line2", ""), f"{st.get('city', '')}, {st.get('state', '')} {st.get('pincode', '')}", f"Phone: {st.get('phone', '')}"]),
+            ("<b>Bill to</b><br/>" + _addr([order.buyer_business, f"GSTIN: {order.buyer_gstin}"]) + "<br/><b>Ship to</b><br/>" if order.buyer_gstin else "<b>Bill to / Ship to</b><br/>")
+            + _addr([st.get("full_name", ""), st.get("line1", ""), st.get("line2", ""), f"{st.get('city', '')}, {st.get('state', '')} {st.get('pincode', '')}", f"Phone: {st.get('phone', '')}"]),
         ]
     ]
     totals = [["Total (inclusive of GST)", _money(sub.total)], ["Amount in words", ""], [rupees_in_words(sub.total), ""]]

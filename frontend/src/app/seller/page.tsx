@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader, Stat } from "@/components/portal-shell";
+import { PushPrompt } from "@/components/push-prompt";
 import { ButtonLink, PageLoader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
@@ -43,6 +44,7 @@ export default function SellerDashboard() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Dashboard" actions={<ButtonLink href="/seller/products/new">Add a product</ButtonLink>} />
+      <PushPrompt app="seller" title="Get new orders as notifications" text="Hear about new orders, pickups and returns on this device, even when this page is closed." />
       {live === 0 && (
         <div className="rounded-xl bg-marigold-light p-4">
           <p className="font-semibold">You have no live products yet</p>

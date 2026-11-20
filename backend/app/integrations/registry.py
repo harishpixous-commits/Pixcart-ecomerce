@@ -31,6 +31,7 @@ class FieldDef:
     placeholder: str = ""
     min: float | None = None
     max: float | None = None
+    max_len: int = 500  # longest text accepted (a service-account private key needs more)
 
     @property
     def secret(self) -> bool:
@@ -191,6 +192,38 @@ PROVIDERS: tuple[Provider, ...] = (
         ),
     ),
     Provider(
+        key="firebase",
+        name="Firebase push notifications",
+        group="messaging",
+        purpose="Instant push notifications on phones and browsers: new delivery requests for partners even when the app is in the background, "
+                "order and delivery updates for shoppers, alerts for staff. Without it, these appear inside the app only.",
+        fields=(
+            FieldDef("project_id", "Project ID", "firebase_project_id", required=True, pattern=r"[a-z0-9-]{4,40}", pattern_hint="Lowercase letters, digits and hyphens",
+                     help="Firebase console → Project settings → General → Project ID."),
+            FieldDef("client_email", "Service account email", "firebase_client_email", kind="email", required=True,
+                     help="Project settings → Service accounts → Generate new private key. Copy client_email from the downloaded JSON file."),
+            FieldDef("private_key", "Service account private key", "firebase_private_key", kind="secret", required=True, max_len=4000,
+                     help="The private_key value from the same JSON file, copied as it is (one line with \\n in it)."),
+            FieldDef("api_key", "Web API key", "firebase_api_key", required=True, pattern=r"[A-Za-z0-9_-]{20,60}", pattern_hint="From the web app config",
+                     help="Project settings → General → Your apps → add a Web app → apiKey."),
+            FieldDef("sender_id", "Sender ID", "firebase_sender_id", required=True, pattern=r"[0-9]{6,20}", pattern_hint="Digits (messagingSenderId)"),
+            FieldDef("app_id", "Web app ID", "firebase_app_id", required=True, pattern=r"[0-9]+:[0-9]+:web:[A-Za-z0-9]+", pattern_hint="Looks like 1:1234:web:abcd"),
+            FieldDef("vapid_key", "Web push certificate key", "firebase_vapid_key", required=True, pattern=r"[A-Za-z0-9_-]{60,120}",
+                     pattern_hint="Project settings → Cloud Messaging → Web Push certificates → Key pair"),
+        ),
+        off={"firebase_project_id": ""},
+        default_on="firebase_project_id",
+        docs_url="https://firebase.google.com/docs/cloud-messaging",
+        setup_steps=(
+            "Create a project at console.firebase.google.com (Google Analytics is not needed).",
+            "Project settings → General → Your apps → Add app → Web. Copy apiKey, messagingSenderId and appId here.",
+            "Project settings → Cloud Messaging → Web Push certificates → Generate key pair. Copy the key here.",
+            "Project settings → Service accounts → Generate new private key. From the JSON file copy client_email and private_key here.",
+            "For the Android partner app: add an Android app with the app's package name and put google-services.json in the app project before building.",
+            "Save, switch on and press Test connection. Partners then tap Allow notifications in the partner app.",
+        ),
+    ),
+    Provider(
         key="shiprocket",
         name="Shiprocket",
         group="shipping",
@@ -259,7 +292,7 @@ BY_KEY = {p.key: p for p in PROVIDERS}
 
 GROUP_LABELS = {
     "payments": "Payments and payouts",
-    "messaging": "SMS, email and WhatsApp",
+    "messaging": "SMS, email, WhatsApp and push notifications",
     "shipping": "Shipping",
     "ai": "AI",
     "monitoring": "Monitoring",
@@ -297,7 +330,7 @@ def validate_value(f: FieldDef, value: Any) -> Any:
     v = value.strip()
     if any(ord(c) < 32 for c in v):
         raise ValueError(f"{f.label}: remove line breaks and hidden characters")
-    if len(v) > 500:
+    if len(v) > f.max_len:
         raise ValueError(f"{f.label}: too long")
     if f.kind == "select" and v not in f.options:
         raise ValueError(f"{f.label}: choose one of {', '.join(f.options)}")

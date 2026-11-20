@@ -227,7 +227,8 @@ export function ShopHeader() {
       <div className="bg-peacock">
         <div className="mx-auto flex max-w-shop flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 sm:flex-nowrap sm:px-4">
           <Logo />
-          <div className="order-last w-full sm:order-none sm:flex-1">
+          {/* min-w-0 lets the search shrink so the account and cart buttons never push past the screen edge */}
+          <div className="order-last w-full min-w-0 sm:order-none sm:flex-1">
             <Suspense>
               <SearchBox categories={cats} />
             </Suspense>

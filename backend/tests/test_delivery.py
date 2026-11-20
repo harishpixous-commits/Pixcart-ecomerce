@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal, utcnow
 from app.models import DeliveryAssignment, DeliveryBoy, DeliveryZone, OrderStatusLog, SubOrder
-from tests.conftest import PDF, Api, login_phone, png_bytes
+from tests.conftest import PDF, Api, add_address, login_phone, png_bytes
 from tests.test_phase2_money import setup
 from tests.test_promotions import order
 
@@ -262,3 +262,274 @@ async def test_admin_reviews_partners_zones_and_settings(client, admin):
     manager = await staff_with_role(client, "delivery_manager", "dm@pixcart.in")
     assert (await manager.get("/api/admin/delivery/partners")).status_code == 200
     assert (await manager.get(f"/api/admin/delivery/partners/{pid}/bank")).status_code == 403  # bank numbers need the payouts permission
+
+
+# ---------------------------------------------------------------------------- steps 4 to 8: the delivery pipeline
+
+CHENNAI = ("600001", "600028", "600040")  # the test seller's store is in 600001, the shopper in 600028
+
+
+async def ready_partner(client, admin, phone: str, name: str, zone_id: str, lat: float, lng: float) -> Api:
+    rider = await register_partner(client, phone, name, zone_id)
+    pid = (await rider.get("/api/delivery/me")).json()["id"]
+    assert (await admin.post(f"/api/admin/delivery/partners/{pid}/kyc", {"action": "approve", "zone_id": zone_id})).status_code == 200
+    assert (await rider.post("/api/delivery/me/online", {"online": True})).status_code == 200
+    assert (await rider.post("/api/delivery/me/location", {"lat": lat, "lng": lng})).status_code == 200
+    rider.partner_id = pid
+    return rider
+
+
+async def cod_order(client, product, phone: str) -> tuple[Api, dict]:
+    buyer = await login_phone(client, phone, name=f"Buyer {phone[-3:]}")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": product["variants"][0]["id"], "qty": 1})
+    from tests.test_phase2_money import key
+
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+    return buyer, o
+
+
+def titles(inbox: dict) -> list[str]:
+    return [n["title"] for n in inbox["items"]]
+
+
+async def test_pipeline_manual_assignment_to_delivery_earnings_and_payout(client, admin, categories):
+    zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
+    await admin.put("/api/admin/delivery/settings", {"auto_assign": False, "fleet_mode": "zones"})
+    tn, ka, shirt, _ = await setup(client, admin, categories)  # shirt ₹1,000, sold by Kovai Textiles from 600001
+    rider = await ready_partner(client, admin, "9600000701", "Kumar Rider", zone_id, 13.0830, 80.2710)
+    buyer, o = await cod_order(client, shirt, "9600000702")
+    sub_id = o["sub_orders"][0]["id"]
+
+    # the seller: the order is in the fleet's zones, so courier shipping is refused and "Ready for pickup" is offered
+    assert (await tn.post(f"/api/seller/orders/{sub_id}/confirm")).status_code == 200
+    view = (await tn.get(f"/api/seller/orders/{sub_id}")).json()
+    assert view["fleet"]["eligible"] is True and view["fleet"]["choice"] is False
+    await tn.post(f"/api/seller/orders/{sub_id}/pack")
+    assert (await tn.post(f"/api/seller/orders/{sub_id}/ship", {"courier_name": "DTDC", "tracking_number": "AWB99999"})).json()["error"]["code"] == "fleet_order"
+    r = (await tn.post(f"/api/seller/orders/{sub_id}/ready-for-pickup")).json()
+    code = r["fleet"]["pickup_code"]
+    assert r["status"] == "packed" and r["fleet"]["active"] and len(code) == 4 and r["fleet"]["step"]["status"] == "waiting"
+    assert "Ready for pickup: " + r["number"] in titles((await admin.get("/api/notifications")).json())
+
+    # admin queue → candidates → offer; the partner sees the request with a timer, without the customer's details yet
+    q = (await admin.get("/api/admin/delivery/queue")).json()
+    assert q["counts"]["waiting"] == 1 and q["items"][0]["cod_amount"] == 100000
+    cands = (await admin.get(f"/api/admin/delivery/packages/{sub_id}/candidates")).json()
+    assert cands[0]["ok"] and cands[0]["distance_km"] is None  # the store has no map position yet
+    await admin.post("/api/admin/delivery/assign", {"sub_order_id": sub_id, "partner_id": rider.partner_id})
+    feed = (await rider.get("/api/delivery/feed")).json()
+    offer = feed["offers"][0]
+    assert 0 < offer["seconds_left"] <= 30 and offer["drop"]["name"] == "" and offer["cod_amount"] == 100000 and offer["fee_estimate"] == 3000
+    assert "New delivery request" in titles((await rider.get("/api/notifications")).json())
+
+    # declined → back to the queue, staff told; offered again and accepted
+    assert (await rider.post(f"/api/delivery/offers/{offer['id']}/reject", {"reason": "vehicle", "note": "Puncture"})).json()["ok"]
+    assert (await admin.get("/api/admin/delivery/queue")).json()["counts"]["waiting"] == 1
+    assert any(t.startswith("No delivery partner took") for t in titles((await admin.get("/api/notifications")).json()))
+    a2 = (await admin.post("/api/admin/delivery/assign", {"sub_order_id": sub_id, "partner_id": rider.partner_id})).json()
+    accepted = (await rider.post(f"/api/delivery/offers/{a2['id']}/accept")).json()
+    assert accepted["status"] == "accepted" and accepted["drop"]["name"] == "Priya S" and accepted["drop"]["phone"] == "9876500000"
+    assert "Delivery partner assigned" in titles((await buyer.get("/api/notifications")).json())
+    assert any(t.startswith("Pickup assigned") for t in titles((await tn.get("/api/notifications")).json()))
+    assert (await tn.get(f"/api/seller/orders/{sub_id}")).json()["fleet"]["partner"]["name"] == "Kumar Rider"
+
+    # at the store (its map position is learnt) → pickup needs the seller's code → the package is shipped
+    trip = f"/api/delivery/trips/{a2['id']}"
+    assert (await rider.post(f"{trip}/status", {"to": "on_the_way"})).json()["error"]["code"] == "invalid_step"
+    await rider.post(f"{trip}/status", {"to": "at_store", "lat": 13.0827, "lng": 80.2707})
+    assert (await rider.post(f"{trip}/status", {"to": "picked", "code": "0000" if code != "0000" else "1111"})).json()["error"]["code"] == "wrong_code"
+    picked = (await rider.post(f"{trip}/status", {"to": "picked", "code": code, "lat": 13.0827, "lng": 80.2707})).json()
+    assert picked["status"] == "picked"
+    order_view = (await buyer.get(f"/api/orders/{o['id']}")).json()
+    track = order_view["fleet"][sub_id]
+    assert order_view["sub_orders"][0]["status"] == "shipped" and track["partner"]["name"] == "Kumar Rider" and len(track["otp"]) == 4
+    assert track["location"]["lat"] == 13.083
+    assert "Out for delivery" in titles((await buyer.get("/api/notifications")).json())
+    otp = track["otp"]
+
+    # at the door: OTP, photo and the exact cash are all checked
+    await rider.post(f"{trip}/status", {"to": "on_the_way"})
+    await rider.post(f"{trip}/status", {"to": "reached"})
+    photo = {"photo": ("door.png", png_bytes(), "image/png")}
+    bad = await client.post(f"{trip}/deliver", headers=rider.h(), data={"otp": "9999" if otp != "9999" else "8888", "cod_collected": "100000", "cod_method": "cash"}, files=photo)
+    assert bad.json()["error"]["code"] == "wrong_otp"
+    no_photo = await client.post(f"{trip}/deliver", headers=rider.h(), data={"otp": otp, "cod_collected": "100000", "cod_method": "cash"})
+    assert no_photo.json()["error"]["code"] == "proof_required"
+    short = await client.post(f"{trip}/deliver", headers=rider.h(), data={"otp": otp, "cod_collected": "90000", "cod_method": "cash"}, files=photo)
+    assert short.json()["error"]["code"] == "cod_mismatch"
+    done = await client.post(f"{trip}/deliver", headers=rider.h(), data={"otp": otp, "cod_collected": "100000", "cod_method": "upi", "lat": "13.06", "lng": "80.25"},
+                             files={"photo": ("door.png", png_bytes(), "image/png")})
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "delivered" and done.json()["fee"] == 3000 and done.json()["distance_km"] > 0
+    after = (await buyer.get(f"/api/orders/{o['id']}")).json()
+    assert after["sub_orders"][0]["status"] == "delivered" and after["fleet"][sub_id]["can_rate"] is True
+    assert (await buyer.get(f"/api/orders/{o['id']}/delivery-proof/{sub_id}")).status_code == 200
+    assert "Delivered" in titles((await buyer.get("/api/notifications")).json())
+
+    # rating and complaint
+    assert (await buyer.post(f"/api/orders/{o['id']}/delivery-rating", {"sub_order_id": sub_id, "rating": 5, "comment": "Very polite"})).json()["rating"] == 5
+    me = (await rider.get("/api/delivery/me")).json()
+    assert me["rating_avg"] == 5.0 and me["rating_count"] == 1
+    c = (await buyer.post(f"/api/orders/{o['id']}/delivery-complaint", {"sub_order_id": sub_id, "category": "late", "text": "Came 20 minutes late"})).json()
+    fb = (await admin.get("/api/admin/delivery/feedback")).json()
+    assert fb["open"] == 1 and fb["items"][0]["category_label"] == "Delivered late"
+    assert (await admin.post(f"/api/admin/delivery/complaints/{c['id']}/resolve", {"note": "Spoke to the partner"})).json()["ok"]
+    assert (await admin.get("/api/admin/delivery/feedback", params={"kind": "ratings"})).json()["items"][0]["rating"] == 5
+
+    # earnings, cash in hand, deposits, the weekly payout
+    e = (await rider.get("/api/delivery/earnings")).json()
+    assert e["today"]["trips"] == 1 and e["today"]["earned"] == 3000 and e["cash_in_hand"] == 100000 and e["unpaid"] == 3000
+    assert (await rider.get("/api/delivery/history")).json()["items"][0]["status"] == "delivered"
+    assert (await admin.post(f"/api/admin/delivery/partners/{rider.partner_id}/deposits", {"amount_paise": 200000})).json()["error"]["code"] == "deposit_too_big"
+    assert (await admin.post(f"/api/admin/delivery/partners/{rider.partner_id}/deposits", {"amount_paise": 100000, "method": "upi", "reference": "UPI123"})).json()["cash_in_hand"] == 0
+    from datetime import date
+    gen = (await admin.post("/api/admin/delivery/payouts/generate", {"week_start": date.today().isoformat()})).json()
+    assert gen["created"] == 1
+    pays = (await admin.get("/api/admin/delivery/payouts")).json()
+    assert pays["items"][0]["amount"] == 3000 and pays["items"][0]["net_amount"] == 3000 and pays["pending_total"] == 3000
+    assert (await admin.post(f"/api/admin/delivery/payouts/{pays['items'][0]['id']}/paid", {"reference": "UTR0001"})).json()["status"] == "paid"
+    assert "Payout ₹30 paid" in titles((await rider.get("/api/notifications")).json())
+    assert (await admin.post("/api/admin/delivery/payouts/generate", {"week_start": date.today().isoformat()})).json()["created"] == 0
+
+    # the live view and the reports
+    live = (await admin.get("/api/admin/delivery/live")).json()
+    p = next(x for x in live["partners"] if x["name"] == "Kumar Rider")
+    assert p["online"] and p["state"] == "free" and p["today_trips"] == 1 and p["location_state"] == "live" and live["summary"]["online"] >= 1
+    rep = (await admin.get("/api/admin/delivery/reports")).json()
+    assert rep["delivered"] == 1 and rep["success_rate"] == 100.0 and rep["partners"][0]["delivered"] == 1
+    over = (await admin.get("/api/admin/delivery/overview")).json()
+    assert over["delivered_today"] == 1 and over["queue"] == 0
+
+
+async def test_auto_assign_expiry_failure_return_and_alerts(client, admin, categories, gateway):
+    from app.services import fleet
+
+    zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
+    await admin.put("/api/admin/delivery/settings", {"auto_assign": True, "offer_seconds": 10, "max_offers": 3, "stuck_minutes": 30})
+    tn, ka, shirt, _ = await setup(client, admin, categories)
+    near = await ready_partner(client, admin, "9600000801", "Near Rider", zone_id, 13.0830, 80.2700)
+    far = await ready_partner(client, admin, "9600000802", "Far Rider", zone_id, 13.1200, 80.2900)
+    # the store's position is known (a partner reached it before), so the nearest partner is asked first
+    async with SessionLocal() as s:
+        from app.models import Warehouse
+        for wh in (await s.execute(select(Warehouse))).scalars():
+            wh.lat, wh.lng = 13.0827, 80.2707
+        await s.commit()
+
+    buyer, o = await cod_order(client, shirt, "9600000803")
+    sub_id = o["sub_orders"][0]["id"]
+    await tn.post(f"/api/seller/orders/{sub_id}/confirm")
+    r = (await tn.post(f"/api/seller/orders/{sub_id}/ready-for-pickup")).json()  # straight from confirmed: packs it too
+    assert r["status"] == "packed" and r["fleet"]["step"]["status"] == "offered"
+    first = (await near.get("/api/delivery/feed")).json()["offers"]
+    assert len(first) == 1 and (await far.get("/api/delivery/feed")).json()["offers"] == []
+
+    # nobody answers in time: the request moves to the next partner
+    async with SessionLocal() as s:
+        a = await s.get(DeliveryAssignment, __import__("uuid").UUID(first[0]["id"]))
+        a.expires_at = utcnow() - timedelta(seconds=1)
+        await s.commit()
+    assert (await near.post(f"/api/delivery/offers/{first[0]['id']}/accept")).json()["error"]["code"] == "offer_expired"
+    second = (await far.get("/api/delivery/feed")).json()["offers"]
+    assert len(second) == 1
+    # the second partner declines and nobody else is free: staff are told and the package waits in the queue
+    await far.post(f"/api/delivery/offers/{second[0]['id']}/reject", {"reason": "too_far"})
+    q = (await admin.get("/api/admin/delivery/queue")).json()
+    assert q["counts"]["waiting"] == 1 and [t["status"] for t in q["items"][0]["tries"]] == ["expired", "rejected"]
+    assert any(t.startswith("No delivery partner took") for t in titles((await admin.get("/api/notifications")).json()))
+
+    # staff assign directly (the partner agreed on the phone); a trip that stays in one step too long alerts staff
+    direct = (await admin.post("/api/admin/delivery/assign", {"sub_order_id": sub_id, "partner_id": near.partner_id, "direct": True})).json()
+    assert direct["status"] == "accepted"
+    async with SessionLocal() as s:
+        a = await s.get(DeliveryAssignment, __import__("uuid").UUID(direct["id"]))
+        a.status_at = utcnow() - timedelta(minutes=45)
+        await s.commit()
+    async with SessionLocal() as s:
+        assert await fleet.stuck_check(s) == 1
+        await s.commit()
+    assert any(t.startswith("Delivery stuck") for t in titles((await admin.get("/api/notifications")).json()))
+    live = (await admin.get("/api/admin/delivery/live")).json()
+    assert live["summary"]["stuck"] == 1 and next(p for p in live["partners"] if p["name"] == "Near Rider")["state"] == "on_trip"
+
+    # picked up, then the customer is not available: the attempt fails; staff send it back to the seller
+    code = (await tn.get(f"/api/seller/orders/{sub_id}")).json()["fleet"]["pickup_code"]
+    trip = f"/api/delivery/trips/{direct['id']}"
+    await near.post(f"{trip}/status", {"to": "picked", "code": code})
+    failed = (await near.post(f"{trip}/fail", {"reason": "not_available", "note": "Phone switched off"})).json()
+    assert failed["status"] == "failed" and "Customer not available" in failed["fail_reason"]
+    assert "Delivery attempt failed" in titles((await buyer.get("/api/notifications")).json())
+    fq = (await admin.get("/api/admin/delivery/queue", params={"tab": "failed"})).json()
+    assert fq["counts"]["failed"] == 1
+    back = (await admin.post(f"/api/admin/delivery/assignments/{direct['id']}/resolve", {"action": "return"})).json()
+    assert back["kind"] == "return" and back["status"] == "picked"
+    assert (await near.post(f"/api/delivery/trips/{back['id']}/returned", {"code": "0000" if code != "0000" else "1111"})).json()["error"]["code"] == "wrong_code"
+    done = (await near.post(f"/api/delivery/trips/{back['id']}/returned", {"code": code})).json()
+    assert done["status"] == "delivered"
+    after = (await buyer.get(f"/api/orders/{o['id']}")).json()
+    assert after["sub_orders"][0]["status"] == "cancelled"  # returned to the seller: the order part is cancelled
+    assert (await tn.get("/api/seller/inventory")).json()["items"][0]["total"] == 10  # the stock is back
+    assert any(t.startswith("Package returned") for t in titles((await tn.get("/api/notifications")).json()))
+
+    # a cancelled order while a partner holds the request: the partner is told and the request ends
+    buyer2, o2 = await cod_order(client, shirt, "9600000804")
+    sub2 = o2["sub_orders"][0]["id"]
+    await tn.post(f"/api/seller/orders/{sub2}/confirm")
+    await tn.post(f"/api/seller/orders/{sub2}/ready-for-pickup")
+    offers = (await near.get("/api/delivery/feed")).json()["offers"] + (await far.get("/api/delivery/feed")).json()["offers"]
+    assert len(offers) == 1
+    await buyer2.post(f"/api/orders/{o2['id']}/cancel", {"reason": "Ordered by mistake"})
+    assert (await near.get("/api/delivery/feed")).json()["offers"] == [] and (await far.get("/api/delivery/feed")).json()["offers"] == []
+    told = titles((await near.get("/api/notifications")).json()) + titles((await far.get("/api/notifications")).json())
+    assert any(t.startswith("Delivery cancelled") for t in told)
+
+    # "seller chooses": a package in the zones can still go by courier
+    await admin.put("/api/admin/delivery/settings", {"fleet_mode": "seller_choice", "auto_assign": False})
+    buyer3, o3 = await cod_order(client, shirt, "9600000805")
+    sub3 = o3["sub_orders"][0]["id"]
+    await tn.post(f"/api/seller/orders/{sub3}/confirm")
+    assert (await tn.get(f"/api/seller/orders/{sub3}")).json()["fleet"]["choice"] is True
+    await tn.post(f"/api/seller/orders/{sub3}/ready-for-pickup")
+    assert (await tn.post(f"/api/seller/orders/{sub3}/use-courier")).json()["fleet"]["active"] is False
+    shipped = await tn.post(f"/api/seller/orders/{sub3}/ship", {"courier_name": "DTDC", "tracking_number": "AWB12345"})
+    assert shipped.status_code == 200 and shipped.json()["status"] == "shipped"
+
+    # couriers only: the fleet is not offered at all
+    await admin.put("/api/admin/delivery/settings", {"fleet_mode": "off"})
+    buyer4, o4 = await cod_order(client, shirt, "9600000806")
+    sub4 = o4["sub_orders"][0]["id"]
+    await tn.post(f"/api/seller/orders/{sub4}/confirm")
+    assert (await tn.get(f"/api/seller/orders/{sub4}")).json()["fleet"]["eligible"] is False
+    assert (await tn.post(f"/api/seller/orders/{sub4}/ready-for-pickup")).json()["error"]["code"] == "not_fleet"
+
+
+def fake_apk() -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("AndroidManifest.xml", b"\x03\x00\x08\x00manifest")
+        z.writestr("classes.dex", b"dex\n035\x00")
+        z.writestr("resources.arsc", b"\x02\x00\x0c\x00")
+    return buf.getvalue()
+
+
+async def test_partner_app_upload_publishes_the_download_link(client, admin):
+    url = "/api/admin/delivery/app"
+    # not an app: refused, and the settings stay as they were
+    bad = await client.post(url, headers=admin.h(), files={"file": ("app.apk", b"PK\x03\x04not really a zip", "application/octet-stream")})
+    assert bad.status_code == 400 and bad.json()["error"]["code"] == "invalid_apk"
+    pdf = await client.post(url, headers=admin.h(), files={"file": ("app.apk", PDF, "application/pdf")})
+    assert pdf.json()["error"]["code"] == "invalid_apk"
+    assert (await client.post(url + "?version=1.0<script>", headers=admin.h(), files={"file": ("a.apk", fake_apk())})).json()["error"]["code"] == "invalid_version"
+
+    ok = await client.post(url + "?version=1.2.0", headers=admin.h(), files={"file": ("pixcart.apk", fake_apk(), "application/vnd.android.package-archive")})
+    assert ok.status_code == 200, ok.text
+    link = ok.json()["values"]["android_apk_url"]
+    assert "/apps/pixcart-partner-1.2.0-" in link and link.endswith(".apk")
+    opts = (await client.get("/api/delivery/options")).json()
+    assert opts["android_apk_url"] == link and opts["app_version"] == "1.2.0"  # partners see it on /delivery/download
+    actions = {a["action"] for a in (await admin.get("/api/admin/audit")).json()["items"]}
+    assert "delivery.app_upload" in actions
