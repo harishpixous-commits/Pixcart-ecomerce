@@ -160,7 +160,7 @@ export default function AdminTripPage() {
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
             <h2 className="mb-2 font-semibold">Money</h2>
             <dl className="grid grid-cols-[1fr_auto] gap-y-1.5 text-sm">
-              <dt className="text-ink-soft">Payment</dt><dd className="font-semibold">{t.payment === "cod" ? "Cash on delivery" : "Prepaid"}</dd>
+              <dt className="text-ink-soft">Payment</dt><dd className="font-semibold">{t.kind === "pickup" ? "Return pickup, no money" : t.payment === "cod" ? "Cash on delivery" : "Prepaid"}</dd>
               {t.cod_amount > 0 && (<><dt className="text-ink-soft">Cash to collect</dt><dd className="font-semibold">{rupees(t.cod_amount)}</dd></>)}
               {t.cod_collected > 0 && (<><dt className="text-ink-soft">Collected</dt><dd className="font-semibold text-leaf">{rupees(t.cod_collected)} {t.cod_method === "upi" ? "by UPI" : "in cash"}</dd></>)}
               <dt className="text-ink-soft">Partner fee</dt><dd className="font-semibold">{t.status === "delivered" ? rupees(t.fee) : `about ${rupees(t.fee_estimate)}`}</dd>

@@ -18,11 +18,11 @@ export const SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a"] as const;
 export type ColumnSeries = { key: string; label: string; color?: string };
 export type ColumnDatum = { key: string; label: string; title: string; values: Record<string, number>; highlight?: boolean };
 
-/** Rounds the axis top up to a clean number (1, 2, 2.5, 5 × 10^n). */
+/** Rounds the axis top up to a clean, even number (2, 4, 6, 8, 10 × 10^n), so the middle gridline is a whole value. */
 function niceMax(v: number): number {
-  if (v <= 0) return 1;
+  if (v <= 0) return 2;
   const exp = Math.pow(10, Math.floor(Math.log10(v)));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * exp >= v) return m * exp;
+  for (const m of [1, 2, 4, 6, 8, 10]) if (m * exp >= v) return m * exp === 1 ? 2 : m * exp;
   return 10 * exp;
 }
 
@@ -45,6 +45,7 @@ export function ColumnChart({ data, series, format, height = 168, labelEvery = 1
   const top = niceMax(Math.max(0, ...totals));
   const ticks = [top, top / 2, 0];
   const peak = totals.indexOf(Math.max(...totals));
+  const hi = data.findIndex((d) => d.highlight); // the highlighted day always gets its label; close neighbours give way
   const empty = totals.every((t) => t === 0);
 
   return (
@@ -121,10 +122,13 @@ export function ColumnChart({ data, series, format, height = 168, labelEvery = 1
               );
             })}
           </ol>
-          <ol className="mt-1.5 flex" aria-hidden>
+          {/* labels sit centred under their column and may spill into the empty neighbours (long ranges label every n-th day) */}
+          <ol className="relative mt-1.5 flex h-4" aria-hidden>
             {data.map((d, i) => (
-              <li key={d.key} className={clsx("min-w-0 flex-1 truncate text-center text-[11px]", d.highlight ? "font-bold text-ink" : "text-ink-faint")}>
-                {i % labelEvery === 0 || d.highlight ? d.label : ""}
+              <li key={d.key} className="relative min-w-0 flex-1">
+                {(d.highlight || (i % labelEvery === 0 && (hi < 0 || labelEvery === 1 || Math.abs(hi - i) >= Math.ceil(labelEvery / 2)))) && (
+                  <span className={clsx("absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-[11px]", d.highlight ? "font-bold text-ink" : "text-ink-faint")}>{d.label}</span>
+                )}
               </li>
             ))}
           </ol>
