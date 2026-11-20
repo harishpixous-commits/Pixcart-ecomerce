@@ -34,13 +34,16 @@ docs/      GO_LIVE (launch runbook), DEPLOY (AWS details), BUSINESS_RULES, AI_AS
 | `ai/` | AI studio tasks (drafts that a person reviews) and risk briefs |
 | `shop_assistant/` | Customer chat on the storefront: `agent` (live + guided), `intents` (multilingual rules), customer-only `tools`, whitelist `views`, `kb` (help articles + public facts), `replies`, `prompts`, `settings`. Must never import `assistant/`, `ai/` or admin routers |
 | `assistant/` | Admin AI assistant: `agent` loop, `tools`, `decision` layer, `actions` (confirm-before-run), `uploads`, `downloads`, `prompts`, `sandbox`, `settings` |
-| `jobs.py` | Scheduler: expire unpaid orders, retry refunds, send notifications, cleanup |
+| `routers/delivery.py`, `routers/delivery_admin.py`, `services/fleet.py`, `services/delivery_settings.py`, `models/delivery.py` | Own delivery fleet (see `docs/DELIVERY.md`). Partner app API under `/delivery`, admin API under `/admin/delivery`. `fleet` holds every rule: offers and auto-assign (`candidates`, `offer`), `release` (kind-aware: delivery, return, pickup), the `sweep` job (expired offers, unassigned alerts), return pickups by the fleet (`request_return_pickup`), trip views and tracking, earnings and weekly payouts. Fees, timers, zones' behaviour and the app download live in `delivery_settings.DEFAULTS` (Admin → Delivery → Settings) |
+| `jobs.py` | Scheduler: expire unpaid orders, retry refunds, send notifications, cleanup, fleet sweep (every 10 s), fleet alerts and weekly partner payouts |
 
 ### Frontend map (`frontend/src`)
 
 `app/(shop)` storefront (product page: `p/[slug]/page.tsx` server sections + `buy-box.tsx` gallery/details/buy box;
 blocks in `components/pdp.tsx`, reviews and customer photos in `components/reviews.tsx`; every block reads its switch from
-`site.pdp`) · `app/seller` seller hub · `app/admin` admin panel · `components/` shared UI
+`site.pdp`) · `app/seller` seller hub · `app/admin` admin panel (fleet: `app/admin/delivery`) · `app/delivery` delivery
+partner app (installable web app; `mobile/partner-app` wraps it for Android; blocks in `components/delivery/`) ·
+`components/charts/columns.tsx` (accessible column chart) · `components/map/live-map.tsx` (Leaflet) · `components/` shared UI
 (`assistant/` dock, blocks, voice) · `lib/api.ts` (fetch with token refresh, `downloadFile`, `downloadPost`,
 `streamPost` for SSE) · `lib/speech.ts` (browser speech) · `lib/admin.tsx` (`useCan(permission)`).
 
@@ -63,6 +66,9 @@ blocks in `components/pdp.tsx`, reviews and customer photos in `components/revie
 9. **Migrations**: `alembic revision --autogenerate -m "..."`, review it, then `alembic upgrade head`,
    `alembic downgrade -1`, `alembic upgrade head`, `alembic check` must pass.
 10. **UI text** is plain, active, sentence case; errors say what to do next.
+11. **Fleet privacy**: a partner sees the customer's name, phone and address only while the trip is under way
+    (`fleet.ON_TRIP`), and a customer sees the partner's phone only then. Partners sign in with OTP; staff see
+    only the last 4 digits of Aadhaar. Customers' coordinates never go to third-party geocoders.
 
 ## Common tasks
 
@@ -75,6 +81,8 @@ blocks in `components/pdp.tsx`, reviews and customer photos in `components/revie
 | Add a shop assistant tool | `@tool(..., login=, feature=)` in `shop_assistant/tools.py`, output through `shop_assistant/views.py` (whitelist), filtered by the session's customer; see `docs/SHOP_ASSISTANT.md` |
 | Add an assistant action | `ActionDef` + `prepare` branch + `execute` branch in `assistant/actions.py`, calling the existing endpoint function |
 | Add an admin page | `frontend/src/app/admin/<page>/page.tsx` + a nav entry with its permission in `app/admin/layout.tsx` |
+| Add a fleet setting | A default in `delivery_settings.DEFAULTS` (+ its bounds in `_INTS`/`_CHOICES`/`_TEXTS`), a field on `app/admin/delivery/settings/page.tsx`; read it with `await delivery_settings.get(session)` |
+| Add a notification | An entry in `notify.EVENTS` (channels and default text; admins edit the templates), then `notify.notify(...)`, `notify_seller(...)` or `notify_staff(permission, ...)` where it happens |
 
 ## Run and test
 

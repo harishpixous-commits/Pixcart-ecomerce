@@ -215,7 +215,7 @@ are connected.
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q          # 115 API tests against a real PostgreSQL (creates pixcart_test)
+cd backend && python -m pytest -q          # 119 API tests against a real PostgreSQL (creates pixcart_test)
 cd frontend && npm run typecheck && npm run lint && npm run build
 cd e2e && npm ci && npx playwright test    # browser journeys against a running stack (see below)
 ```
