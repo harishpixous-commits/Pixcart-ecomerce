@@ -46,7 +46,7 @@ test("questions: guests read, a shopper asks, the seller answers from the seller
   await page.goto(SAREE);
   const qa = page.getByTestId("questions");
   await qa.scrollIntoViewIfNeeded();
-  await expect(qa.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await expect(qa.getByRole("link", { name: "Sign in" }).first()).toBeVisible(); // "sign in to ask" (and to answer, when questions exist)
 
   await page.goto(`/login?next=${encodeURIComponent(SAREE)}`);
   await otpLogin(page, randomPhone("96"), "Question Tester");

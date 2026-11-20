@@ -9,7 +9,8 @@
 
 import clsx from "clsx";
 import {
-  ArrowLeft, Banknote, Camera, Check, CheckCircle2, ChevronDown, CircleAlert, Home, KeyRound, MapPin, Navigation, Package, Phone, ShoppingBag, Store, Undo2, X,
+  ArrowLeft, Banknote, Camera, Check, CheckCircle2, ChevronDown, CircleAlert, Home, KeyRound, LifeBuoy, MapPin, MessageCircle, Navigation, Package, Phone, ShoppingBag, Store,
+  Undo2, X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -356,6 +357,8 @@ export default function TripPage() {
         )}
       </section>
 
+      {!ended && <TeamHelp orderNumber={t.order_number} />}
+
       <div className="grid gap-3 md:grid-cols-2">
         <PlaceCard icon={Store} tone="store" title={back ? "Return to" : "Pick up from"} name={t.pickup.name} address={[t.pickup.address, t.pickup.city, t.pickup.pincode].filter(Boolean).join(", ")}
           phone={t.pickup.phone} nav={navigateUrl(t.pickup)} />
@@ -415,6 +418,23 @@ export default function TripPage() {
       <FailDialog open={failing} tripId={t.id} onClose={() => setFailing(false)} onDone={(next) => { setFailing(false); setTrip({ ...t, ...next }); refreshFeed(); load(); }}
         last={location.last} />
     </div>
+  );
+}
+
+/** A problem on the road (accident, wrong item, unsafe place, app trouble): call or message the delivery team. */
+function TeamHelp({ orderNumber }: { orderNumber: string }) {
+  const options = useDeliveryOptions();
+  const phone = options?.support_phone ?? "";
+  const whatsapp = (options?.support_whatsapp ?? "").replace(/\D/g, "");
+  if (!phone && !whatsapp) return null;
+  const wa = whatsapp ? `https://wa.me/${whatsapp.length === 10 ? `91${whatsapp}` : whatsapp}?text=${encodeURIComponent(`Help with delivery ${orderNumber}`)}` : "";
+  return (
+    <section className="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/5" aria-label="Help from the delivery team" data-testid="trip-help">
+      <LifeBuoy className="h-5 w-5 shrink-0 text-vermilion" aria-hidden />
+      <p className="min-w-0 flex-1 text-sm"><span className="font-semibold">Problem on the way?</span> <span className="text-ink-soft">Talk to the delivery team.</span></p>
+      {phone && <a href={telUrl(phone)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-vermilion-light px-3 text-sm font-semibold text-vermilion"><Phone className="h-4 w-4" aria-hidden />Call</a>}
+      {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-leaf-light px-3 text-sm font-semibold text-leaf"><MessageCircle className="h-4 w-4" aria-hidden />WhatsApp</a>}
+    </section>
   );
 }
 

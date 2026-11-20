@@ -141,6 +141,21 @@ async def set_instructions(address_id: uuid.UUID, body: InstructionsIn, user: Cu
     return address_out(a)
 
 
+class LocationIn(BaseModel):
+    lat: float | None = Field(default=None, ge=6.0, le=38.0)  # India
+    lng: float | None = Field(default=None, ge=68.0, le=98.0)
+
+
+@router.patch("/{address_id}/location")
+async def set_location(address_id: uuid.UUID, body: LocationIn, user: CurrentUser, session: SessionDep) -> dict:
+    """Pins (or un-pins, with nulls) an address on the map, e.g. "Use my current location" at checkout."""
+    a = await get_owned_address(session, user.id, address_id)
+    pin = _coords(body.model_dump())
+    a.lat, a.lng = pin["lat"], pin["lng"]
+    await session.commit()
+    return address_out(a)
+
+
 @router.put("/{address_id}")
 async def update_address(address_id: uuid.UUID, body: AddressIn, user: CurrentUser, session: SessionDep) -> dict:
     a = await get_owned_address(session, user.id, address_id)

@@ -119,3 +119,30 @@ async def test_fees_collected_once_and_refunded_when_everything_is_cancelled(cli
         assert sum(refunds) == order.grand_total and order.payment_status == "refunded"
         sub_a, sub_b = await s.get(SubOrder, uuid.UUID(a["id"])), await s.get(SubOrder, uuid.UUID(b["id"]))
         assert sorted([sub_a.total, sub_b.total + order.fees_total + order.tip_paise]) == refunds
+
+
+async def test_address_label_instructions_and_map_pin(client):
+    """Saved addresses carry a name, instructions and a map pin; checkout's "Use my location" pins one later."""
+    buyer = await login_phone(client, "9600000951", name="Pin Buyer")
+    r = await buyer.post("/api/addresses", {"full_name": "Pin Buyer", "phone": "9876500001", "line1": "7 Temple St", "city": "Chennai", "state_code": "33",
+                                            "pincode": "600004", "kind": "other", "label": "Amma's house", "instructions": "Blue gate, ring twice",
+                                            "lat": 13.0333, "lng": 80.2667})
+    assert r.status_code == 201, r.text
+    a = r.json()
+    assert a["label"] == "Amma's house" and a["instructions"] == "Blue gate, ring twice" and a["lat"] == 13.0333
+    # a pin outside India, or only one of the two numbers, is refused or dropped
+    assert (await buyer.post("/api/addresses", {"full_name": "X Y", "phone": "9876500001", "line1": "1 St", "city": "Chennai", "state_code": "33",
+                                                "pincode": "600004", "lat": 51.5, "lng": -0.12})).status_code == 422
+    half = await buyer.post("/api/addresses", {"full_name": "X Y", "phone": "9876500001", "line1": "1 St", "city": "Chennai", "state_code": "33",
+                                               "pincode": "600004", "lat": 13.0})
+    assert half.status_code == 201 and half.json()["lat"] is None and half.json()["lng"] is None
+
+    # pin (and move) an existing address from checkout; only the owner can
+    plain = await add_address(buyer)
+    moved = await buyer.patch(f"/api/addresses/{plain}/location", {"lat": 13.0827123456, "lng": 80.2707})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["lat"] == 13.082712 and moved.json()["lng"] == 80.2707
+    other = await login_phone(client, "9600000952", name="Someone Else")
+    assert (await other.patch(f"/api/addresses/{plain}/location", {"lat": 13.0, "lng": 80.0})).status_code == 404
+    cleared = await buyer.patch(f"/api/addresses/{plain}/location", {"lat": None, "lng": None})
+    assert cleared.json()["lat"] is None
