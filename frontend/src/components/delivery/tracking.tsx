@@ -140,7 +140,7 @@ export function DeliveryTracking({ orderId, subId, f, packageStatus, onChanged }
               {p.rating_count > 0 && <span className="ml-2 inline-flex items-center gap-0.5"><Star className="h-3.5 w-3.5 fill-marigold text-marigold" aria-hidden />{p.rating_avg.toFixed(1)}</span>}
             </p>
           </div>
-          {a.status !== "delivered" && a.status !== "failed" && (
+          {a.status !== "delivered" && a.status !== "failed" && p.phone && (
             <a href={telUrl(p.phone)} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-peacock px-3 text-sm font-semibold text-white hover:bg-peacock-dark">
               <Phone className="h-4 w-4" aria-hidden /> Call
             </a>

@@ -824,7 +824,9 @@ async def trip_view(session: AsyncSession, a: DeliveryAssignment, *, for_partner
     items = list((await session.execute(select(OrderItem.title, OrderItem.variant_label, OrderItem.qty, OrderItem.image_url).where(OrderItem.sub_order_id == sub.id))).all())
     cfg = await delivery_settings.get(session)
     boy = await session.get(DeliveryBoy, a.delivery_boy_id)
-    show_customer = a.status not in ("offered",)  # partners see the customer's details once they accept
+    # Partners see the customer's name, phone, address and instructions only while the trip is theirs (from accepting
+    # to handing over); before that and after it ends they see the area only. Staff always see everything.
+    show_customer = a.status in ON_TRIP or not for_partner
     out = {
         **assignment_brief(a), "order_number": sub.number, "order_id": str(order.id), "sub_order_id": str(sub.id), "payment": order.payment_method,
         "pickup": {"name": place["name"], "address": place["address"], "pincode": place["pincode"], "city": place["city"], "phone": place["phone"],
@@ -858,7 +860,9 @@ async def customer_tracking(session: AsyncSession, order: Order) -> dict[str, di
         if a is not None:
             boy = await session.get(DeliveryBoy, a.delivery_boy_id)
             view["assignment"] = {k: v for k, v in assignment_brief(a).items() if k not in ("fee", "tip", "cod_collected", "cod_method", "reject_reason")}
-            view["partner"] = {"name": boy.name, "photo": boy.photo, "phone": boy.phone, "vehicle": VEHICLE_LABELS.get(boy.vehicle_type, ""), "vehicle_no": boy.vehicle_no,
+            # the partner's number only while they are on the way with this package (privacy both ways)
+            view["partner"] = {"name": boy.name, "photo": boy.photo, "phone": boy.phone if a.status in ON_TRIP else "",
+                               "vehicle": VEHICLE_LABELS.get(boy.vehicle_type, ""), "vehicle_no": boy.vehicle_no,
                                "rating_avg": round(float(boy.rating_avg or 0), 1), "rating_count": boy.rating_count}
             if a.status in ("picked", "on_the_way", "reached"):
                 view["otp"] = sub.delivery_otp

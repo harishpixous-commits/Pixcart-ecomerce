@@ -365,6 +365,9 @@ export default function TripPage() {
         {!back && (
           t.status === "offered" ? (
             <PlaceCard icon={MapPin} tone="home" title="Deliver to" name={[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")} address="The full address shows after you accept." />
+          ) : ended && !t.drop.phone ? (
+            <PlaceCard icon={MapPin} tone="home" title="Delivered to" name={[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")}
+              address="The customer's name, phone and address are hidden once the trip ends, to protect their privacy." />
           ) : (
             <PlaceCard icon={MapPin} tone="home" title="Deliver to" name={t.drop.name} address={[t.drop.address, t.drop.city, t.drop.pincode].filter(Boolean).join(", ")}
               phone={t.drop.phone} nav={navigateUrl(t.drop)} instructions={t.drop.instructions} noBag={t.drop.no_bag} />

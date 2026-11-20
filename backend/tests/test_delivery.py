@@ -362,6 +362,10 @@ async def test_pipeline_manual_assignment_to_delivery_earnings_and_payout(client
                              files={"photo": ("door.png", png_bytes(), "image/png")})
     assert done.status_code == 200, done.text
     assert done.json()["status"] == "delivered" and done.json()["fee"] == 3000 and done.json()["distance_km"] > 0
+    # once handed over, the partner no longer sees the customer's name, phone or address (staff still do)
+    assert done.json()["drop"]["phone"] == "" and done.json()["drop"]["address"] == "" and done.json()["drop"]["pincode"]
+    staff_view = (await admin.get(f"/api/admin/delivery/trips/{done.json()['id']}")).json()
+    assert staff_view["drop"]["phone"] == "9876500000"
     after = (await buyer.get(f"/api/orders/{o['id']}")).json()
     assert after["sub_orders"][0]["status"] == "delivered" and after["fleet"][sub_id]["can_rate"] is True
     assert (await buyer.get(f"/api/orders/{o['id']}/delivery-proof/{sub_id}")).status_code == 200
