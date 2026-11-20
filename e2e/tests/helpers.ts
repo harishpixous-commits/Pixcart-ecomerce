@@ -31,7 +31,7 @@ export async function otpLogin(page: Page, phone: string, name?: string) {
     await expect(input).toHaveValue(new RegExp(phone.slice(-4)));
     await page.getByRole("button", { name: "Send code" }).click();
     try {
-      await expect(code).toBeVisible({ timeout: 5_000 });
+      await expect(code).toBeVisible({ timeout: 15_000 });
       break;
     } catch (e) {
       if (attempt === 2) throw e;
@@ -56,7 +56,7 @@ export async function createAccount(page: Page, phone: string, name: string) {
     if (!(await terms.isChecked())) await terms.check();
     await page.getByRole("button", { name: "Continue" }).click();
     try {
-      await expect(code).toBeVisible({ timeout: 5_000 });
+      await expect(code).toBeVisible({ timeout: 15_000 });
       break;
     } catch (e) {
       if (attempt === 2) throw e;

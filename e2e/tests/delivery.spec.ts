@@ -95,8 +95,8 @@ async function setUpFleet(request: APIRequestContext, partnerPhone: string) {
   expect(ok.ok(), await ok.text()).toBeTruthy();
 }
 
-test("own delivery partner: request pops up, pickup code, OTP, cash, photo, delivered, rated", async ({ browser, request, seller }) => {
-  test.setTimeout(420_000);
+test("own delivery partner: request pops up, pickup code, OTP, cash, photo, delivered, rated", async ({ browser, request }) => {
+  test.setTimeout(600_000); // four sign-ins and a whole trip
   const partnerPhone = randomPhone("73");
   const customerPhone = randomPhone("95");
   await test.step("a zone and an approved partner", () => setUpFleet(request, partnerPhone));
@@ -143,9 +143,13 @@ test("own delivery partner: request pops up, pickup code, OTP, cash, photo, deli
     orderNo = ((await customer.locator("h1").first().textContent()) ?? "").replace("Order", "").trim();
   });
 
-  // the seller confirms and hands the package to our partner
+  // the seller (Bengaluru Gadget Hub) confirms and hands the package to our partner
   let pickupCode = "";
+  const seller = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
   await test.step("seller marks it ready for pickup", async () => {
+    await seller.goto("/login?next=/seller");
+    await otpLogin(seller, process.env.FLEET_SELLER_PHONE ?? "9000000002");
+    await seller.waitForURL("**/seller");
     await seller.goto("/seller/orders");
     await seller.locator("a[href^='/seller/orders/']", { hasText: orderNo }).first().click();
     await seller.getByRole("button", { name: "Confirm order" }).click();
@@ -159,7 +163,7 @@ test("own delivery partner: request pops up, pickup code, OTP, cash, photo, deli
     await expect(partner.getByTestId("offer-popup")).toBeVisible({ timeout: 30_000 });
     await expect(partner.getByTestId("offer-popup")).toContainText("Collect");
     await partner.getByTestId("offer-accept").click();
-    await expect(partner.getByTestId("trip-page")).toBeVisible({ timeout: 30_000 });
+    await expect(partner.getByTestId("trip-page")).toBeVisible({ timeout: 90_000 }); // a dev server compiles the page on first use
   });
 
   await test.step("admin sees the partner on a trip on the live map", async () => {
@@ -209,5 +213,6 @@ test("own delivery partner: request pops up, pickup code, OTP, cash, photo, deli
   expect(partnerErrors).toEqual([]);
   await pctx.close();
   await customer.context().close();
+  await seller.context().close();
 });
 

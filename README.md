@@ -16,9 +16,17 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
 - **Changing code (person or AI agent)?** Read `AGENTS.md`.
 - **AI assistant internals:** `docs/AI_ASSISTANT.md`.
 - **Customer chat on the website (shop assistant):** `docs/SHOP_ASSISTANT.md`.
+- **Own delivery fleet, checkout fees and push notifications:** `docs/DELIVERY.md`.
 
 ## What is included
 
+- **Own delivery fleet** (like Instamart or Flipkart's own delivery): partner app on the web and Android (sign-up with
+  KYC, online switch, request pop-up with countdown, navigation, pickup code, customer OTP, cash collection, photo
+  proof, earnings and weekly payouts), zones, auto-assign to the nearest free partner or assignment by staff, live map of
+  partners online, customer tracking with the partner on a map, ratings and complaints, reports. See `docs/DELIVERY.md`.
+- **Checkout fees and the bill**: delivery, cash on delivery, handling, small cart and platform fees, tip for the
+  delivery partner, GSTIN for business purchases and "no bag", each switched on and priced in Admin → Checkout and fees.
+- **Push notifications** (Firebase) to phones and browsers for every notification, and installable apps (home screen).
 - **Shop assistant** (Help button on the storefront): customers chat or talk (English, Tanglish, Tamil, Hindi) to track
   orders, cancel before shipping (with a confirm button), check returns and refunds, find products, and raise a pre-filled
   support request with the chat attached. Works without AI (guided mode) and with any connected model. Fully separate
@@ -33,7 +41,8 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
 - **Exports**: every report as CSV, Excel or PDF with filters and column choice; several at once as one ZIP.
 - **Razorpay simulator** (`tools/razorpay-sim`) to run online payments, webhooks and refunds end to end locally.
 
-**Customers** — search with typo tolerance, categories, product pages with delivery date by PIN code,
+**Customers** — saved addresses with a map pin, a name (Home, Work or their own) and delivery instructions, live
+tracking of own-fleet deliveries, search with typo tolerance, categories, product pages with delivery date by PIN code,
 ratings and reviews (with an AI summary when many reviews exist), wishlist, recently viewed, cart that
 survives sign-in, mobile OTP sign-in, saved addresses, coupons and an offers list at checkout, Razorpay or
 cash on delivery, order tracking per package, cancellation, returns with UPI refunds for COD, GST invoices
@@ -200,12 +209,13 @@ automatically). One listing at a time, photos can be changed in Admin → Produc
 off (it is signed out at once) and **Restore** to switch it back on.
 
 Every integration is optional and switches on when its keys are set: Razorpay, RazorpayX, MSG91, SMTP,
-WhatsApp, Shiprocket, Anthropic (AI), S3 and Sentry. Admin → Integrations shows which are connected.
+WhatsApp, Shiprocket, Firebase (push notifications), Anthropic (AI), S3 and Sentry. Admin → Integrations shows which
+are connected.
 
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q          # 97 API tests against a real PostgreSQL (creates pixcart_test)
+cd backend && python -m pytest -q          # 115 API tests against a real PostgreSQL (creates pixcart_test)
 cd frontend && npm run typecheck && npm run lint && npm run build
 cd e2e && npm ci && npx playwright test    # browser journeys against a running stack (see below)
 ```
@@ -218,14 +228,17 @@ and payouts, returns with credit notes, support SLAs, staff roles and two-step s
 social modules (validation, unsafe links refused, old settings upgraded, emails carrying the business footer),
 exports (formats, seller scoping, role permissions, formula safety, a 5,000-row streamed file), the AI
 pipeline (sandbox and live modes, cached prompt layers, switches, budget, retries, permissions, human review,
-customer messages, risk briefs) and bulk listing upload.
+customer messages, risk briefs), bulk listing upload, the delivery fleet (registration and KYC, zones, manual
+and auto assignment with expiry and fallback, pickup code, OTP, photo and cash checks, failures and returns, payouts,
+cash deposits, stuck alerts, reports, ratings), checkout fees and push notifications.
 
 **End-to-end tests** (`e2e/`, Playwright) run a full journey in a real browser: a new customer buys with a
 coupon and cash on delivery, the seller confirms, packs, ships and delivers, the customer opens the invoice
 and requests a return, the seller receives it, and the admin records the UPI refund. They also rebrand the
 storefront, edit business details, contact and social links and check the shop follows, switch the social
 module off, download exports from the export centre and from list pages, use AI studio, draft and send a
-support reply and a customer message with AI, bulk-upload listings, and open every seller and admin screen. They expect the API on port 8000
+support reply and a customer message with AI, bulk-upload listings, deliver an order with an own delivery partner
+(request pop-up, pickup code, OTP, cash, photo, rating, admin live map), and open every seller and admin screen. They expect the API on port 8000
 with `SMS_PROVIDER=console` writing its log to `$API_LOG` (default `/tmp/api.log`), demo data, and the web
 on port 3000. CI runs them on every push.
 
@@ -250,9 +263,10 @@ frontend/src/
   components/    UI kit, home sections, charts, media library, coupons, returns, reviews
   lib/           API client, session, site settings and theme, wishlist, formatting
 e2e/             Playwright browser tests
+mobile/partner-app/  Android partner app (Capacitor shell around /delivery), built by GitHub Actions
 infra/terraform/ AWS: VPC, RDS, ECS Fargate, ALB + WAF, S3 + CloudFront, ECR, Secrets Manager, alarms
 .github/         CI (tests, audits, E2E, Terraform checks) and the deploy pipeline
-docs/            DEPLOY.md, BUSINESS_RULES.md
+docs/            DEPLOY.md, BUSINESS_RULES.md, DELIVERY.md, GO_LIVE.md, AI_ASSISTANT.md, SHOP_ASSISTANT.md
 ```
 
 See [docs/DEPLOY.md](docs/DEPLOY.md) for AWS deployment, integrations and the go-live checklist, and
