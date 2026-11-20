@@ -325,3 +325,34 @@ async def test_rate_limit_per_chat(client, admin, categories):
     chat2, hdr2 = await guest_chat(client)  # another shopper on the same network is not blocked
     assert (await client.post(f"/api/shop-assistant/sessions/{chat2}/messages", json={"text": "hi"}, headers=hdr2)).status_code == 200
     assert uuid.UUID(chat2)
+
+
+async def test_fees_on_the_bill_are_explained_and_reach_older_knowledge_bases(client, admin):
+    """The marketplace's own fees (including the bad weather and late night fees) come from Admin → Checkout and fees;
+    a knowledge base seeded before the "Fees on your bill" article existed gets it once."""
+    from sqlalchemy import delete, func, select
+
+    from app.db import SessionLocal, utcnow
+    from app.models import PlatformSetting, ShopKbArticle
+    from app.shop_assistant import kb
+
+    await admin.put("/api/admin/checkout", {"fees": {"late_night_enabled": True, "late_night_paise": 1500, "surge_enabled": True, "surge_paise": 2500,
+                                                     "surge_label": "Rain fee", "platform_enabled": True, "platform_paise": 500}})
+    chat, hdr = await guest_chat(client)
+    ev = await ask_guest(client, chat, hdr, "why is there a late night fee?")
+    said = text_of(ev) + json.dumps(cards(ev, "article"), ensure_ascii=False)
+    assert "Late night fee ₹15 on orders placed between 11 pm and 6 am" in said and "Rain fee ₹25 per order right now" in said, said
+    assert "Platform fee ₹5 per order" in said
+
+    # an older knowledge base (seeded at version 1, without the fees article) gets it once, never twice
+    async with SessionLocal() as s:
+        await s.execute(delete(ShopKbArticle).where(ShopKbArticle.title == "Fees on your bill"))
+        row = await s.get(PlatformSetting, kb.SEEDED_KEY)
+        row.value, row.updated_at = {"at": utcnow().isoformat()}, utcnow()
+        await s.commit()
+    for _ in range(2):
+        async with SessionLocal() as s:
+            await kb.ensure_starter(s)
+    async with SessionLocal() as s:
+        n = (await s.execute(select(func.count()).select_from(ShopKbArticle).where(ShopKbArticle.title == "Fees on your bill"))).scalar_one()
+        assert n == 1 and (await s.get(PlatformSetting, kb.SEEDED_KEY)).value["version"] == kb.STARTER_VERSION

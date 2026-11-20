@@ -37,6 +37,7 @@ def knowledge(brand: str, instructions: str, facts: dict[str, Any]) -> str:
            f"Delivery: {facts['shipping_fee']} per seller; free when a seller's items reach {facts['free_delivery_amount']}; "
            f"{facts['transit_same_city']}-{facts['transit_national']} days.",
            f"Payments: {facts['cod_text']}",
+           f"Fees: {facts['fees_text']}",
            "Returns: " + ("each product has its own return window from the delivery day." if facts["returns_enabled"] else "returns are paused right now.")]
     if instructions.strip():
         out.append("House rules from the store (follow them unless they conflict with the rules above):\n" + instructions.strip())

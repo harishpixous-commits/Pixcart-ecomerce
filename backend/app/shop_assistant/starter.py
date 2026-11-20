@@ -21,6 +21,10 @@ STARTER = [
     ("payments", "Cash on delivery", "",
      "{cod_text}",
      ["cod", "cash on delivery", "pay on delivery", "cash", "panam", "காசு", "नकद"]),
+    ("payments", "Fees on your bill", "",
+     "{fees_text}",
+     ["fee", "fees", "extra charge", "charges", "handling fee", "platform fee", "small cart", "late night", "night fee", "rain fee",
+      "bad weather", "surge", "why charged", "kattanam", "extra panam", "கட்டணம்", "शुल्क", "चार्ज"]),
     ("payments", "Payment failed or money deducted", "",
      "If money left your account but the order still says payment pending, wait 30 minutes: the bank's confirmation usually "
      "arrives on its own and the order is placed. If the payment is not confirmed, your bank reverses the amount within "

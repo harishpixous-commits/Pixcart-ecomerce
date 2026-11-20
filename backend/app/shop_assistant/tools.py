@@ -233,11 +233,12 @@ async def help_articles(ctx: Ctx, a: dict[str, Any]) -> Out:
                [{"type": "article", "title": hits[0].title, "text": hits[0].body, "link": hits[0].link}])
 
 
-@tool("store_policies", "Checking store policies", "The store's current delivery fee, free-delivery amount, cash on delivery, delivery "
-      "times and return reasons. Use for questions about charges and delivery days.", {}, feature="help_articles", login=False)
+@tool("store_policies", "Checking store policies", "The store's current delivery fee, free-delivery amount, cash on delivery, the "
+      "other fees on the bill (handling, small cart, platform, bad weather, late night) and the tip, delivery times and return reasons. "
+      "Use for questions about charges, fees and delivery days.", {}, feature="help_articles", login=False)
 async def store_policies(ctx: Ctx, a: dict[str, Any]) -> Out:
     f = await kb.public_facts(ctx.session)
-    return Out({k: f[k] for k in ("brand", "shipping_fee", "free_delivery_amount", "cod_text", "transit_same_city", "transit_same_state",
+    return Out({k: f[k] for k in ("brand", "shipping_fee", "free_delivery_amount", "cod_text", "fees_text", "transit_same_city", "transit_same_state",
                                   "transit_national", "returns_enabled", "return_reasons", "grievance_text")})
 
 

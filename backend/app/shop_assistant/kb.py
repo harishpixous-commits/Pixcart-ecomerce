@@ -1,5 +1,5 @@
 """The shop assistant's knowledge: help articles written for customers, published storefront pages, and a
-whitelist of public settings (delivery fee, COD, transit days, grievance contact).
+whitelist of public settings (delivery fee, COD, the marketplace fees on the bill, transit days, grievance contact).
 
 Nothing else is readable from here: not the admin assistant's notes, not raw platform settings (which hold
 commission, TCS/TDS and payout rules), not staff data.
@@ -28,6 +28,32 @@ def inr(paise: int) -> str:
     return f"₹{rupees:,.0f}" if rupees == int(rupees) else f"₹{rupees:,.2f}"
 
 
+async def fees_text(session: AsyncSession) -> str:
+    """The marketplace's own fees as a shopper would read them (Admin → Checkout and fees), including whether the bad
+    weather fee is being charged right now and the late night window. Only what the bill would show."""
+    from app.services import fees as fees_svc
+
+    ck = await fees_svc.get(session)
+    parts = []
+    if ck["handling_enabled"] and ck["handling_paise"]:
+        free = f", free on orders of {inr(ck['handling_free_above_paise'])} or more" if ck["handling_free_above_paise"] else ""
+        parts.append(f"{ck['handling_label']} {inr(ck['handling_paise'])} per order{free}")
+    if ck["small_cart_enabled"] and ck["small_cart_paise"]:
+        parts.append(f"{ck['small_cart_label']} {inr(ck['small_cart_paise'])} when the item total is below {inr(ck['small_cart_below_paise'])}")
+    if ck["platform_enabled"] and ck["platform_paise"]:
+        parts.append(f"{ck['platform_label']} {inr(ck['platform_paise'])} per order")
+    if fees_svc.surge_active(ck):
+        parts.append(f"{ck['surge_label']} {inr(ck['surge_paise'])} per order right now ({ck['surge_info'].rstrip('.')})")
+    if ck["late_night_enabled"] and ck["late_night_paise"]:
+        parts.append(f"{ck['late_night_label']} {inr(ck['late_night_paise'])} on orders placed between {fees_svc.clock(ck['late_night_from'])} "
+                     f"and {fees_svc.clock(ck['late_night_to'])}")
+    text = ("Besides delivery, the bill can include: " + "; ".join(parts) + ". These fees include GST.") if parts else \
+        "Besides delivery (and the cash on delivery fee, if any), there are no extra fees on your order."
+    if ck["tip_enabled"]:
+        text += " You can add a tip for the delivery partner at checkout; it goes to them in full."
+    return text + " Every charge is shown on the bill before you pay; tap a fee's name to read why it applies."
+
+
 async def public_facts(session: AsyncSession) -> dict[str, Any]:
     """Customer-facing facts only. Add a key here deliberately; never pass the settings dict through."""
     cfg = await get_settings(session)
@@ -46,6 +72,7 @@ async def public_facts(session: AsyncSession) -> dict[str, Any]:
         "free_delivery_amount": inr(cfg["free_shipping_threshold_paise"]),
         "cod_enabled": bool(cfg["cod_enabled"]),
         "cod_text": cod,
+        "fees_text": await fees_text(session),
         "transit_same_city": cfg["transit_days_same_city"],
         "transit_same_state": cfg["transit_days_same_state"],
         "transit_national": cfg["transit_days_national"],
@@ -76,22 +103,41 @@ def tokens(text: str) -> list[str]:
 
 
 SEEDED_KEY = "shop_assistant_kb_seeded"
+STARTER_VERSION = 2
+NEW_IN_VERSION = {2: ("Fees on your bill",)}  # starter articles added later reach knowledge bases seeded earlier, once
 
 
 async def ensure_starter(session: AsyncSession) -> None:
-    """Adds the starter articles once, to an empty knowledge base. Deleting them later does not bring them back."""
+    """Adds the starter articles once, to an empty knowledge base, and articles added to the starter set later once to
+    knowledge bases seeded before. Deleting them afterwards does not bring them back."""
     from app.db import SessionLocal, utcnow
     from app.models import PlatformSetting
 
     from .starter import STARTER
 
-    if await session.get(PlatformSetting, SEEDED_KEY) is not None:
+    row = await session.get(PlatformSetting, SEEDED_KEY)
+    if row is not None and int((row.value or {}).get("version", 1)) >= STARTER_VERSION:
         return
     async with SessionLocal() as s:  # its own transaction: never commits the caller's pending work
-        if (await s.execute(select(ShopKbArticle.id).limit(1))).first() is None:
-            for i, (topic, title, link, body, kw) in enumerate(STARTER):
-                s.add(ShopKbArticle(title=title, body=body, keywords=kw, topic=topic, link=link, is_published=True, position=i, uses=0))
-        s.add(PlatformSetting(key=SEEDED_KEY, value={"at": utcnow().isoformat()}, updated_at=utcnow()))
+        seeded = (await s.execute(select(PlatformSetting).where(PlatformSetting.key == SEEDED_KEY).with_for_update())).scalar_one_or_none()
+        done = int((seeded.value or {}).get("version", 1)) if seeded else 0
+        if done >= STARTER_VERSION:
+            return
+        if seeded is None:
+            if (await s.execute(select(ShopKbArticle.id).limit(1))).first() is None:
+                for i, (topic, title, link, body, kw) in enumerate(STARTER):
+                    s.add(ShopKbArticle(title=title, body=body, keywords=kw, topic=topic, link=link, is_published=True, position=i, uses=0))
+            s.add(PlatformSetting(key=SEEDED_KEY, value={"at": utcnow().isoformat(), "version": STARTER_VERSION}, updated_at=utcnow()))
+        else:
+            titles = {t for v in range(done + 1, STARTER_VERSION + 1) for t in NEW_IN_VERSION.get(v, ())}
+            have = set((await s.execute(select(ShopKbArticle.title).where(ShopKbArticle.title.in_(titles)))).scalars()) if titles else set()
+            last = (await s.execute(select(ShopKbArticle.position).order_by(ShopKbArticle.position.desc()).limit(1))).scalar_one_or_none() or 0
+            for topic, title, link, body, kw in STARTER:
+                if title in titles and title not in have:
+                    last += 1
+                    s.add(ShopKbArticle(title=title, body=body, keywords=kw, topic=topic, link=link, is_published=True, position=last, uses=0))
+            seeded.value = {**(seeded.value or {}), "version": STARTER_VERSION}
+            seeded.updated_at = utcnow()
         try:
             await s.commit()
         except Exception:  # noqa: BLE001 — another request seeded at the same moment
