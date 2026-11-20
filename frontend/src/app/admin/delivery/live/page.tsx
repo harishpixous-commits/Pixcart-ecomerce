@@ -264,7 +264,8 @@ function buildMap(partners: LivePartner[], trips: TripView[]): { markers: MapMar
     if (store) markers.push({ id: `s:${t.id}`, lat: store[0], lng: store[1], kind: "store", title: t.pickup.name, popup: `Pickup for ${t.order_number}\n${t.pickup.name}\n${t.pickup.address}` });
     if (home) markers.push({ id: `h:${t.id}`, lat: home[0], lng: home[1], kind: "home", title: `Customer, ${t.order_number}`, popup: `Drop for ${t.order_number}\n${t.drop.city} ${t.drop.pincode}` });
     const me = t.partner.lat !== null && t.partner.lng !== null ? ([t.partner.lat, t.partner.lng] as [number, number]) : null;
-    const goingToStore = t.kind === "return" || BEFORE_PICKUP.includes(t.status);
+    // where the partner is heading now: a return pickup goes to the customer first, then the store
+    const goingToStore = t.kind === "pickup" ? ["picked", "on_the_way"].includes(t.status) : t.kind === "return" || BEFORE_PICKUP.includes(t.status);
     const target = goingToStore ? store : home;
     if (me && target) lines.push({ id: `l:${t.id}`, points: [me, target], color: goingToStore ? "#F5A524" : "#0B5563", dashed: t.status === "offered" });
     else if (store && home && !goingToStore) lines.push({ id: `r:${t.id}`, points: [store, home], color: "#0B5563", dashed: true });
@@ -342,7 +343,7 @@ function PartnerCard({ p, trips, now, fetchedAt, selected, onSelect }: {
                 className={clsx("flex items-center gap-2 rounded-xl px-3 py-2 text-sm ring-1 transition hover:bg-mist", t.stuck ? "bg-vermilion-light/60 ring-vermilion/30" : "ring-line")}>
                 <span className="font-semibold">{t.order_number}</span>
                 <TripPill trip={t} />
-                {t.kind === "return" && <span className="text-xs font-semibold text-marigold-dark">Return</span>}
+                {t.kind !== "delivery" && <span className="text-xs font-semibold text-marigold-dark">{t.kind === "pickup" ? "Return pickup" : "Return"}</span>}
                 <span className={clsx("ml-auto shrink-0 text-xs", t.stuck ? "font-bold text-vermilion" : "text-ink-faint")}>
                   {t.stuck ? "Stuck · " : ""}{minutesLabel(t.minutes_in_step ?? 0)}
                 </span>

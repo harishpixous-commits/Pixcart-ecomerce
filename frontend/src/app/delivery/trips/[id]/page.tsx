@@ -4,7 +4,8 @@
  * One trip, step by step, built for one hand on a phone: the map with the store, the customer and you; the next thing
  * to do in a big card (reached the store, the seller's pickup code, start the trip, arrived, the customer's OTP, the
  * cash collected and a photo of the delivered package); navigation and call buttons; the address, instructions and
- * items. "Could not deliver" records why. A return trip brings a package back to the store with the seller's code.
+ * items. "Could not deliver" records why. A return trip brings a package back to the store with the seller's code; a
+ * return pickup collects a customer's return (their pickup code) and hands it to the store (the seller's code).
  */
 
 import clsx from "clsx";
@@ -75,7 +76,9 @@ export default function TripPage() {
     ? { lat: location.last.coords.latitude, lng: location.last.coords.longitude }
     : trip?.partner.lat != null && trip.partner.lng != null ? { lat: trip.partner.lat, lng: trip.partner.lng } : null;
   const back = trip?.kind === "return";
-  const toStore = !!trip && (back || ["offered", "accepted", "at_store"].includes(trip.status));
+  const collecting = trip?.kind === "pickup"; // a customer's return: first to the customer, then to the store
+  const isDelivery = trip?.kind === "delivery";
+  const toStore = !!trip && (collecting ? ["picked", "on_the_way", "delivered"].includes(trip.status) : back || ["offered", "accepted", "at_store"].includes(trip.status));
   const meKey = me ? `${me.lat.toFixed(5)},${me.lng.toFixed(5)}` : "";
 
   const { markers, lines } = useMemo(() => {
@@ -104,7 +107,7 @@ export default function TripPage() {
     );
   }
   const t = trip;
-  const collect = !back && t.cod_amount > 0;
+  const collect = isDelivery && t.cod_amount > 0;
 
   async function step(to: Step, label: string) {
     setBusy(to);
@@ -195,7 +198,7 @@ export default function TripPage() {
           <ArrowLeft className="h-5 w-5" aria-hidden />
         </Link>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-faint">{back ? "Return to store" : "Delivery"}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-faint">{collecting ? `Return pickup${t.return_number ? ` · ${t.return_number}` : ""}` : back ? "Return to store" : "Delivery"}</p>
           <h1 className="font-display text-xl font-bold leading-tight">{t.order_number}</h1>
         </div>
         <TripPill trip={t} />
@@ -222,7 +225,7 @@ export default function TripPage() {
           <Action icon={Package} title="New request" text="Accept or reject it in the request window." />
         )}
 
-        {!back && t.status === "accepted" && (
+        {isDelivery && t.status === "accepted" && (
           <Action icon={Store} title="Go to the store" text={`Pick up ${t.order_number} from ${t.pickup.name}.`}>
             <Button size="lg" className="w-full" loading={busy === "at_store"} onClick={() => step("at_store", "Marked as at the store")} data-testid="step-at-store">
               <Store className="h-5 w-5" aria-hidden /> I have reached the store
@@ -230,7 +233,7 @@ export default function TripPage() {
           </Action>
         )}
 
-        {!back && t.status === "at_store" && (
+        {isDelivery && t.status === "at_store" && (
           <Action icon={KeyRound} title="Collect the package" text={t.needs.pickup_code ? "Check the items, then ask the seller for the 4-digit pickup code shown on their order screen." : "Check the items and take the package."}>
             {t.needs.pickup_code && (
               <CodeInput label="Seller's pickup code" value={code} onChange={setCode} testId="pickup-code" />
@@ -242,7 +245,7 @@ export default function TripPage() {
           </Action>
         )}
 
-        {!back && t.status === "picked" && (
+        {isDelivery && t.status === "picked" && (
           <Action icon={Navigation} title="Package with you" text="Start the trip and head to the customer. They can see you on the map.">
             <Button size="lg" className="w-full" loading={busy === "on_the_way"} onClick={() => step("on_the_way", "Trip started")} data-testid="step-on-the-way">
               <Navigation className="h-5 w-5" aria-hidden /> Start the trip
@@ -250,7 +253,7 @@ export default function TripPage() {
           </Action>
         )}
 
-        {!back && t.status === "on_the_way" && (
+        {isDelivery && t.status === "on_the_way" && (
           <Action icon={MapPin} title="On the way to the customer" text={t.drop.instructions ? `Note from the customer: ${t.drop.instructions}` : "Call the customer if you can't find the address."}>
             <Button size="lg" className="w-full" loading={busy === "reached"} onClick={() => step("reached", "Marked as arrived. The customer was told.")} data-testid="step-reached">
               <Home className="h-5 w-5" aria-hidden /> I have arrived
@@ -258,7 +261,7 @@ export default function TripPage() {
           </Action>
         )}
 
-        {!back && t.status === "reached" && (
+        {isDelivery && t.status === "reached" && (
           <Action icon={CheckCircle2} title="Hand over the package" text="Give the package to the customer, then fill in the details below.">
             <div className="flex flex-col gap-4">
               {t.needs.otp && <CodeInput label="Delivery OTP from the customer" hint="The customer sees it in their SMS and on their order page." value={otp} onChange={setOtp} testId="delivery-otp" />}
@@ -303,6 +306,41 @@ export default function TripPage() {
           </Action>
         )}
 
+        {collecting && t.status === "accepted" && (
+          <Action icon={MapPin} title="Go to the customer" text={`Collect return ${t.return_number ?? ""} from ${t.drop.name || "the customer"}.`}>
+            <Button size="lg" className="w-full" loading={busy === "reached"} onClick={() => step("reached", "Marked as at the customer")} data-testid="step-at-customer">
+              <Home className="h-5 w-5" aria-hidden /> I have reached the customer
+            </Button>
+          </Action>
+        )}
+
+        {collecting && t.status === "reached" && (
+          <Action icon={KeyRound} title="Collect the return" text={t.needs.otp ? "Check the items below, then ask the customer for their pickup code (on their order page and SMS)." : "Check the items below and collect them."}>
+            {t.needs.otp && <CodeInput label="Customer's pickup code" value={code} onChange={setCode} testId="customer-pickup-code" />}
+            <Button size="lg" className="w-full" loading={busy === "picked"} disabled={t.needs.otp && code.trim().length < 4}
+              onClick={() => step("picked", "Collected. Now bring it to the store.")} data-testid="step-collected">
+              <Package className="h-5 w-5" aria-hidden /> Collected
+            </Button>
+          </Action>
+        )}
+
+        {collecting && t.status === "picked" && (
+          <Action icon={Store} title="Bring it to the store" text={`Take return ${t.return_number ?? ""} to ${t.pickup.name}.`}>
+            <Button size="lg" className="w-full" loading={busy === "on_the_way"} onClick={() => step("on_the_way", "On the way to the store")} data-testid="step-to-store">
+              <Navigation className="h-5 w-5" aria-hidden /> Start going to the store
+            </Button>
+          </Action>
+        )}
+
+        {collecting && t.status === "on_the_way" && (
+          <Action icon={KeyRound} title="Hand it to the store" text={t.needs.pickup_code ? "Give the return to the seller and enter the pickup code they show you." : "Give the return to the seller."}>
+            {t.needs.pickup_code && <CodeInput label="Seller's pickup code" value={code} onChange={setCode} testId="return-code" />}
+            <Button size="lg" className="w-full" loading={busy === "returned"} disabled={t.needs.pickup_code && code.trim().length < 4} onClick={handBack} data-testid="handed-to-store">
+              <Undo2 className="h-5 w-5" aria-hidden /> Handed to the store
+            </Button>
+          </Action>
+        )}
+
         {back && ["picked", "on_the_way"].includes(t.status) && (
           <Action icon={Undo2} title="Bring the package back" text={`Take ${t.order_number} back to ${t.pickup.name}.`}>
             {t.status === "picked" ? (
@@ -329,7 +367,7 @@ export default function TripPage() {
         {t.status === "delivered" && (
           <div className="flex flex-col items-center gap-2 py-2 text-center" data-testid="trip-done">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-leaf text-white"><Check className="h-9 w-9" strokeWidth={3} aria-hidden /></span>
-            <p className="font-display text-2xl font-bold">{back ? "Returned to the store" : "Delivered"}</p>
+            <p className="font-display text-2xl font-bold">{back || collecting ? "Returned to the store" : "Delivered"}</p>
             <p className="text-ink-soft">{time(t.delivered_at)}{t.distance_km ? ` · ${t.distance_km} km` : ""}</p>
             <p className="rounded-full bg-leaf-light px-4 py-1.5 font-semibold text-leaf">You earned {rupees(t.fee + t.tip)}{t.tip ? ` (incl. ${rupees(t.tip)} tip)` : ""}</p>
             {t.cod_collected > 0 && <p className="text-sm text-ink-soft">Cash collected {rupees(t.cod_collected)} by {t.cod_method === "upi" ? "UPI" : "cash"}. Deposit cash with the team.</p>}
@@ -339,7 +377,8 @@ export default function TripPage() {
         )}
 
         {t.status === "failed" && (
-          <Action icon={CircleAlert} title="Delivery not completed" text={`${t.fail_reason || "Reason recorded"}. Keep the package safe; the delivery team will tell you whether to try again or bring it back to the store.`}>
+          <Action icon={CircleAlert} title={collecting ? "Return not collected" : "Delivery not completed"}
+            text={collecting ? `${t.fail_reason || "Reason recorded"}. The delivery team will arrange another pickup.` : `${t.fail_reason || "Reason recorded"}. Keep the package safe; the delivery team will tell you whether to try again or bring it back to the store.`}>
             <Link href="/delivery" className="inline-flex h-11 items-center rounded-full bg-peacock px-6 font-semibold text-white">Back to home</Link>
           </Action>
         )}
@@ -350,33 +389,38 @@ export default function TripPage() {
           </Action>
         )}
 
-        {!back && ["picked", "on_the_way", "reached"].includes(t.status) && (
+        {isDelivery && ["picked", "on_the_way", "reached"].includes(t.status) && (
           <button type="button" onClick={() => setFailing(true)} className="mt-3 w-full rounded-xl py-2 text-sm font-semibold text-vermilion hover:bg-vermilion-light" data-testid="cannot-deliver">
             Could not deliver?
+          </button>
+        )}
+        {collecting && ["accepted", "reached"].includes(t.status) && (
+          <button type="button" onClick={() => setFailing(true)} className="mt-3 w-full rounded-xl py-2 text-sm font-semibold text-vermilion hover:bg-vermilion-light" data-testid="cannot-collect">
+            Could not collect?
           </button>
         )}
       </section>
 
       {!ended && <TeamHelp orderNumber={t.order_number} />}
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <PlaceCard icon={Store} tone="store" title={back ? "Return to" : "Pick up from"} name={t.pickup.name} address={[t.pickup.address, t.pickup.city, t.pickup.pincode].filter(Boolean).join(", ")}
+      <div className={clsx("grid gap-3 md:grid-cols-2", collecting && "[&>*:first-child]:order-2")}>
+        <PlaceCard icon={Store} tone="store" title={back || collecting ? "Bring to" : "Pick up from"} name={t.pickup.name} address={[t.pickup.address, t.pickup.city, t.pickup.pincode].filter(Boolean).join(", ")}
           phone={t.pickup.phone} nav={navigateUrl(t.pickup)} />
         {!back && (
           t.status === "offered" ? (
-            <PlaceCard icon={MapPin} tone="home" title="Deliver to" name={[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")} address="The full address shows after you accept." />
+            <PlaceCard icon={MapPin} tone="home" title={collecting ? "Collect from" : "Deliver to"} name={[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")} address="The full address shows after you accept." />
           ) : ended && !t.drop.phone ? (
-            <PlaceCard icon={MapPin} tone="home" title="Delivered to" name={[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")}
+            <PlaceCard icon={MapPin} tone="home" title={collecting ? "Collected from" : "Delivered to"} name={[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")}
               address="The customer's name, phone and address are hidden once the trip ends, to protect their privacy." />
           ) : (
-            <PlaceCard icon={MapPin} tone="home" title="Deliver to" name={t.drop.name} address={[t.drop.address, t.drop.city, t.drop.pincode].filter(Boolean).join(", ")}
+            <PlaceCard icon={MapPin} tone="home" title={collecting ? "Collect from" : "Deliver to"} name={t.drop.name} address={[t.drop.address, t.drop.city, t.drop.pincode].filter(Boolean).join(", ")}
               phone={t.drop.phone} nav={navigateUrl(t.drop)} instructions={t.drop.instructions} noBag={t.drop.no_bag} />
           )
         )}
       </div>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-        <h2 className="mb-2 flex items-center gap-2 font-semibold"><ShoppingBag className="h-4 w-4 text-peacock" aria-hidden /> Items ({t.items.reduce((n, i) => n + i.qty, 0)})</h2>
+        <h2 className="mb-2 flex items-center gap-2 font-semibold"><ShoppingBag className="h-4 w-4 text-peacock" aria-hidden /> {collecting ? "Items to collect" : "Items"} ({t.items.reduce((n, i) => n + i.qty, 0)})</h2>
         <ul className="divide-y divide-line">
           {t.items.map((i, k) => (
             <li key={k} className="flex items-center gap-3 py-2">
@@ -396,7 +440,7 @@ export default function TripPage() {
           {collect ? (
             <span className="rounded-full bg-marigold-light px-3 py-1 font-semibold text-[#8A5A00]">Cash on delivery: collect {rupees(t.cod_amount)}</span>
           ) : (
-            <span className="rounded-full bg-leaf-light px-3 py-1 font-semibold text-leaf">{back ? "Return trip" : "Prepaid: collect nothing"}</span>
+            <span className="rounded-full bg-leaf-light px-3 py-1 font-semibold text-leaf">{collecting ? "Return pickup: collect no money" : back ? "Return trip" : "Prepaid: collect nothing"}</span>
           )}
           {!ended && <span className="rounded-full bg-mist px-3 py-1 font-semibold">You earn about {rupees(t.fee_estimate)}</span>}
         </div>
@@ -418,7 +462,7 @@ export default function TripPage() {
         </details>
       )}
 
-      <FailDialog open={failing} tripId={t.id} onClose={() => setFailing(false)} onDone={(next) => { setFailing(false); setTrip({ ...t, ...next }); refreshFeed(); load(); }}
+      <FailDialog open={failing} tripId={t.id} collecting={collecting} onClose={() => setFailing(false)} onDone={(next) => { setFailing(false); setTrip({ ...t, ...next }); refreshFeed(); load(); }}
         last={location.last} />
     </div>
   );
@@ -514,8 +558,8 @@ function ProofThumb({ id }: { id: string }) {
   return <img src={url} alt="Delivery photo" className="mt-1 h-28 w-28 rounded-2xl object-cover ring-1 ring-line" />;
 }
 
-function FailDialog({ open, tripId, onClose, onDone, last }: {
-  open: boolean; tripId: string; onClose: () => void; onDone: (t: TripView) => void; last: GeolocationPosition | null;
+function FailDialog({ open, tripId, collecting, onClose, onDone, last }: {
+  open: boolean; tripId: string; collecting: boolean; onClose: () => void; onDone: (t: TripView) => void; last: GeolocationPosition | null;
 }) {
   const options = useDeliveryOptions();
   const [reason, setReason] = useState("");
@@ -540,13 +584,13 @@ function FailDialog({ open, tripId, onClose, onDone, last }: {
     }
   }
   return (
-    <Modal open={open} onClose={onClose} title="Why could you not deliver?">
+    <Modal open={open} onClose={onClose} title={collecting ? "Why could you not collect the return?" : "Why could you not deliver?"}>
       <form onSubmit={submit} className="flex flex-col gap-3" data-testid="fail-dialog">
-        <p className="text-sm text-ink-soft">Call the customer first. If you still cannot deliver, choose why. Keep the package safe with you.</p>
+        <p className="text-sm text-ink-soft">{collecting ? "Call the customer first. If you still cannot collect it, choose why." : "Call the customer first. If you still cannot deliver, choose why. Keep the package safe with you."}</p>
         <ErrorNote message={error} />
         <fieldset className="flex flex-col gap-2">
           <legend className="sr-only">Reason</legend>
-          {Object.entries(options?.fail_reasons ?? {}).map(([k, label]) => (
+          {Object.entries(options?.fail_reasons ?? {}).filter(([k]) => !(collecting && k === "no_cash")).map(([k, label]) => (
             <label key={k} className={clsx("flex cursor-pointer items-center gap-3 rounded-xl p-3 ring-1 transition", reason === k ? "bg-vermilion-light ring-vermilion" : "ring-line hover:bg-mist")}>
               <input type="radio" name="fail" value={k} checked={reason === k} onChange={() => setReason(k)} className="h-4 w-4 accent-vermilion" />
               <span className="font-medium">{label}</span>
@@ -554,7 +598,7 @@ function FailDialog({ open, tripId, onClose, onDone, last }: {
           ))}
         </fieldset>
         <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add details (optional)" rows={2} maxLength={200} aria-label="Details" />
-        <Button type="submit" variant="danger" loading={busy} disabled={!reason} className="self-start">Report not delivered</Button>
+        <Button type="submit" variant="danger" loading={busy} disabled={!reason} className="self-start">{collecting ? "Report not collected" : "Report not delivered"}</Button>
       </form>
     </Modal>
   );

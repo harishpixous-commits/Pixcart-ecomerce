@@ -206,6 +206,7 @@ export default function DeliverySettings() {
         <TextField label="Delivery team phone" value={String(v.support_phone)} onChange={(e) => set("support_phone", e.target.value)} hint="Shown in the partner app's Help" />
         <TextField label="Delivery team WhatsApp" value={String(v.support_whatsapp)} onChange={(e) => set("support_whatsapp", e.target.value)} />
         <Toggle k="require_vehicle_doc" v={v} set={set} label="Vehicle registration (RC) is required" hint="Otherwise it is optional during registration." />
+        <Toggle k="return_pickups" v={v} set={set} label="Partners collect customers' returns" hint="For packages our partners delivered: an approved return is collected from the customer (with their pickup code) and brought to the seller." />
       </section>
 
       <section className={card} data-testid="partner-app-settings">

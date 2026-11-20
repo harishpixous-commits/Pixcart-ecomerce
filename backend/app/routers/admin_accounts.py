@@ -178,7 +178,7 @@ async def customer_detail(user_id: uuid.UUID, admin: Perm("customers"), session:
         "addresses": [{"id": str(a.id), "name": a.full_name, "phone": a.phone, "kind": a.kind, "is_default": a.is_default,
                        "text": ", ".join(x for x in (a.line1, a.line2, a.landmark, a.city, STATES.get(a.state_code, a.state_code), a.pincode) if x)} for a in addresses],
         "orders": [order_summary(o, [s for s in subs if s.order_id == o.id], by_sub) for o in orders],
-        "returns": [await returns_svc.return_out(session, r) for r in rets],
+        "returns": [await returns_svc.return_out(session, r, viewer="admin") for r in rets],
         "tickets": [{"id": str(t.id), "number": t.number, "subject": t.subject, "status": t.status, "updated_at": t.updated_at.isoformat()} for t in tickets],
         "sessions": [{"device": _ua(s.user_agent), "signed_in_at": s.created_at.isoformat(), "expires_at": s.expires_at.isoformat()} for s in sessions],
         "history": [{"action": h.action, "detail": h.detail, "by": actors.get(h.actor_user_id, "") if h.actor_user_id else "", "at": h.created_at.isoformat()} for h in history],

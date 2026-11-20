@@ -124,7 +124,18 @@ const SHORT: Record<TripStatus, string> = {
   failed: "Not delivered",
 };
 
+const PICKUP_SHORT: Partial<Record<TripStatus, string>> = {
+  offered: "Pickup request",
+  accepted: "Going to customer",
+  reached: "At customer",
+  picked: "Collected",
+  on_the_way: "To the store",
+  delivered: "Returned to store",
+  failed: "Not collected",
+};
+
 export function tripShort(t: Pick<TripBrief, "status" | "kind">): string {
+  if (t.kind === "pickup") return PICKUP_SHORT[t.status] ?? SHORT[t.status] ?? t.status;
   if (t.kind === "return") {
     if (t.status === "delivered") return "Returned to store";
     if (t.status === "reached") return "Back at store";
@@ -148,6 +159,14 @@ const DELIVERY_STEPS: { key: TripStatus; label: string; at: keyof TripBrief }[] 
   { key: "delivered", label: "Delivered", at: "delivered_at" },
 ];
 
+const PICKUP_STEPS: { key: TripStatus; label: string; at: keyof TripBrief }[] = [
+  { key: "accepted", label: "Accepted", at: "accepted_at" },
+  { key: "reached", label: "At customer", at: "reached_at" },
+  { key: "picked", label: "Collected", at: "picked_at" },
+  { key: "on_the_way", label: "To the store", at: "on_the_way_at" },
+  { key: "delivered", label: "Handed over", at: "delivered_at" },
+];
+
 const RETURN_STEPS: { key: TripStatus; label: string; at: keyof TripBrief }[] = [
   { key: "picked", label: "Package with you", at: "picked_at" },
   { key: "on_the_way", label: "Going back", at: "on_the_way_at" },
@@ -156,7 +175,7 @@ const RETURN_STEPS: { key: TripStatus; label: string; at: keyof TripBrief }[] = 
 ];
 
 export function TripProgress({ trip, compact }: { trip: TripBrief; compact?: boolean }) {
-  const steps = trip.kind === "return" ? RETURN_STEPS : DELIVERY_STEPS;
+  const steps = trip.kind === "pickup" ? PICKUP_STEPS : trip.kind === "return" ? RETURN_STEPS : DELIVERY_STEPS;
   // The step reached (−1 while it is still a request). A skipped step ("At store") counts as done once a later one is.
   const at = steps.findIndex((s) => s.key === trip.status);
   const ended = ["failed", "cancelled", "rejected", "expired"].includes(trip.status);

@@ -169,6 +169,26 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "seller_package_returned": {
         "inapp": ("Package returned: {{order_number}}", "{{partner}} returned {{order_number}} to your store ({{reason}}). The stock is back in your inventory."),
     },
+    # returns collected by the own delivery fleet
+    "delivery_new_return_pickup": {  # partner
+        "inapp": ("New return pickup", "Collect a return from a customer in {{drop_area}} and bring it to {{store}} ({{pickup_area}}). {{fee}}. Accept within {{seconds}} seconds."),
+    },
+    "delivery_return_pickup_assigned": {  # partner
+        "inapp": ("Return pickup assigned to you", "{{order_number}}: collect the return from a customer in {{drop_area}} and bring it to {{store}}."),
+    },
+    "return_pickup_scheduled": {  # customer
+        "inapp": ("Return pickup on the way", "{{partner}} will collect your return {{return_number}}. Keep the item packed and give pickup code {{code}} when you hand it over."),
+        "sms": ("", "{{brand}}: {{partner}} will collect your return {{return_number}}. Pickup code {{code}}."),
+    },
+    "return_pickup_failed": {  # customer
+        "inapp": ("Return pickup missed: {{return_number}}", "We could not collect your return ({{reason}}). We will arrange another pickup."),
+    },
+    "seller_return_arriving": {
+        "inapp": ("Return on its way: {{return_number}}", "{{partner}} collected return {{return_number}} ({{order_number}}) and is bringing it to you. Give pickup code {{code}} when you receive it."),
+    },
+    "seller_return_delivered": {
+        "inapp": ("Return delivered: {{return_number}}", "{{partner}} brought return {{return_number}} to your store. Check the item, then mark it received to refund the customer."),
+    },
 }
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
@@ -213,7 +233,7 @@ async def notify(
             if tpl is None or not tpl[3] or not push.configured(cfg):
                 continue
             push.queue(session, user.id, render(tpl[0], variables)[:120], render(tpl[1], variables)[:400], link,
-                       {"event": event, **({"urgent": "1"} if event == "delivery_new_offer" else {})})
+                       {"event": event, **({"urgent": "1"} if event in ("delivery_new_offer", "delivery_new_return_pickup") else {})})
             continue
         tpl = await _template(session, event, channel)
         if tpl is None:

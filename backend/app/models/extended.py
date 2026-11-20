@@ -185,6 +185,10 @@ class ReturnRequest(IdMixin, TimestampMixin, Base):
     pickup_courier: Mapped[str] = mapped_column(String(60), default="")
     pickup_tracking: Mapped[str] = mapped_column(String(60), default="")
     credit_note_number: Mapped[str] = mapped_column(String(20), default="")
+    # own delivery fleet collecting the item: when it was asked for, staff alerted, and the code the customer gives
+    fleet_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fleet_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pickup_otp: Mapped[str] = mapped_column(String(6), default="", server_default="")
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

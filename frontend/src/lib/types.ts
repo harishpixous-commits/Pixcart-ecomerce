@@ -714,6 +714,16 @@ export interface ReturnView {
   received_at: string | null;
   refunded_at: string | null;
   items: { title: string; variant_label: string; image: string; qty: number; amount: Paise }[];
+  /** our delivery partner collecting the item (the code is the one meant for whoever is looking) */
+  fleet_pickup?: {
+    requested: boolean;
+    status: string;
+    label: string;
+    assignment_id: string | null;
+    fail_reason: string;
+    partner: { name: string; vehicle: string; vehicle_no: string; phone: string; photo: string } | null;
+    code?: string;
+  } | null;
 }
 
 export interface ReturnableItem {

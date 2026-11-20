@@ -61,6 +61,19 @@ export default function SellerReturns() {
               ))}
               <p className="mt-2 text-ink-soft"><strong>{r.reason_label}.</strong> {r.comment}</p>
               <p className="text-sm text-ink-faint">Requested {dateTime(r.created_at)}</p>
+              {r.fleet_pickup?.requested && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-peacock-light/50 p-3 text-sm ring-1 ring-peacock/15" data-testid="seller-return-pickup">
+                  <span className="font-semibold text-peacock-dark">Our delivery partner collects this return{r.fleet_pickup.label ? `: ${r.fleet_pickup.label}` : ""}</span>
+                  {r.fleet_pickup.partner && <span className="text-ink-soft">{r.fleet_pickup.partner.name}{r.fleet_pickup.partner.vehicle_no ? ` · ${r.fleet_pickup.partner.vehicle_no}` : ""}</span>}
+                  {r.fleet_pickup.code && (
+                    <span className="flex items-center gap-2">
+                      <span className="text-ink-soft">Give pickup code</span>
+                      <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-lg font-bold tracking-[0.3em] ring-1 ring-line">{r.fleet_pickup.code}</span>
+                      <span className="text-ink-soft">when you receive it</span>
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 {r.status === "requested" && (
                   <>
@@ -68,7 +81,9 @@ export default function SellerReturns() {
                     <Button size="sm" variant="danger" onClick={() => setAct({ r, action: "reject" })}>Reject</Button>
                   </>
                 )}
-                {r.status === "approved" && <Button size="sm" variant="secondary" onClick={() => setAct({ r, action: "picked_up" })}>Pickup booked</Button>}
+                {r.status === "approved" && (
+                  <Button size="sm" variant="secondary" onClick={() => setAct({ r, action: "picked_up" })}>{r.fleet_pickup?.requested ? "Use my own courier instead" : "Pickup booked"}</Button>
+                )}
                 {(r.status === "approved" || r.status === "picked_up") && <Button size="sm" onClick={() => run(r, "received")}>Mark received and refund</Button>}
                 {r.credit_note_number && (
                   <Button size="sm" variant="ghost" onClick={() => openPdf(`/api/seller/returns/${r.id}/credit-note.pdf`, (m) => toast(m, "error"))}><FileText className="h-4 w-4" /> Credit note {r.credit_note_number}</Button>

@@ -41,6 +41,18 @@ the partner; staff choose **Try again** or **Bring back to store** (Assign deliv
 brought back is handed to the seller with the pickup code; the order part is cancelled, a prepaid amount refunded and
 the stock returned. Cancelling an order before pickup stops the trip; after pickup the partner is told to bring it back.
 
+## Returns collected by a partner
+
+For a package our partners delivered, approving the customer's return asks a partner to collect it (switch:
+Delivery settings → *Partners collect customers' returns*). The customer gets a 4-digit **pickup code** on the return
+card and by notification. The request is offered like a delivery (auto-assign to the nearest free partner of the
+customer's zone, or by staff in **Assign deliveries → Return pickups**, where staff can also hand it to the seller's
+own courier). The partner goes to the customer, checks the items, enters the customer's code (the return becomes
+*Picked up*), brings it to the store and enters the **seller's pickup code** shown on the seller's Returns page. The seller
+checks the item and marks the return received, which puts the stock back, issues the credit note and refunds the
+customer. The partner earns the delivery fee for the pickup. "Could not collect" (customer away, item not ready,
+refused) puts the return back in the Return pickups list for another try.
+
 ## Watching the fleet
 
 - **Live partners**: who is online now (free, on a trip, location live or old), how long online, trips in progress,

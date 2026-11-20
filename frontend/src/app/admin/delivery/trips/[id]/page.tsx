@@ -88,7 +88,7 @@ export default function AdminTripPage() {
         <Link href="/admin/delivery/trips" className="flex h-10 w-10 items-center justify-center rounded-xl bg-white ring-1 ring-line" aria-label="Back to trips"><ArrowLeft className="h-5 w-5" /></Link>
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-bold">{t.order_number}</h1>
-          <p className="text-sm text-ink-soft">{t.kind === "return" ? "Return to store" : "Delivery"} · {t.mode === "auto" ? "auto-assign" : "assigned by staff"} · {dateTime(t.assigned_at)}</p>
+          <p className="text-sm text-ink-soft">{t.kind === "pickup" ? `Return pickup${t.return_number ? ` ${t.return_number}` : ""}` : t.kind === "return" ? "Return to store" : "Delivery"} · {t.mode === "auto" ? "auto-assign" : "assigned by staff"} · {dateTime(t.assigned_at)}</p>
         </div>
         <TripPill trip={t} />
         <Link href={`/admin/orders/${t.order_id}`} className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 font-semibold text-peacock ring-1 ring-inset ring-peacock/40 hover:bg-peacock-light">
@@ -117,9 +117,9 @@ export default function AdminTripPage() {
           {markers.length > 0 && <LiveMap markers={markers} lines={lines} fitKey={`${t.id}:${markers.length}`} className="h-72 sm:h-80" />}
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5"><TripProgress trip={t} /></section>
           <div className="grid gap-3 md:grid-cols-2">
-            <Place icon={Store} title={t.kind === "return" ? "Store (return to)" : "Pick up from"} tone="store" name={t.pickup.name}
+            <Place icon={Store} title={t.kind === "return" || t.kind === "pickup" ? "Store (bring to)" : "Pick up from"} tone="store" name={t.pickup.name}
               lines={[t.pickup.address, [t.pickup.city, t.pickup.pincode].filter(Boolean).join(" ")]} phone={t.pickup.phone} nav={navigateUrl(t.pickup)} />
-            <Place icon={MapPin} title="Deliver to" tone="home" name={t.drop.name || "Customer"} lines={[t.drop.address, [t.drop.city, t.drop.pincode].filter(Boolean).join(" ")]}
+            <Place icon={MapPin} title={t.kind === "pickup" ? "Collect from" : "Deliver to"} tone="home" name={t.drop.name || "Customer"} lines={[t.drop.address, [t.drop.city, t.drop.pincode].filter(Boolean).join(" ")]}
               phone={t.drop.phone} nav={navigateUrl(t.drop)} note={t.drop.instructions} noBag={t.drop.no_bag} />
           </div>
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">

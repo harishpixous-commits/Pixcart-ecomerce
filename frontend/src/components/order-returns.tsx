@@ -102,6 +102,7 @@ export function ReturnsList({ returns, onCancel }: { returns: ReturnView[]; onCa
               <p className="text-sm text-ink-soft">{r.reason_label}. Refund {rupees(r.refund_amount)}{r.refund_upi ? ` to ${r.refund_upi}` : ""}.</p>
               {r.seller_note && <p className="text-sm text-ink-soft">Seller: {r.seller_note}</p>}
               {r.pickup_tracking && <p className="text-sm text-ink-soft">Pickup: {r.pickup_courier} {r.pickup_tracking}</p>}
+              {r.fleet_pickup?.requested && <FleetPickupNote f={r.fleet_pickup} />}
             </div>
             <div className="flex flex-col items-end gap-1">
               <StatusPill status={r.status === "refunded" ? "approved" : r.status === "rejected" ? "rejected" : r.status === "cancelled" ? "cancelled" : "pending"} label={RETURN_STATUS[r.status]} />
@@ -116,5 +117,28 @@ export function ReturnsList({ returns, onCancel }: { returns: ReturnView[]; onCa
         ))}
       </ul>
     </section>
+  );
+}
+
+/** Our delivery partner collecting the return: the step, who is coming, and the code to give them. */
+function FleetPickupNote({ f }: { f: NonNullable<ReturnView["fleet_pickup"]> }) {
+  return (
+    <div className="mt-2 flex flex-col gap-1.5 rounded-xl bg-peacock-light/50 p-3 text-sm ring-1 ring-peacock/15" data-testid="return-fleet-pickup">
+      <p className="font-semibold text-peacock-dark">Pickup by our delivery partner{f.label ? `: ${f.label}` : ""}</p>
+      {f.partner && (
+        <p className="text-ink-soft">
+          {f.partner.name}{f.partner.vehicle_no ? ` · ${f.partner.vehicle_no}` : ""}
+          {f.partner.phone && <> · <a href={`tel:${f.partner.phone}`} className="font-semibold text-peacock">Call</a></>}
+        </p>
+      )}
+      {f.status === "failed" && f.fail_reason && <p className="text-vermilion">Last try: {f.fail_reason}. We will arrange another pickup.</p>}
+      {f.code && (
+        <p className="flex items-center gap-2">
+          <span className="text-ink-soft">Pickup code</span>
+          <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-lg font-bold tracking-[0.3em] ring-1 ring-line" data-testid="return-pickup-code">{f.code}</span>
+          <span className="text-xs text-ink-faint">Give it to the partner only when you hand over the item.</span>
+        </p>
+      )}
+    </div>
   );
 }

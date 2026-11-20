@@ -4,7 +4,7 @@
  * Admin → Delivery → Assign: packages the sellers marked "Ready for pickup" that no partner has yet, requests waiting
  * for a partner to accept, and failed attempts that need a decision (try again or bring the package back).
  * Assign by hand (with or without asking the partner), let auto-assign ask the nearest free partner, or hand the
- * package to a courier instead.
+ * package to a courier instead. "Return pickups" lists customers' returns our partners should collect.
  */
 
 import clsx from "clsx";
@@ -19,7 +19,7 @@ import { api, ApiError } from "@/lib/api";
 import type { Candidate, QueuePackage } from "@/lib/delivery-types";
 import { rupees } from "@/lib/format";
 
-type Tab = "waiting" | "offered" | "failed";
+type Tab = "waiting" | "offered" | "failed" | "returns";
 type Data = { items: QueuePackage[]; counts: Record<Tab, number> };
 
 const TRY_LABEL: Record<string, string> = { rejected: "declined", expired: "did not answer", cancelled: "taken back", failed: "could not deliver", delivered: "delivered" };
@@ -27,7 +27,7 @@ const TRY_LABEL: Record<string, string> = { rejected: "declined", expired: "did 
 function QueuePage() {
   const sp = useSearchParams();
   const router = useRouter();
-  const tab = (["waiting", "offered", "failed"].includes(sp.get("tab") ?? "") ? sp.get("tab") : "waiting") as Tab;
+  const tab = (["waiting", "offered", "failed", "returns"].includes(sp.get("tab") ?? "") ? sp.get("tab") : "waiting") as Tab;
   const [data, setData] = useState<{ tab: Tab; d: Data } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<QueuePackage | null>(null);
@@ -50,17 +50,19 @@ function QueuePage() {
         { value: "waiting", label: "Waiting for a partner", count: counts?.waiting },
         { value: "offered", label: "Request sent", count: counts?.offered },
         { value: "failed", label: "Not delivered", count: counts?.failed },
+        { value: "returns", label: "Return pickups", count: counts?.returns },
       ]} />
       <ErrorNote message={error} />
       {!d ? (error ? null : <PageLoader />) : d.items.length === 0 ? (
         <EmptyState
-          title={tab === "waiting" ? "Every package has a partner" : tab === "offered" ? "No requests waiting for an answer" : "No failed deliveries to sort out"}
-          body={tab === "waiting" ? "Packages show up here when a seller taps Ready for pickup and no partner has taken them yet." : undefined}
+          title={tab === "waiting" ? "Every package has a partner" : tab === "offered" ? "No requests waiting for an answer" : tab === "returns" ? "No returns waiting to be collected" : "No failed deliveries to sort out"}
+          body={tab === "waiting" ? "Packages show up here when a seller taps Ready for pickup and no partner has taken them yet."
+            : tab === "returns" ? "Approved returns of packages our partners delivered wait here when no partner has taken the pickup." : undefined}
         />
       ) : (
         <ul className="flex flex-col gap-3" data-testid="queue-list">
           {d.items.map((p) => (
-            <li key={p.sub_order_id}>
+            <li key={p.return_id ?? p.sub_order_id}>
               <PackageCard p={p} tab={tab} now={now} onAssign={() => setAssigning(p)} onCancel={() => setCancelling(p)} onChanged={load} />
             </li>
           ))}
@@ -94,8 +96,10 @@ function PackageCard({ p, tab, now, onAssign, onCancel, onChanged }: {
   return (
     <article className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:p-5" data-testid="queue-item">
       <header className="flex flex-wrap items-center gap-2">
-        <h2 className="font-display text-lg font-semibold">{p.order_number}</h2>
-        {p.payment === "cod" ? <Pill tone="amber">Cash on delivery {rupees(p.cod_amount)}</Pill> : <Pill tone="green">Prepaid</Pill>}
+        <h2 className="font-display text-lg font-semibold">{p.return_number ? `Return ${p.return_number}` : p.order_number}</h2>
+        {p.return_number && <span className="text-sm text-ink-soft">order {p.order_number}</span>}
+        {p.return_number || a?.kind === "pickup" ? <Pill tone="blue">Return pickup</Pill>
+          : p.payment === "cod" ? <Pill tone="amber">Cash on delivery {rupees(p.cod_amount)}</Pill> : <Pill tone="green">Prepaid</Pill>}
         {p.zone ? <Pill tone="blue">{p.zone.name}</Pill> : <Pill tone="red">No zone</Pill>}
         {p.ready_since && <span className="text-sm text-ink-faint">Ready {ago(p.ready_since, now)}</span>}
         {p.pickup_code && <span className="ml-auto rounded-lg bg-mist px-2 py-1 font-mono text-sm font-bold tracking-widest" title="The seller gives this code to the partner at pickup">Code {p.pickup_code}</span>}
@@ -119,6 +123,10 @@ function PackageCard({ p, tab, now, onAssign, onCancel, onChanged }: {
           </div>
         </div>
       </div>
+
+      {p.return_items && p.return_items.length > 0 && (
+        <p className="mt-3 text-sm"><span className="font-semibold">Collect: </span>{p.return_items.join(", ")}</p>
+      )}
 
       {p.tries.length > 0 && (
         <p className="mt-3 text-sm text-ink-soft">
@@ -157,6 +165,19 @@ function PackageCard({ p, tab, now, onAssign, onCancel, onChanged }: {
             </Button>
           </>
         )}
+        {tab === "returns" && p.return_id && (
+          <>
+            <Button onClick={onAssign}><UserCheck className="h-4 w-4" aria-hidden /> Assign partner</Button>
+            <Button variant="secondary" loading={busy === "auto"} onClick={() => run("auto", `/api/admin/delivery/returns/${p.return_id}/auto-assign`, {}, "Asked the nearest free partner")}>
+              <Zap className="h-4 w-4" aria-hidden /> Auto-assign
+            </Button>
+            <Button variant="ghost" loading={busy === "courier"} onClick={() => {
+              if (window.confirm("Let the seller arrange this pickup with their courier instead? Our partners stop trying.")) run("courier", `/api/admin/delivery/returns/${p.return_id}/courier`, {}, "The seller will arrange the pickup");
+            }}>
+              <Truck className="h-4 w-4" aria-hidden /> Seller&apos;s courier instead
+            </Button>
+          </>
+        )}
         {tab === "offered" && (
           <>
             <Button variant="secondary" onClick={onCancel}><Undo2 className="h-4 w-4" aria-hidden /> Take back the request</Button>
@@ -186,22 +207,24 @@ function AssignDialog({ pkg, onClose, onDone }: { pkg: QueuePackage | null; onCl
   const [direct, setDirect] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<{ id: string; message: string } | null>(null);
-  const id = pkg?.sub_order_id ?? null;
+  const id = pkg ? pkg.return_id ?? pkg.sub_order_id : null;
+  const forReturn = !!pkg?.return_id;
 
   useEffect(() => {
     if (!id) return;
     let live = true;
-    api<Candidate[]>(`/api/admin/delivery/packages/${id}/candidates`)
+    api<Candidate[]>(forReturn ? `/api/admin/delivery/returns/${id}/candidates` : `/api/admin/delivery/packages/${id}/candidates`)
       .then((c) => { if (live) { setList({ id, items: c }); setError(null); } })
       .catch((e) => { if (live) setError(e instanceof ApiError ? e.message : "Could not load partners"); });
     return () => { live = false; };
-  }, [id]);
+  }, [id, forReturn]);
 
   async function assign(c: Candidate, force: boolean) {
     if (!pkg) return;
     setBusy(c.id);
     try {
-      await api("/api/admin/delivery/assign", { method: "POST", body: { sub_order_id: pkg.sub_order_id, partner_id: c.id, direct, force } });
+      if (pkg.return_id) await api(`/api/admin/delivery/returns/${pkg.return_id}/assign`, { method: "POST", body: { partner_id: c.id, direct, force } });
+      else await api("/api/admin/delivery/assign", { method: "POST", body: { sub_order_id: pkg.sub_order_id, partner_id: c.id, direct, force } });
       toast(direct ? `Assigned to ${c.name}` : `Request sent to ${c.name}`);
       setBlocked(null);
       onDone();
@@ -215,7 +238,7 @@ function AssignDialog({ pkg, onClose, onDone }: { pkg: QueuePackage | null; onCl
 
   const items = list && list.id === id ? list.items : null;
   return (
-    <Modal open={!!pkg} onClose={() => { setBlocked(null); onClose(); }} title={pkg ? `Assign ${pkg.order_number}` : "Assign"} wide>
+    <Modal open={!!pkg} onClose={() => { setBlocked(null); onClose(); }} title={pkg ? (pkg.return_number ? `Collect return ${pkg.return_number}` : `Assign ${pkg.order_number}`) : "Assign"} wide>
       <div className="flex flex-col gap-3" data-testid="assign-dialog">
         <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-mist p-3">
           <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={direct} onChange={(e) => setDirect(e.target.checked)} />

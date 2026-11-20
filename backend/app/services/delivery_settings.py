@@ -52,6 +52,7 @@ DEFAULTS: dict[str, Any] = {
     "enabled": True,                 # partner app, assignment and tracking
     "fleet_mode": "zones",
     "registration_open": True,       # new partners can sign up in the app
+    "return_pickups": True,          # partners collect customers' returns of packages the fleet delivered
     "auto_assign": True,             # offer packages to the nearest free partner automatically
     "offer_seconds": 30,             # time a partner has to accept
     "radius_km": 8,                  # partners further than this from the store are not offered the package

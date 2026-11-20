@@ -143,26 +143,42 @@ ALLOWED = {
 }
 
 
-async def set_status(session: AsyncSession, ret: ReturnRequest, dst: str, *, note: str = "", courier: str = "", tracking: str = "") -> list[uuid.UUID]:
-    """Moves a return forward. Returns refund ids to send to the gateway after commit."""
+async def set_status(session: AsyncSession, ret: ReturnRequest, dst: str, *, note: str = "", courier: str = "", tracking: str = "",
+                     by_fleet: bool = False) -> list[uuid.UUID]:
+    """Moves a return forward. Returns refund ids to send to the gateway after commit.
+
+    For a package our own delivery partners delivered, approving the return asks a partner to collect it (the customer
+    gets a pickup code); cancelling it, or the seller handing it to a courier, stops that pickup."""
+    from app.services import fleet
+
     if dst not in ALLOWED.get(ret.status, ()):
         raise Conflict(f"A {ret.status.replace('_', ' ')} return cannot become {dst.replace('_', ' ')}", "illegal_transition")
     now = utcnow()
     refund_ids: list[uuid.UUID] = []
+    extra = note if dst == "rejected" else ""
     ret.status = dst
     if note:
         ret.seller_note = note[:2000]
     if dst == "approved":
         ret.approved_at = now
+        await session.flush()
+        await fleet.request_return_pickup(session, ret)
+        if ret.fleet_requested_at:
+            extra = f"Our delivery partner will collect it. Give pickup code {ret.pickup_otp} when you hand it over."
     elif dst == "picked_up":
         ret.pickup_courier, ret.pickup_tracking = courier[:60], tracking[:60]
+        if ret.fleet_requested_at and not by_fleet:
+            await fleet.cancel_return_pickup(session, ret, "The seller arranged another pickup")
     elif dst == "received":
         ret.received_at = now
         refund_ids = await _receive(session, ret)
+        await fleet.close_pickup_on_receive(session, ret, None)
     elif dst == "refunded":
         ret.refunded_at = now
+    elif dst == "cancelled" and ret.fleet_requested_at:
+        await fleet.cancel_return_pickup(session, ret, "The customer cancelled the return")
     await session.flush()
-    await _tell_customer(session, ret, note if dst == "rejected" else "")
+    await _tell_customer(session, ret, extra)
     return refund_ids
 
 
@@ -196,10 +212,14 @@ async def _receive(session: AsyncSession, ret: ReturnRequest) -> list[uuid.UUID]
     return refund_ids
 
 
-async def return_out(session: AsyncSession, ret: ReturnRequest, *, with_upi: bool = False) -> dict:
+async def return_out(session: AsyncSession, ret: ReturnRequest, *, with_upi: bool = False, viewer: str = "customer") -> dict:
+    """A return for the customer, the seller or staff (``viewer``); each sees only the pickup code meant for them."""
+    from app.services import fleet
+
     rows = (await session.execute(select(ReturnItem, OrderItem).join(OrderItem, OrderItem.id == ReturnItem.order_item_id).where(ReturnItem.return_id == ret.id))).all()
     sub = await session.get(SubOrder, ret.sub_order_id)
     return {
+        "fleet_pickup": await fleet.pickup_tracking(session, ret, viewer=viewer),
         "id": str(ret.id), "number": ret.number, "status": ret.status, "reason": ret.reason, "reason_label": RETURN_REASONS.get(ret.reason, ret.reason),
         "comment": ret.comment, "seller_note": ret.seller_note, "refund_amount": ret.refund_amount,
         "refund_upi": ret.refund_upi if with_upi else (ret.refund_upi[:2] + "…@" + ret.refund_upi.split("@")[-1] if ret.refund_upi else ""),

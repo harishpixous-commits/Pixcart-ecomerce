@@ -86,7 +86,7 @@ function TripsPage() {
                 <span className="flex min-w-0 flex-wrap items-center gap-2 sm:w-64">
                   <span className="font-semibold">{t.order_number}</span>
                   <TripPill trip={t} />
-                  {t.kind === "return" && <span className="text-xs font-semibold text-marigold-dark">Return</span>}
+                  {t.kind !== "delivery" && <span className="text-xs font-semibold text-marigold-dark">{t.kind === "pickup" ? "Return pickup" : "Return"}</span>}
                   <span className="w-full text-xs text-ink-faint">{dateTime(t.assigned_at)} · {t.mode === "auto" ? "auto-assign" : "by staff"}</span>
                 </span>
                 <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink-soft">

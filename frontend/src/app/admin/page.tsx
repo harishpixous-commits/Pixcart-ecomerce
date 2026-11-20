@@ -2,13 +2,15 @@
 
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DailyBars, Delta, HBar } from "@/components/charts";
+import { usePolling } from "@/components/delivery/trip";
 import { PageHeader, Stat } from "@/components/portal-shell";
 import { AiBadge, type AiRun } from "@/components/ai";
 import { Button, ErrorNote, PageLoader, Select } from "@/components/ui";
-import { useAdmin } from "@/lib/admin";
+import { useAdmin, useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
+import type { DeliveryOverview } from "@/lib/delivery-types";
 import { hoursLabel, rupees } from "@/lib/format";
 
 type D = { sellers_pending_review: number; products_pending_review: number; orders_today: number; gmv_30d: number; orders_30d: number; commission_30d: number; refunds_needing_attention: number; active_sellers: number; customers: number; live_products: number };
@@ -82,6 +84,43 @@ function BusinessBrief({ days }: { days: number }) {
   );
 }
 
+/** The own delivery fleet at a glance, live: partners online now, packages waiting, trips moving, stuck trips. */
+function FleetGlance() {
+  const can = useCan("delivery");
+  const [o, setO] = useState<DeliveryOverview | null>(null);
+  const load = useCallback(() => {
+    api<DeliveryOverview>("/api/admin/delivery/overview").then(setO).catch(() => {});
+  }, []);
+  usePolling(load, 30_000, can);
+  if (!can || !o || !o.enabled || o.fleet_mode === "off") return null;
+  const tiles = [
+    { label: "Partners online now", value: o.online, href: "/admin/delivery/live", tone: "text-leaf" },
+    { label: "Waiting for a partner", value: o.queue, href: "/admin/delivery/queue", tone: o.queue ? "text-[#8A5A00]" : "text-ink" },
+    { label: "On a trip", value: o.on_trip, href: "/admin/delivery/trips?status=active", tone: "text-peacock" },
+    { label: "Stuck trips", value: o.stuck, href: "/admin/delivery/live", tone: o.stuck ? "text-vermilion" : "text-ink" },
+    { label: "Delivered today", value: o.delivered_today, href: "/admin/delivery/trips?status=delivered", tone: "text-ink" },
+  ];
+  return (
+    <section className="rounded-xl bg-white p-4" data-testid="fleet-glance">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <span className="relative flex h-2.5 w-2.5">{o.online > 0 && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-leaf/60 motion-reduce:animate-none" />}<span className={o.online > 0 ? "relative inline-flex h-2.5 w-2.5 rounded-full bg-leaf" : "relative inline-flex h-2.5 w-2.5 rounded-full bg-line"} /></span>
+          Delivery fleet, live
+        </h2>
+        <Link href="/admin/delivery/live" className="text-sm font-semibold text-peacock">See who is online</Link>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {tiles.map((t) => (
+          <Link key={t.label} href={t.href} className="rounded-lg bg-mist px-3 py-2 hover:ring-2 hover:ring-peacock/20">
+            <p className={`font-display text-2xl font-bold ${t.tone}`}>{t.value}</p>
+            <p className="text-xs text-ink-soft">{t.label}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function AdminHome() {
   const [d, setD] = useState<D | null>(null);
   // analytics for the chosen period; while another period loads, the loader shows instead of old numbers
@@ -103,6 +142,7 @@ export default function AdminHome() {
         </Select>
       } />
       <SetupChecklist />
+      <FleetGlance />
       <BusinessBrief days={days} />
       {d && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -333,7 +333,7 @@ async def seller_returns(seller: SellerAccount, session: SessionDep, status: str
         stmt = stmt.where(ReturnRequest.status == status)
     rows = list((await session.execute(stmt.order_by(ReturnRequest.created_at.desc()).offset((page - 1) * 20).limit(20))).scalars())
     counts = dict((await session.execute(select(ReturnRequest.status, func.count()).where(ReturnRequest.seller_id == seller.id).group_by(ReturnRequest.status))).all())
-    return {"items": [await returns_svc.return_out(session, r) for r in rows], "status_counts": counts, "page": page}
+    return {"items": [await returns_svc.return_out(session, r, viewer="seller") for r in rows], "status_counts": counts, "page": page}
 
 
 @router.post("/returns/{return_id}")
@@ -349,7 +349,7 @@ async def act_return(return_id: uuid.UUID, body: ReturnAction, seller: SellerAcc
     await session.commit()
     if refund_ids:
         background.add_task(run_refunds, refund_ids)
-    return await returns_svc.return_out(session, ret)
+    return await returns_svc.return_out(session, ret, viewer="seller")
 
 
 # ----------------------------------------------------------------------------- money

@@ -77,7 +77,8 @@ export interface TripBrief {
   id: string;
   status: TripStatus;
   status_label: string;
-  kind: "delivery" | "return";
+  /** delivery; return = a package going back to the store; pickup = collecting a customer's return */
+  kind: "delivery" | "return" | "pickup";
   mode: "manual" | "auto";
   assigned_at: string;
   expires_at: string | null;
@@ -99,6 +100,7 @@ export interface TripBrief {
   rating: number | null;
   rating_comment: string;
   has_proof: boolean;
+  return_id?: string | null;
 }
 
 export interface TripPlace {
@@ -124,6 +126,8 @@ export interface TripView extends TripBrief {
   needs: { pickup_code: boolean; otp: boolean; photo: boolean };
   partner: { id: string; name: string; phone: string; photo: string; vehicle: string; vehicle_no: string; lat: number | null; lng: number | null; location_at: string | null };
   pickup_code?: string;
+  /** a return pickup: the customer's return number */
+  return_number?: string;
   seconds_left?: number;
   minutes_in_step?: number;
   stuck?: boolean;
@@ -242,6 +246,10 @@ export interface QueuePackage {
   cod_amount: number;
   pickup_code: string;
   tries: { status: TripStatus; reason: string; partner: string }[];
+  /** the "Return pickups" tab: the return to collect */
+  return_id?: string;
+  return_number?: string;
+  return_items?: string[];
   assignment?: TripBrief & { partner: string; partner_phone: string; seconds_left?: number | null };
 }
 

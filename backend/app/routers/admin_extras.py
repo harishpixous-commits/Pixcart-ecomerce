@@ -320,7 +320,7 @@ async def admin_returns(admin: Perm("orders"), session: SessionDep, status: str 
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = list((await session.execute(stmt.order_by(ReturnRequest.created_at.desc()).offset((page - 1) * 30).limit(30))).scalars())
     counts = dict((await session.execute(select(ReturnRequest.status, func.count()).group_by(ReturnRequest.status))).all())
-    return {"items": [await returns_svc.return_out(session, r, with_upi=True) for r in rows], "status_counts": counts,
+    return {"items": [await returns_svc.return_out(session, r, with_upi=True, viewer="admin") for r in rows], "status_counts": counts,
             "total": total, "page": page, "page_size": 30}
 
 
@@ -346,7 +346,7 @@ async def admin_return_action(return_id: uuid.UUID, body: AdminReturnAction, adm
     await session.commit()
     if refund_ids:
         background.add_task(run_refunds, refund_ids)
-    return await returns_svc.return_out(session, ret, with_upi=True)
+    return await returns_svc.return_out(session, ret, with_upi=True, viewer="admin")
 
 
 # ----------------------------------------------------------------------------- payouts

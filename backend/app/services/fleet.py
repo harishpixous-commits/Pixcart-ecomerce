@@ -8,6 +8,10 @@ Pipeline for one package (sub-order with ``shipping_provider = 'fleet'``):
 
 A rejected or expired offer stays as a history row and the package goes to the next partner (auto) or back to the
 admin queue. Every step is written to ``order_status_logs`` with who did it and where.
+
+Return pickups (``kind = 'pickup'``, linked to the customer's return): offered and accepted the same way, then
+    → reached the customer → collected (the customer's pickup code; the return becomes "picked up") → on the way
+    → handed to the store (the seller's pickup code); the seller checks the item and marks the return received.
 """
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ from app.models import (
     Order,
     OrderItem,
     OrderStatusLog,
+    ReturnRequest,
     Seller,
     SubOrder,
     User,
@@ -211,7 +216,7 @@ def _area(st: dict) -> str:
 async def _offer_vars(session: AsyncSession, a: DeliveryAssignment, sub: SubOrder, order: Order, cfg: dict) -> dict:
     place = await pickup_place(session, sub)
     return {"order_number": sub.number, "store": place["name"], "pickup_area": place["city"] or place["pincode"], "drop_area": _area(order.ship_to),
-            "fee": f"Earn {rupees(fee_for(cfg, None) + (order.tip_paise if await is_fee_carrier(session, sub) else 0))}",
+            "fee": f"Earn {rupees(fee_for(cfg, None) + (order.tip_paise if a.kind == 'delivery' and await is_fee_carrier(session, sub) else 0))}",
             "cod": f", collect {rupees(a.cod_amount)}" if a.cod_amount else "", "seconds": cfg["offer_seconds"]}
 
 
@@ -306,8 +311,9 @@ async def _end(session: AsyncSession, a: DeliveryAssignment, status: str, note: 
 
 
 async def offer(session: AsyncSession, sub: SubOrder, boy: DeliveryBoy, *, mode: str, by: User | None = None, direct: bool = False,
-                cfg: dict | None = None) -> DeliveryAssignment:
-    """Offers the package to a partner (they accept within the offer time), or assigns it outright (``direct``)."""
+                cfg: dict | None = None, ret: ReturnRequest | None = None) -> DeliveryAssignment:
+    """Offers the package to a partner (they accept within the offer time), or assigns it outright (``direct``).
+    With ``ret`` it is a return pickup: collect the item from the customer and bring it to the store."""
     from app.services.notify import notify
     from app.services.orders import collect_amount
 
@@ -317,16 +323,21 @@ async def offer(session: AsyncSession, sub: SubOrder, boy: DeliveryBoy, *, mode:
     order = await session.get(Order, sub.order_id)
     now = utcnow()
     a = DeliveryAssignment(
-        order_id=order.id, sub_order_id=sub.id, delivery_boy_id=boy.id, assigned_by=by.id if by else None, mode=mode, kind="delivery",
+        order_id=order.id, sub_order_id=sub.id, delivery_boy_id=boy.id, assigned_by=by.id if by else None, mode=mode,
+        kind="pickup" if ret else "delivery", return_id=ret.id if ret else None,
         status="accepted" if direct else "offered", assigned_at=now, expires_at=None if direct else now + timedelta(seconds=cfg["offer_seconds"]),
-        accepted_at=now if direct else None, status_at=now, cod_amount=await collect_amount(session, sub, order), created_at=now,
+        accepted_at=now if direct else None, status_at=now, cod_amount=0 if ret else await collect_amount(session, sub, order), created_at=now,
     )
     session.add(a)
     await session.flush()
     log_status(session, order_id=order.id, sub_order_id=sub.id, assignment_id=a.id, status=a.status, actor="admin" if by else "system",
-               user_id=by.id if by else None, note=f"{'Assigned to' if direct else 'Offered to'} {boy.name}")
+               user_id=by.id if by else None, note=f"{'Assigned to' if direct else 'Offered to'} {boy.name}" + (f" (return {ret.number} pickup)" if ret else ""))
     variables = await _offer_vars(session, a, sub, order, cfg)
-    await notify(session, "delivery_assigned" if direct else "delivery_new_offer", await session.get(User, boy.user_id), variables,
+    if ret:
+        event = "delivery_return_pickup_assigned" if direct else "delivery_new_return_pickup"
+    else:
+        event = "delivery_assigned" if direct else "delivery_new_offer"
+    await notify(session, event, await session.get(User, boy.user_id), variables,
                  link=f"/delivery/trips/{a.id}" if direct else "/delivery", channels=("inapp", "push", "sms") if direct else ("inapp", "push"))
     if direct:
         await _announce_accepted(session, a, sub, order, boy)
@@ -336,6 +347,12 @@ async def offer(session: AsyncSession, sub: SubOrder, boy: DeliveryBoy, *, mode:
 async def _announce_accepted(session: AsyncSession, a: DeliveryAssignment, sub: SubOrder, order: Order, boy: DeliveryBoy) -> None:
     from app.services.notify import notify, notify_seller
 
+    if a.kind == "pickup":
+        ret = await session.get(ReturnRequest, a.return_id) if a.return_id else None
+        if ret:
+            await notify(session, "return_pickup_scheduled", await session.get(User, ret.user_id),
+                         {"partner": boy.name, "return_number": ret.number, "code": ret.pickup_otp}, link=f"/orders/{order.id}", channels=("inapp", "push", "sms"))
+        return
     item = (await session.execute(select(OrderItem.title).where(OrderItem.sub_order_id == sub.id).limit(1))).scalar_one_or_none() or "Your package"
     await notify(session, "delivery_partner_assigned", await session.get(User, order.user_id), {"partner": boy.name, "item": item}, link=f"/orders/{order.id}")
     await notify_seller(session, sub.seller_id, "seller_pickup_assigned", {"order_number": sub.number, "partner": boy.name,
@@ -343,26 +360,35 @@ async def _announce_accepted(session: AsyncSession, a: DeliveryAssignment, sub: 
                                                                            "code": sub.pickup_code}, link=f"/seller/orders/{sub.id}")
 
 
-async def candidates(session: AsyncSession, sub: SubOrder, cfg: dict, *, online_only: bool = True) -> list[dict]:
-    """Partners who could take this package, best first, each with why they can or cannot."""
+async def candidates(session: AsyncSession, sub: SubOrder, cfg: dict, *, online_only: bool = True, ret: ReturnRequest | None = None) -> list[dict]:
+    """Partners who could take this package (or, with ``ret``, collect this return), best first, each with why they
+    can or cannot. Distance is from the store, or from the customer's door for a return pickup."""
     from app.services.orders import collect_amount
 
     order = await session.get(Order, sub.order_id)
-    place = await pickup_place(session, sub)
+    if ret:
+        st = order.ship_to or {}
+        place = {"lat": st.get("lat"), "lng": st.get("lng")}
+        zone = await zone_for_pin(session, st.get("pincode", ""))
+        zone_id = zone.id if zone else None
+    else:
+        place = await pickup_place(session, sub)
+        zone_id = sub.delivery_zone_id
     stmt = select(DeliveryBoy).where(DeliveryBoy.kyc_status == "approved", DeliveryBoy.is_active.is_(True))
     if online_only:
         stmt = stmt.where(DeliveryBoy.is_online.is_(True))
     boys = list((await session.execute(stmt)).scalars())
     ids = [b.id for b in boys]
     load, cash = await loads(session, ids), await cash_by_partner(session, ids)
-    tried = set((await session.execute(select(DeliveryAssignment.delivery_boy_id).where(DeliveryAssignment.sub_order_id == sub.id))).scalars())
-    cod = await collect_amount(session, sub, order)
+    asked = DeliveryAssignment.return_id == ret.id if ret else DeliveryAssignment.sub_order_id == sub.id
+    tried = set((await session.execute(select(DeliveryAssignment.delivery_boy_id).where(asked))).scalars())
+    cod = 0 if ret else await collect_amount(session, sub, order)
     now = utcnow()
     out = []
     for b in boys:
         dist = haversine_km(place["lat"], place["lng"], float(b.lat), float(b.lng)) if (place["lat"] is not None and b.lat is not None) else None
         reasons = []
-        if sub.delivery_zone_id and b.zone_id != sub.delivery_zone_id:
+        if zone_id and b.zone_id != zone_id:
             reasons.append("other zone")
         if b.id in tried:
             reasons.append("already asked")
@@ -413,6 +439,53 @@ async def auto_assign(session: AsyncSession, sub: SubOrder, *, cfg: dict | None 
     return await offer(session, sub, pool[0]["boy"], mode="auto", cfg=cfg)
 
 
+async def _alert_pickup_unassigned(session: AsyncSession, ret: ReturnRequest, reason: str) -> None:
+    from app.services.notify import notify_staff
+
+    if ret.fleet_alerted_at:
+        return
+    ret.fleet_alerted_at = utcnow()
+    await notify_staff(session, "delivery", "staff_delivery_unassigned", {"order_number": f"return {ret.number}", "reason": reason},
+                       link="/admin/delivery/queue?tab=returns")
+
+
+async def auto_assign_pickup(session: AsyncSession, ret: ReturnRequest, *, cfg: dict | None = None) -> DeliveryAssignment | None:
+    """Offers a return pickup to the nearest free partner of the customer's zone (or tells staff once)."""
+    cfg = cfg or await delivery_settings.get(session)
+    sub = await session.get(SubOrder, ret.sub_order_id)
+    if not (cfg["enabled"] and cfg["auto_assign"] and cfg["return_pickups"]) or ret.status != "approved" or not ret.fleet_requested_at or sub is None:
+        return None
+    if await active_assignment(session, sub.id):
+        return None
+    tried = (await session.execute(select(func.count()).select_from(DeliveryAssignment).where(
+        DeliveryAssignment.return_id == ret.id, DeliveryAssignment.mode == "auto"))).scalar_one()
+    if tried >= cfg["max_offers"]:
+        await _alert_pickup_unassigned(session, ret, f"{tried} partners were asked and none took it.")
+        return None
+    pool = [c for c in await candidates(session, sub, cfg, ret=ret) if c["ok"]]
+    if not pool:
+        await _alert_pickup_unassigned(session, ret, "No free partner is online near the customer right now.")
+        return None
+    return await offer(session, sub, pool[0]["boy"], mode="auto", cfg=cfg, ret=ret)
+
+
+async def release(session: AsyncSession, a: DeliveryAssignment, why: str, cfg: dict) -> None:
+    """After a request or trip ended without the work done: offer it again (auto-assign) or tell staff."""
+    await session.flush()
+    if a.kind == "pickup":
+        ret = await session.get(ReturnRequest, a.return_id) if a.return_id else None
+        if ret is None or ret.status != "approved" or not ret.fleet_requested_at:
+            return
+        if not cfg["auto_assign"]:
+            ret.fleet_alerted_at = None
+        if not cfg["auto_assign"] or await auto_assign_pickup(session, ret, cfg=cfg) is None:
+            await _alert_pickup_unassigned(session, ret, why)
+        return
+    sub = await session.get(SubOrder, a.sub_order_id)
+    if sub:
+        await _after_release(session, sub, why, cfg)
+
+
 async def _after_release(session: AsyncSession, sub: SubOrder, why: str, cfg: dict) -> None:
     """A partner declined, did not answer or was taken off: offer the package again or tell staff."""
     if sub.status != "packed" or sub.shipping_provider != "fleet":
@@ -436,10 +509,7 @@ async def sweep(session: AsyncSession) -> int:
     cfg = await delivery_settings.get(session)
     for a in rows:
         await _end(session, a, "expired", "Not accepted in time")
-        sub = await session.get(SubOrder, a.sub_order_id)
-        if sub:
-            await session.flush()
-            await _after_release(session, sub, "The partner did not answer in time.", cfg)
+        await release(session, a, "The partner did not answer in time.", cfg)
     return len(rows)
 
 
@@ -454,9 +524,7 @@ async def accept(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy)
         raise Conflict("This request is no longer available", "offer_gone")
     if a.expires_at and a.expires_at < utcnow():
         await _end(session, a, "expired", "Not accepted in time")
-        sub = await session.get(SubOrder, a.sub_order_id)
-        await session.flush()
-        await _after_release(session, sub, "The partner answered too late.", cfg)
+        await release(session, a, "The partner answered too late.", cfg)
         raise Conflict("Time is up for this request; it went to another partner", "offer_expired")
     busy = (await session.execute(select(func.count()).select_from(DeliveryAssignment).where(
         DeliveryAssignment.delivery_boy_id == boy.id, DeliveryAssignment.status.in_(ON_TRIP)))).scalar_one()
@@ -478,15 +546,15 @@ async def reject(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy,
     text = REJECT_REASONS.get(reason, "Other reason") + (f": {note.strip()}" if note.strip() else "")
     a.reject_reason = text[:200]
     await _end(session, a, "rejected", text, user_id=boy.user_id, actor="delivery")
-    sub = await session.get(SubOrder, a.sub_order_id)
-    await session.flush()
-    await _after_release(session, sub, f"{boy.name} declined: {text}", cfg)
+    await release(session, a, f"{boy.name} declined: {text}", cfg)
 
 
 # ============================================================================ the trip
 
 
 STEPS = {"at_store": ("accepted",), "picked": ("accepted", "at_store"), "on_the_way": ("picked",), "reached": ("picked", "on_the_way")}
+# a return pickup: reached = at the customer's door, picked = collected from the customer, on_the_way = to the store
+PICKUP_STEPS = {"reached": ("accepted",), "picked": ("accepted", "reached"), "on_the_way": ("picked",)}
 
 
 async def advance(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, to: str, *, code: str = "",
@@ -500,12 +568,17 @@ async def advance(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy
     allowed = STEPS.get(to, ())
     if a.kind == "return":
         allowed = {"on_the_way": ("picked",), "reached": ("picked", "on_the_way")}.get(to, ())
+    elif a.kind == "pickup":
+        allowed = PICKUP_STEPS.get(to, ())
     if a.status not in allowed:
         raise Conflict(f"You cannot mark this as {to.replace('_', ' ')} now", "invalid_step")
     cfg = await delivery_settings.get(session)
     sub = await session.get(SubOrder, a.sub_order_id)
     order = await session.get(Order, a.order_id)
     now = utcnow()
+    if a.kind == "pickup":
+        await _advance_pickup(session, a, boy, to, cfg, code=code, lat=lat, lng=lng)
+        return
     if to == "picked":
         if cfg["pickup_code_required"]:
             await rate_limit(session, f"dpick:{a.id}", limit=8, window_seconds=900)
@@ -530,6 +603,67 @@ async def advance(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy
         elif to == "reached":
             await notify(session, "delivery_arriving", customer, {"item": item, "partner": boy.name, "otp": sub.delivery_otp}, link=f"/orders/{order.id}",
                          channels=("inapp", "push"))
+
+
+async def _advance_pickup(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, to: str, cfg: dict, *, code: str,
+                          lat: float | None, lng: float | None) -> None:
+    """Steps of a return pickup. Collecting checks the customer's pickup code and marks the return picked up."""
+    from app.core.deps import rate_limit
+    from app.services import returns as returns_svc
+    from app.services.notify import notify_seller
+
+    ret = await session.get(ReturnRequest, a.return_id) if a.return_id else None
+    if ret is None or ret.status not in ("approved", "picked_up"):
+        raise Conflict("This return is no longer waiting to be collected", "invalid_step")
+    sub = await session.get(SubOrder, a.sub_order_id)
+    now = utcnow()
+    if to == "picked":
+        if cfg["delivery_otp_required"]:
+            await rate_limit(session, f"dret-otp:{a.id}", limit=6, window_seconds=900)
+            if code.strip() != ret.pickup_otp:
+                await session.commit()  # keep the attempt count
+                raise ApiError("The pickup code does not match. Ask the customer for the code on their order page or SMS.", "wrong_code")
+        a.picked_lat, a.picked_lng = lat, lng
+        if ret.status == "approved":
+            await returns_svc.set_status(session, ret, "picked_up", courier="Our delivery partner", tracking=sub.number, by_fleet=True)
+        await notify_seller(session, sub.seller_id, "seller_return_arriving", {"return_number": ret.number, "order_number": sub.number, "partner": boy.name,
+                                                                                "code": sub.pickup_code}, link="/seller/returns")
+    a.status, a.status_at, a.stuck_alerted_at = to, now, None
+    setattr(a, f"{to}_at", now)
+    log_status(session, order_id=a.order_id, sub_order_id=a.sub_order_id, assignment_id=a.id, status=f"return_{to}", actor="delivery", user_id=boy.user_id,
+               lat=lat, lng=lng, note={"reached": "At the customer's door", "picked": f"Collected return {ret.number}", "on_the_way": "Bringing it to the store"}[to])
+
+
+async def request_return_pickup(session: AsyncSession, ret: ReturnRequest) -> DeliveryAssignment | None:
+    """An approved return of a package the fleet delivered: a partner collects it (auto-assign, or staff assign it).
+    Does nothing when the fleet or return pickups are switched off, or the package went by courier."""
+    cfg = await delivery_settings.get(session)
+    sub = await session.get(SubOrder, ret.sub_order_id)
+    if not (cfg["enabled"] and cfg["return_pickups"]) or cfg["fleet_mode"] == "off" or sub is None or sub.shipping_provider != "fleet":
+        return None
+    if ret.status != "approved" or ret.fleet_requested_at:
+        return None
+    ret.fleet_requested_at = utcnow()
+    ret.fleet_alerted_at = None
+    ret.pickup_otp = ret.pickup_otp or _code()
+    sub.pickup_code = sub.pickup_code or _code()
+    log_status(session, order_id=sub.order_id, sub_order_id=sub.id, status="pickup_requested", actor="system", note=f"Return {ret.number}")
+    await session.flush()
+    if cfg["auto_assign"]:
+        a = await auto_assign_pickup(session, ret, cfg=cfg)
+        if a is not None:
+            return a
+    await _alert_pickup_unassigned(session, ret, "A return is waiting for a partner to collect it.")
+    return None
+
+
+async def cancel_return_pickup(session: AsyncSession, ret: ReturnRequest, why: str, *, user: User | None = None) -> None:
+    """The return was cancelled (or staff switched it to a courier) before the item was collected."""
+    ret.fleet_requested_at = None
+    a = (await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.return_id == ret.id, DeliveryAssignment.status.in_(ACTIVE))
+                               .with_for_update())).scalar_one_or_none()
+    if a is not None and a.status in ("offered", "accepted", "reached"):
+        await _end(session, a, "cancelled", why, user_id=user.id if user else None, actor="admin" if user else "system", tell_partner=True)
 
 
 async def deliver(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, *, otp: str, proof_key: str, cod_collected: int, cod_method: str,
@@ -602,6 +736,9 @@ async def fail(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, r
 
     if a.delivery_boy_id != boy.id:
         raise NotFound("Delivery")
+    if a.kind == "pickup":
+        await _fail_pickup(session, a, boy, reason, note, lat, lng)
+        return
     if a.kind != "delivery" or a.status not in ("picked", "on_the_way", "reached"):
         raise Conflict("Only a package you are carrying can be marked as not delivered", "invalid_step")
     text = FAIL_REASONS.get(reason, "Other reason") + (f": {note.strip()}" if note.strip() else "")
@@ -614,6 +751,26 @@ async def fail(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, r
                  link=f"/orders/{order.id}")
     await notify_staff(session, "delivery", "staff_delivery_failed", {"order_number": sub.number, "partner": boy.name, "reason": text},
                        link="/admin/delivery/queue?tab=failed")
+
+
+async def _fail_pickup(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, reason: str, note: str, lat: float | None, lng: float | None) -> None:
+    """The partner could not collect a return (customer away, item not ready, refused): the return waits for another try."""
+    from app.services.notify import notify, notify_staff
+
+    if a.status not in ("accepted", "reached"):
+        raise Conflict("Only a return you have not collected yet can be marked as not collected", "invalid_step")
+    text = FAIL_REASONS.get(reason, "Other reason") + (f": {note.strip()}" if note.strip() else "")
+    a.fail_reason, a.drop_lat, a.drop_lng = text[:200], lat, lng
+    await _end(session, a, "failed", text, user_id=boy.user_id, actor="delivery")
+    ret = await session.get(ReturnRequest, a.return_id) if a.return_id else None
+    if ret is None:
+        return
+    order = await session.get(Order, a.order_id)
+    await notify(session, "return_pickup_failed", await session.get(User, ret.user_id), {"return_number": ret.number, "reason": FAIL_REASONS.get(reason, "Other reason")},
+                 link=f"/orders/{order.id}")
+    ret.fleet_alerted_at = utcnow()
+    await notify_staff(session, "delivery", "staff_delivery_failed", {"order_number": f"return {ret.number}", "partner": boy.name, "reason": text},
+                       link="/admin/delivery/queue?tab=returns")
 
 
 async def resolve_failed(session: AsyncSession, failed: DeliveryAssignment, user: User, action: str) -> DeliveryAssignment:
@@ -654,6 +811,9 @@ async def returned(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBo
 
     if a.delivery_boy_id != boy.id:
         raise NotFound("Delivery")
+    if a.kind == "pickup":
+        await _pickup_handed_over(session, a, boy, code=code, lat=lat, lng=lng)
+        return
     if a.kind != "return" or a.status not in ("picked", "on_the_way", "reached"):
         raise Conflict("This is not a return to the store", "invalid_step")
     cfg = await delivery_settings.get(session)
@@ -675,6 +835,76 @@ async def returned(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBo
                         link=f"/seller/orders/{sub.id}")
 
 
+async def _pickup_handed_over(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy, *, code: str, lat: float | None, lng: float | None) -> None:
+    """The partner gives the collected return to the seller (seller's pickup code). The seller then checks the item and
+    marks the return received, which puts the stock back and refunds the customer."""
+    from app.core.deps import rate_limit
+    from app.services.notify import notify_seller
+
+    if a.status not in ("picked", "on_the_way"):
+        raise Conflict("Collect the return from the customer first", "invalid_step")
+    cfg = await delivery_settings.get(session)
+    sub = await session.get(SubOrder, a.sub_order_id)
+    if cfg["pickup_code_required"]:
+        await rate_limit(session, f"dret:{a.id}", limit=8, window_seconds=900)
+        if code.strip() != sub.pickup_code:
+            await session.commit()
+            raise ApiError("The code does not match. Ask the seller for the pickup code on their returns screen.", "wrong_code")
+    now = utcnow()
+    a.status, a.delivered_at, a.ended_at, a.status_at, a.drop_lat, a.drop_lng = "delivered", now, now, now, lat, lng
+    if a.picked_lat is not None and lat is not None:
+        a.distance_km = round(haversine_km(float(a.picked_lat), float(a.picked_lng), lat, lng) * ROAD_FACTOR, 2)
+    a.fee_paise = fee_for(cfg, float(a.distance_km) if a.distance_km is not None else None)
+    ret = await session.get(ReturnRequest, a.return_id) if a.return_id else None
+    log_status(session, order_id=a.order_id, sub_order_id=sub.id, assignment_id=a.id, status="return_delivered", actor="delivery", user_id=boy.user_id,
+               lat=lat, lng=lng, note=f"Return {ret.number if ret else ''} handed to the store")
+    if ret:
+        await notify_seller(session, sub.seller_id, "seller_return_delivered", {"return_number": ret.number, "partner": boy.name}, link="/seller/returns")
+
+
+async def close_pickup_on_receive(session: AsyncSession, ret: ReturnRequest, user: User | None) -> None:
+    """The seller marked the return received while the partner's trip was still open (they forgot to tap): close it."""
+    a = (await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.return_id == ret.id, DeliveryAssignment.status.in_(ACTIVE))
+                               .with_for_update())).scalar_one_or_none()
+    if a is None:
+        return
+    if a.status in ("picked", "on_the_way"):
+        cfg = await delivery_settings.get(session)
+        now = utcnow()
+        a.status, a.delivered_at, a.ended_at, a.status_at = "delivered", now, now, now
+        a.fee_paise = fee_for(cfg, None)
+        log_status(session, order_id=a.order_id, sub_order_id=a.sub_order_id, assignment_id=a.id, status="return_delivered", actor="seller",
+                   user_id=user.id if user else None, note="The seller received the return")
+    else:
+        await _end(session, a, "cancelled", "The seller already has the return", actor="seller", tell_partner=True)
+
+
+async def pickup_tracking(session: AsyncSession, ret: ReturnRequest, *, viewer: str) -> dict | None:
+    """A return pickup by our partner as the customer, the seller or staff see it (each sees only their own code)."""
+    if not ret.fleet_requested_at and not ret.pickup_otp:
+        return None
+    a = (await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.return_id == ret.id).order_by(DeliveryAssignment.created_at.desc())
+                               .limit(1))).scalar_one_or_none()
+    boy = await session.get(DeliveryBoy, a.delivery_boy_id) if a else None
+    live = a is not None and a.status in ON_TRIP
+    waiting = ret.status == "approved" and ret.fleet_requested_at is not None and (a is None or a.status not in ON_TRIP)
+    label = ("Finding a delivery partner" if waiting else
+             {"accepted": "Partner on the way to collect", "reached": "Partner at the door", "picked": "Collected", "on_the_way": "On the way to the seller",
+              "delivered": "Handed to the seller", "failed": "Not collected"}.get(a.status, "") if a else "")
+    sub = await session.get(SubOrder, ret.sub_order_id)
+    out: dict[str, Any] = {
+        "requested": ret.fleet_requested_at is not None, "status": a.status if a else "waiting", "label": label, "assignment_id": str(a.id) if a else None,
+        "fail_reason": a.fail_reason if a and a.status == "failed" else "",
+        "partner": {"name": boy.name, "vehicle": VEHICLE_LABELS.get(boy.vehicle_type, ""), "vehicle_no": boy.vehicle_no,
+                    "phone": boy.phone if live else "", "photo": boy.photo} if boy and live else None,
+    }
+    if viewer == "customer" and ret.status == "approved":
+        out["code"] = ret.pickup_otp  # given to the partner at collection
+    if viewer == "seller" and live and a.status in ("picked", "on_the_way"):
+        out["code"] = sub.pickup_code if sub else ""  # given to the partner when the item reaches the store
+    return out
+
+
 async def on_cancelled(session: AsyncSession, sub: SubOrder, reason: str) -> None:
     """A fleet package was cancelled: stop the request or trip; a package already picked up goes back to the store."""
     a = await active_assignment(session, sub.id)
@@ -693,9 +923,14 @@ async def on_cancelled(session: AsyncSession, sub: SubOrder, reason: str) -> Non
     await session.flush()
 
 
+def before_pickup(a: DeliveryAssignment) -> bool:
+    """The partner does not have the item yet (a delivery not picked up at the store, a return not collected)."""
+    return a.status in (("offered", "accepted", "reached") if a.kind == "pickup" else ("offered", "accepted", "at_store"))
+
+
 async def cancel_by_staff(session: AsyncSession, a: DeliveryAssignment, user: User, reason: str) -> None:
     """Staff take a request or trip off a partner (before pickup); the package goes back to the queue."""
-    if a.status not in ("offered", "accepted", "at_store"):
+    if not before_pickup(a):
         raise Conflict("The partner already has the package; mark the delivery failed or return it instead", "already_picked")
     await _end(session, a, "cancelled", f"Taken off by the delivery team: {reason}", user_id=user.id, actor="admin", tell_partner=True)
     sub = await session.get(SubOrder, a.sub_order_id)
@@ -834,7 +1069,7 @@ def assignment_brief(a: DeliveryAssignment) -> dict:
             "status_at": a.status_at.isoformat(), "reject_reason": a.reject_reason, "fail_reason": a.fail_reason, "cod_amount": a.cod_amount,
             "cod_collected": a.cod_collected, "cod_method": a.cod_method, "fee": a.fee_paise, "tip": a.tip_paise,
             "distance_km": float(a.distance_km) if a.distance_km is not None else None, "rating": a.rating, "rating_comment": a.rating_comment,
-            "has_proof": bool(a.proof_photo)}
+            "has_proof": bool(a.proof_photo), "return_id": str(a.return_id) if a.return_id else None}
 
 
 async def trip_view(session: AsyncSession, a: DeliveryAssignment, *, for_partner: bool = True) -> dict:
@@ -858,12 +1093,21 @@ async def trip_view(session: AsyncSession, a: DeliveryAssignment, *, for_partner
                  "city": st.get("city", ""), "pincode": st.get("pincode", ""), "lat": st.get("lat"), "lng": st.get("lng"),
                  "instructions": st.get("instructions", "") if show_customer else "", "no_bag": bool(st.get("no_bag"))},
         "items": [{"title": t, "variant": v, "qty": q, "image": img} for t, v, q, img in items],
-        "fee_estimate": fee_for(cfg, None) + (order.tip_paise if await is_fee_carrier(session, sub) else 0),
+        "fee_estimate": fee_for(cfg, None) + (order.tip_paise if a.kind == "delivery" and await is_fee_carrier(session, sub) else 0),
         "needs": {"pickup_code": cfg["pickup_code_required"], "otp": cfg["delivery_otp_required"], "photo": cfg["proof_photo_required"]},
         "partner": {"id": str(boy.id), "name": boy.name, "phone": boy.phone, "photo": boy.photo, "vehicle": VEHICLE_LABELS.get(boy.vehicle_type, ""),
                     "vehicle_no": boy.vehicle_no, "lat": float(boy.lat) if boy.lat is not None else None, "lng": float(boy.lng) if boy.lng is not None else None,
                     "location_at": boy.location_at.isoformat() if boy.location_at else None},
     }
+    if a.kind == "pickup" and a.return_id:
+        ret = await session.get(ReturnRequest, a.return_id)
+        out["return_number"] = ret.number if ret else ""
+        if ret:  # what the partner collects: the returned items only
+            from app.models import ReturnItem
+
+            rows = (await session.execute(select(OrderItem.title, OrderItem.variant_label, ReturnItem.qty, OrderItem.image_url).join(
+                ReturnItem, ReturnItem.order_item_id == OrderItem.id).where(ReturnItem.return_id == ret.id))).all()
+            out["items"] = [{"title": t, "variant": v, "qty": q, "image": img} for t, v, q, img in rows]
     if not for_partner:
         out["pickup_code"] = sub.pickup_code
     return out

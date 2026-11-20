@@ -90,7 +90,9 @@ class DeliveryAssignment(IdMixin, Base):
     delivery_boy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_boys.id", ondelete="RESTRICT"), index=True)
     assigned_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))  # empty = auto
     mode: Mapped[str] = mapped_column(String(6), default="manual")  # manual | auto
-    kind: Mapped[str] = mapped_column(String(8), default="delivery", server_default="delivery")  # delivery | return (back to the seller)
+    # delivery | return (a package going back to the seller) | pickup (collecting a customer's return for the seller)
+    kind: Mapped[str] = mapped_column(String(8), default="delivery", server_default="delivery")
+    return_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("return_requests.id", ondelete="SET NULL"), index=True)
     status: Mapped[str] = mapped_column(String(10), default="offered", index=True)
     reject_reason: Mapped[str] = mapped_column(String(200), default="")
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -125,7 +127,7 @@ class DeliveryAssignment(IdMixin, Base):
     __table_args__ = (
         CheckConstraint(f"status IN {ASSIGNMENT_STATUSES}", name="status"),
         CheckConstraint("mode IN ('manual','auto')", name="mode"),
-        CheckConstraint("kind IN ('delivery','return')", name="kind"),
+        CheckConstraint("kind IN ('delivery','return','pickup')", name="kind"),
         CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="rating"),
         CheckConstraint("cod_collected >= 0 AND cod_amount >= 0 AND fee_paise >= 0", name="money"),
         # one live offer or trip per package at a time, even when two staff assign at once

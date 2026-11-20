@@ -597,3 +597,70 @@ async def test_staff_mark_delivered_closes_the_partners_trip(client, admin, cate
     assert any(x["note"].startswith("Marked delivered by staff") for x in done["log"])
     feed = (await rider.get("/api/delivery/feed")).json()
     assert feed["active"] == [] and feed["cash_in_hand"] == done["cod_amount"] and feed["today"]["trips"] == 1
+
+
+async def test_return_pickup_by_our_partner(client, admin, categories):
+    zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
+    await admin.put("/api/admin/delivery/settings", {"auto_assign": True, "fleet_mode": "zones", "return_pickups": True})
+    tn, _ka, shirt, _ = await setup(client, admin, categories)
+    rider = await ready_partner(client, admin, "9600000981", "Return Rider", zone_id, 13.083, 80.271)
+    buyer, o = await cod_order(client, shirt, "9600000982")
+    sid = o["sub_orders"][0]["id"]
+    # delivered by our partner first
+    await tn.post(f"/api/seller/orders/{sid}/confirm")
+    await tn.post(f"/api/seller/orders/{sid}/ready-for-pickup")
+    offer = (await rider.get("/api/delivery/feed")).json()["offers"][0]
+    assert (await rider.post(f"/api/delivery/offers/{offer['id']}/accept")).status_code == 200
+    seller_code = (await tn.get(f"/api/seller/orders/{sid}")).json()["fleet"]["pickup_code"]
+    trip = f"/api/delivery/trips/{offer['id']}"
+    assert (await rider.post(f"{trip}/status", {"to": "picked", "code": seller_code})).status_code == 200
+    otp = (await buyer.get(f"/api/orders/{o['id']}")).json()["fleet"][sid]["otp"]
+    done = await client.post(f"{trip}/deliver", headers=rider.h(), data={"otp": otp, "cod_collected": str(offer["cod_amount"]), "cod_method": "cash"},
+                             files={"photo": ("door.png", png_bytes(), "image/png")})
+    assert done.status_code == 200, done.text
+
+    # the customer returns it; the seller approves; our partner is asked to collect it
+    item_id = (await buyer.get(f"/api/orders/{o['id']}/returnable")).json()["items"][sid][0]["order_item_id"]
+    r = await buyer.post("/api/returns", {"sub_order_id": sid, "items": [{"order_item_id": item_id, "qty": 1}], "reason": "size_fit", "refund_upi": "priya@okaxis"})
+    assert r.status_code == 201, r.text
+    rid = r.json()["id"]
+    approved = (await tn.post(f"/api/seller/returns/{rid}", {"action": "approve"})).json()
+    assert approved["status"] == "approved" and approved["fleet_pickup"]["requested"] is True and "code" not in approved["fleet_pickup"]
+    mine = (await buyer.get(f"/api/orders/{o['id']}/returnable")).json()["returns"][0]
+    pickup_code = mine["fleet_pickup"]["code"]
+    assert len(pickup_code) == 4 and mine["fleet_pickup"]["label"] == "Finding a delivery partner"
+    feed = (await rider.get("/api/delivery/feed")).json()
+    assert feed["offers"][0]["kind"] == "pickup" and feed["offers"][0]["return_number"] == mine["number"] and feed["offers"][0]["cod_amount"] == 0
+
+    # the partner declines: the return waits in the admin's Return pickups tab and staff assign it
+    assert (await rider.post(f"/api/delivery/offers/{feed['offers'][0]['id']}/reject", {"reason": "busy"})).json()["ok"]
+    q = (await admin.get("/api/admin/delivery/queue", params={"tab": "returns"})).json()
+    assert q["counts"]["returns"] == 1 and q["items"][0]["return_number"] == mine["number"] and q["items"][0]["tries"][0]["status"] == "rejected"
+    cands = (await admin.get(f"/api/admin/delivery/returns/{rid}/candidates")).json()
+    assert cands[0]["id"] == rider.partner_id and "already asked" in cands[0]["reasons"]
+    pick = await admin.post(f"/api/admin/delivery/returns/{rid}/assign", {"partner_id": rider.partner_id, "direct": True})
+    assert pick.status_code == 200, pick.text
+    pid = pick.json()["id"]
+    assert pick.json()["kind"] == "pickup" and pick.json()["status"] == "accepted"
+    assert any("will collect your return" in n["body"] for n in (await buyer.get("/api/notifications")).json()["items"])
+
+    # at the customer's door: collect with the customer's code
+    ptrip = f"/api/delivery/trips/{pid}"
+    view = (await rider.get(ptrip)).json()
+    assert view["drop"]["phone"] == "9876500000" and view["items"][0]["qty"] == 1 and view["return_number"] == mine["number"]
+    assert (await rider.post(f"{ptrip}/status", {"to": "at_store"})).json()["error"]["code"] == "invalid_step"
+    assert (await rider.post(f"{ptrip}/status", {"to": "reached"})).status_code == 200
+    assert (await rider.post(f"{ptrip}/status", {"to": "picked", "code": "0000" if pickup_code != "0000" else "1111"})).json()["error"]["code"] == "wrong_code"
+    assert (await rider.post(f"{ptrip}/status", {"to": "picked", "code": pickup_code})).status_code == 200
+    seller_view = (await tn.get("/api/seller/returns")).json()["items"][0]
+    assert seller_view["status"] == "picked_up" and seller_view["pickup_courier"] == "Our delivery partner" and seller_view["fleet_pickup"]["code"] == seller_code
+
+    # handed to the store with the seller's code; the seller checks it and receives it (refund, credit note, stock back)
+    assert (await rider.post(f"{ptrip}/status", {"to": "on_the_way"})).status_code == 200
+    handed = await rider.post(f"{ptrip}/returned", {"code": seller_code})
+    assert handed.status_code == 200, handed.text
+    assert handed.json()["status"] == "delivered" and handed.json()["fee"] == 3000
+    received = (await tn.post(f"/api/seller/returns/{rid}", {"action": "received"})).json()
+    assert received["status"] == "received" and received["credit_note_number"]
+    earned = (await rider.get("/api/delivery/earnings")).json()
+    assert earned["today"]["trips"] == 2  # the delivery and the return pickup are both paid

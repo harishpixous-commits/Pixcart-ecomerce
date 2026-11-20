@@ -226,7 +226,7 @@ export function OfferPopup() {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/75">{live.length > 1 ? `Request 1 of ${live.length}` : "New request"}</p>
-                <h2 id="offer-title" className="font-display text-2xl font-bold leading-tight">{offer.kind === "return" ? "Return to store" : "New delivery request"}</h2>
+                <h2 id="offer-title" className="font-display text-2xl font-bold leading-tight">{offer.kind === "pickup" ? "Return pickup request" : offer.kind === "return" ? "Return to store" : "New delivery request"}</h2>
                 <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-sm font-semibold">
                   You earn about {rupees(offer.fee_estimate)}
                 </p>
@@ -236,24 +236,26 @@ export function OfferPopup() {
           </div>
 
           <div id="offer-desc" className="flex flex-col gap-3 px-5 py-4">
-            <div className="relative flex flex-col gap-3 pl-8">
+            <div className={clsx("relative flex flex-col gap-3 pl-8", offer.kind === "pickup" && "flex-col-reverse")}>
               <span className="absolute bottom-6 left-[11px] top-6 w-0.5 bg-gradient-to-b from-marigold to-vermilion" aria-hidden />
               <div className="relative">
                 <span className="absolute -left-8 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-marigold text-white"><Store className="h-3.5 w-3.5" aria-hidden /></span>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Pick up{toStore !== null ? ` · ${km(toStore)} from you` : ""}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{offer.kind === "pickup" ? "Bring to" : "Pick up"}{toStore !== null && offer.kind !== "pickup" ? ` · ${km(toStore)} from you` : ""}</p>
                 <p className="font-semibold text-ink">{offer.pickup.name}</p>
                 <p className="text-sm text-ink-soft">{[offer.pickup.address, offer.pickup.city, offer.pickup.pincode].filter(Boolean).join(", ")}</p>
               </div>
               <div className="relative">
                 <span className="absolute -left-8 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-vermilion text-white"><MapPin className="h-3.5 w-3.5" aria-hidden /></span>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Deliver to{toCustomer !== null ? ` · ${km(toCustomer)} from the store` : ""}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{offer.kind === "pickup" ? "Collect from" : "Deliver to"}{toCustomer !== null ? ` · ${km(toCustomer)} from the store` : ""}</p>
                 <p className="font-semibold text-ink">{[offer.drop.city, offer.drop.pincode].filter(Boolean).join(" ") || "Customer"}</p>
                 <p className="text-sm text-ink-soft">Full address shows after you accept.</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1 font-semibold"><Package className="h-4 w-4 text-peacock" aria-hidden />{items} item{items === 1 ? "" : "s"}</span>
-              {offer.payment === "cod" && offer.cod_amount > 0 ? (
+              {offer.kind === "pickup" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-peacock-light px-3 py-1 font-semibold text-peacock"><Package className="h-4 w-4" aria-hidden />Customer return{offer.return_number ? ` ${offer.return_number}` : ""}</span>
+              ) : offer.payment === "cod" && offer.cod_amount > 0 ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-marigold-light px-3 py-1 font-semibold text-[#8A5A00]"><Banknote className="h-4 w-4" aria-hidden />Collect {rupees(offer.cod_amount)} cash</span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-leaf-light px-3 py-1 font-semibold text-leaf"><Check className="h-4 w-4" aria-hidden />Prepaid</span>

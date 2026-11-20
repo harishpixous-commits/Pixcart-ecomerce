@@ -95,8 +95,8 @@ async function setUpFleet(request: APIRequestContext, partnerPhone: string) {
   expect(ok.ok(), await ok.text()).toBeTruthy();
 }
 
-test("own delivery partner: request pops up, pickup code, OTP, cash, photo, delivered, rated", async ({ browser, request }) => {
-  test.setTimeout(600_000); // four sign-ins and a whole trip
+test("own delivery partner: request pops up, pickup code, OTP, cash, photo, delivered, rated, return collected", async ({ browser, request }) => {
+  test.setTimeout(900_000); // four sign-ins, a delivery and a return pickup
   const partnerPhone = randomPhone("73");
   const customerPhone = randomPhone("95");
   await test.step("a zone and an approved partner", () => setUpFleet(request, partnerPhone));
@@ -208,6 +208,41 @@ test("own delivery partner: request pops up, pickup code, OTP, cash, photo, deli
     await customer.getByLabel("Comment").fill("Quick and polite");
     await customer.getByRole("button", { name: "Submit rating" }).click();
     await expect(customer.getByText("You rated this delivery")).toBeVisible();
+  });
+
+  await test.step("customer returns it; the seller approves; our partner is asked to collect it", async () => {
+    await customer.getByRole("button", { name: "Return items" }).click();
+    const form = customer.getByRole("dialog");
+    await form.getByRole("combobox", { name: /Quantity to return/ }).first().selectOption("1");
+    await form.locator("#rr").selectOption({ index: 1 });
+    await form.getByLabel("UPI ID for your refund").fill("ananya@okaxis");
+    await form.getByRole("button", { name: "Request return" }).click();
+    await expect(form).toBeHidden();
+    await seller.goto("/seller/returns");
+    const card = seller.locator("section", { hasText: orderNo }).first();
+    await card.getByRole("button", { name: "Approve return" }).click();
+    await expect(partner.getByTestId("offer-popup")).toContainText("Return pickup request", { timeout: 30_000 });
+    await partner.getByTestId("offer-accept").click();
+    await expect(partner.getByTestId("step-at-customer")).toBeVisible({ timeout: 90_000 });
+  });
+
+  await test.step("collect with the customer's code, hand over with the seller's code, seller receives it", async () => {
+    await customer.reload();
+    const returnCode = ((await customer.getByTestId("return-pickup-code").textContent()) ?? "").trim();
+    expect(returnCode).toMatch(/^\d{4}$/);
+    await partner.getByTestId("step-at-customer").click();
+    await partner.getByTestId("customer-pickup-code").fill(returnCode);
+    await partner.getByTestId("step-collected").click();
+    await partner.getByTestId("step-to-store").click();
+    await partner.getByTestId("return-code").fill(pickupCode); // the seller's code, as at the first pickup
+    await partner.getByTestId("handed-to-store").click();
+    await expect(partner.getByTestId("trip-done")).toContainText("Returned to the store");
+    await seller.reload();
+    await seller.getByRole("tab", { name: /In transit/ }).click();
+    const card = seller.locator("section", { hasText: orderNo }).first();
+    await expect(card.getByTestId("seller-return-pickup")).toBeVisible();
+    await card.getByRole("button", { name: "Mark received and refund" }).click();
+    await expect(seller.locator("section", { hasText: orderNo })).toHaveCount(0); // moved to Received
   });
 
   expect(partnerErrors).toEqual([]);

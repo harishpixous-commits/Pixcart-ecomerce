@@ -108,9 +108,17 @@ function Num({ icon: Icon, label, value, warn }: { icon: typeof Radar; label: st
   );
 }
 
+const NEXT_PICKUP: Record<string, string> = {
+  accepted: "Go to the customer",
+  reached: "Collect the return",
+  picked: "Bring it to the store",
+  on_the_way: "Hand it to the store",
+};
+
 function ActiveTrip({ t }: { t: TripView }) {
   const back = t.kind === "return";
-  const toStore = back || ["accepted", "at_store"].includes(t.status);
+  const collecting = t.kind === "pickup";
+  const toStore = collecting ? ["picked", "on_the_way"].includes(t.status) : back || ["accepted", "at_store"].includes(t.status);
   return (
     <Link href={`/delivery/trips/${t.id}`} className="group flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 transition hover:ring-peacock/40" data-testid="active-trip">
       <span className={clsx("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl", toStore ? "bg-marigold-light text-marigold-dark" : "bg-vermilion-light text-vermilion")}>
@@ -122,7 +130,7 @@ function ActiveTrip({ t }: { t: TripView }) {
           <TripPill trip={t} />
           {t.payment === "cod" && t.cod_amount > 0 && !back && <span className="text-xs font-semibold text-[#8A5A00]">Collect {rupees(t.cod_amount)}</span>}
         </span>
-        <span className="block font-semibold text-peacock">{back ? "Bring the package back to the store" : NEXT[t.status] ?? t.status_label}</span>
+        <span className="block font-semibold text-peacock">{collecting ? NEXT_PICKUP[t.status] ?? t.status_label : back ? "Bring the package back to the store" : NEXT[t.status] ?? t.status_label}</span>
         <span className="block truncate text-sm text-ink-soft">{toStore ? t.pickup.name : `${t.drop.name}, ${[t.drop.city, t.drop.pincode].filter(Boolean).join(" ")}`}</span>
       </span>
       <ChevronRight className="h-5 w-5 shrink-0 text-ink-faint transition group-hover:translate-x-0.5" aria-hidden />

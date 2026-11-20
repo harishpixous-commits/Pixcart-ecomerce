@@ -101,7 +101,7 @@ export default function HistoryPage() {
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{t.order_number}</span>
                       <TripPill trip={t} />
-                      {t.kind === "return" && <span className="text-xs font-semibold text-marigold-dark">Return</span>}
+                      {t.kind !== "delivery" && <span className="text-xs font-semibold text-marigold-dark">{t.kind === "pickup" ? "Return pickup" : "Return"}</span>}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-ink-soft">
                       <span>{dateTime(t.delivered_at ?? t.assigned_at)}</span>

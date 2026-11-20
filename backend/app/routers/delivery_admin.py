@@ -28,6 +28,7 @@ from app.models import (
     DeliveryZone,
     Order,
     OrderStatusLog,
+    ReturnRequest,
     SubOrder,
     User,
 )
@@ -125,15 +126,42 @@ async def _package(session, sub: SubOrder) -> dict:
             "tries": [{"status": s, "reason": r, "partner": n} for s, r, n in tries]}
 
 
+async def _pickups_waiting(session) -> list[ReturnRequest]:
+    """Approved returns our partners should collect that have no live request or trip (new, declined, or not collected)."""
+    live = select(DeliveryAssignment.return_id).where(DeliveryAssignment.status.in_(ACTIVE), DeliveryAssignment.return_id.is_not(None))
+    return list((await session.execute(select(ReturnRequest).where(ReturnRequest.status == "approved", ReturnRequest.fleet_requested_at.is_not(None),
+                                                                   ReturnRequest.id.not_in(live)).order_by(ReturnRequest.fleet_requested_at))).scalars())
+
+
+async def _pickup_item(session, ret: ReturnRequest) -> dict:
+    from app.models import OrderItem, ReturnItem
+
+    sub = await session.get(SubOrder, ret.sub_order_id)
+    item = await _package(session, sub)
+    st = (await session.get(Order, sub.order_id)).ship_to or {}
+    zone = await svc.zone_for_pin(session, st.get("pincode", ""))
+    tries = (await session.execute(select(DeliveryAssignment.status, DeliveryAssignment.reject_reason, DeliveryAssignment.fail_reason, DeliveryBoy.name).join(
+        DeliveryBoy, DeliveryBoy.id == DeliveryAssignment.delivery_boy_id).where(DeliveryAssignment.return_id == ret.id).order_by(DeliveryAssignment.created_at))).all()
+    titles = (await session.execute(select(OrderItem.title, ReturnItem.qty).join(ReturnItem, ReturnItem.order_item_id == OrderItem.id)
+                                    .where(ReturnItem.return_id == ret.id))).all()
+    return {**item, "return_id": str(ret.id), "return_number": ret.number, "ready_since": ret.fleet_requested_at.isoformat() if ret.fleet_requested_at else None,
+            "zone": {"id": str(zone.id), "name": zone.name} if zone else None, "payment": "online", "cod_amount": 0,
+            "return_items": [f"{t} × {q}" for t, q in titles],
+            "tries": [{"status": st_, "reason": fr or rr, "partner": n} for st_, rr, fr, n in tries]}
+
+
 @router.get("/queue")
-async def queue(admin: Staff, session: SessionDep, tab: Literal["waiting", "offered", "failed"] = "waiting") -> dict:
+async def queue(admin: Staff, session: SessionDep, tab: Literal["waiting", "offered", "failed", "returns"] = "waiting") -> dict:
     if await svc.sweep(session):
         await session.commit()
     waiting = await _waiting(session)
+    pickups = await _pickups_waiting(session)
     failed = await _failed(session)
     offered = list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.status == "offered").order_by(DeliveryAssignment.expires_at))).scalars())
     if tab == "waiting":
         items = [await _package(session, s) for s in waiting]
+    elif tab == "returns":
+        items = [await _pickup_item(session, r) for r in pickups]
     elif tab == "offered":
         items = []
         for a in offered:
@@ -149,7 +177,80 @@ async def queue(admin: Staff, session: SessionDep, tab: Literal["waiting", "offe
             boy = await session.get(DeliveryBoy, a.delivery_boy_id)
             item["assignment"] = {**svc.assignment_brief(a), "partner": boy.name, "partner_phone": boy.phone}
             items.append(item)
-    return {"items": items, "counts": {"waiting": len(waiting), "offered": len(offered), "failed": len(failed)}}
+    return {"items": items, "counts": {"waiting": len(waiting), "offered": len(offered), "failed": len(failed), "returns": len(pickups)}}
+
+
+async def _approved_pickup(session, return_id: uuid.UUID) -> tuple[ReturnRequest, SubOrder]:
+    ret = (await session.execute(select(ReturnRequest).where(ReturnRequest.id == return_id).with_for_update())).scalar_one_or_none()
+    if ret is None or ret.status != "approved" or not ret.fleet_requested_at:
+        raise Conflict("This return is not waiting for a partner to collect it", "not_waiting")
+    return ret, await session.get(SubOrder, ret.sub_order_id)
+
+
+@router.get("/returns/{return_id}/candidates")
+async def pickup_candidates(return_id: uuid.UUID, admin: Staff, session: SessionDep) -> list[dict]:
+    ret = await session.get(ReturnRequest, return_id)
+    if ret is None:
+        raise NotFound("Return")
+    sub = await session.get(SubOrder, ret.sub_order_id)
+    cfg = await delivery_settings.get(session)
+    zones = {z.id: z.name for z in (await session.execute(select(DeliveryZone))).scalars()}
+    out = []
+    for c in await svc.candidates(session, sub, cfg, online_only=False, ret=ret):
+        b = c["boy"]
+        out.append({"id": str(b.id), "name": b.name, "phone": b.phone, "photo": b.photo, "vehicle": svc.VEHICLE_LABELS.get(b.vehicle_type, ""),
+                    "zone": zones.get(b.zone_id, ""), "online": b.is_online, "distance_km": c["distance_km"], "load": c["load"], "cash": c["cash"],
+                    "location_fresh": c["fresh"], "ok": c["ok"], "reasons": c["reasons"], "rating_avg": round(float(b.rating_avg or 0), 1)})
+    return out
+
+
+class PickupAssignIn(BaseModel):
+    partner_id: uuid.UUID
+    direct: bool = False
+    force: bool = False
+
+
+@router.post("/returns/{return_id}/assign")
+async def assign_pickup(return_id: uuid.UUID, body: PickupAssignIn, admin: Staff, session: SessionDep) -> dict:
+    ret, sub = await _approved_pickup(session, return_id)
+    boy = await _partner(session, body.partner_id)
+    if boy.kyc_status != "approved" or not boy.is_active:
+        raise ApiError("This partner is not approved or is switched off", "partner_unavailable")
+    cfg = await delivery_settings.get(session)
+    match = next((c for c in await svc.candidates(session, sub, cfg, online_only=False, ret=ret) if c["boy"].id == boy.id), None)
+    reasons = [r for r in (match["reasons"] if match else []) if r != "already asked"]
+    if reasons and not body.force:
+        raise Conflict(f"{boy.name}: {', '.join(reasons)}. Assign anyway to override.", "partner_not_free")
+    a = await svc.offer(session, sub, boy, mode="manual", by=admin, direct=body.direct, cfg=cfg, ret=ret)
+    audit(session, admin, "delivery.assign_pickup", "return_request", ret.id, f"{boy.name}{' (direct)' if body.direct else ''}")
+    await session.commit()
+    return svc.assignment_brief(a)
+
+
+@router.post("/returns/{return_id}/auto-assign")
+async def auto_assign_pickup(return_id: uuid.UUID, admin: Staff, session: SessionDep) -> dict:
+    ret, _sub = await _approved_pickup(session, return_id)
+    cfg = {**(await delivery_settings.get(session)), "auto_assign": True}
+    ret.fleet_alerted_at = None
+    a = await svc.auto_assign_pickup(session, ret, cfg=cfg)
+    await session.commit()
+    if a is None:
+        raise Conflict("No free partner can collect it right now", "no_partner")
+    return svc.assignment_brief(a)
+
+
+@router.post("/returns/{return_id}/courier")
+async def pickup_by_courier(return_id: uuid.UUID, admin: Staff, session: SessionDep) -> dict:
+    """The seller arranges the pickup instead (courier): our partners stop trying."""
+    from app.services.notify import notify_seller
+
+    ret, sub = await _approved_pickup(session, return_id)
+    await svc.cancel_return_pickup(session, ret, "Switched to the seller's courier", user=admin)
+    audit(session, admin, "delivery.pickup_to_courier", "return_request", ret.id)
+    await notify_seller(session, sub.seller_id, "seller_return_requested", {"order_number": sub.number, "reason": "arrange the pickup with your courier"},
+                        link="/seller/returns")
+    await session.commit()
+    return {"ok": True}
 
 
 @router.get("/packages/{sub_id}/candidates")
@@ -681,9 +782,9 @@ async def set_active(partner_id: uuid.UUID, body: ActiveIn, admin: Staff, sessio
         cfg = await delivery_settings.get(session)
         for a in list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id,
                                                                                DeliveryAssignment.status.in_(ACTIVE)).with_for_update())).scalars()):
-            if a.status in ("offered", "accepted", "at_store"):
+            if svc.before_pickup(a):
                 await svc.cancel_by_staff(session, a, admin, f"Partner switched off: {body.reason.strip()}")
-                await svc._after_release(session, await session.get(SubOrder, a.sub_order_id), "the partner was switched off", cfg)
+                await svc.release(session, a, "the partner was switched off", cfg)
             else:
                 in_hand += 1
     audit(session, admin, "delivery.partner_on" if body.active else "delivery.partner_off", "delivery_boy", b.id, body.reason[:200])
