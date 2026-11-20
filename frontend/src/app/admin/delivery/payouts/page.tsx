@@ -13,6 +13,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { Kpi, PartnerAvatar } from "@/components/delivery/admin";
 import { PageHeader, Tabs } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, Field, Input, Modal, PageLoader, Pagination, Pill, Select, TextField, useToast } from "@/components/ui";
+import { useCan } from "@/lib/admin";
 import { api, ApiError } from "@/lib/api";
 import { date, dateTime, rupees, toPaise } from "@/lib/format";
 
@@ -53,6 +54,7 @@ function PayoutsPage() {
 
 function PayoutsTab({ status }: { status: "pending" | "paid" }) {
   const toast = useToast();
+  const canPay = useCan("payouts"); // creating and paying payouts needs the Payouts permission
   const [page, setPage] = useState(1);
   const [d, setD] = useState<{ key: string; data: Payouts } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +100,7 @@ function PayoutsTab({ status }: { status: "pending" | "paid" }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Kpi icon={Wallet} label="To pay now" value={rupees(data.pending_total)} hint="Pending payouts" tone={data.pending_total ? "amber" : "gray"} />
           <Kpi icon={IndianRupee} label="Earned, not in a payout yet" value={rupees(data.not_in_payout)} hint="Goes into next week's payout" tone="blue" />
+          {canPay ? (
           <div className="flex flex-col gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
             <p className="text-sm font-medium text-ink-soft">Create payouts now</p>
             <div className="flex flex-wrap items-end gap-2">
@@ -108,6 +111,11 @@ function PayoutsTab({ status }: { status: "pending" | "paid" }) {
             </div>
             <p className="text-xs text-ink-faint">They are also created automatically every Monday morning.</p>
           </div>
+          ) : (
+            <p className="rounded-2xl bg-white p-4 text-sm text-ink-soft shadow-sm ring-1 ring-black/5">
+              Payouts are created every Monday morning. Paying them needs the <b>Payouts</b> permission (Admin → Staff and roles).
+            </p>
+          )}
         </div>
       )}
       <ErrorNote message={error} />
@@ -139,7 +147,7 @@ function PayoutsTab({ status }: { status: "pending" | "paid" }) {
                 </div>
                 <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
                   <span className="font-display text-xl font-bold">{rupees(p.net_amount)}</span>
-                  {p.status === "pending" && <Button size="sm" onClick={() => setPaying(p)} data-testid="mark-paid"><CheckCircle2 className="h-4 w-4" aria-hidden /> Mark paid</Button>}
+                  {p.status === "pending" && canPay && <Button size="sm" onClick={() => setPaying(p)} data-testid="mark-paid"><CheckCircle2 className="h-4 w-4" aria-hidden /> Mark paid</Button>}
                 </div>
               </li>
             ))}
