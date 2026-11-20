@@ -152,7 +152,13 @@ export default function PartnerDetail() {
         <Review partner={p} zones={zones} action="reject" onDone={(x) => { setP({ ...p, ...x }); setModal(null); toast("The partner was told what to fix."); }} />
       </Modal>
       <Modal open={modal === "off"} onClose={() => setModal(null)} title={`Switch off ${p.name}`}>
-        <SwitchOff id={id} onDone={(x) => { setP({ ...p, ...x }); setModal(null); toast("Switched off. They cannot take deliveries."); }} />
+        <SwitchOff id={id} onDone={(x) => {
+          setP({ ...p, ...x });
+          setModal(null);
+          toast(x.trips_in_hand
+            ? `Switched off. Their requests went to other partners; ${x.trips_in_hand} package${x.trips_in_hand === 1 ? " is" : "s are"} still with them to deliver or bring back.`
+            : "Switched off. Their requests went to other partners.");
+        }} />
       </Modal>
       <Modal open={modal === "edit"} onClose={() => setModal(null)} title="Edit details" wide>
         <EditDetails partner={p} zones={zones} onDone={(x) => { setP({ ...p, ...x }); setModal(null); toast("Saved"); }} />
@@ -243,7 +249,7 @@ function Review({ partner, zones, action, onDone }: { partner: Partner; zones: Z
   );
 }
 
-function SwitchOff({ id, onDone }: { id: string; onDone: (p: Partner) => void }) {
+function SwitchOff({ id, onDone }: { id: string; onDone: (p: Partner & { trips_in_hand?: number }) => void }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,11 +258,11 @@ function SwitchOff({ id, onDone }: { id: string; onDone: (p: Partner) => void })
       e.preventDefault();
       setBusy(true);
       setError(null);
-      try { onDone(await api<Partner>(`/api/admin/delivery/partners/${id}/active`, { method: "POST", body: { active: false, reason } })); }
+      try { onDone(await api<Partner & { trips_in_hand?: number }>(`/api/admin/delivery/partners/${id}/active`, { method: "POST", body: { active: false, reason } })); }
       catch (x) { setError(x instanceof ApiError ? x.message : "Could not switch off"); } finally { setBusy(false); }
     }}>
       <ErrorNote message={error} />
-      <p className="text-sm text-ink-soft">They go offline at once and cannot take deliveries until you switch them on again. They see your reason.</p>
+      <p className="text-sm text-ink-soft">They go offline at once and get no new requests until you switch them on again; requests and trips not yet picked up go to other partners. Packages already with them can still be delivered or brought back. They see your reason.</p>
       <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required minLength={5} maxLength={300} aria-label="Reason" placeholder="e.g. Documents expired" />
       <Button type="submit" variant="danger" loading={busy} disabled={reason.trim().length < 5}>Switch off</Button>
     </form>

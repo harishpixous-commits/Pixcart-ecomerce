@@ -134,6 +134,8 @@ export interface PartnerFeed {
   offers: TripView[];
   active: TripView[];
   is_online: boolean;
+  /** false when the account is switched off or deliveries are paused: only trips in hand */
+  taking_requests?: boolean;
   today: { trips: number; earned: number };
   cash_in_hand: number;
   cash_limit: number;

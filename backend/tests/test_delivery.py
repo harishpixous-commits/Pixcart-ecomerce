@@ -537,3 +537,39 @@ async def test_partner_app_upload_publishes_the_download_link(client, admin):
     assert opts["android_apk_url"] == link and opts["app_version"] == "1.2.0"  # partners see it on /delivery/download
     actions = {a["action"] for a in (await admin.get("/api/admin/audit")).json()["items"]}
     assert "delivery.app_upload" in actions
+
+
+async def test_switching_a_partner_off_mid_trip_keeps_packages_in_hand(client, admin, categories):
+    zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
+    await admin.put("/api/admin/delivery/settings", {"auto_assign": False, "fleet_mode": "zones"})
+    tn, _ka, shirt, _ = await setup(client, admin, categories)
+    rider = await ready_partner(client, admin, "9600000961", "Off Rider", zone_id, 13.083, 80.271)
+    subs = []
+    for phone in ("9600000963", "9600000964"):
+        _, o = await cod_order(client, shirt, phone)
+        sid = o["sub_orders"][0]["id"]
+        await tn.post(f"/api/seller/orders/{sid}/confirm")
+        await tn.post(f"/api/seller/orders/{sid}/ready-for-pickup")
+        subs.append(sid)
+    # one package picked up by the partner, another only offered to them
+    picked = (await admin.post("/api/admin/delivery/assign", {"sub_order_id": subs[0], "partner_id": rider.partner_id, "direct": True})).json()
+    code = (await tn.get(f"/api/seller/orders/{subs[0]}")).json()["fleet"]["pickup_code"]
+    assert (await rider.post(f"/api/delivery/trips/{picked['id']}/status", {"to": "picked", "code": code})).status_code == 200
+    offered = (await admin.post("/api/admin/delivery/assign", {"sub_order_id": subs[1], "partner_id": rider.partner_id})).json()
+    assert offered["status"] == "offered"
+
+    off = await admin.post(f"/api/admin/delivery/partners/{rider.partner_id}/active", {"active": False, "reason": "Documents expired"})
+    assert off.status_code == 200, off.text
+    assert off.json()["trips_in_hand"] == 1 and off.json()["is_online"] is False
+    # the request went back to the queue (auto-assign is off) and the partner gets no new work
+    waiting = [p["sub_order_id"] for p in (await admin.get("/api/admin/delivery/queue")).json()["items"]]
+    assert subs[1] in waiting and subs[0] not in waiting
+    feed = (await rider.get("/api/delivery/feed")).json()
+    assert feed["offers"] == [] and feed["taking_requests"] is False and [t["id"] for t in feed["active"]] == [picked["id"]]
+    assert (await rider.post("/api/delivery/me/online", {"online": True})).status_code == 403
+    assert (await rider.post(f"/api/delivery/offers/{offered['id']}/accept")).status_code in (403, 409)
+    # but the package in hand can still be delivered (or brought back), and its location still shared
+    assert (await rider.post("/api/delivery/me/location", {"lat": 13.07, "lng": 80.26})).status_code == 200
+    assert (await rider.post(f"/api/delivery/trips/{picked['id']}/status", {"to": "on_the_way"})).status_code == 200
+    failed = await rider.post(f"/api/delivery/trips/{picked['id']}/fail", {"reason": "not_available"})
+    assert failed.status_code == 200 and failed.json()["status"] == "failed"

@@ -104,7 +104,7 @@ function Gate({ children }: { children: React.ReactNode }) {
   if (status === "loading") return <FullLoader label="Opening your partner app" />;
   if (status === "error") return <ErrorScreen />;
   if (!approved) return <SimpleFrame>{allowedEarly ? children : <FullLoader />}</SimpleFrame>;
-  if (partner?.is_active === false) return <SimpleFrame><Inactive /></SimpleFrame>;
+  // a switched-off partner still gets the app, to finish (or bring back) packages already in hand; no new requests
   return <DeliveryShell>{children}</DeliveryShell>;
 }
 
@@ -120,13 +120,17 @@ function ErrorScreen() {
   );
 }
 
-function Inactive() {
+/** Shown on the home screen when the account is switched off, or deliveries are paused for everyone. */
+export function NoRequestsNotice({ inactive, carrying }: { inactive: boolean; carrying: boolean }) {
   return (
-    <div className="mx-auto mt-10 max-w-sm rounded-2xl bg-white p-6 text-center shadow-sm">
-      <p className="font-display text-xl font-semibold">Your account is switched off</p>
-      <p className="mt-1 text-ink-soft">You cannot take deliveries right now. Contact the delivery team for help.</p>
-      <Link href="/delivery/help" className="mt-4 inline-block rounded-full bg-peacock px-5 py-2 font-semibold text-white">Get help</Link>
-    </div>
+    <section className="rounded-3xl bg-vermilion-light p-5 text-center ring-1 ring-vermilion/20" role="status" data-testid="no-requests">
+      <p className="font-display text-xl font-semibold text-vermilion">{inactive ? "Your account is switched off" : "Deliveries are paused"}</p>
+      <p className="mt-1 text-ink-soft">
+        {inactive ? "You will not get new delivery requests." : "The delivery team has paused new requests for now."}
+        {carrying ? " Finish the packages you have: deliver them, or bring them back to the store." : ""}
+      </p>
+      {inactive && <Link href="/delivery/help" className="mt-3 inline-block rounded-full bg-white px-5 py-2 font-semibold text-vermilion ring-1 ring-vermilion/30">Contact the delivery team</Link>}
+    </section>
   );
 }
 
@@ -267,7 +271,7 @@ export function OnlineSwitch({ large }: { large?: boolean }) {
   const { refresh } = useFeed();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  if (!partner) return null;
+  if (!partner || partner.is_active === false) return null; // switched off: no going online
   const on = partner.is_online;
   async function flip() {
     if (!partner) return;

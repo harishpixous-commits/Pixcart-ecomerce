@@ -673,14 +673,25 @@ async def set_active(partner_id: uuid.UUID, body: ActiveIn, admin: Staff, sessio
     if not body.active and len(body.reason.strip()) < 5:
         raise ApiError("Give a reason (at least 5 characters)", "reason_required", fields={"reason": "Required"})
     b.is_active = body.active
+    in_hand = 0
     if not body.active:
         b.is_online = False
+        # requests and trips not yet picked up go to other partners; packages already in hand stay with the partner,
+        # who can still deliver them or bring them back to the store
+        cfg = await delivery_settings.get(session)
+        for a in list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id,
+                                                                               DeliveryAssignment.status.in_(ACTIVE)).with_for_update())).scalars()):
+            if a.status in ("offered", "accepted", "at_store"):
+                await svc.cancel_by_staff(session, a, admin, f"Partner switched off: {body.reason.strip()}")
+                await svc._after_release(session, await session.get(SubOrder, a.sub_order_id), "the partner was switched off", cfg)
+            else:
+                in_hand += 1
     audit(session, admin, "delivery.partner_on" if body.active else "delivery.partner_off", "delivery_boy", b.id, body.reason[:200])
     user = await session.get(User, b.user_id)
     await notify(session, "delivery_kyc_update", user, {"status": "switched on" if body.active else "switched off",
                                                          "message": "You can take deliveries again." if body.active else body.reason.strip()}, link="/delivery")
     await session.commit()
-    return await _out(session, b)
+    return {**(await _out(session, b)), "trips_in_hand": in_hand}
 
 
 # ============================================================================ zones

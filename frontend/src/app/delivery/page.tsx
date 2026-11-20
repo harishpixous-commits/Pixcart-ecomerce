@@ -8,7 +8,7 @@
 import clsx from "clsx";
 import { AlertTriangle, Banknote, ChevronRight, IndianRupee, LocateFixed, MapPin, MapPinOff, Navigation, Package, Radar, Smartphone, Store, Volume2 } from "lucide-react";
 import Link from "next/link";
-import { OnlineSwitch, usePartner } from "@/components/delivery/app";
+import { NoRequestsNotice, OnlineSwitch, usePartner } from "@/components/delivery/app";
 import { useFeed } from "@/components/delivery/feed";
 import { TripPill } from "@/components/delivery/trip";
 import type { TripView } from "@/lib/delivery-types";
@@ -36,13 +36,15 @@ export default function PartnerHome() {
   const cash = feed?.cash_in_hand ?? 0;
   const limit = feed?.cash_limit ?? 0;
   const loc = location.state;
+  const inactive = partner.is_active === false;
+  const paused = inactive || feed?.taking_requests === false;
   return (
     <div className="flex flex-col gap-4" data-testid="partner-home">
       <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
         <p className="text-sm text-ink-soft" suppressHydrationWarning>{greeting()},</p>
         <h1 className="text-2xl font-bold">{partner.name.split(" ")[0]}</h1>
         <p className="mb-4 text-sm text-ink-soft">{partner.zone ? `${partner.zone.name}, ${partner.zone.city}` : "Delivery area not set yet"}</p>
-        <OnlineSwitch large />
+        {!inactive && <OnlineSwitch large />}
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <Num icon={Package} label="Delivered today" value={String(feed?.today.trips ?? 0)} />
           <Num icon={IndianRupee} label="Earned today" value={rupees(feed?.today.earned ?? 0)} />
@@ -64,7 +66,9 @@ export default function PartnerHome() {
         </section>
       )}
 
-      {online ? (
+      {paused && <NoRequestsNotice inactive={inactive} carrying={active.length > 0} />}
+
+      {paused ? null : online ? (
         active.length === 0 && (
           <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-peacock to-peacock-dark p-6 text-center text-white shadow-sm" data-testid="waiting">
             <div className="relative mx-auto flex h-28 w-28 items-center justify-center">

@@ -59,6 +59,17 @@ async def approved_partner(b: Partner, session: SessionDep) -> DeliveryBoy:
 ApprovedPartner = Annotated[DeliveryBoy, Depends(approved_partner)]
 
 
+async def trip_partner(b: Partner) -> DeliveryBoy:
+    """For finishing work already in hand: an approved partner may complete (or return) packages they carry even
+    when their account was switched off or deliveries are paused; only new requests stop."""
+    if b.kyc_status != "approved":
+        raise Forbidden("Your account is not approved yet")
+    return b
+
+
+TripPartner = Annotated[DeliveryBoy, Depends(trip_partner)]
+
+
 # ============================================================================ registration and profile
 
 
@@ -273,7 +284,7 @@ class LocationIn(BaseModel):
 
 
 @router.post("/me/location")
-async def set_location(body: LocationIn, b: ApprovedPartner, session: SessionDep) -> dict:
+async def set_location(body: LocationIn, b: TripPartner, session: SessionDep) -> dict:
     await rate_limit(session, f"dloc:{b.id}", limit=40, window_seconds=60)
     b.lat, b.lng, b.location_at = round(body.lat, 6), round(body.lng, 6), utcnow()
     await session.commit()
@@ -294,25 +305,26 @@ async def _own_trip(session, assignment_id: uuid.UUID, b: DeliveryBoy, *, lock: 
 
 
 @router.get("/feed")
-async def feed(b: ApprovedPartner, session: SessionDep) -> dict:
+async def feed(b: TripPartner, session: SessionDep) -> dict:
     """What the app polls every few seconds: new requests (with seconds left), trips in progress and today's numbers."""
     if await svc.sweep(session):
         await session.commit()
     now = utcnow()
+    cfg = await delivery_settings.get(session)
+    taking = b.is_active and cfg["enabled"]  # switched off or paused: only trips already in hand, no new requests
     offers = list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status == "offered",
-                                                                          DeliveryAssignment.expires_at > now).order_by(DeliveryAssignment.assigned_at))).scalars())
+                                                                          DeliveryAssignment.expires_at > now).order_by(DeliveryAssignment.assigned_at))).scalars()) if taking else []
     active = list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status.in_(ON_TRIP))
                                          .order_by(DeliveryAssignment.accepted_at))).scalars())
     day = svc.ist_day_start(datetime.now(svc.IST).date())
     trips, earned = (await session.execute(select(func.count(), func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0)).where(
         DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status == "delivered", DeliveryAssignment.delivered_at >= day))).one()
-    cfg = await delivery_settings.get(session)
     out_offers = []
     for a in offers:
         v = await svc.trip_view(session, a)
         v["seconds_left"] = max(0, int((a.expires_at - now).total_seconds()))
         out_offers.append(v)
-    return {"offers": out_offers, "active": [await svc.trip_view(session, a) for a in active], "is_online": b.is_online,
+    return {"offers": out_offers, "active": [await svc.trip_view(session, a) for a in active], "is_online": b.is_online and taking, "taking_requests": taking,
             "today": {"trips": int(trips), "earned": int(earned)}, "cash_in_hand": await svc.cash_in_hand(session, b.id), "cash_limit": cfg["cod_limit_paise"],
             "offer_seconds": cfg["offer_seconds"], "server_time": now.isoformat()}
 
@@ -359,7 +371,7 @@ class StepIn(BaseModel):
 
 
 @router.post("/trips/{assignment_id}/status")
-async def trip_step(assignment_id: uuid.UUID, body: StepIn, b: ApprovedPartner, session: SessionDep) -> dict:
+async def trip_step(assignment_id: uuid.UUID, body: StepIn, b: TripPartner, session: SessionDep) -> dict:
     a = await _own_trip(session, assignment_id, b)
     await svc.advance(session, a, b, body.to, code=body.code, lat=body.lat, lng=body.lng)
     await session.commit()
@@ -367,7 +379,7 @@ async def trip_step(assignment_id: uuid.UUID, body: StepIn, b: ApprovedPartner, 
 
 
 @router.post("/trips/{assignment_id}/deliver")
-async def trip_deliver(assignment_id: uuid.UUID, b: ApprovedPartner, session: SessionDep, otp: str = Form(default="", max_length=8),
+async def trip_deliver(assignment_id: uuid.UUID, b: TripPartner, session: SessionDep, otp: str = Form(default="", max_length=8),
                        cod_collected: int = Form(default=0, ge=0, le=100_000_000), cod_method: str = Form(default="", max_length=6),
                        lat: float | None = Form(default=None), lng: float | None = Form(default=None), photo: UploadFile | None = File(default=None)) -> dict:
     a = await _own_trip(session, assignment_id, b)
@@ -387,7 +399,7 @@ class FailIn(BaseModel):
 
 
 @router.post("/trips/{assignment_id}/fail")
-async def trip_fail(assignment_id: uuid.UUID, body: FailIn, b: ApprovedPartner, session: SessionDep) -> dict:
+async def trip_fail(assignment_id: uuid.UUID, body: FailIn, b: TripPartner, session: SessionDep) -> dict:
     a = await _own_trip(session, assignment_id, b)
     await svc.fail(session, a, b, body.reason, body.note, body.lat, body.lng)
     await session.commit()
@@ -401,7 +413,7 @@ class ReturnedIn(BaseModel):
 
 
 @router.post("/trips/{assignment_id}/returned")
-async def trip_returned(assignment_id: uuid.UUID, body: ReturnedIn, b: ApprovedPartner, session: SessionDep) -> dict:
+async def trip_returned(assignment_id: uuid.UUID, body: ReturnedIn, b: TripPartner, session: SessionDep) -> dict:
     a = await _own_trip(session, assignment_id, b)
     await svc.returned(session, a, b, code=body.code, lat=body.lat, lng=body.lng)
     await session.commit()
