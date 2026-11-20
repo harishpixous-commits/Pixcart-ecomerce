@@ -151,6 +151,18 @@ def fee_for(cfg: dict, distance_km: float | None) -> int:
     return cfg["fee_fixed_paise"]
 
 
+async def weather_bonus(session: AsyncSession, cfg: dict) -> int:
+    """The bonus a partner earns on a trip finished now: the bad weather bonus while that fee is being charged."""
+    if not cfg["weather_bonus_paise"]:
+        return 0
+    from app.services import fees as fees_svc
+
+    return cfg["weather_bonus_paise"] if fees_svc.surge_active(await fees_svc.get(session)) else 0
+
+
+EARNED = DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise + DeliveryAssignment.bonus_paise  # what a trip pays the partner
+
+
 async def cash_by_partner(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
     """Cash on delivery each partner still holds: collected minus deposited."""
     if not ids:
@@ -216,7 +228,7 @@ def _area(st: dict) -> str:
 async def _offer_vars(session: AsyncSession, a: DeliveryAssignment, sub: SubOrder, order: Order, cfg: dict) -> dict:
     place = await pickup_place(session, sub)
     return {"order_number": sub.number, "store": place["name"], "pickup_area": place["city"] or place["pincode"], "drop_area": _area(order.ship_to),
-            "fee": f"Earn {rupees(fee_for(cfg, None) + (order.tip_paise if a.kind == 'delivery' and await is_fee_carrier(session, sub) else 0))}",
+            "fee": f"Earn {rupees(fee_for(cfg, None) + (order.tip_paise if a.kind == 'delivery' and await is_fee_carrier(session, sub) else 0) + await weather_bonus(session, cfg))}",
             "cod": f", collect {rupees(a.cod_amount)}" if a.cod_amount else "", "seconds": cfg["offer_seconds"]}
 
 
@@ -701,6 +713,7 @@ async def deliver(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBoy
         a.distance_km = round(haversine_km(float(a.picked_lat), float(a.picked_lng), lat, lng) * ROAD_FACTOR, 2)
     a.fee_paise = fee_for(cfg, float(a.distance_km) if a.distance_km is not None else None)
     a.tip_paise = order.tip_paise if await is_fee_carrier(session, sub) else 0
+    a.bonus_paise = await weather_bonus(session, cfg)
     await transition(session, sub, "delivered", "delivery", f"Delivered by {boy.name}")
     log_status(session, order_id=a.order_id, sub_order_id=sub.id, assignment_id=a.id, status="delivered", actor="delivery", user_id=boy.user_id, lat=lat, lng=lng)
     item = (await session.execute(select(OrderItem.title).where(OrderItem.sub_order_id == sub.id).limit(1))).scalar_one_or_none() or "your package"
@@ -726,6 +739,7 @@ async def staff_deliver(session: AsyncSession, a: DeliveryAssignment, user: User
     a.cod_collected, a.cod_method = (due, "cash") if due else (0, "")
     a.fee_paise = fee_for(cfg, float(a.distance_km) if a.distance_km is not None else None)
     a.tip_paise = order.tip_paise if await is_fee_carrier(session, sub) else 0
+    a.bonus_paise = await weather_bonus(session, cfg)
     await transition(session, sub, "delivered", "admin", f"Delivered by {boy.name if boy else 'the partner'} (confirmed by staff)")
     log_status(session, order_id=a.order_id, sub_order_id=sub.id, assignment_id=a.id, status="delivered", actor="admin", user_id=user.id,
                note="Marked delivered by staff" + (f"; {rupees(due)} cash counted as collected by the partner" if due else ""))
@@ -826,6 +840,7 @@ async def returned(session: AsyncSession, a: DeliveryAssignment, boy: DeliveryBo
     now = utcnow()
     a.status, a.delivered_at, a.ended_at, a.status_at, a.drop_lat, a.drop_lng = "delivered", now, now, now, lat, lng
     a.fee_paise = fee_for(cfg, None)
+    a.bonus_paise = await weather_bonus(session, cfg)
     last_fail = (await session.execute(select(DeliveryAssignment.fail_reason).where(DeliveryAssignment.sub_order_id == sub.id, DeliveryAssignment.status == "failed")
                                        .order_by(DeliveryAssignment.created_at.desc()).limit(1))).scalar_one_or_none() or "Order cancelled"
     log_status(session, order_id=a.order_id, sub_order_id=sub.id, assignment_id=a.id, status="returned", actor="delivery", user_id=boy.user_id, lat=lat, lng=lng)
@@ -855,6 +870,7 @@ async def _pickup_handed_over(session: AsyncSession, a: DeliveryAssignment, boy:
     if a.picked_lat is not None and lat is not None:
         a.distance_km = round(haversine_km(float(a.picked_lat), float(a.picked_lng), lat, lng) * ROAD_FACTOR, 2)
     a.fee_paise = fee_for(cfg, float(a.distance_km) if a.distance_km is not None else None)
+    a.bonus_paise = await weather_bonus(session, cfg)
     ret = await session.get(ReturnRequest, a.return_id) if a.return_id else None
     log_status(session, order_id=a.order_id, sub_order_id=sub.id, assignment_id=a.id, status="return_delivered", actor="delivery", user_id=boy.user_id,
                lat=lat, lng=lng, note=f"Return {ret.number if ret else ''} handed to the store")
@@ -873,6 +889,7 @@ async def close_pickup_on_receive(session: AsyncSession, ret: ReturnRequest, use
         now = utcnow()
         a.status, a.delivered_at, a.ended_at, a.status_at = "delivered", now, now, now
         a.fee_paise = fee_for(cfg, None)
+        a.bonus_paise = await weather_bonus(session, cfg)
         log_status(session, order_id=a.order_id, sub_order_id=a.sub_order_id, assignment_id=a.id, status="return_delivered", actor="seller",
                    user_id=user.id if user else None, note="The seller received the return")
     else:
@@ -988,23 +1005,23 @@ async def earnings(session: AsyncSession, boy: DeliveryBoy) -> dict:
 
     async def period(since: datetime | None) -> dict:
         stmt = select(func.count(), func.coalesce(func.sum(DeliveryAssignment.fee_paise), 0), func.coalesce(func.sum(DeliveryAssignment.tip_paise), 0),
-                      func.coalesce(func.sum(DeliveryAssignment.cod_collected), 0)).where(
+                      func.coalesce(func.sum(DeliveryAssignment.bonus_paise), 0), func.coalesce(func.sum(DeliveryAssignment.cod_collected), 0)).where(
             DeliveryAssignment.delivery_boy_id == boy.id, DeliveryAssignment.status == "delivered")
         if since:
             stmt = stmt.where(DeliveryAssignment.delivered_at >= since)
-        n, fee, tip, cod = (await session.execute(stmt)).one()
-        return {"trips": int(n), "fees": int(fee), "tips": int(tip), "earned": int(fee) + int(tip), "cod_collected": int(cod)}
+        n, fee, tip, bonus, cod = (await session.execute(stmt)).one()
+        return {"trips": int(n), "fees": int(fee), "tips": int(tip), "bonuses": int(bonus), "earned": int(fee) + int(tip) + int(bonus), "cod_collected": int(cod)}
 
     days = []
     for k in range(6, -1, -1):
         d = today - timedelta(days=k)
-        n, amount = (await session.execute(select(func.count(), func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0)).where(
+        n, amount = (await session.execute(select(func.count(), func.coalesce(func.sum(EARNED), 0)).where(
             DeliveryAssignment.delivery_boy_id == boy.id, DeliveryAssignment.status == "delivered",
             DeliveryAssignment.delivered_at >= ist_day_start(d), DeliveryAssignment.delivered_at < ist_day_start(d + timedelta(days=1))))).one()
         days.append({"date": d.isoformat(), "trips": int(n), "earned": int(amount)})
     payouts = list((await session.execute(select(DeliveryPayout).where(DeliveryPayout.delivery_boy_id == boy.id).order_by(DeliveryPayout.period_start.desc()).limit(12))).scalars())
     deposits = list((await session.execute(select(DeliveryCashDeposit).where(DeliveryCashDeposit.delivery_boy_id == boy.id).order_by(DeliveryCashDeposit.created_at.desc()).limit(10))).scalars())
-    unpaid = (await session.execute(select(func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0)).where(
+    unpaid = (await session.execute(select(func.coalesce(func.sum(EARNED), 0)).where(
         DeliveryAssignment.delivery_boy_id == boy.id, DeliveryAssignment.status == "delivered", DeliveryAssignment.payout_id.is_(None)))).scalar_one()
     cfg = await delivery_settings.get(session)
     return {
@@ -1024,7 +1041,7 @@ async def generate_payouts(session: AsyncSession, week_start: date) -> int:
     cfg = await delivery_settings.get(session)
     start, end = week_of(week_start)
     until = ist_day_start(end + timedelta(days=1))
-    rows = (await session.execute(select(DeliveryAssignment.delivery_boy_id, func.count(), func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0))
+    rows = (await session.execute(select(DeliveryAssignment.delivery_boy_id, func.count(), func.coalesce(func.sum(EARNED), 0))
                                   .where(DeliveryAssignment.status == "delivered", DeliveryAssignment.payout_id.is_(None), DeliveryAssignment.delivered_at < until)
                                   .group_by(DeliveryAssignment.delivery_boy_id))).all()
     made = 0
@@ -1067,7 +1084,7 @@ def assignment_brief(a: DeliveryAssignment) -> dict:
             "picked_at": a.picked_at.isoformat() if a.picked_at else None, "on_the_way_at": a.on_the_way_at.isoformat() if a.on_the_way_at else None,
             "reached_at": a.reached_at.isoformat() if a.reached_at else None, "delivered_at": a.delivered_at.isoformat() if a.delivered_at else None,
             "status_at": a.status_at.isoformat(), "reject_reason": a.reject_reason, "fail_reason": a.fail_reason, "cod_amount": a.cod_amount,
-            "cod_collected": a.cod_collected, "cod_method": a.cod_method, "fee": a.fee_paise, "tip": a.tip_paise,
+            "cod_collected": a.cod_collected, "cod_method": a.cod_method, "fee": a.fee_paise, "tip": a.tip_paise, "bonus": a.bonus_paise,
             "distance_km": float(a.distance_km) if a.distance_km is not None else None, "rating": a.rating, "rating_comment": a.rating_comment,
             "has_proof": bool(a.proof_photo), "return_id": str(a.return_id) if a.return_id else None}
 
@@ -1084,6 +1101,7 @@ async def trip_view(session: AsyncSession, a: DeliveryAssignment, *, for_partner
     # Partners see the customer's name, phone, address and instructions only while the trip is theirs (from accepting
     # to handing over); before that and after it ends they see the area only. Staff always see everything.
     show_customer = a.status in ON_TRIP or not for_partner
+    bonus_now = await weather_bonus(session, cfg) if a.status in ACTIVE else 0
     out = {
         **assignment_brief(a), "order_number": sub.number, "order_id": str(order.id), "sub_order_id": str(sub.id), "payment": order.payment_method,
         "pickup": {"name": place["name"], "address": place["address"], "pincode": place["pincode"], "city": place["city"], "phone": place["phone"],
@@ -1093,7 +1111,8 @@ async def trip_view(session: AsyncSession, a: DeliveryAssignment, *, for_partner
                  "city": st.get("city", ""), "pincode": st.get("pincode", ""), "lat": st.get("lat"), "lng": st.get("lng"),
                  "instructions": st.get("instructions", "") if show_customer else "", "no_bag": bool(st.get("no_bag"))},
         "items": [{"title": t, "variant": v, "qty": q, "image": img} for t, v, q, img in items],
-        "fee_estimate": fee_for(cfg, None) + (order.tip_paise if a.kind == "delivery" and await is_fee_carrier(session, sub) else 0),
+        "fee_estimate": fee_for(cfg, None) + (order.tip_paise if a.kind == "delivery" and await is_fee_carrier(session, sub) else 0) + bonus_now,
+        "bonus_now": bonus_now,  # bad weather bonus if the trip finished now (the final one is fixed when it ends)
         "needs": {"pickup_code": cfg["pickup_code_required"], "otp": cfg["delivery_otp_required"], "photo": cfg["proof_photo_required"]},
         "partner": {"id": str(boy.id), "name": boy.name, "phone": boy.phone, "photo": boy.photo, "vehicle": VEHICLE_LABELS.get(boy.vehicle_type, ""),
                     "vehicle_no": boy.vehicle_no, "lat": float(boy.lat) if boy.lat is not None else None, "lng": float(boy.lng) if boy.lng is not None else None,

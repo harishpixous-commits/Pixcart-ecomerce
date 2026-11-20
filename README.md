@@ -24,8 +24,10 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
   KYC, online switch, request pop-up with countdown, navigation, pickup code, customer OTP, cash collection, photo
   proof, earnings and weekly payouts), zones, auto-assign to the nearest free partner or assignment by staff, live map of
   partners online, customer tracking with the partner on a map, ratings and complaints, reports. See `docs/DELIVERY.md`.
-- **Checkout fees and the bill**: delivery, cash on delivery, handling, small cart and platform fees, tip for the
-  delivery partner, GSTIN for business purchases and "no bag", each switched on and priced in Admin → Checkout and fees.
+- **Checkout fees and the bill**: delivery, cash on delivery, handling, small cart and platform fees, a bad weather fee
+  (switched on for a few hours or until switched off; partners can earn a bonus per trip meanwhile), a late night fee
+  (a time window, India time), tip for the delivery partner, GSTIN for business purchases and "no bag", each switched on
+  and priced in Admin → Checkout and fees, with a live preview of the bill.
 - **Push notifications** (Firebase) to phones and browsers for every notification, and installable apps (home screen).
 - **Shop assistant** (Help button on the storefront): customers chat or talk (English, Tanglish, Tamil, Hindi) to track
   orders, cancel before shipping (with a confirm button), check returns and refunds, find products, and raise a pre-filled
@@ -36,7 +38,7 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
 - **Admin AI assistant** (Ctrl+J): chat and hands-free voice in any language, exact live figures as tables and charts,
   file upload and comparison with live data, downloads of every answer (PDF, Excel, CSV), confirm-before-run changes,
   memory, any LLM provider with several keys and fallbacks, and a fast decision layer (built-in rules or Laya).
-- **Integrations hub**: Razorpay, RazorpayX, MSG91, email, WhatsApp, Shiprocket, AI and Sentry keys entered in the admin
+- **Integrations hub**: Razorpay, RazorpayX, MSG91, email, WhatsApp, Firebase (push), Shiprocket, AI and Sentry keys entered in the admin
   panel, encrypted, with Test connection; **Go-live checklist**; **roles and permissions** editor.
 - **Exports**: every report as CSV, Excel or PDF with filters and column choice; several at once as one ZIP.
 - **Razorpay simulator** (`tools/razorpay-sim`) to run online payments, webhooks and refunds end to end locally.

@@ -165,6 +165,7 @@ export default function AdminTripPage() {
               {t.cod_collected > 0 && (<><dt className="text-ink-soft">Collected</dt><dd className="font-semibold text-leaf">{rupees(t.cod_collected)} {t.cod_method === "upi" ? "by UPI" : "in cash"}</dd></>)}
               <dt className="text-ink-soft">Partner fee</dt><dd className="font-semibold">{t.status === "delivered" ? rupees(t.fee) : `about ${rupees(t.fee_estimate)}`}</dd>
               {t.tip > 0 && (<><dt className="text-ink-soft">Customer tip</dt><dd className="font-semibold">{rupees(t.tip)}</dd></>)}
+              {(t.bonus ?? 0) > 0 && (<><dt className="text-ink-soft">Bad weather bonus</dt><dd className="font-semibold">{rupees(t.bonus ?? 0)}</dd></>)}
               {t.distance_km !== null && (<><dt className="text-ink-soft">Distance</dt><dd className="font-semibold">{t.distance_km} km</dd></>)}
             </dl>
           </section>

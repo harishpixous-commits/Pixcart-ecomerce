@@ -8,12 +8,12 @@
  */
 
 import clsx from "clsx";
-import { Banknote, Building2, CircleCheck, HandCoins, ListChecks, Loader2, PackageCheck, Percent, Plus, Receipt, ShoppingBasket, Truck, X } from "lucide-react";
+import { Banknote, Building2, CircleCheck, CircleSlash, Clock3, CloudRain, HandCoins, ListChecks, Loader2, MoonStar, PackageCheck, Percent, Plus, Receipt, ShoppingBasket, Truck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BillDetails } from "@/components/bill";
 import { PageHeader } from "@/components/portal-shell";
-import { Button, ErrorNote, Field, Input, PageLoader, Pill, Textarea, TextField, useToast } from "@/components/ui";
+import { Button, ErrorNote, Field, Input, PageLoader, Pill, Select, Textarea, TextField, useToast } from "@/components/ui";
 import { useCan } from "@/lib/admin";
 import { api, ApiError, latestOnly } from "@/lib/api";
 import { paiseToInput, rupees, toPaise } from "@/lib/format";
@@ -27,28 +27,43 @@ type Fees = {
   handling_enabled: boolean; handling_paise: number; handling_list_paise: number; handling_free_above_paise: number; handling_label: string; handling_info: string;
   small_cart_enabled: boolean; small_cart_paise: number; small_cart_below_paise: number; small_cart_label: string; small_cart_info: string;
   platform_enabled: boolean; platform_paise: number; platform_label: string; platform_info: string;
+  surge_enabled: boolean; surge_paise: number; surge_until: string; surge_label: string; surge_info: string;
+  late_night_enabled: boolean; late_night_paise: number; late_night_from: string; late_night_to: string; late_night_label: string; late_night_info: string;
   fees_gst_bps: number; fees_refund_on_cancel: boolean;
   tip_enabled: boolean; tip_presets: number[]; tip_max_paise: number;
   gstin_enabled: boolean; instructions_enabled: boolean; no_bag_enabled: boolean; cancellation_note: string;
 };
-type Settings = { marketplace: Marketplace; fees: Fees };
+/** Whether the time-bound fees are being charged at this moment (worked out by the server's clock). */
+type FeeStatus = { surge_active: boolean; surge_until: string | null; surge_ended: boolean; late_night_active: boolean; night_window_now: boolean };
+type Settings = { marketplace: Marketplace; fees: Fees; status?: FeeStatus };
+type Body = { marketplace: Marketplace; fees: Partial<Fees> & { surge_hours?: number } };
 type Preview = { items_total: number; shipping: number; cod_fee: number; fees: FeeLine[]; total: number; hints: string[] };
 
 const MARKET_MONEY = ["shipping_fee_paise", "free_shipping_threshold_paise", "cod_fee_paise", "cod_max_order_paise"] as const;
-const FEE_MONEY = ["handling_paise", "handling_list_paise", "handling_free_above_paise", "small_cart_paise", "small_cart_below_paise", "platform_paise", "tip_max_paise"] as const;
+const FEE_MONEY = ["handling_paise", "handling_list_paise", "handling_free_above_paise", "small_cart_paise", "small_cart_below_paise", "platform_paise",
+  "surge_paise", "late_night_paise", "tip_max_paise"] as const;
 const MONEY = [...MARKET_MONEY, ...FEE_MONEY];
-const FEE_FLAGS = ["handling_enabled", "small_cart_enabled", "platform_enabled", "fees_refund_on_cancel", "tip_enabled", "gstin_enabled", "instructions_enabled", "no_bag_enabled"] as const;
-const FEE_TEXTS = ["delivery_label", "delivery_info", "handling_label", "handling_info", "small_cart_label", "small_cart_info", "platform_label", "platform_info", "cancellation_note"] as const;
-const LABELS = ["delivery_label", "handling_label", "small_cart_label", "platform_label"] as const;
+const FEE_FLAGS = ["handling_enabled", "small_cart_enabled", "platform_enabled", "surge_enabled", "late_night_enabled", "fees_refund_on_cancel", "tip_enabled",
+  "gstin_enabled", "instructions_enabled", "no_bag_enabled"] as const;
+const FEE_TEXTS = ["delivery_label", "delivery_info", "handling_label", "handling_info", "small_cart_label", "small_cart_info", "platform_label", "platform_info",
+  "surge_label", "surge_info", "late_night_label", "late_night_info", "cancellation_note"] as const;
+const LABELS = ["delivery_label", "handling_label", "small_cart_label", "platform_label", "surge_label", "late_night_label"] as const;
+const TIMES = ["late_night_from", "late_night_to"] as const;
+/** How long the bad weather fee runs once saved ("" keeps what is saved; "0" until switched off). */
+const SURGE_HOURS = ["1", "2", "3", "4", "6", "8", "12", "24"] as const;
 
 type MoneyKey = (typeof MONEY)[number];
 type FlagKey = "cod_enabled" | (typeof FEE_FLAGS)[number];
 type TextKey = (typeof FEE_TEXTS)[number];
 type LabelKey = (typeof LABELS)[number];
-type IssueKey = MoneyKey | LabelKey | "gst";
+type TimeKey = (typeof TIMES)[number];
+type IssueKey = MoneyKey | LabelKey | TimeKey | "gst" | "surge_for";
 
 /** The form as typed: amounts (rupees) and the GST rate (percent) stay text until they are sent. */
-type Draft = { money: Record<MoneyKey, string>; flags: Record<FlagKey, boolean>; text: Record<TextKey, string>; gst: string; tips: number[] };
+type Draft = {
+  money: Record<MoneyKey, string>; flags: Record<FlagKey, boolean>; text: Record<TextKey, string>; times: Record<TimeKey, string>;
+  gst: string; tips: number[]; surgeFor: string;
+};
 
 /** What this page calls each amount, to put the server's messages (setting keys, paise) in plain words. */
 const NAMES: Record<MoneyKey | "fees_gst_bps", string> = {
@@ -62,6 +77,8 @@ const NAMES: Record<MoneyKey | "fees_gst_bps", string> = {
   small_cart_paise: "Small cart fee",
   small_cart_below_paise: "Small cart limit",
   platform_paise: "Platform fee",
+  surge_paise: "Bad weather fee",
+  late_night_paise: "Late night fee",
   tip_max_paise: "Largest tip",
   fees_gst_bps: "GST in the fees",
 };
@@ -83,25 +100,32 @@ function toDraft({ marketplace: m, fees: f }: Settings): Draft {
     money: { ...pick(MARKET_MONEY, (k) => paiseToInput(m[k])), ...pick(FEE_MONEY, (k) => paiseToInput(f[k])) },
     flags: { cod_enabled: m.cod_enabled, ...pick(FEE_FLAGS, (k) => f[k]) },
     text: pick(FEE_TEXTS, (k) => f[k]),
+    times: pick(TIMES, (k) => f[k]),
     gst: String(f.fees_gst_bps / 100),
     tips: [...f.tip_presets].sort((a, b) => a - b),
+    surgeFor: "",
   };
 }
 
 /** Both groups with amounts in paise, as the server takes them; null while an amount or the GST rate cannot be read. */
-function toBody(d: Draft): Settings | null {
+function toBody(d: Draft): Body | null {
   const paise = pick(MONEY, (k) => toPaise(d.money[k]));
   const bps = toBps(d.gst);
   if (bps === null || MONEY.some((k) => paise[k] === null)) return null;
   const p = (k: MoneyKey) => paise[k] ?? 0;
   return {
     marketplace: { ...pick(MARKET_MONEY, p), cod_enabled: d.flags.cod_enabled },
-    fees: { ...d.text, ...pick(FEE_FLAGS, (k) => d.flags[k]), ...pick(FEE_MONEY, p), fees_gst_bps: bps, tip_presets: d.tips },
+    fees: {
+      ...d.text, ...d.times, ...pick(FEE_FLAGS, (k) => d.flags[k]), ...pick(FEE_MONEY, p), fees_gst_bps: bps, tip_presets: d.tips,
+      ...(d.surgeFor !== "" && d.flags.surge_enabled ? { surge_hours: Number(d.surgeFor) } : {}),
+    },
   };
 }
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 /** What must be fixed before saving, by field: the server's own rules, so mistakes show while typing. */
-function findIssues(d: Draft): Partial<Record<IssueKey, string>> {
+function findIssues(d: Draft, surgeEnded: boolean): Partial<Record<IssueKey, string>> {
   const out: Partial<Record<IssueKey, string>> = {};
   for (const k of MONEY) if (toPaise(d.money[k]) === null) out[k] = "Enter rupees, like 40 or 12.50";
   const fee = toPaise(d.money.handling_paise);
@@ -109,7 +133,27 @@ function findIssues(d: Draft): Partial<Record<IssueKey, string>> {
   if (fee !== null && list !== null && list > 0 && list <= fee) out.handling_list_paise = "Make it higher than the fee charged, or 0 to show none";
   if (toBps(d.gst) === null) out.gst = "Enter 0 to 28";
   for (const k of LABELS) if (d.text[k].trim().length < 2) out[k] = "Use 2 to 40 characters";
+  for (const k of TIMES) if (!HHMM.test(d.times[k])) out[k] = "Pick a time";
+  if (!out.late_night_to && d.times.late_night_from === d.times.late_night_to) out.late_night_to = "Make it different from the start time";
+  if (d.flags.surge_enabled && surgeEnded && d.surgeFor === "") out.surge_for = "The last period ended. Choose how long to charge it now.";
   return out;
+}
+
+/** "18:30" from the server's ISO time, in India time, with the day when it is not today. */
+function untilLabel(iso: string): string {
+  const t = new Date(iso);
+  const opts = { timeZone: "Asia/Kolkata" } as const;
+  const time = t.toLocaleTimeString("en-IN", { ...opts, hour: "numeric", minute: "2-digit" });
+  const day = t.toLocaleDateString("en-IN", { ...opts, day: "numeric", month: "short" });
+  const today = new Date().toLocaleDateString("en-IN", { ...opts, day: "numeric", month: "short" });
+  return day === today ? time : `${time}, ${day}`;
+}
+
+/** "23:00" → "11 pm". */
+function clock(hhmm: string): string {
+  if (!HHMM.test(hhmm)) return hhmm;
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "am" : "pm"}`;
 }
 
 /** The server names a setting by its key and gives limits in paise; say it the way this page does. */
@@ -202,7 +246,7 @@ export default function CheckoutAndFees() {
   const [busy, setBusy] = useState(false);
   const [tipText, setTipText] = useState("");
   const [tipError, setTipError] = useState<string | null>(null);
-  const [sample, setSample] = useState({ items: "500", cod: false });
+  const [sample, setSample] = useState({ items: "500", cod: false, night: false });
   const [retry, setRetry] = useState(0);
   const [shown, setShown] = useState<{ key: string; bill: Preview } | null>(null);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
@@ -225,7 +269,8 @@ export default function CheckoutAndFees() {
   const body = d ? toBody(d) : null;
   const sampleItems = toPaise(sample.items);
   const codOn = d?.flags.cod_enabled ?? false;
-  const previewJson = body && sampleItems !== null ? JSON.stringify({ ...body, items_total: sampleItems, cod: sample.cod && codOn }) : null;
+  const nightOn = d?.flags.late_night_enabled ?? false;
+  const previewJson = body && sampleItems !== null ? JSON.stringify({ ...body, items_total: sampleItems, cod: sample.cod && codOn, night: sample.night && nightOn }) : null;
   const previewKey = previewJson === null ? null : `${retry}:${previewJson}`;
 
   useEffect(() => {
@@ -259,8 +304,17 @@ export default function CheckoutAndFees() {
     );
   }
 
-  const issues = findIssues(d);
+  const status = saved.status;
+  const surgeEnded = !!status?.surge_ended && saved.fees.surge_enabled;
+  const issues = findIssues(d, surgeEnded);
   const has = (...keys: IssueKey[]) => keys.some((k) => k in issues);
+  // what saving with "keep" ("") does: keeps a running end time; otherwise it is charged until switched off
+  const keepsEnd = saved.fees.surge_enabled && !!status?.surge_until && !status.surge_ended;
+  const surgeChoices = [
+    { value: "", label: keepsEnd ? `Keep: until ${untilLabel(status!.surge_until!)}` : surgeEnded ? "Choose how long" : "Until I switch it off" },
+    ...(keepsEnd || surgeEnded ? [{ value: "0", label: "Until I switch it off" }] : []),
+    ...SURGE_HOURS.map((h) => ({ value: h, label: `For ${h} hour${h === "1" ? "" : "s"} from saving` })),
+  ];
   const blocked = Object.keys(issues).length > 0;
   const dirty = JSON.stringify(body) !== JSON.stringify(toBody(toDraft(saved)));
   const message = tried && blocked ? "Check the highlighted fields, then save again." : error;
@@ -274,6 +328,7 @@ export default function CheckoutAndFees() {
   const setMoney = (k: MoneyKey, v: string) => setD((x) => x && { ...x, money: { ...x.money, [k]: v } });
   const setFlag = (k: FlagKey, v: boolean) => setD((x) => x && { ...x, flags: { ...x.flags, [k]: v } });
   const setText = (k: TextKey, v: string) => setD((x) => x && { ...x, text: { ...x.text, [k]: v } });
+  const setTime = (k: TimeKey, v: string) => setD((x) => x && { ...x, times: { ...x.times, [k]: v } });
   const money = (k: MoneyKey) => ({
     value: d.money[k], inputMode: "decimal" as const, error: issues[k], "data-testid": `amount-${k}`,
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setMoney(k, e.target.value),
@@ -299,7 +354,7 @@ export default function CheckoutAndFees() {
     e.preventDefault();
     const form = e.currentTarget;
     const payload = d ? toBody(d) : null;
-    if (!d || !payload || Object.keys(findIssues(d)).length > 0) {
+    if (!d || !payload || Object.keys(findIssues(d, surgeEnded)).length > 0) {
       setTried(true);
       const first = form.querySelector<HTMLElement>('[aria-invalid="true"]');
       first?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -313,7 +368,7 @@ export default function CheckoutAndFees() {
       const s = await api<Settings>("/api/admin/checkout", { method: "PUT", body: payload });
       setSaved(s);
       setD(toDraft(s));
-      toast("Checkout and fees saved");
+      toast(s.status?.surge_active && s.status.surge_until ? `Checkout and fees saved. The ${s.fees.surge_label.toLowerCase()} stops at ${untilLabel(s.status.surge_until)}.` : "Checkout and fees saved");
     } catch (x) {
       setError(x instanceof ApiError ? readable(x.message) : "Could not save. Try again.");
     } finally {
@@ -379,8 +434,58 @@ export default function CheckoutAndFees() {
             )}
           </Section>
 
+          <Section icon={CloudRain} title="Bad weather fee" on={d.flags.surge_enabled}
+            sub="Switch it on during heavy rain or very high demand, for a few hours or until you switch it off. The marketplace's own fee, with GST included.">
+            <Toggle {...toggle("surge_enabled")} label="Charge a bad weather fee" hint="On every order placed while it is on." className="sm:col-span-2" />
+            {status && saved.fees.surge_enabled && (status.surge_active || surgeEnded) && (
+              <p className={clsx("flex items-center gap-2 rounded-lg px-3 py-2 text-sm sm:col-span-2", status.surge_active ? "bg-leaf-light text-ink" : "bg-mist text-ink-soft")}
+                data-testid="surge-status">
+                {status.surge_active ? <Clock3 className="h-4 w-4 shrink-0 text-leaf" aria-hidden /> : <CircleSlash className="h-4 w-4 shrink-0" aria-hidden />}
+                {status.surge_active
+                  ? status.surge_until ? `Being charged now, until ${untilLabel(status.surge_until)}.` : "Being charged now, until you switch it off."
+                  : `Stopped by itself at ${untilLabel(status.surge_until!)}.`}
+              </p>
+            )}
+            {(d.flags.surge_enabled || has("surge_paise", "surge_label", "surge_for")) && (
+              <>
+                <TextField label="Fee (₹)" {...money("surge_paise")} hint="On each order, once" />
+                <Field label="Charge it" hint="It switches off by itself at the end" error={issues.surge_for}>
+                  <Select value={d.surgeFor} onChange={(e) => { const v = e.target.value; setD((x) => x && { ...x, surgeFor: v }); }} data-testid="surge-for"
+                    className={issues.surge_for ? "border-vermilion" : undefined} aria-invalid={!!issues.surge_for}>
+                    {surgeChoices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </Select>
+                </Field>
+                <OnTheBill {...wording("surge_label", "surge_info")} placeholder="Bad weather fee" />
+                <p className="text-xs text-ink-faint sm:col-span-2">
+                  Delivery partners can earn a bonus on every trip they finish while this fee is on: set it in Delivery → Settings → Partner earnings.
+                </p>
+              </>
+            )}
+          </Section>
+
+          <Section icon={MoonStar} title="Late night fee" on={d.flags.late_night_enabled}
+            sub="On orders placed between the times you set, India time. The marketplace's own fee, with GST included.">
+            <Toggle {...toggle("late_night_enabled")} label="Charge a late night fee" hint="Only on orders placed inside the time window." className="sm:col-span-2" />
+            {status?.late_night_active && saved.fees.late_night_enabled && (
+              <p className="flex items-center gap-2 rounded-lg bg-leaf-light px-3 py-2 text-sm text-ink sm:col-span-2" data-testid="night-status">
+                <Clock3 className="h-4 w-4 shrink-0 text-leaf" aria-hidden />Being charged now, until {clock(saved.fees.late_night_to)}.
+              </p>
+            )}
+            {(d.flags.late_night_enabled || has("late_night_paise", "late_night_label", "late_night_from", "late_night_to")) && (
+              <>
+                <TextField label="Fee (₹)" {...money("late_night_paise")} hint="On each order, once" className="sm:col-span-2" />
+                <TextField label="From" type="time" value={d.times.late_night_from} error={issues.late_night_from} data-testid="night-from"
+                  hint={HHMM.test(d.times.late_night_from) ? clock(d.times.late_night_from) : "India time"} onChange={(e) => setTime("late_night_from", e.target.value)} />
+                <TextField label="Until" type="time" value={d.times.late_night_to} error={issues.late_night_to} data-testid="night-to"
+                  hint={HHMM.test(d.times.late_night_to) ? `${clock(d.times.late_night_to)}${d.times.late_night_to < d.times.late_night_from ? ", the next morning" : ""}` : "India time"}
+                  onChange={(e) => setTime("late_night_to", e.target.value)} />
+                <OnTheBill {...wording("late_night_label", "late_night_info")} placeholder="Late night fee" />
+              </>
+            )}
+          </Section>
+
           <Section icon={Percent} title="Tax and refunds"
-            sub="For the handling, small cart and platform fees. Delivery and cash on delivery fees are taxed with the goods in each package instead.">
+            sub="For the marketplace's own fees (handling, small cart, platform, bad weather, late night). Delivery and cash on delivery fees are taxed with the goods in each package instead.">
             <TextField label="GST included in these fees (%)" value={d.gst} inputMode="decimal" error={issues.gst} hint="0 to 28. The bill shows the GST inside each fee." data-testid="gst-percent"
               onChange={(e) => { const v = e.target.value; setD((x) => x && { ...x, gst: v }); }} />
             <Toggle {...toggle("fees_refund_on_cancel")} label="Refund these fees when every package of an order is cancelled" hint="The tip goes back too. Off: the marketplace keeps the fees." />
@@ -485,6 +590,13 @@ export default function CheckoutAndFees() {
                   onChange={(e) => { const v = e.target.checked; setSample((s) => ({ ...s, cod: v })); }} />
                 Cash on delivery
               </label>
+              {nightOn && (
+                <label className="flex h-10 cursor-pointer items-center gap-2 font-medium">
+                  <input type="checkbox" className="h-4 w-4 accent-peacock" checked={sample.night} data-testid="preview-night"
+                    onChange={(e) => { const v = e.target.checked; setSample((s) => ({ ...s, night: v })); }} />
+                  Placed late at night
+                </label>
+              )}
             </div>
             {sampleItems === null ? (
               <p className="mt-1.5 text-sm text-vermilion">Enter rupees, like 500</p>

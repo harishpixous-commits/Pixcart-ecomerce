@@ -117,6 +117,7 @@ class DeliveryAssignment(IdMixin, Base):
     distance_km: Mapped[float | None] = mapped_column(Numeric(7, 2))
     fee_paise: Mapped[int] = mapped_column(BigInteger, default=0)
     tip_paise: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")  # the customer's tip, paid to the partner in full
+    bonus_paise: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")  # bad weather bonus for a trip finished while that fee was on
     payout_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_payouts.id", ondelete="SET NULL"), index=True)
     fail_reason: Mapped[str] = mapped_column(String(200), default="")
     rating: Mapped[int | None] = mapped_column(SmallInteger)
@@ -129,7 +130,7 @@ class DeliveryAssignment(IdMixin, Base):
         CheckConstraint("mode IN ('manual','auto')", name="mode"),
         CheckConstraint("kind IN ('delivery','return','pickup')", name="kind"),
         CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="rating"),
-        CheckConstraint("cod_collected >= 0 AND cod_amount >= 0 AND fee_paise >= 0", name="money"),
+        CheckConstraint("cod_collected >= 0 AND cod_amount >= 0 AND fee_paise >= 0 AND bonus_paise >= 0", name="money"),
         # one live offer or trip per package at a time, even when two staff assign at once
         Index("uq_delivery_assignments_active", "sub_order_id", unique=True, postgresql_where=text(f"status IN {ACTIVE}")),
         Index("ix_delivery_assignments_boy_status", "delivery_boy_id", "status"),

@@ -9,19 +9,24 @@ The bill a shopper sees, in order:
     Handling fee                  (optional; a struck-through regular amount shows a discount; free above an amount)
     Small cart fee                (optional; when the item total is below an amount)
     Platform fee                  (optional)
+    Bad weather fee               (optional; staff switch it on during heavy rain or very high demand, for a few hours
+                                   or until they switch it off; partners can earn a bonus per trip meanwhile)
+    Late night fee                (optional; on orders placed in a time window, India time)
     Delivery partner tip          (optional; goes to the delivery partner in full)
     Coupon                        (minus)
     To pay
 
-Delivery and cash-on-delivery fees belong to the seller's package (as before). Handling, small cart and platform fees
-are the marketplace's own charges for its service: they are not part of any seller's sale, the amounts include GST
-at ``fees_gst_bps``, they are refunded when every package of the order is cancelled (if switched on) and they are
-collected with the first live package of a cash-on-delivery order.
+Delivery and cash-on-delivery fees belong to the seller's package (as before). Handling, small cart, platform, bad
+weather and late night fees are the marketplace's own charges for its service: they are not part of any seller's sale,
+the amounts include GST at ``fees_gst_bps``, they are refunded when every package of the order is cancelled (if
+switched on) and they are collected with the first live package of a cash-on-delivery order.
 """
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +35,9 @@ from app.db import utcnow
 from app.models import PlatformSetting
 
 KEY = "checkout"
-FEE_CODES = ("handling", "small_cart", "platform")
+FEE_CODES = ("handling", "small_cart", "platform", "surge", "late_night")
+IST = ZoneInfo("Asia/Kolkata")
+SURGE_HOURS_MAX = 72
 
 DEFAULTS: dict[str, Any] = {
     "delivery_label": "Delivery fee",
@@ -50,7 +57,18 @@ DEFAULTS: dict[str, Any] = {
     "platform_paise": 0,
     "platform_label": "Platform fee",
     "platform_info": "Helps us run the store and keep improving it.",
-    "fees_gst_bps": 1800,            # GST included in the handling, small cart and platform fees
+    "surge_enabled": False,          # bad weather or very high demand
+    "surge_paise": 0,
+    "surge_until": "",               # switches itself off at this moment (UTC, ISO 8601); empty = until staff switch it off
+    "surge_label": "Bad weather fee",
+    "surge_info": "Charged during heavy rain or very high demand, when deliveries take longer and cost more.",
+    "late_night_enabled": False,
+    "late_night_paise": 0,
+    "late_night_from": "23:00",      # India time, 24-hour clock; the window may run past midnight
+    "late_night_to": "06:00",
+    "late_night_label": "Late night fee",
+    "late_night_info": "Orders placed late at night cost more to pack and deliver.",
+    "fees_gst_bps": 1800,            # GST included in the marketplace's own fees
     "fees_refund_on_cancel": True,   # refunded when every package of the order is cancelled
     "tip_enabled": False,
     "tip_presets": [1000, 2000, 3000],
@@ -63,9 +81,17 @@ DEFAULTS: dict[str, Any] = {
 
 _INTS = {"handling_paise": (0, 100_000), "handling_list_paise": (0, 100_000), "handling_free_above_paise": (0, 100_000_000),
          "small_cart_paise": (0, 100_000), "small_cart_below_paise": (0, 10_000_000), "platform_paise": (0, 100_000),
-         "fees_gst_bps": (0, 2800), "tip_max_paise": (0, 500_000)}
+         "fees_gst_bps": (0, 2800), "tip_max_paise": (0, 500_000), "surge_paise": (0, 100_000), "late_night_paise": (0, 100_000)}
 _TEXTS = {"delivery_label": 40, "delivery_info": 300, "handling_label": 40, "handling_info": 300, "small_cart_label": 40, "small_cart_info": 300,
-          "platform_label": 40, "platform_info": 300, "cancellation_note": 600}
+          "platform_label": 40, "platform_info": 300, "surge_label": 40, "surge_info": 300, "late_night_label": 40, "late_night_info": 300,
+          "cancellation_note": 600}
+TIMES = ("late_night_from", "late_night_to")
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def valid_time(v: Any) -> bool:
+    """A 24-hour clock time like '23:00'."""
+    return isinstance(v, str) and bool(_HHMM.match(v))
 
 
 class CheckoutSettingsError(ValueError):
@@ -80,12 +106,40 @@ async def get(session: AsyncSession) -> dict[str, Any]:
     return out
 
 
+def _until(ck: dict) -> datetime | None:
+    """When the bad weather fee switches itself off (None: it stays on until staff switch it off)."""
+    try:
+        return datetime.fromisoformat(ck["surge_until"]) if ck.get("surge_until") else None
+    except ValueError:
+        return None
+
+
+def surge_hours_until(hours: Any, now: datetime | None = None) -> str:
+    """``surge_hours`` (how long to charge the bad weather fee from now; 0 = until switched off) as a ``surge_until``."""
+    if isinstance(hours, bool) or not isinstance(hours, int) or not 0 <= hours <= SURGE_HOURS_MAX:
+        raise CheckoutSettingsError(f"Charge the bad weather fee for 1 to {SURGE_HOURS_MAX} hours, or until you switch it off")
+    return "" if hours == 0 else ((now or utcnow()) + timedelta(hours=hours)).isoformat()
+
+
 async def update(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
+    """Saves checkout settings. Besides the keys in DEFAULTS it takes ``surge_hours``: how long the bad weather fee is
+    charged from now (0 = until it is switched off), which the server turns into ``surge_until`` with its own clock."""
+    data = dict(data)
     clean: dict[str, Any] = {}
+    if "surge_hours" in data:
+        clean["surge_until"] = surge_hours_until(data.pop("surge_hours"))
+        data.pop("surge_until", None)
     for k, v in data.items():
         if k not in DEFAULTS:
             raise CheckoutSettingsError(f"Unknown setting: {k}")
-        if k in _INTS:
+        if k == "surge_until":
+            if not isinstance(v, str) or (v and _until({"surge_until": v}) is None) or (v and _until({"surge_until": v}).tzinfo is None):
+                raise CheckoutSettingsError("surge_until must be a date and time with a time zone, or empty")
+            v = _until({"surge_until": v}).astimezone(timezone.utc).isoformat() if v else ""
+        elif k in TIMES:
+            if not valid_time(v):
+                raise CheckoutSettingsError("Late night times use the 24-hour clock, like 23:00")
+        elif k in _INTS:
             lo, hi = _INTS[k]
             if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
                 raise CheckoutSettingsError(f"{k} must be a whole number between {lo} and {hi}")
@@ -102,9 +156,15 @@ async def update(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
         elif not isinstance(v, bool):
             raise CheckoutSettingsError(f"{k} must be on or off")
         clean[k] = v
-    merged = {**(await get(session)), **clean}
+    current = await get(session)
+    if "surge_enabled" in clean and clean["surge_enabled"] != current["surge_enabled"] and "surge_until" not in clean:
+        # switching it off forgets the end time; switching it on again without a duration charges it until switched off
+        clean["surge_until"] = ""
+    merged = {**current, **clean}
     if merged["handling_list_paise"] and merged["handling_list_paise"] <= merged["handling_paise"]:
         raise CheckoutSettingsError("The regular handling fee shown struck through must be higher than the fee charged")
+    if merged["late_night_from"] == merged["late_night_to"]:
+        raise CheckoutSettingsError("The late night fee needs a start time different from its end time")
     row = (await session.execute(select(PlatformSetting).where(PlatformSetting.key == KEY).with_for_update())).scalar_one_or_none()
     if row is None:
         row = PlatformSetting(key=KEY, value={}, updated_at=utcnow())
@@ -125,8 +185,44 @@ def _gst_split(amount: int, bps: int) -> tuple[int, int]:
     return taxable, amount - taxable
 
 
-def order_fees(ck: dict, items_total: int) -> list[dict]:
-    """The marketplace's own fees for an order with this item total (before coupons). Each line carries its GST split."""
+def surge_active(ck: dict, now: datetime | None = None) -> bool:
+    """The bad weather fee is being charged right now."""
+    if not (ck["surge_enabled"] and ck["surge_paise"] > 0):
+        return False
+    until = _until(ck)
+    return until is None or (now or utcnow()) < until
+
+
+def _minutes(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def in_night_window(ck: dict, now: datetime | None = None) -> bool:
+    """India time is inside the late night window (which may run past midnight, like 23:00 to 06:00)."""
+    t = (now or utcnow()).astimezone(IST)
+    m, start, end = t.hour * 60 + t.minute, _minutes(ck["late_night_from"]), _minutes(ck["late_night_to"])
+    return start <= m < end if start < end else (m >= start or m < end)
+
+
+def clock(hhmm: str) -> str:
+    """'23:00' → '11 pm', '06:30' → '6:30 am'."""
+    h, m = (int(x) for x in hhmm.split(":"))
+    return f"{h % 12 or 12}{f':{m:02d}' if m else ''} {'am' if h < 12 else 'pm'}"
+
+
+def status(ck: dict, now: datetime | None = None) -> dict:
+    """For the admin page: whether the time-bound fees are being charged at this moment."""
+    until = _until(ck)
+    return {"surge_active": surge_active(ck, now), "surge_until": until.isoformat() if until else None,
+            "surge_ended": bool(ck["surge_enabled"] and until and (now or utcnow()) >= until),
+            "late_night_active": bool(ck["late_night_enabled"] and ck["late_night_paise"] > 0 and in_night_window(ck, now)),
+            "night_window_now": in_night_window(ck, now)}
+
+
+def order_fees(ck: dict, items_total: int, *, now: datetime | None = None, night: bool | None = None) -> list[dict]:
+    """The marketplace's own fees for an order with this item total (before coupons). Each line carries its GST split.
+    ``night`` overrides the clock for the late night fee (the admin preview); ``now`` defaults to this moment."""
     lines: list[dict] = []
 
     def add(code: str, amount: int, *, list_amount: int = 0, hint: str = "") -> None:
@@ -147,6 +243,11 @@ def order_fees(ck: dict, items_total: int) -> list[dict]:
         add("small_cart", ck["small_cart_paise"], hint=f"No small cart fee on orders of {_rupees(ck['small_cart_below_paise'])} or more")
     if ck["platform_enabled"] and ck["platform_paise"] > 0:
         add("platform", ck["platform_paise"])
+    if surge_active(ck, now):
+        add("surge", ck["surge_paise"])
+    is_night = in_night_window(ck, now) if night is None else night
+    if ck["late_night_enabled"] and ck["late_night_paise"] > 0 and is_night:
+        add("late_night", ck["late_night_paise"], hint=f"On orders placed between {clock(ck['late_night_from'])} and {clock(ck['late_night_to'])}")
     return lines
 
 

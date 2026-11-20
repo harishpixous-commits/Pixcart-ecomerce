@@ -96,6 +96,8 @@ export interface TripBrief {
   cod_method: string;
   fee: number;
   tip: number;
+  /** bad weather bonus, fixed when the trip ends */
+  bonus?: number;
   distance_km: number | null;
   rating: number | null;
   rating_comment: string;
@@ -122,7 +124,10 @@ export interface TripView extends TripBrief {
   pickup: TripPlace;
   drop: TripPlace & { instructions: string; no_bag: boolean };
   items: { title: string; variant: string; qty: number; image: string }[];
+  /** fee + tip + the bad weather bonus if the trip finished now */
   fee_estimate: number;
+  /** the bad weather bonus in that estimate (0 when the fee is off) */
+  bonus_now?: number;
   needs: { pickup_code: boolean; otp: boolean; photo: boolean };
   partner: { id: string; name: string; phone: string; photo: string; vehicle: string; vehicle_no: string; lat: number | null; lng: number | null; location_at: string | null };
   pickup_code?: string;
@@ -145,9 +150,11 @@ export interface PartnerFeed {
   cash_limit: number;
   offer_seconds: number;
   server_time: string;
+  /** bad weather bonus per trip right now (0 when the fee is off) */
+  bonus_now?: number;
 }
 
-export interface EarningsPeriod { trips: number; fees: number; tips: number; earned: number; cod_collected: number }
+export interface EarningsPeriod { trips: number; fees: number; tips: number; bonuses?: number; earned: number; cod_collected: number }
 
 export interface PayoutRow {
   id: string;

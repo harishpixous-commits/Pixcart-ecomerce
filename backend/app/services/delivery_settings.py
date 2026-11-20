@@ -64,6 +64,7 @@ DEFAULTS: dict[str, Any] = {
     "fee_per_km_paise": 800,         # ... ₹8 a km
     "fee_min_paise": 2500,
     "fee_max_paise": 15000,
+    "weather_bonus_paise": 0,        # extra per trip finished while the bad weather fee is on (Admin → Checkout and fees)
     "cod_limit_paise": 500000,       # cash a partner may hold; above it they get no cash-on-delivery packages
     "cod_deduct_from_payout": False, # take cash not yet deposited out of the weekly payout
     "stuck_minutes": 30,             # alert staff when a package stays in one step this long
@@ -84,7 +85,7 @@ DEFAULTS: dict[str, Any] = {
 _INTS: dict[str, tuple[int, int]] = {
     "offer_seconds": (10, 180), "radius_km": (1, 100), "max_active": (1, 10), "max_offers": (1, 30),
     "fee_fixed_paise": (0, 100_000), "fee_base_paise": (0, 100_000), "fee_per_km_paise": (0, 20_000),
-    "fee_min_paise": (0, 100_000), "fee_max_paise": (0, 500_000), "cod_limit_paise": (0, 10_000_000),
+    "fee_min_paise": (0, 100_000), "fee_max_paise": (0, 500_000), "weather_bonus_paise": (0, 50_000), "cod_limit_paise": (0, 10_000_000),
     "stuck_minutes": (5, 720), "location_seconds": (5, 300),
 }
 _CHOICES = {"fleet_mode": FLEET_MODES, "fee_mode": FEE_MODES}
@@ -153,5 +154,5 @@ def public(cfg: dict[str, Any]) -> dict[str, Any]:
         "support_whatsapp": cfg["support_whatsapp"], "android_apk_url": cfg["android_apk_url"], "play_store_url": cfg["play_store_url"],
         "app_version": cfg["app_version"], "require_vehicle_doc": cfg["require_vehicle_doc"], "fee_mode": cfg["fee_mode"],
         "fee_fixed_paise": cfg["fee_fixed_paise"], "fee_base_paise": cfg["fee_base_paise"], "fee_per_km_paise": cfg["fee_per_km_paise"],
-        "vehicles": VEHICLE_LABELS, "id_proofs": ID_PROOFS, "reject_reasons": REJECT_REASONS, "fail_reasons": FAIL_REASONS,
+        "weather_bonus_paise": cfg["weather_bonus_paise"], "vehicles": VEHICLE_LABELS, "id_proofs": ID_PROOFS, "reject_reasons": REJECT_REASONS, "fail_reasons": FAIL_REASONS,
     }

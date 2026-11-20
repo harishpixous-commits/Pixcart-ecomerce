@@ -46,6 +46,7 @@ export default function EarningsPage() {
         <p className="font-display text-4xl font-bold">{rupees(e.week.earned)}</p>
         <p className="mt-1 text-sm text-white/80">
           {e.week.trips} deliver{e.week.trips === 1 ? "y" : "ies"} · fees {rupees(e.week.fees)}{e.week.tips ? ` · tips ${rupees(e.week.tips)}` : ""}
+          {e.week.bonuses ? ` · bad weather bonus ${rupees(e.week.bonuses)}` : ""}
         </p>
         <div className="mt-4 grid grid-cols-3 gap-2">
           <Period label="Today" p={e.today} />
@@ -56,7 +57,7 @@ export default function EarningsPage() {
 
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
         <h2 className="font-semibold">Last 7 days</h2>
-        <p className="mb-3 text-sm text-ink-soft">What you earned each day, fees and tips</p>
+        <p className="mb-3 text-sm text-ink-soft">What you earned each day: fees, tips and bonuses</p>
         <ColumnChart
           caption="Earnings per day for the last 7 days"
           series={[{ key: "earned", label: "Earned" }]}

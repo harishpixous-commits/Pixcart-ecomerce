@@ -599,6 +599,39 @@ async def test_staff_mark_delivered_closes_the_partners_trip(client, admin, cate
     assert feed["active"] == [] and feed["cash_in_hand"] == done["cod_amount"] and feed["today"]["trips"] == 1
 
 
+async def test_bad_weather_fee_and_partner_bonus(client, admin, categories):
+    zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
+    await admin.put("/api/admin/delivery/settings", {"auto_assign": False, "fleet_mode": "zones", "weather_bonus_paise": 2000})
+    r = (await admin.put("/api/admin/checkout", {"fees": {"surge_enabled": True, "surge_paise": 2500, "surge_hours": 2}})).json()
+    assert r["status"]["surge_active"] is True and r["status"]["surge_until"]
+    tn, _ka, shirt, _ = await setup(client, admin, categories)
+    rider = await ready_partner(client, admin, "9600000981", "Rain Rider", zone_id, 13.083, 80.271)
+    _, o = await cod_order(client, shirt, "9600000982")
+    assert [f["code"] for f in o["fees"]] == ["surge"] and o["fees_total"] == 2500
+    sid = o["sub_orders"][0]["id"]
+    await tn.post(f"/api/seller/orders/{sid}/confirm")
+    await tn.post(f"/api/seller/orders/{sid}/ready-for-pickup")
+    trip = (await admin.post("/api/admin/delivery/assign", {"sub_order_id": sid, "partner_id": rider.partner_id, "direct": True})).json()
+    feed = (await rider.get("/api/delivery/feed")).json()
+    assert feed["bonus_now"] == 2000 and feed["active"][0]["bonus_now"] == 2000 and feed["active"][0]["fee_estimate"] == 3000 + 2000
+    assert feed["active"][0]["cod_amount"] == o["grand_total"]  # the bad weather fee is collected with the package
+    code = (await tn.get(f"/api/seller/orders/{sid}")).json()["fleet"]["pickup_code"]
+    assert (await rider.post(f"/api/delivery/trips/{trip['id']}/status", {"to": "picked", "code": code})).status_code == 200
+    assert (await admin.post(f"/api/admin/sub-orders/{sid}/deliver")).status_code == 200
+    done = (await admin.get(f"/api/admin/delivery/trips/{trip['id']}")).json()
+    assert done["fee"] == 3000 and done["bonus"] == 2000
+    e = (await rider.get("/api/delivery/earnings")).json()
+    assert e["today"]["bonuses"] == 2000 and e["today"]["earned"] == 5000 and e["unpaid"] == 5000
+    assert (await rider.get("/api/delivery/feed")).json()["today"]["earned"] == 5000
+
+    # switched off: no bonus on new trips, and switching it on again without a duration keeps it on until switched off
+    off = (await admin.put("/api/admin/checkout", {"fees": {"surge_enabled": False}})).json()
+    assert off["status"]["surge_active"] is False and off["fees"]["surge_until"] == ""
+    assert (await rider.get("/api/delivery/feed")).json()["bonus_now"] == 0
+    on = (await admin.put("/api/admin/checkout", {"fees": {"surge_enabled": True}})).json()
+    assert on["status"]["surge_active"] is True and on["status"]["surge_until"] is None
+
+
 async def test_return_pickup_by_our_partner(client, admin, categories):
     zone_id = await make_zone("Chennai Central", "Chennai", CHENNAI)
     await admin.put("/api/admin/delivery/settings", {"auto_assign": True, "fleet_mode": "zones", "return_pickups": True})

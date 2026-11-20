@@ -121,6 +121,42 @@ async def test_fees_collected_once_and_refunded_when_everything_is_cancelled(cli
         assert sorted([sub_a.total, sub_b.total + order.fees_total + order.tip_paise]) == refunds
 
 
+async def test_bad_weather_and_late_night_fees(admin):
+    """Time-bound fees: the bad weather fee runs for a set number of hours (or until switched off); the late night fee
+    applies to orders placed inside a window in India time, which may cross midnight."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.services import fees as fees_svc
+
+    for bad in ({"late_night_from": "25:00"}, {"late_night_from": "06:00", "late_night_to": "06:00"}, {"surge_hours": 100}, {"surge_hours": True},
+                {"surge_until": "tomorrow"}, {"surge_until": "2030-01-01T10:00:00"}):
+        assert (await admin.put("/api/admin/checkout", {"fees": bad})).json()["error"]["code"] == "invalid_setting", bad
+    r = (await admin.put("/api/admin/checkout", {"fees": {"surge_enabled": True, "surge_paise": 3000, "surge_hours": 3, "late_night_enabled": True,
+                                                          "late_night_paise": 1500, "surge_label": "Rain fee"}})).json()
+    until = datetime.fromisoformat(r["status"]["surge_until"])
+    assert timedelta(hours=2, minutes=59) < until - datetime.now(timezone.utc) <= timedelta(hours=3) and r["status"]["surge_active"]
+    day = (await admin.post("/api/admin/checkout/preview", {"items_total": 50000})).json()
+    night = (await admin.post("/api/admin/checkout/preview", {"items_total": 50000, "night": True})).json()
+    assert [f["code"] for f in day["fees"]] == ["surge"] and day["fees"][0]["label"] == "Rain fee"
+    assert [f["code"] for f in night["fees"]] == ["surge", "late_night"] and night["total"] == day["total"] + 1500
+    assert night["fees"][1]["hint"] == "On orders placed between 11 pm and 6 am"
+    # once its end time passes the fee stops by itself; the admin page says it ended
+    ended = r["fees"] | {"surge_until": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()}
+    assert fees_svc.surge_active(ended) is False and fees_svc.status(ended)["surge_ended"] is True
+    assert fees_svc.order_fees(ended | {"late_night_enabled": False}, 50000) == []
+
+    ist = fees_svc.IST
+    at = lambda h, m=0: datetime(2026, 11, 20, h, m, tzinfo=ist)  # noqa: E731
+    ck = r["fees"] | {"surge_until": ""}  # charged until switched off
+    assert [fees_svc.in_night_window(ck, at(h, m)) for h, m in ((22, 59), (23, 0), (2, 30), (5, 59), (6, 0), (13, 0))] == [False, True, True, True, False, False]
+    early = ck | {"late_night_from": "01:00", "late_night_to": "05:30"}
+    assert [fees_svc.in_night_window(early, at(h, m)) for h, m in ((0, 59), (1, 0), (5, 29), (5, 30))] == [False, True, True, False]
+    assert [f["code"] for f in fees_svc.order_fees(ck, 50000, now=at(23, 30))] == ["surge", "late_night"]
+    assert [f["code"] for f in fees_svc.order_fees(ck | {"surge_enabled": False}, 50000, now=at(23, 30))] == ["late_night"]
+    assert fees_svc.order_fees(ck | {"surge_enabled": False}, 50000, now=at(12, 0)) == []
+    assert fees_svc.clock("06:30") == "6:30 am" and fees_svc.clock("00:00") == "12 am" and fees_svc.clock("12:15") == "12:15 pm"
+
+
 async def test_address_label_instructions_and_map_pin(client):
     """Saved addresses carry a name, instructions and a map pin; checkout's "Use my location" pins one later."""
     buyer = await login_phone(client, "9600000951", name="Pin Buyer")

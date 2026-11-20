@@ -368,7 +368,7 @@ async def live(admin: Staff, session: SessionDep) -> dict:
     cash, load = await svc.cash_by_partner(session, ids), await svc.loads(session, ids)
     day = svc.ist_day_start(datetime.now(svc.IST).date())
     today = {bid: (int(n), int(e)) for bid, n, e in (await session.execute(select(DeliveryAssignment.delivery_boy_id, func.count(),
-                                                                                    func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0))
+                                                                                    func.coalesce(func.sum(svc.EARNED), 0))
                                                                              .where(DeliveryAssignment.delivery_boy_id.in_(ids or [uuid.uuid4()]), DeliveryAssignment.status == "delivered",
                                                                                     DeliveryAssignment.delivered_at >= day).group_by(DeliveryAssignment.delivery_boy_id))).all()}
     zones = {z.id: z for z in (await session.execute(select(DeliveryZone))).scalars()}
@@ -498,7 +498,7 @@ async def payouts(admin: Staff, session: SessionDep, status: Literal["", "pendin
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await session.execute(stmt.order_by(DeliveryPayout.period_start.desc(), DeliveryBoy.name).offset((page - 1) * 50).limit(50))).all()
     pending = (await session.execute(select(func.coalesce(func.sum(DeliveryPayout.net_amount), 0)).where(DeliveryPayout.status == "pending"))).scalar_one()
-    unbilled = (await session.execute(select(func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0)).where(
+    unbilled = (await session.execute(select(func.coalesce(func.sum(svc.EARNED), 0)).where(
         DeliveryAssignment.status == "delivered", DeliveryAssignment.payout_id.is_(None)))).scalar_one()
     return {"items": [{"id": str(p.id), "partner": {"id": str(b.id), "name": b.name, "phone": b.phone, "bank": {k: v for k, v in (b.bank_details or {}).items() if k != "account_enc"}},
                        "period_start": p.period_start.isoformat(), "period_end": p.period_end.isoformat(), "deliveries": p.deliveries, "amount": p.amount,
@@ -566,7 +566,7 @@ async def reports(admin: Staff, session: SessionDep, days: int = Query(default=3
     perf = (await session.execute(select(DeliveryBoy.id, DeliveryBoy.name, DeliveryBoy.rating_avg, DeliveryBoy.rating_count,
                                          func.count().filter(DeliveryAssignment.status == "delivered"), func.count().filter(DeliveryAssignment.status == "failed"),
                                          func.count().filter(DeliveryAssignment.status.in_(("rejected", "expired"))),
-                                         func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0),
+                                         func.coalesce(func.sum(svc.EARNED), 0),
                                          func.coalesce(func.sum(DeliveryAssignment.cod_collected), 0), func.avg(mins).filter(DeliveryAssignment.status == "delivered"))
                                   .join(DeliveryBoy, DeliveryBoy.id == DeliveryAssignment.delivery_boy_id)
                                   .where(DeliveryAssignment.assigned_at >= since).group_by(DeliveryBoy.id, DeliveryBoy.name, DeliveryBoy.rating_avg, DeliveryBoy.rating_count))).all()

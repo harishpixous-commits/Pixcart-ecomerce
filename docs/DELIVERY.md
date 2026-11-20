@@ -33,7 +33,8 @@ shipping. Everything here is set up and run from the admin panel; nothing needs 
 4. **Start the trip**: the customer's order page shows the partner, a live map and the OTP. **I have arrived** sends
    the customer a notification.
 5. **Hand over**: the partner enters the customer's OTP, the cash collected (exactly the amount due, cash or UPI) for
-   cash on delivery, and a photo of the package. The order is *Delivered*; the partner earns the fee plus the tip.
+   cash on delivery, and a photo of the package. The order is *Delivered*; the partner earns the fee plus the tip, plus
+   the **bad weather bonus** (Delivery settings → Partner earnings) when the trip ends while the bad weather fee is on.
 6. The customer rates the partner (1 to 5 stars) or reports a problem; staff see both in **Ratings and complaints**.
 
 **Could not deliver** (customer not available, wrong address, refused, no cash, damaged, other) keeps the package with
@@ -81,6 +82,17 @@ with its label and the text shoppers see, GST included in the fees, a refund of 
 cancelled, the **tip** for the delivery partner (preset amounts and maximum), **GSTIN** for business purchases, delivery
 instructions, "no bag", and the cancellation note. A live preview shows the bill for a sample order. Shoppers see the
 same bill (item total, each fee with its explanation, savings, To pay) in the cart, at checkout and on the order.
+
+Two time-bound fees, like Instamart's:
+
+- **Bad weather fee** (rename it, e.g. "Rain fee"): switch it on during heavy rain or very high demand for 1 to 24
+  hours from saving, or until you switch it off; it stops by itself at the end and the page says when. Partners see a
+  "Bad weather bonus" banner and earn the bonus on every trip they finish meanwhile.
+- **Late night fee**: on orders placed inside a window in India time (default 11 pm to 6 am; it may cross midnight).
+  The preview has a "Placed late at night" box to see that bill at any time of day.
+
+If a time-bound fee starts or ends while a shopper is at checkout, the order is refused with "Prices changed" and the
+new bill is shown, so nobody pays an amount they did not see.
 
 ## Push notifications
 

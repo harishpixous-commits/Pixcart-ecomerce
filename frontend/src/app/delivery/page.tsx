@@ -6,7 +6,7 @@
  */
 
 import clsx from "clsx";
-import { AlertTriangle, Banknote, ChevronRight, IndianRupee, LocateFixed, MapPin, MapPinOff, Navigation, Package, Radar, Smartphone, Store, Volume2 } from "lucide-react";
+import { AlertTriangle, Banknote, ChevronRight, CloudRain, IndianRupee, LocateFixed, MapPin, MapPinOff, Navigation, Package, Radar, Smartphone, Store, Volume2 } from "lucide-react";
 import Link from "next/link";
 import { NoRequestsNotice, OnlineSwitch, usePartner } from "@/components/delivery/app";
 import { useFeed } from "@/components/delivery/feed";
@@ -51,6 +51,16 @@ export default function PartnerHome() {
           <Num icon={Banknote} label="Cash in hand" value={rupees(cash)} warn={limit > 0 && cash > limit} />
         </div>
       </section>
+
+      {!paused && (feed?.bonus_now ?? 0) > 0 && (
+        <p className="flex items-start gap-3 rounded-2xl bg-gradient-to-r from-[#1d4f91] to-peacock p-4 text-white shadow-sm" data-testid="bonus-banner">
+          <CloudRain className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+          <span>
+            <b className="block font-display text-lg leading-tight">Bad weather bonus: +{rupees(feed?.bonus_now ?? 0)} a trip</b>
+            <span className="text-sm text-white/85">Added to every trip you finish while it lasts. Ride safely.</span>
+          </span>
+        </p>
+      )}
 
       {limit > 0 && cash > limit && (
         <p className="flex items-start gap-2 rounded-2xl bg-vermilion-light p-4 text-sm text-vermilion" role="alert">

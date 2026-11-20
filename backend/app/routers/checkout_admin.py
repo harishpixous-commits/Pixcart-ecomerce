@@ -23,7 +23,8 @@ MARKETPLACE_KEYS = ("shipping_fee_paise", "free_shipping_threshold_paise", "cod_
 
 async def _out(session) -> dict:
     cfg = await get_settings(session)
-    return {"marketplace": {k: cfg[k] for k in MARKETPLACE_KEYS}, "fees": await fees_svc.get(session)}
+    ck = await fees_svc.get(session)
+    return {"marketplace": {k: cfg[k] for k in MARKETPLACE_KEYS}, "fees": ck, "status": fees_svc.status(ck)}
 
 
 @router.get("")
@@ -49,13 +50,25 @@ async def write(body: dict[str, Any], admin: Perm("settings"), session: SessionD
 
 @router.post("/preview")
 async def preview(body: dict[str, Any], admin: Perm("settings"), session: SessionDep) -> dict:
-    """The bill for a sample cart with the (unsaved) settings, for the live preview."""
+    """The bill for a sample cart with the (unsaved) settings, for the live preview. ``night`` shows the bill of an
+    order placed inside the late night window, whatever the time now."""
     cfg = {**(await get_settings(session)), **{k: v for k, v in (body.get("marketplace") or {}).items() if k in MARKETPLACE_KEYS}}
-    ck = {**(await fees_svc.get(session)), **{k: v for k, v in (body.get("fees") or {}).items() if k in fees_svc.DEFAULTS}}
+    sent = dict(body.get("fees") or {})
+    saved = await fees_svc.get(session)
+    ck = {**saved, **{k: v for k, v in sent.items() if k in fees_svc.DEFAULTS and k != "surge_until"}}
+    try:
+        if "surge_hours" in sent:
+            ck["surge_until"] = fees_svc.surge_hours_until(sent["surge_hours"])
+        elif "surge_enabled" in sent and sent["surge_enabled"] != saved["surge_enabled"]:
+            ck["surge_until"] = ""  # as saving would do: switched on without a duration, it is charged until switched off
+    except fees_svc.CheckoutSettingsError as exc:
+        raise ApiError(str(exc), "invalid_setting") from exc
+    if not all(fees_svc.valid_time(ck.get(k)) for k in fees_svc.TIMES) or ck["late_night_from"] == ck["late_night_to"]:
+        ck["late_night_enabled"] = False  # the form shows the problem; the preview leaves the fee out meanwhile
     items = max(0, int(body.get("items_total") or 0))
     cod = bool(body.get("cod"))
     shipping = 0 if items >= cfg["free_shipping_threshold_paise"] or items == 0 else cfg["shipping_fee_paise"]
-    lines = fees_svc.order_fees(ck, items)
+    lines = fees_svc.order_fees(ck, items, night=bool(body.get("night")))
     cod_fee = cfg["cod_fee_paise"] if cod else 0
     return {"items_total": items, "shipping": shipping, "cod_fee": cod_fee, "fees": lines,
             "total": items + shipping + cod_fee + sum(f["amount"] for f in lines),

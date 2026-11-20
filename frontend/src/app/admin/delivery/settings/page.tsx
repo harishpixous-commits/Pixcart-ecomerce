@@ -16,7 +16,7 @@ const MODES: { value: string; title: string; text: string }[] = [
   { value: "off", title: "Couriers only", text: "Your partners get no packages; sellers ship every order by courier." },
 ];
 
-const MONEY = ["fee_fixed_paise", "fee_base_paise", "fee_per_km_paise", "fee_min_paise", "fee_max_paise", "cod_limit_paise"];
+const MONEY = ["fee_fixed_paise", "fee_base_paise", "fee_per_km_paise", "fee_min_paise", "fee_max_paise", "weather_bonus_paise", "cod_limit_paise"];
 
 function Toggle({ k, v, set, label, hint }: { k: string; v: Values; set: (k: string, x: boolean) => void; label: string; hint: string }) {
   return (
@@ -176,6 +176,12 @@ export default function DeliverySettings() {
         <p className="rounded-xl bg-mist px-4 py-3 text-sm sm:col-span-2">
           Example: a 2 km delivery earns <b>{rupees(example(2))}</b>, a 6 km delivery earns <b>{rupees(example(6))}</b>.
         </p>
+        <div className="flex flex-col gap-3 border-t border-line pt-3 sm:col-span-2 sm:flex-row sm:items-start" id="partner-pay">
+          <TextField label="Bad weather bonus per trip (₹)" {...rs("weather_bonus_paise")} className="sm:w-56" data-testid="weather-bonus" />
+          <p className="text-sm text-ink-soft sm:pt-7">
+            Added to every trip a partner finishes while the bad weather fee is on (Checkout and fees). Partners see it on each request and in their earnings. 0 for no bonus.
+          </p>
+        </div>
       </section>
 
       <section className={card}>

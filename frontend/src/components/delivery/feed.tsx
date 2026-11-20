@@ -229,6 +229,7 @@ export function OfferPopup() {
                 <h2 id="offer-title" className="font-display text-2xl font-bold leading-tight">{offer.kind === "pickup" ? "Return pickup request" : offer.kind === "return" ? "Return to store" : "New delivery request"}</h2>
                 <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-sm font-semibold">
                   You earn about {rupees(offer.fee_estimate)}
+                  {(offer.bonus_now ?? 0) > 0 && <span className="text-white/80">(incl. {rupees(offer.bonus_now ?? 0)} bad weather bonus)</span>}
                 </p>
               </div>
             </div>

@@ -317,7 +317,7 @@ async def feed(b: TripPartner, session: SessionDep) -> dict:
     active = list((await session.execute(select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status.in_(ON_TRIP))
                                          .order_by(DeliveryAssignment.accepted_at))).scalars())
     day = svc.ist_day_start(datetime.now(svc.IST).date())
-    trips, earned = (await session.execute(select(func.count(), func.coalesce(func.sum(DeliveryAssignment.fee_paise + DeliveryAssignment.tip_paise), 0)).where(
+    trips, earned = (await session.execute(select(func.count(), func.coalesce(func.sum(svc.EARNED), 0)).where(
         DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status == "delivered", DeliveryAssignment.delivered_at >= day))).one()
     out_offers = []
     for a in offers:
@@ -326,7 +326,7 @@ async def feed(b: TripPartner, session: SessionDep) -> dict:
         out_offers.append(v)
     return {"offers": out_offers, "active": [await svc.trip_view(session, a) for a in active], "is_online": b.is_online and taking, "taking_requests": taking,
             "today": {"trips": int(trips), "earned": int(earned)}, "cash_in_hand": await svc.cash_in_hand(session, b.id), "cash_limit": cfg["cod_limit_paise"],
-            "offer_seconds": cfg["offer_seconds"], "server_time": now.isoformat()}
+            "offer_seconds": cfg["offer_seconds"], "server_time": now.isoformat(), "bonus_now": await svc.weather_bonus(session, cfg)}
 
 
 @router.post("/offers/{assignment_id}/accept")

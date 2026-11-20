@@ -442,7 +442,17 @@ export default function TripPage() {
           ) : (
             <span className="rounded-full bg-leaf-light px-3 py-1 font-semibold text-leaf">{collecting ? "Return pickup: collect no money" : back ? "Return trip" : "Prepaid: collect nothing"}</span>
           )}
-          {!ended && <span className="rounded-full bg-mist px-3 py-1 font-semibold">You earn about {rupees(t.fee_estimate)}</span>}
+          {!ended && (
+            <span className="rounded-full bg-mist px-3 py-1 font-semibold">
+              You earn about {rupees(t.fee_estimate)}{(t.bonus_now ?? 0) > 0 ? ` (incl. ${rupees(t.bonus_now ?? 0)} bad weather bonus)` : ""}
+            </span>
+          )}
+          {t.status === "delivered" && (
+            <span className="rounded-full bg-leaf-light px-3 py-1 font-semibold text-leaf" data-testid="trip-earned">
+              You earned {rupees(t.fee + t.tip + (t.bonus ?? 0))}
+              {t.tip || t.bonus ? <span className="font-normal"> ({[`fee ${rupees(t.fee)}`, t.tip ? `tip ${rupees(t.tip)}` : "", t.bonus ? `bonus ${rupees(t.bonus)}` : ""].filter(Boolean).join(", ")})</span> : null}
+            </span>
+          )}
         </div>
       </section>
 
