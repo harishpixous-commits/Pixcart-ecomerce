@@ -185,7 +185,8 @@ promotion; the home page adds Amazon-style card rows, a deals rail with a timer,
 
 **Questions, alerts, compare and bundles.** Product pages have **Questions and answers**: signed-in shoppers ask, and the
 seller (badge "Seller"), verified buyers and other shoppers answer; the asker is told when an answer arrives, posts with
-contact details or several reports wait for staff (*Admin → Questions*), and sellers answer from *Seller hub → Questions*.
+contact details, or reported by the set number of different shoppers (*Admin → Product page*, default 3, 0 = never; each
+shopper counts once per post), wait for staff (*Admin → Questions*), and sellers answer from *Seller hub → Questions*.
 **Notify me** on an out-of-stock version sends one alert when it is back; products saved to the wishlist send a
 **price-drop alert** when they get cheaper by the set percentage (*Your alerts*, `/alerts`; a job checks every 10 minutes).
 **Compare** puts up to 4 products side by side (`/compare`, with "show only differences"), and **Frequently bought

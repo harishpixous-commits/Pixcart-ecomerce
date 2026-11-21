@@ -92,6 +92,7 @@ DEFAULTS: dict[str, Any] = {
     "feature_qa": True,                # shoppers ask questions on product pages
     "qa_need_approval": False,         # questions and answers wait for staff before they appear
     "qa_buyers_answer_only": False,    # only the seller and verified buyers may answer
+    "qa_report_hide_at": 3,            # reports from this many different shoppers hide a post until staff check it; 0 = never
     "feature_stock_alerts": True,      # "Notify me when it is back"
     "feature_price_alerts": True,      # wishlist price-drop alerts
     "price_alert_min_drop_pct": 10,
@@ -168,6 +169,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "feature_qa": (bool, 0, 1),
     "qa_need_approval": (bool, 0, 1),
     "qa_buyers_answer_only": (bool, 0, 1),
+    "qa_report_hide_at": (int, 0, 50),
     "feature_stock_alerts": (bool, 0, 1),
     "feature_price_alerts": (bool, 0, 1),
     "price_alert_min_drop_pct": (int, 1, 90),

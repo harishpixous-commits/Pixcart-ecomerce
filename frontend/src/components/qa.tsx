@@ -92,8 +92,8 @@ export function ProductQuestions({ slug, title }: { slug: string; title: string 
   }
   async function report(kind: "question" | "answer", id: string) {
     try {
-      await api("/api/qa/report", { method: "POST", body: { kind, id } });
-      toast("Thanks. Our team will check it.");
+      const r = await api<{ already: boolean }>("/api/qa/report", { method: "POST", body: { kind, id } });
+      toast(r.already ? "You have already reported this. Our team will check it." : "Thanks. Our team will check it.");
     } catch (x) {
       toast(x instanceof ApiError ? x.message : "Could not report", "error");
     }
