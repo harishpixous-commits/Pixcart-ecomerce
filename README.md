@@ -59,7 +59,8 @@ slip, GST invoice, courier booking through Shiprocket, returns, payouts with a r
 mode, dispatch days, invoice prefix, and CSV exports from every list.
 
 **Admin** — KPI overview with charts, seller verification, listing moderation with an AI check, orders,
-returns, refunds, payouts (bank file + UTR, or RazorpayX), support desk with the 48-hour and 30-day limits,
+returns (staff can open one for a customer; return policy per category and a period in which damaged, faulty or
+wrong items are always taken back), refunds, payouts (bank file + UTR, or RazorpayX), support desk with the 48-hour and 30-day limits,
 storefront editor (including business, contact and social modules that can each be switched on or off),
 coupons, message templates, GST TCS report for GSTR-8, an export centre, a go-live checklist, marketplace
 settings and feature switches, integrations status, staff with six roles, two-step sign-in, audit log.

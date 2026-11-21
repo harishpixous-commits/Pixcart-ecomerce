@@ -47,7 +47,7 @@ from app.services.catalog import public_product_filter
 from app.services.coupons import list_for_checkout
 from app.services.delivery import estimate, state_for_pin
 from app.services.invoices import credit_note_pdf, invoice_pdf
-from app.services.platform_settings import PRODUCT_REPORT_REASONS, RETURN_REASONS, get_settings
+from app.services.platform_settings import DEFECT_REASONS, PRODUCT_REPORT_REASONS, RETURN_REASONS, get_settings
 from app.services.stats import bump
 
 router = APIRouter(tags=["customer"])
@@ -460,10 +460,17 @@ class ReturnIn(BaseModel):
     comment: str = Field(default="", max_length=2000)
     refund_upi: str = Field(default="", max_length=60)
 
+    def lines(self) -> list[tuple[uuid.UUID, int]]:
+        try:
+            return [(uuid.UUID(str(i["order_item_id"])), int(i["qty"])) for i in self.items]
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ApiError("Choose the items and quantities to return", "invalid_items") from exc
+
 
 @router.get("/api/returns/reasons")
 async def return_reasons() -> dict:
-    return {"reasons": [{"code": k, "label": v} for k, v in RETURN_REASONS.items()]}
+    # `defect`: also allowed for items that can be returned only when they arrived damaged, faulty, wrong or incomplete
+    return {"reasons": [{"code": k, "label": v, "defect": k in DEFECT_REASONS} for k, v in RETURN_REASONS.items()]}
 
 
 @router.get("/api/orders/{order_id}/returnable")
@@ -481,11 +488,7 @@ async def returnable(order_id: uuid.UUID, user: CurrentUser, session: SessionDep
 
 @router.post("/api/returns", status_code=201)
 async def create_return(body: ReturnIn, user: CurrentUser, session: SessionDep) -> dict:
-    try:
-        items = [(uuid.UUID(str(i["order_item_id"])), int(i["qty"])) for i in body.items]
-    except (KeyError, ValueError, TypeError) as exc:
-        raise ApiError("Choose the items and quantities to return", "invalid_items") from exc
-    ret = await returns_svc.create(session, user, body.sub_order_id, items, body.reason, body.comment, body.refund_upi.strip())
+    ret = await returns_svc.create(session, user, body.sub_order_id, body.lines(), body.reason, body.comment, body.refund_upi.strip())
     await session.commit()
     return await returns_svc.return_out(session, ret)
 

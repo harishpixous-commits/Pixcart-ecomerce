@@ -33,6 +33,9 @@ DEFAULTS: dict[str, Any] = {
     "feature_support": True,
     "reviews_need_approval": False,
     "auto_approve_returns": False,
+    # an item that arrived damaged, defective, wrong or incomplete can be returned for this many days after delivery,
+    # even when its listing is not returnable (Consumer Protection (E-Commerce) Rules 2020); 0 = off
+    "defect_return_days": 7,
     # delivery estimate (days in transit, added to the seller's dispatch days)
     "transit_days_same_city": 1,
     "transit_days_same_state": 3,
@@ -119,6 +122,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "feature_support": (bool, 0, 1),
     "reviews_need_approval": (bool, 0, 1),
     "auto_approve_returns": (bool, 0, 1),
+    "defect_return_days": (int, 0, 30),
     "transit_days_same_city": (int, 0, 15),
     "transit_days_same_state": (int, 0, 20),
     "transit_days_national": (int, 0, 30),
@@ -196,6 +200,8 @@ RETURN_REASONS = {
     "missing_parts": "Parts or accessories missing",
     "quality": "Quality is not as expected",
 }
+# The seller's fault: these returns are accepted for defect_return_days even when the listing is not returnable.
+DEFECT_REASONS = ("damaged", "defective", "wrong_item", "missing_parts")
 
 _ROW_KEY = "marketplace"
 

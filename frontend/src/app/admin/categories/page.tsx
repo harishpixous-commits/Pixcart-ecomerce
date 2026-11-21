@@ -8,8 +8,16 @@ import { useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
 import { GST_RATES, pct } from "@/lib/format";
 
-type Cat = { id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean; required_details: string[] };
-const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[] };
+type Cat = {
+  id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean; required_details: string[];
+  return_window_days: number; min_return_window_days: number;
+};
+const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[], returnDays: "7", minReturnDays: "0" };
+
+function returnPolicy(c: Cat): string {
+  const days = c.return_window_days ? `${c.return_window_days} days` : "Not returnable";
+  return c.min_return_window_days ? `${days}, at least ${c.min_return_window_days}` : days;
+}
 
 export default function AdminCategories() {
   const toast = useToast();
@@ -44,13 +52,15 @@ export default function AdminCategories() {
   function open(c: Cat | "new") {
     setError(null);
     setEditing(c);
-    setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active, image_url: c.image_url, required: c.required_details ?? [] });
+    setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active, image_url: c.image_url, required: c.required_details ?? [],
+      returnDays: String(c.return_window_days), minReturnDays: String(c.min_return_window_days) });
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: f.image_url, required_details: f.required };
+    const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: f.image_url, required_details: f.required,
+      return_window_days: Number(f.returnDays), min_return_window_days: Number(f.minReturnDays) };
     try {
       if (editing === "new") await api("/api/admin/categories", { method: "POST", body });
       else if (editing) await api(`/api/admin/categories/${editing.id}`, { method: "PUT", body });
@@ -65,13 +75,14 @@ export default function AdminCategories() {
   if (!cats) return <PageLoader />;
   return (
     <div>
-      <PageHeader title="Categories" sub="Sellers list products in the most specific category. Commission and GST here are defaults." actions={<Button onClick={() => open("new")}>Add category</Button>} />
-      <Table head={["Category", "Commission", "Default GST", "Required information", "Order", "Status", ""]}>
+      <PageHeader title="Categories" sub="Sellers list products in the most specific category. Commission, GST and returns here apply to that category." actions={<Button onClick={() => open("new")}>Add category</Button>} />
+      <Table head={["Category", "Commission", "Default GST", "Returns", "Required information", "Order", "Status", ""]}>
         {ordered.map(({ c, depth }) => (
           <tr key={c.id}>
             <td className="px-4 py-2.5" style={{ paddingLeft: 16 + depth * 24 }}>{depth ? "└ " : ""}<span className={depth ? "" : "font-semibold"}>{c.name}</span></td>
             <td className="px-4 py-2.5">{pct(c.commission_bps)}</td>
             <td className="px-4 py-2.5">{pct(c.default_gst_bps)}</td>
+            <td className="px-4 py-2.5 text-sm">{returnPolicy(c)}</td>
             <td className="px-4 py-2.5 text-sm text-ink-soft">{c.required_details?.length ? `${c.required_details.length} items` : "—"}</td>
             <td className="px-4 py-2.5">{c.position}</td>
             <td className="px-4 py-2.5">{c.is_active ? <Pill tone="green">Active</Pill> : <Pill>Hidden</Pill>}</td>
@@ -99,6 +110,12 @@ export default function AdminCategories() {
             <TextField label="Display order" inputMode="numeric" value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} />
             <label className="flex items-center gap-2 pt-6"><input type="checkbox" className="accent-peacock" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> Visible</label>
           </div>
+          <fieldset className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2">
+            <legend className="px-1 text-sm font-semibold">Returns</legend>
+            <TextField label="Return window (days)" inputMode="numeric" value={f.returnDays} onChange={(e) => setF({ ...f, returnDays: e.target.value })} hint="New listings start with this. 0 means not returnable." required />
+            <TextField label="Shortest window sellers may set" inputMode="numeric" value={f.minReturnDays} onChange={(e) => setF({ ...f, minReturnDays: e.target.value })} hint="Days. Listings below it move up to it when you save." required />
+            <p className="text-xs text-ink-faint sm:col-span-2">Up to 30 days. Damaged, faulty or wrong items can always be returned for the period set in Settings.</p>
+          </fieldset>
           <fieldset className="rounded-lg border border-line p-3">
             <legend className="px-1 text-sm font-semibold">Product information sellers must give</legend>
             <p className="mb-2 text-xs text-ink-faint">A listing in this category (or one inside it) cannot be sent for review until these are filled in. For packaged goods, Legal Metrology rules expect net quantity, manufacturer or packer, importer for imports and consumer care details; add FSSAI licence for food.</p>

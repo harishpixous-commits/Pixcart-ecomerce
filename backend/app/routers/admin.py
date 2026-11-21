@@ -82,6 +82,8 @@ class CategoryIn(BaseModel):
     position: int = Field(default=0, ge=0, le=10_000)
     is_active: bool = True
     required_details: list[str] = Field(default_factory=list, max_length=20)
+    return_window_days: int = Field(default=7, ge=0, le=30)  # what new listings start with
+    min_return_window_days: int = Field(default=0, ge=0, le=30)  # sellers cannot set less
 
     @field_validator("required_details")
     @classmethod
@@ -433,6 +435,8 @@ def _cat_out(c: Category) -> dict:
         "position": c.position,
         "is_active": c.is_active,
         "required_details": list(c.required_details or []),
+        "return_window_days": c.return_window_days,
+        "min_return_window_days": c.min_return_window_days,
     }
 
 
@@ -453,6 +457,9 @@ async def list_categories(admin: Perm("catalog"), session: SessionDep) -> list[d
 async def _validate_category(session, body: CategoryIn, current: Category | None) -> None:
     if body.default_gst_bps not in GST_RATES_BPS:
         raise ApiError("Choose a valid GST rate", "invalid_gst", fields={"default_gst_bps": "Invalid"})
+    if body.min_return_window_days > body.return_window_days:
+        raise ApiError("Make the default return window at least as long as the shortest window sellers may set", "invalid_return_window",
+                       fields={"return_window_days": f"At least {body.min_return_window_days} days"})
     if body.parent_id:
         parent = await session.get(Category, body.parent_id)
         if parent is None:
@@ -490,7 +497,10 @@ async def update_category(category_id: uuid.UUID, body: CategoryIn, admin: Perm(
     await _validate_category(session, body, c)
     for k, v in body.model_dump().items():
         setattr(c, k, v)
-    audit(session, admin, "category.update", "category", c.id)
+    # listings below a raised minimum move up to it (customers who already bought keep the window of their order)
+    raised = (await session.execute(update(Product).where(Product.category_id == c.id, Product.return_window_days < c.min_return_window_days)
+                                    .values(return_window_days=c.min_return_window_days))).rowcount
+    audit(session, admin, "category.update", "category", c.id, f"Listings raised to the {c.min_return_window_days}-day minimum return window: {raised}" if raised else "")
     await session.commit()
     return _cat_out(c)
 

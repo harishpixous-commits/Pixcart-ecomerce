@@ -40,7 +40,7 @@ from app.models import (
     TicketMessage,
     User,
 )
-from app.routers.customer import refresh_ratings, ticket_out
+from app.routers.customer import ReturnIn, refresh_ratings, ticket_out
 from app.routers.orders import run_refunds
 from app.routers.seller_extras import (
     SellerCouponIn,
@@ -322,6 +322,29 @@ async def admin_returns(admin: Perm("orders"), session: SessionDep, status: str 
     counts = dict((await session.execute(select(ReturnRequest.status, func.count()).group_by(ReturnRequest.status))).all())
     return {"items": [await returns_svc.return_out(session, r, with_upi=True, viewer="admin") for r in rows], "status_counts": counts,
             "total": total, "page": page, "page_size": 30}
+
+
+@router.get("/orders/{order_id}/returnable")
+async def admin_returnable(order_id: uuid.UUID, admin: Perm("orders"), session: SessionDep) -> dict:
+    """What can still be returned from each package of the order, by the same rules as the customer's own request."""
+    o = await session.get(Order, order_id)
+    if o is None:
+        raise NotFound("Order")
+    subs = (await session.execute(select(SubOrder).where(SubOrder.order_id == o.id))).scalars()
+    return {"items": {str(s.id): await returns_svc.returnable_items(session, s) for s in subs}, "needs_upi": o.payment_method == "cod"}
+
+
+@router.post("/returns", status_code=201)
+async def admin_open_return(body: ReturnIn, admin: Perm("orders"), session: SessionDep) -> dict:
+    """Staff open a return for the customer (for example when they call support), with the customer's own checks."""
+    order = (await session.execute(select(Order).join(SubOrder, SubOrder.order_id == Order.id).where(SubOrder.id == body.sub_order_id))).scalar_one_or_none()
+    if order is None:
+        raise NotFound("Order")
+    customer = await session.get(User, order.user_id)
+    ret = await returns_svc.create(session, customer, body.sub_order_id, body.lines(), body.reason, body.comment, body.refund_upi.strip())
+    audit(session, admin, "return.admin_open", "return", ret.id, f"{ret.number} on order {order.number}, reason {body.reason}")
+    await session.commit()
+    return await returns_svc.return_out(session, ret, with_upi=True, viewer="admin")
 
 
 class AdminReturnAction(BaseModel):

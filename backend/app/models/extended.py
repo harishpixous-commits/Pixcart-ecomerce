@@ -210,7 +210,11 @@ class ReturnItem(IdMixin, Base):
     # set when the seller receives it: back in sellable stock, or damaged (kept out of stock)
     condition: Mapped[str] = mapped_column(String(10), default="", server_default="")
 
-    __table_args__ = (CheckConstraint("qty > 0", name="qty"), CheckConstraint("condition IN ('','sellable','damaged')", name="condition"))
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="qty"),
+        CheckConstraint("condition IN ('','sellable','damaged')", name="condition"),
+        UniqueConstraint("return_id", "order_item_id", name="uq_return_items_return_order_item"),
+    )
 
 
 class Coupon(IdMixin, TimestampMixin, Base):

@@ -13,6 +13,7 @@ type S = {
   reviews_need_approval: boolean; auto_approve_returns: boolean; transit_days_same_city: number; transit_days_same_state: number; transit_days_national: number;
   auto_cancel_unconfirmed_hours: number; auto_payouts: boolean; payout_min_paise: number; low_stock_threshold: number;
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
+  defect_return_days: number;
 };
 
 const FLAGS: [keyof S, string, string][] = [
@@ -43,6 +44,7 @@ export default function AdminSettings() {
         codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item),
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
+        defectDays: String(x.defect_return_days),
       });
     }).catch(quietly);
   }, []);
@@ -59,6 +61,7 @@ export default function AdminSettings() {
         cod_max_order_paise: toPaise(f.codMax), tcs_bps: bps(f.tcs), tds_bps: bps(f.tds), commission_gst_bps: bps(f.cgst), max_qty_per_item: Number(f.qty),
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
+        defect_return_days: Number(f.defectDays),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
       setS(await api<S>("/api/admin/settings", { method: "PUT", body }));
@@ -128,6 +131,15 @@ export default function AdminSettings() {
         <h2 className="text-lg font-semibold sm:col-span-2">Orders and payouts</h2>
         <TextField label="Cancel orders sellers don't confirm within (hours)" {...bind("autoCancel")} hint="0 turns this off. Customers are refunded in full." />
         <TextField label="Minimum payout (₹)" {...bind("payoutMin")} hint="Smaller balances wait for the next run" />
+      </section>
+      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
+        <h2 className="text-lg font-semibold sm:col-span-2">Returns</h2>
+        <TextField label="Take back damaged, faulty or wrong items for (days)" inputMode="numeric" {...bind("defectDays")}
+          hint="Counted from delivery, also when a listing is not returnable. Sellers are paid after this period. 0 turns this off." />
+        <p className="text-sm text-ink-soft">
+          Each category&apos;s return window, and the shortest window sellers may choose, are set in{" "}
+          <Link href="/admin/categories" className="font-semibold text-peacock">Categories</Link>.
+        </p>
       </section>
       <Button type="submit" loading={busy} className="self-start">Save settings</Button>
     </form>

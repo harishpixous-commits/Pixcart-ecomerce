@@ -26,8 +26,21 @@ export async function openPdf(path: string, onError: (m: string) => void) {
   }
 }
 
-export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDone }: { subId: string; items: ReturnableItem[]; needsUpi: boolean; open: boolean; onClose: () => void; onDone: () => void }) {
-  const [reasons, setReasons] = useState<{ code: string; label: string }[]>([]);
+// The customer asks for a return themselves; staff (Admin → order) open one on the customer's behalf, by the same rules.
+const REQUEST_COPY = {
+  customer: {
+    path: "/api/returns", title: "Return items", why: "Why are you returning?", upi: "UPI ID for your refund",
+    upiHint: "You paid cash on delivery, so we send the refund to this UPI ID", submit: "Request return", done: "Return requested", failed: "Could not request the return",
+  },
+  staff: {
+    path: "/api/admin/returns", title: "Open a return for the customer", why: "Why is the customer returning?", upi: "Customer's UPI ID for the refund",
+    upiHint: "They paid cash on delivery, so the refund goes to this UPI ID", submit: "Open return", done: "Return opened", failed: "Could not open the return",
+  },
+};
+
+export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDone, staff = false }: { subId: string; items: ReturnableItem[]; needsUpi: boolean; open: boolean; onClose: () => void; onDone: () => void; staff?: boolean }) {
+  const copy = REQUEST_COPY[staff ? "staff" : "customer"];
+  const [reasons, setReasons] = useState<{ code: string; label: string; defect: boolean }[]>([]);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
@@ -36,25 +49,29 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   useEffect(() => {
-    if (open) api<{ reasons: { code: string; label: string }[] }>("/api/returns/reasons").then((r) => setReasons(r.reasons)).catch(quietly);
+    if (open) api<{ reasons: { code: string; label: string; defect: boolean }[] }>("/api/returns/reasons").then((r) => setReasons(r.reasons)).catch(quietly);
   }, [open]);
   const chosen = items.filter((i) => (qty[i.order_item_id] ?? 0) > 0);
   const refund = chosen.reduce((n, i) => n + i.unit_refund * (qty[i.order_item_id] ?? 0), 0);
+  // an item past its own return window comes back only if it arrived damaged, faulty, wrong or incomplete
+  const defectsOnly = chosen.some((i) => i.defects_only);
+  const allowed = defectsOnly ? reasons.filter((r) => r.defect) : reasons;
+  const why = allowed.some((r) => r.code === reason) ? reason : "";
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/returns", { method: "POST", body: { sub_order_id: subId, items: chosen.map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason, comment, refund_upi: upi } });
-      toast("Return requested");
+      await api(copy.path, { method: "POST", body: { sub_order_id: subId, items: chosen.map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: why, comment, refund_upi: upi } });
+      toast(copy.done);
       onDone();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not request the return");
+      setError(e instanceof ApiError ? e.message : copy.failed);
     } finally {
       setBusy(false);
     }
   }
   return (
-    <Modal open={open} onClose={onClose} title="Return items" wide>
+    <Modal open={open} onClose={onClose} title={copy.title} wide>
       <div className="flex flex-col gap-4">
         <ErrorNote message={error} />
         <div className="flex flex-col gap-3">
@@ -63,7 +80,10 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
               <ProductImage src={i.image} alt="" className="h-14 w-14 shrink-0" />
               <div className="flex-1">
                 <p className="font-medium">{i.title}</p>
-                <p className="text-sm text-ink-faint">{i.eligible ? `Return by ${date(i.return_by)}, refund ${rupees(i.unit_refund)} each` : "Return window closed or not returnable"}</p>
+                <p className="text-sm text-ink-faint">
+                  {!i.eligible ? "Return window closed or not returnable"
+                    : `${i.defects_only ? "Only if it arrived damaged, faulty, wrong or incomplete: return" : "Return"} by ${date(i.return_by)}, refund ${rupees(i.unit_refund)} each`}
+                </p>
               </div>
               <Select aria-label={`Quantity to return of ${i.title}`} disabled={!i.eligible} value={qty[i.order_item_id] ?? 0} onChange={(e) => setQty({ ...qty, [i.order_item_id]: Number(e.target.value) })} className="h-9 w-20">
                 {Array.from({ length: i.qty_left + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
@@ -71,17 +91,17 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
             </div>
           ))}
         </div>
-        <Field label="Why are you returning?" htmlFor="rr">
-          <Select id="rr" value={reason} onChange={(e) => setReason(e.target.value)}>
+        <Field label={copy.why} htmlFor="rr" hint={defectsOnly ? "Some items you chose can be returned only for these reasons" : undefined}>
+          <Select id="rr" value={why} onChange={(e) => setReason(e.target.value)}>
             <option value="">Choose a reason</option>
-            {reasons.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+            {allowed.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
           </Select>
         </Field>
         <Field label="More details (optional)" htmlFor="rc"><Textarea id="rc" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={3} /></Field>
-        {needsUpi && <TextField label="UPI ID for your refund" value={upi} onChange={(e) => setUpi(e.target.value.trim())} placeholder="yourname@okbank" hint="You paid cash on delivery, so we send the refund to this UPI ID" />}
+        {needsUpi && <TextField label={copy.upi} value={upi} onChange={(e) => setUpi(e.target.value.trim())} placeholder="yourname@okbank" hint={copy.upiHint} />}
         <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
           <p>Refund: <span className="font-display text-lg font-bold">{rupees(refund)}</span></p>
-          <Button onClick={submit} loading={busy} disabled={!chosen.length || !reason || (needsUpi && !upi)}>Request return</Button>
+          <Button onClick={submit} loading={busy} disabled={!chosen.length || !why || (needsUpi && !upi)}>{copy.submit}</Button>
         </div>
       </div>
     </Modal>

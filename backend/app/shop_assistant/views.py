@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Order, OrderItem, Product, Refund, ReturnRequest, Seller, SubOrder, SupportTicket, TicketMessage
+from app.models import Order, OrderItem, Refund, ReturnRequest, Seller, SubOrder, SupportTicket, TicketMessage
 from app.services import returns as returns_svc
 from app.services.orders import CUSTOMER_CANCELLABLE
 from app.services.platform_settings import RETURN_REASONS
@@ -75,7 +75,6 @@ async def order_view(session: AsyncSession, o: Order) -> dict[str, Any]:
     subs = list((await session.execute(select(SubOrder).where(SubOrder.order_id == o.id).order_by(SubOrder.number))).scalars())
     items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id.in_([s.id for s in subs])))).scalars()) if subs else []
     sellers = dict((await session.execute(select(Seller.id, Seller.display_name).where(Seller.id.in_({s.seller_id for s in subs})))).all()) if subs else {}
-    windows = dict((await session.execute(select(Product.id, Product.return_window_days).where(Product.id.in_({i.product_id for i in items})))).all()) if items else {}
     refunds = list((await session.execute(select(Refund).where(Refund.order_id == o.id).order_by(Refund.created_at))).scalars())
     rets = list((await session.execute(select(ReturnRequest).where(ReturnRequest.sub_order_id.in_([s.id for s in subs])).order_by(ReturnRequest.created_at))).scalars()) if subs else []
     packages = []
@@ -87,7 +86,7 @@ async def order_view(session: AsyncSession, o: Order) -> dict[str, Any]:
             "seller": sellers.get(s.seller_id, ""),
             "steps": [{"key": k, "label": PACKAGE_STATUS[k], "done": s.status != "cancelled" and i <= reached} for i, k in enumerate(STEPS)],
             "items": [{"title": i.title, "variant": i.variant_label, "image": i.image_url, "qty": i.qty, "amount": inr(i.line_total),
-                       "return_window_days": windows.get(i.product_id, 0)} for i in items if i.sub_order_id == s.id],
+                       "return_window_days": i.return_window_days} for i in items if i.sub_order_id == s.id],
             "expected_delivery_at": _d(s.expected_delivery_at), "shipped_at": _d(s.shipped_at), "delivered_at": _d(s.delivered_at),
             "cancelled_at": _d(s.cancelled_at), "cancel_reason": s.cancel_reason if s.status == "cancelled" else "",
             "courier": s.courier_name, "tracking_number": s.tracking_number, "tracking_url": s.tracking_url,

@@ -58,7 +58,7 @@ All amounts are integer paise and rates are basis points (100 bps = 1%). Roundin
 | TCS (CGST Act s.52) | 0.5% of net taxable value; split CGST/SGST or IGST in the GSTR-8 report |
 | TDS (Income-tax s.194-O / s.393 of the 2025 Act) | 0.1% of gross amount |
 | Seller payout | gross − commission − GST on commission − TCS − TDS |
-| Payout date | delivery date + the longest return window among the items |
+| Payout date | delivery date + the longest return window among the items (as saved on the order), and never before the period for damaged, faulty or wrong items ends |
 
 The GSTR-8 report (Admin → TCS report) lists supplier-wise net taxable value and TCS for sub-orders placed
 in the month, excluding cancelled ones, less the taxable value and TCS of returns received in the month.
@@ -83,6 +83,9 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 
 - New listings and **content** edits (title, description, images, category, GST, HSN, specs, return window)
   go to review. **Price and stock** edits on a live listing apply immediately.
+- Each category has a return policy (Admin → Categories): the window a new listing starts with (also used for a
+  blank cell in the bulk upload) and the shortest window a seller may set, up to 30 days. When staff raise the
+  minimum, listings below it move up to it at once (written to the audit log); orders already placed keep their window.
 - A listing is visible only when it is approved, its seller is approved, and it has an active variant.
   Suspending a seller hides all of their listings at once.
 - Images must be uploaded through PixCart. They are re-encoded to WebP, which removes EXIF and GPS data.
@@ -141,9 +144,19 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 
 ## Returns
 
-- A customer can return eligible items within the product's return window, counted from delivery.
+- A customer can return eligible items within the return window the listing showed when the order was placed,
+  counted from delivery. Each order item keeps that window: a later edit to the listing changes only new orders.
+- An item that arrived damaged, faulty, wrong or with parts missing can be returned for that reason for a set number
+  of days after delivery (Admin → Settings → Returns, 7 by default; 0 turns it off), even when the listing is not
+  returnable or its own window has closed (Consumer Protection (E-Commerce) Rules 2020). Seller payouts wait for
+  that period too.
+- A return request lists each item once; an item named twice is counted once, with its quantities added up.
 - Flow: requested → approved (or rejected with a reason) → picked up → received → refunded. Admins can step
   in at every stage; "approve returns automatically" skips the seller's approval.
+- Staff with the orders permission ("Orders and returns") can open a return for a customer from the order
+  (Admin → Orders → Open a return), for example when the customer calls support. The customer's own rules apply
+  (windows, reasons, UPI ID for cash-on-delivery refunds); the return is the customer's, and the audit log names
+  the staff member.
 - On receipt: stock goes back to the warehouse, the seller's ledger is reversed for those items, a credit
   note is issued, and online payments are refunded to the original method. For cash on delivery, the
   customer gives a UPI ID and finance records the UPI reference when the refund is paid.

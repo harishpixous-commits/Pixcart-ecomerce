@@ -553,6 +553,9 @@ export interface SellerCategory {
   path: string;
   commission_bps: number;
   default_gst_bps: number;
+  /** the return window new listings start with, and the shortest one a seller may set */
+  return_window_days: number;
+  min_return_window_days: number;
 }
 
 export interface SellerOrder {
@@ -756,5 +759,7 @@ export interface ReturnableItem {
   qty_left: number;
   return_by: string;
   eligible: boolean;
+  /** past its own return window (or not returnable): it can come back only if it arrived damaged, faulty, wrong or incomplete */
+  defects_only: boolean;
   unit_refund: Paise;
 }

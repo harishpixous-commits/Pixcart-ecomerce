@@ -46,7 +46,7 @@ function AdminReturnsInner() {
   const c = d?.status_counts ?? {};
   return (
     <div>
-      <PageHeader title="Returns" sub="Step in when a seller doesn't respond, settle disputes, and record UPI refunds for cash-on-delivery returns." actions={<ExportButton scope="admin" name="returns" status={status || undefined} />} />
+      <PageHeader title="Returns" sub="Step in when a seller doesn't respond, settle disputes, and record UPI refunds for cash-on-delivery returns. To open a return for a customer, use Open a return on their order." actions={<ExportButton scope="admin" name="returns" status={status || undefined} />} />
       <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[["requested", "Waiting for seller"], ["approved", "Approved"], ["picked_up", "Picked up"], ["received", "Received, refund due"], ["refunded", "Refunded"], ["rejected", "Rejected"], ["", "All"]].map(([v, l]) => ({ value: v, label: l, count: v ? c[v] ?? 0 : undefined }))} />
       <Input placeholder="Return or package number, customer name or mobile" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="mb-3 max-w-sm" aria-label="Search returns" />
       {!canAct && <p className="mb-3 rounded-lg bg-mist p-3 text-sm text-ink-soft">You can see returns. Approving, rejecting and recording refunds needs the Refunds permission.</p>}

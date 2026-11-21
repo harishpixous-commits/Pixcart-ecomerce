@@ -17,7 +17,6 @@ from app.models import (
     Order,
     OrderItem,
     Payment,
-    Product,
     Refund,
     ReturnItem,
     ReturnRequest,
@@ -30,7 +29,7 @@ from app.services import inventory
 from app.services.invoices import next_number
 from app.services.ledger import post_return
 from app.services.notify import notify, notify_seller
-from app.services.platform_settings import RETURN_REASONS, get_settings
+from app.services.platform_settings import DEFECT_REASONS, RETURN_REASONS, get_settings
 
 OPEN = ("requested", "approved", "picked_up")
 UPI = re.compile(r"^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$")
@@ -56,10 +55,15 @@ def seller_value(it: OrderItem, qty: int) -> int:
 
 
 async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
+    """What can still be returned from a delivered package. Each item can be returned for any reason within the window
+    saved on it when the order was placed. After that, or when the listing is not returnable, an item that arrived
+    damaged, defective, wrong or incomplete can still be returned for the marketplace's ``defect_return_days``
+    (``defects_only``)."""
     if sub.status != "delivered" or not sub.delivered_at:
         return []
+    defect_days = (await get_settings(session))["defect_return_days"]
+    defect_until = sub.delivered_at + timedelta(days=defect_days)
     items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
-    windows = dict((await session.execute(select(Product.id, Product.return_window_days).where(Product.id.in_([i.product_id for i in items])))).all())
     pending = dict(
         (
             await session.execute(
@@ -74,12 +78,14 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
     now = utcnow()
     out = []
     for it in items:
-        days = windows.get(it.product_id, 0)
-        until = sub.delivered_at + timedelta(days=days)
+        until = sub.delivered_at + timedelta(days=it.return_window_days)
+        any_reason = it.return_window_days > 0 and now <= until
+        defects_only = not any_reason and defect_days > 0 and now <= defect_until
         left = it.qty - it.returned_qty - int(pending.get(it.id, 0))
         out.append({
             "order_item_id": str(it.id), "title": it.title, "variant_label": it.variant_label, "image": it.image_url,
-            "qty_left": max(0, left), "return_by": until.isoformat(), "eligible": days > 0 and now <= until and left > 0,
+            "qty_left": max(0, left), "return_by": (defect_until if defects_only else until).isoformat(),
+            "eligible": (any_reason or defects_only) and left > 0, "defects_only": defects_only,
             "unit_refund": paid_value(it, 1),
         })
     return out
@@ -98,6 +104,23 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
     eligible = {r["order_item_id"]: r for r in await returnable_items(session, sub)}
     if not items:
         raise ApiError("Choose at least one item to return", "no_items")
+    # One line per item: an item named twice counts once, with its quantities added up, before the check against
+    # what is left to return.
+    wanted: dict[uuid.UUID, int] = {}
+    for item_id, qty in items:
+        e = eligible.get(str(item_id))
+        if e is None or not e["eligible"]:
+            raise ApiError("One of the items can no longer be returned", "not_returnable")
+        if e["defects_only"] and reason not in DEFECT_REASONS:
+            raise ApiError(f"'{e['title']}' can now be returned only if it arrived damaged, faulty, wrong or with parts missing. "
+                           "Choose that reason, or leave this item out.", "reason_not_allowed")
+        if qty < 1:
+            raise ApiError(f"Choose how many of '{e['title']}' to return", "invalid_qty")
+        wanted[item_id] = wanted.get(item_id, 0) + qty
+    for item_id, qty in wanted.items():
+        e = eligible[str(item_id)]
+        if qty > e["qty_left"]:
+            raise ApiError(f"You can return at most {e['qty_left']} of '{e['title']}'", "invalid_qty")
     if order.payment_method == "cod" and not UPI.match(refund_upi or ""):
         raise ApiError("Enter the UPI ID where we should send your refund (for example name@okbank)", "upi_required", fields={"refund_upi": "Required"})
     ret = ReturnRequest(
@@ -107,12 +130,7 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
     session.add(ret)
     await session.flush()
     total = 0
-    for item_id, qty in items:
-        e = eligible.get(str(item_id))
-        if e is None or not e["eligible"]:
-            raise ApiError("One of the items can no longer be returned", "not_returnable")
-        if qty < 1 or qty > e["qty_left"]:
-            raise ApiError(f"You can return at most {e['qty_left']} of '{e['title']}'", "invalid_qty")
+    for item_id, qty in wanted.items():
         it = await session.get(OrderItem, item_id)
         amount = paid_value(it, qty)
         total += amount
