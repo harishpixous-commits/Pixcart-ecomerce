@@ -40,6 +40,8 @@ DEFAULTS: dict[str, Any] = {
     "auto_cancel_unconfirmed_hours": 72,  # 0 = off; placed orders the seller never confirms
     # payouts
     "auto_payouts": False,
+    "payout_weekday": 0,      # automatic payouts run at 10:00 IST on this day: 0 = Monday ... 6 = Sunday
+    "payout_every_weeks": 1,  # 1 = every week, 2 = every second week
     # product page gallery
     "gallery_zoom": True,  # magnify the photo on hover (desktop)
     "gallery_zoom_level": 25,  # zoom ×10: 25 = 2.5×
@@ -123,6 +125,8 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "transit_days_national": (int, 0, 30),
     "auto_cancel_unconfirmed_hours": (int, 0, 720),
     "auto_payouts": (bool, 0, 1),
+    "payout_weekday": (int, 0, 6),
+    "payout_every_weeks": (int, 1, 2),
     "gallery_zoom": (bool, 0, 1),
     "gallery_zoom_level": (int, 15, 40),
     "feature_product_videos": (bool, 0, 1),

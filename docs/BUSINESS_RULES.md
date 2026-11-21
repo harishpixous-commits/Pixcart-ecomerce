@@ -141,7 +141,11 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 - A payout run sweeps everything available per seller above the minimum payout. Manual mode produces a
   bank bulk-transfer CSV and finance records each UTR; RazorpayX mode sends the payout and confirms it by
   webhook. A failed or cancelled payout puts the money back to available.
-- Weekly automatic payouts (Monday morning) can be switched on in Admin → Settings.
+- Automatic payouts are off by default and can be switched on in Admin → Settings, with the payout day
+  (default Monday) and how often (every week, or every second week counted from Monday 1 January 2024).
+  The job checks every day at 10:00 IST and runs only on a payout day. Sellers' Payouts page shows the
+  real schedule and the next payout date, or "when the marketplace runs payouts" while automatic payouts
+  are off.
 
 ## Notifications
 

@@ -11,6 +11,7 @@ import logging
 import re
 import secrets
 import uuid
+from datetime import date, datetime, time, timedelta, timezone
 
 import httpx
 from sqlalchemy import func, select, update
@@ -22,9 +23,13 @@ from app.core.security import decrypt_field
 from app.db import utcnow
 from app.integrations import get as get_integrations
 from app.models import LedgerEntry, Payout, ReturnRequest, Seller, SubOrder
+from app.services.delivery import IST
 from app.services.notify import notify_seller
 
 log = logging.getLogger("pixcart.ledger")
+
+PAYOUT_RUN_IST = time(10, 0)  # the payout job (jobs.py) starts every day at this time and pays only on payout days
+_WEEK_ZERO = date(2024, 1, 1)  # a Monday: "every second week" counts whole weeks from here
 
 
 def _entry(seller_id, kind, amount, available_at, *, sub=None, ret=None, desc="") -> LedgerEntry:
@@ -130,6 +135,23 @@ async def create_payouts(session: AsyncSession, *, min_amount: int = 100, seller
         created.append(payout)
     await session.flush()
     return created
+
+
+def is_payout_day(cfg: dict, day: date) -> bool:
+    """Automatic payouts run on the weekday set in Admin → Settings, every week or every second week (IST dates)."""
+    return day.weekday() == cfg["payout_weekday"] and (day - _WEEK_ZERO).days // 7 % cfg["payout_every_weeks"] == 0
+
+
+def payout_schedule(cfg: dict, now: datetime | None = None) -> dict:
+    """The automatic payout schedule sellers see; ``next_at`` is when the next run starts (None when runs are off)."""
+    now = now or utcnow()
+    next_at = None
+    if cfg["auto_payouts"]:
+        today = now.astimezone(IST).date()
+        runs = (datetime.combine(today + timedelta(days=n), PAYOUT_RUN_IST, IST) for n in range(15))
+        next_at = next((r for r in runs if r > now and is_payout_day(cfg, r.date())), None)
+    return {"auto": cfg["auto_payouts"], "weekday": cfg["payout_weekday"], "every_weeks": cfg["payout_every_weeks"],
+            "min_paise": cfg["payout_min_paise"], "next_at": next_at.astimezone(timezone.utc).isoformat() if next_at else None}
 
 
 async def mark_paid(session: AsyncSession, payout: Payout, utr: str) -> None:

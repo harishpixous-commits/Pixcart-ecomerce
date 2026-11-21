@@ -45,9 +45,9 @@ from app.services import returns as returns_svc
 from app.services.analytics import kpis, product_performance
 from app.services.catalog import refresh_product_aggregates
 from app.services.invoices import credit_note_pdf, invoice_pdf
-from app.services.ledger import balances, payout_out
+from app.services.ledger import balances, payout_out, payout_schedule
 from app.services.orders import transition
-from app.services.platform_settings import PRODUCT_REPORT_REASONS
+from app.services.platform_settings import PRODUCT_REPORT_REASONS, get_settings
 
 router = APIRouter(prefix="/api/seller", tags=["seller-extras"])
 
@@ -358,7 +358,8 @@ async def act_return(return_id: uuid.UUID, body: ReturnAction, seller: SellerAcc
 @router.get("/payouts")
 async def seller_payouts(seller: SellerAccount, session: SessionDep) -> dict:
     rows = list((await session.execute(select(Payout).where(Payout.seller_id == seller.id).order_by(Payout.created_at.desc()).limit(100))).scalars())
-    return {"balances": await balances(session, seller.id), "payouts": [payout_out(p) for p in rows]}
+    return {"balances": await balances(session, seller.id), "payouts": [payout_out(p) for p in rows],
+            "schedule": payout_schedule(await get_settings(session))}
 
 
 @router.get("/ledger")

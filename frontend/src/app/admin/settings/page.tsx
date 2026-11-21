@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
-import { Button, ErrorNote, PageLoader, TextField, useToast } from "@/components/ui";
+import { Button, ErrorNote, Field, PageLoader, Select, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
-import { paiseToInput, toPaise } from "@/lib/format";
+import { paiseToInput, toPaise, WEEKDAYS } from "@/lib/format";
 
 type S = {
   shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number;
   feature_wishlist: boolean; feature_reviews: boolean; feature_returns: boolean; feature_coupons: boolean; feature_support: boolean;
   reviews_need_approval: boolean; auto_approve_returns: boolean; transit_days_same_city: number; transit_days_same_state: number; transit_days_national: number;
-  auto_cancel_unconfirmed_hours: number; auto_payouts: boolean; payout_min_paise: number;
+  auto_cancel_unconfirmed_hours: number; auto_payouts: boolean; payout_min_paise: number; payout_weekday: number; payout_every_weeks: number;
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
 };
 
@@ -22,7 +22,7 @@ const FLAGS: [keyof S, string, string][] = [
   ["auto_approve_returns", "Approve returns automatically", "Skip the seller's approval step; the seller still confirms receipt"],
   ["feature_coupons", "Coupons", "Coupon box and offers list at checkout"],
   ["feature_support", "Help centre", "Customers can raise support tickets"],
-  ["auto_payouts", "Weekly automatic payouts", "Create payouts every Monday for balances above the minimum"],
+  ["auto_payouts", "Automatic payouts", "Create payouts on the payout day (Orders and payouts) for balances above the minimum"],
 ];
 
 export default function AdminSettings() {
@@ -43,6 +43,7 @@ export default function AdminSettings() {
         codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item),
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise),
+        payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
       });
     }).catch(quietly);
   }, []);
@@ -59,6 +60,7 @@ export default function AdminSettings() {
         cod_max_order_paise: toPaise(f.codMax), tcs_bps: bps(f.tcs), tds_bps: bps(f.tds), commission_gst_bps: bps(f.cgst), max_qty_per_item: Number(f.qty),
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), ...flags,
+        payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
       setS(await api<S>("/api/admin/settings", { method: "PUT", body }));
@@ -126,6 +128,17 @@ export default function AdminSettings() {
         <h2 className="text-lg font-semibold sm:col-span-2">Orders and payouts</h2>
         <TextField label="Cancel orders sellers don't confirm within (hours)" {...bind("autoCancel")} hint="0 turns this off. Customers are refunded in full." />
         <TextField label="Minimum payout (₹)" {...bind("payoutMin")} hint="Smaller balances wait for the next run" />
+        <Field label="Payout day" htmlFor="payDay" hint="Automatic payouts start at 10:00 IST on this day">
+          <Select id="payDay" value={f.payDay} onChange={(e) => setF({ ...f, payDay: e.target.value })}>
+            {WEEKDAYS.map((name, i) => <option key={name} value={i}>{name}</option>)}
+          </Select>
+        </Field>
+        <Field label="How often" htmlFor="payEvery" hint="Sellers see the next payout date on their Payouts page">
+          <Select id="payEvery" value={f.payEvery} onChange={(e) => setF({ ...f, payEvery: e.target.value })}>
+            <option value="1">Every week</option>
+            <option value="2">Every two weeks</option>
+          </Select>
+        </Field>
       </section>
       <Button type="submit" loading={busy} className="self-start">Save settings</Button>
     </form>
