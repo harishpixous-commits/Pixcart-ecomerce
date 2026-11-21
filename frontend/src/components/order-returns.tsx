@@ -91,7 +91,7 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
             </div>
           ))}
         </div>
-        <Field label={copy.why} htmlFor="rr" hint={defectsOnly ? "Some items you chose are past their return window, so only these reasons apply" : undefined}>
+        <Field label={copy.why} htmlFor="rr" hint={defectsOnly ? "Some items you chose can be returned only for these reasons" : undefined}>
           <Select id="rr" value={why} onChange={(e) => setReason(e.target.value)}>
             <option value="">Choose a reason</option>
             {allowed.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}

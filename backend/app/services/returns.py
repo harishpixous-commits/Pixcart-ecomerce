@@ -63,7 +63,7 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
         return []
     defect_days = (await get_settings(session))["defect_return_days"]
     defect_until = sub.delivered_at + timedelta(days=defect_days)
-    items =list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
+    items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
     pending = dict(
         (
             await session.execute(

@@ -75,7 +75,7 @@ async def order_view(session: AsyncSession, o: Order) -> dict[str, Any]:
     subs = list((await session.execute(select(SubOrder).where(SubOrder.order_id == o.id).order_by(SubOrder.number))).scalars())
     items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id.in_([s.id for s in subs])))).scalars()) if subs else []
     sellers = dict((await session.execute(select(Seller.id, Seller.display_name).where(Seller.id.in_({s.seller_id for s in subs})))).all()) if subs else {}
-    refunds =list((await session.execute(select(Refund).where(Refund.order_id == o.id).order_by(Refund.created_at))).scalars())
+    refunds = list((await session.execute(select(Refund).where(Refund.order_id == o.id).order_by(Refund.created_at))).scalars())
     rets = list((await session.execute(select(ReturnRequest).where(ReturnRequest.sub_order_id.in_([s.id for s in subs])).order_by(ReturnRequest.created_at))).scalars()) if subs else []
     packages = []
     for s in subs:
