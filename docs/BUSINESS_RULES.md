@@ -79,6 +79,9 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 
 - New listings and **content** edits (title, description, images, category, GST, HSN, specs, return window)
   go to review. **Price and stock** edits on a live listing apply immediately.
+- Each category has a return policy (Admin → Categories): the window a new listing starts with (also used for a
+  blank cell in the bulk upload) and the shortest window a seller may set, up to 30 days. When staff raise the
+  minimum, listings below it move up to it at once (written to the audit log); orders already placed keep their window.
 - A listing is visible only when it is approved, its seller is approved, and it has an active variant.
   Suspending a seller hides all of their listings at once.
 - Images must be uploaded through PixCart. They are re-encoded to WebP, which removes EXIF and GPS data.

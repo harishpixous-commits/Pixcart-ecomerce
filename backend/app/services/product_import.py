@@ -16,7 +16,9 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import ApiError
 from app.models import Category, Seller, Variant
+from app.services.catalog import listing_return_window
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 2000
@@ -183,13 +185,17 @@ async def parse(session: AsyncSession, seller: Seller, data: bytes) -> tuple[lis
                 payload = ProductIn(
                     category_id=cat.id, title=f.get("title", ""), brand=f.get("brand", ""), description=f.get("description", ""),
                     highlights=[h for h in f.get("highlights", "").split("|") if h.strip()][:10], hsn_code=f.get("hsn_code", ""), gst_bps=gst_bps,
-                    country_of_origin=f.get("country_of_origin") or "India", return_window_days=_int(f.get("return_window_days", ""), "return_window_days", 7),
+                    country_of_origin=f.get("country_of_origin") or "India",
+                    return_window_days=_int(f.get("return_window_days", ""), "return_window_days", cat.return_window_days),
                     variants=g["variants"],
                 )
+                listing_return_window(cat, payload.return_window_days)
             except ValidationError as exc:
                 errors.extend(_messages(exc, bool(g["errors"])))
             except (ValueError, InvalidOperation) as exc:
                 errors.append(str(exc))
+            except ApiError as exc:
+                errors.append(exc.message)
         products.append({"key": g["key"], "row": g["row"], "title": f.get("title", ""), "category": cat.name if cat else f.get("category", ""),
                          "variants": len(g["variants"]), "errors": errors, "payload": payload if not errors else None})
     return products, file_errors

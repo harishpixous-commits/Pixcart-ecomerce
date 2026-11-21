@@ -42,10 +42,15 @@ class Category(IdMixin, TimestampMixin, Base):
     # Product information sellers must fill in before a listing in this category can be submitted
     # (keys from services.product_info.REQUIRABLE); sub-categories inherit their parents' list.
     required_details: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    # Return policy: the window a new listing starts with, and the shortest window a seller may set.
+    return_window_days: Mapped[int] = mapped_column(Integer, default=7, server_default="7")
+    min_return_window_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     __table_args__ = (
         CheckConstraint("commission_bps BETWEEN 0 AND 5000", name="commission"),
         CheckConstraint("default_gst_bps IN (0,25,300,500,1200,1800,2800,4000)", name="gst"),
+        CheckConstraint("return_window_days BETWEEN 0 AND 30", name="return_window"),
+        CheckConstraint("min_return_window_days BETWEEN 0 AND return_window_days", name="min_return_window"),
     )
 
 

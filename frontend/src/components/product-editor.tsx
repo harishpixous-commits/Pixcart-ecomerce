@@ -114,7 +114,11 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
     setCategoryId(id);
     const c = cats.find((x) => x.id === id);
     if (c && !product) setGst(c.default_gst_bps);
+    // the category's return policy: new listings start with its default and none may go below its minimum
+    if (c && (!product || Number(returnDays) < c.min_return_window_days)) setReturnDays(String(product ? c.min_return_window_days : c.return_window_days));
   }
+  const minReturn = cat?.min_return_window_days ?? 0;
+  const returnOptions = [...new Set([0, 3, 7, 10, 15, 30, cat?.return_window_days ?? 0, Number(returnDays)])].filter((d) => d >= minReturn).sort((a, b) => a - b);
 
   async function uploadImages(files: FileList) {
     setUploading(true);
@@ -410,9 +414,9 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
             {GST_RATES.map((r) => <option key={r} value={r}>{pct(r)}</option>)}
           </Select>
         </Field>
-        <Field label="Return window" htmlFor="ret">
+        <Field label="Return window" htmlFor="ret" hint={minReturn ? `At least ${minReturn} days in this category` : undefined}>
           <Select id="ret" value={returnDays} onChange={(e) => setReturnDays(e.target.value)}>
-            {[0, 3, 7, 10, 15, 30].map((d) => <option key={d} value={d}>{d === 0 ? "Not returnable" : `${d} days`}</option>)}
+            {returnOptions.map((d) => <option key={d} value={d}>{d === 0 ? "Not returnable" : `${d} days`}</option>)}
           </Select>
         </Field>
       </section>

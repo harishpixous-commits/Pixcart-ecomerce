@@ -1,5 +1,5 @@
-"""Return policy: one line per item in a return request, the return window promised when the order was placed, and
-returns of damaged, faulty, wrong or incomplete items."""
+"""Return policy: one line per item in a return request, the return window promised when the order was placed,
+returns of damaged, faulty, wrong or incomplete items, and each category's return policy."""
 from __future__ import annotations
 
 import uuid
@@ -10,11 +10,12 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
-from app.models import Order, ReturnItem, SubOrder
+from app.models import AuditLog, Order, ReturnItem, SubOrder
 from app.shop_assistant.views import order_view
-from tests.conftest import add_address, login_phone
+from tests.conftest import add_address, login_phone, upload_image
 from tests.test_gallery import body_from
 from tests.test_phase2_money import key, setup, ship_and_deliver
+from tests.test_product_import import make_csv, upload
 
 
 async def place(buyer, addr: str, variant_id: str, qty: int = 1) -> dict:
@@ -151,3 +152,50 @@ async def test_damaged_faulty_or_wrong_items_come_back_even_when_not_returnable(
     assert item["qty_left"] == 1 and not item["eligible"] and not item["defects_only"]
     r = await buyer.post("/api/returns", {**body, "reason": "defective"})
     assert r.status_code == 400 and r.json()["error"]["code"] == "not_returnable"
+
+
+async def test_category_return_policy(client, admin, categories):
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    assert shirt["return_window_days"] == 7  # listed without a window: the category's default
+    cat = next(c for c in (await admin.get("/api/admin/categories")).json() if c["id"] == categories["shirts"])
+    assert (cat["return_window_days"], cat["min_return_window_days"]) == (7, 0)
+    url = f"/api/admin/categories/{categories['shirts']}"
+
+    # The default cannot be shorter than the minimum.
+    r = await admin.put(url, cat | {"return_window_days": 5, "min_return_window_days": 10})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_return_window"
+    r = await admin.put(url, cat | {"return_window_days": 15, "min_return_window_days": 10})
+    assert r.status_code == 200 and (r.json()["return_window_days"], r.json()["min_return_window_days"]) == (15, 10)
+
+    # The live listing below the new minimum moves up to it, and the audit log says so.
+    detail = (await tn.get(f"/api/seller/products/{shirt['id']}")).json()
+    assert detail["return_window_days"] == 10 and detail["status"] == "approved"
+    async with SessionLocal() as s:
+        log = (await s.execute(select(AuditLog).where(AuditLog.action == "category.update"))).scalars().all()
+        assert [x.detail for x in log] == ["Listings raised to the 10-day minimum return window: 1"]
+
+    # Sellers see the policy and cannot go below the minimum.
+    sc = next(c for c in (await tn.get("/api/seller/categories")).json() if c["id"] == categories["shirts"])
+    assert (sc["return_window_days"], sc["min_return_window_days"]) == (15, 10)
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", body_from(detail, return_window_days=7))
+    assert r.status_code == 400 and r.json()["error"]["code"] == "return_window_too_short"
+    assert r.json()["error"]["fields"] == {"return_window_days": "At least 10 days"}
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", body_from(detail, return_window_days=30))
+    assert r.status_code == 200 and r.json()["return_window_days"] == 30
+
+    # A new listing without a window starts with the category's default.
+    new = body_from(detail, title="Handloom Cotton Shirt Green", images=[await upload_image(client, tn)],
+                    variants=[{"sku": "HL-G", "options": {}, "mrp_paise": 200000, "price_paise": 100000, "stock": 5}])
+    del new["return_window_days"]
+    r = await tn.post("/api/seller/products", new)
+    assert r.status_code == 201 and r.json()["return_window_days"] == 15
+
+    # Bulk upload: a blank window takes the default; a shorter one is refused with the reason.
+    rows = [["S-1", "Kovai Men's Cotton Formal Shirt White", "Men's Shirts", "Kovai", "Crisp white cotton shirt for office wear.", "", "6205", "5", "",
+             "India", "KS-1", "", "", "", "", "1299", "799", "20", "250"],
+            ["S-2", "Kovai Men's Linen Casual Shirt Beige", "Men's Shirts", "Kovai", "Linen shirt for summer, relaxed fit.", "", "6205", "5", "3",
+             "India", "KS-2", "", "", "", "", "1299", "799", "20", "250"]]
+    out = (await upload(tn, make_csv(rows), dry_run=False)).json()
+    assert [p["errors"] for p in out["products"]] == [[], ["Listings in Men's Shirts need a return window of at least 10 days"]]
+    created = (await tn.get(f"/api/seller/products/{out['created'][0]['id']}")).json()
+    assert created["return_window_days"] == 15

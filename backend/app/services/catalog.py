@@ -50,6 +50,17 @@ async def leaf_category(session: AsyncSession, category_id: uuid.UUID) -> Catego
     return cat
 
 
+def listing_return_window(cat: Category, days: int | None) -> int:
+    """A listing's return window: the category's default when the seller gives none, never shorter than the category's
+    minimum (Admin → Categories)."""
+    if days is None:
+        return cat.return_window_days
+    if days < cat.min_return_window_days:
+        raise ApiError(f"Listings in {cat.name} need a return window of at least {cat.min_return_window_days} days",
+                       "return_window_too_short", fields={"return_window_days": f"At least {cat.min_return_window_days} days"})
+    return days
+
+
 def check_image_url(url: str) -> str:
     """Only images uploaded through this platform may be attached to a listing."""
     prefix = settings.media_base_url.rstrip("/") + "/products/"

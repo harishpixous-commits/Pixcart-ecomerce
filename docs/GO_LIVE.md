@@ -108,7 +108,7 @@ Every key is encrypted before it is saved and never shown again. Saving keys ask
 | 5.1 | **Storefront → Business, contact and social** | Legal name, e-commerce operator GSTIN, registered address, grievance officer (name, email, phone), customer-care contacts, social links | `/contact` and the footer show them |
 | 5.2 | **Storefront → Brand** | Brand name, logo, colours, Google Analytics / Meta Pixel IDs (optional) | Shop header changes at once |
 | 5.3 | **Storefront → Pages** | Paste the lawyer's Terms, Privacy notice, Returns policy | Pages open without "placeholder" text |
-| 5.4 | **Settings** | Fees, COD limits, return window, and the tax rates your CA confirmed | — |
+| 5.4 | **Settings** | Fees, COD limits, the days damaged, faulty or wrong items can be returned, and the tax rates your CA confirmed. Each category's return window and minimum are in **Categories** | — |
 | 5.5 | **Integrations → Razorpay payments** | **Test** Key ID + Key secret; webhook secret. In Razorpay Dashboard → Webhooks add the webhook address shown on the page with the listed events | Test connection: "Connected to Razorpay in test mode" |
 | 5.6 | **Integrations → MSG91 SMS** | Auth key, OTP template ID (DLT approved), sender ID; switch on | Test with your mobile → SMS arrives |
 | 5.7 | **Integrations → Email** | SES SMTP user/password, sender address on your verified domain | Test → email arrives |

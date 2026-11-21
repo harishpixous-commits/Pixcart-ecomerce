@@ -543,6 +543,9 @@ export interface SellerCategory {
   path: string;
   commission_bps: number;
   default_gst_bps: number;
+  /** the return window new listings start with, and the shortest one a seller may set */
+  return_window_days: number;
+  min_return_window_days: number;
 }
 
 export interface SellerOrder {

@@ -1,4 +1,5 @@
-"""returns: one line per item in a return request; the return window saved on each order item
+"""returns: one line per item in a return request; the return window saved on each order item; a return policy per
+category (default window for new listings, shortest window sellers may set)
 
 Revision ID: 0019
 Revises: 0017
@@ -41,7 +42,16 @@ def upgrade() -> None:
     op.add_column("order_items", sa.Column("return_window_days", sa.Integer(), server_default="0", nullable=False))
     op.execute("UPDATE order_items oi SET return_window_days = p.return_window_days FROM products p WHERE p.id = oi.product_id")
 
+    op.add_column("categories", sa.Column("return_window_days", sa.Integer(), server_default="7", nullable=False))
+    op.add_column("categories", sa.Column("min_return_window_days", sa.Integer(), server_default="0", nullable=False))
+    op.create_check_constraint(op.f("ck_categories_return_window"), "categories", "return_window_days BETWEEN 0 AND 30")
+    op.create_check_constraint(op.f("ck_categories_min_return_window"), "categories", "min_return_window_days BETWEEN 0 AND return_window_days")
+
 
 def downgrade() -> None:
+    op.drop_constraint(op.f("ck_categories_min_return_window"), "categories", type_="check")
+    op.drop_constraint(op.f("ck_categories_return_window"), "categories", type_="check")
+    op.drop_column("categories", "min_return_window_days")
+    op.drop_column("categories", "return_window_days")
     op.drop_column("order_items", "return_window_days")
     op.drop_constraint("uq_return_items_return_order_item", "return_items", type_="unique")

@@ -23,6 +23,7 @@ from app.services.catalog import (
     discount_pct,
     images_for,
     leaf_category,
+    listing_return_window,
     refresh_product_aggregates,
     unique_product_slug,
     variant_label,
@@ -108,7 +109,7 @@ class ProductIn(BaseModel):
     hsn_code: str = Field(pattern=r"^\d{4}(\d{2}){0,2}$")
     gst_bps: int
     country_of_origin: str = Field(default="India", min_length=2, max_length=60)
-    return_window_days: int = Field(default=7, ge=0, le=30)
+    return_window_days: int | None = Field(default=None, ge=0, le=30)  # none: the category's default
     images: list[str] = Field(default_factory=list, max_length=MAX_IMAGES)
     videos: list[VideoIn] = Field(default_factory=list, max_length=10)
     variants: list[VariantIn] = Field(min_length=1, max_length=MAX_VARIANTS)
@@ -367,7 +368,8 @@ async def list_products(
 async def create_product(body: ProductIn, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
     if seller.status in ("suspended",):
         raise Conflict("Your seller account is suspended", "seller_suspended")
-    await leaf_category(session, body.category_id)
+    cat = await leaf_category(session, body.category_id)
+    body.return_window_days = listing_return_window(cat, body.return_window_days)
     p = Product(
         seller_id=seller.id,
         slug=await unique_product_slug(session, body.title),
@@ -441,7 +443,8 @@ async def update_product(product_id: uuid.UUID, body: ProductIn, seller: SellerA
     p = await _owned(session, seller.id, product_id, lock=True)
     if p.status == "archived":
         raise Conflict("Restore this product before editing it", "archived")
-    await leaf_category(session, body.category_id)
+    cat = await leaf_category(session, body.category_id)
+    body.return_window_days = listing_return_window(cat, p.return_window_days if body.return_window_days is None else body.return_window_days)
     before = {f: getattr(p, f) for f in CONTENT_FIELDS}
     before["details"] = details_of(p.details).model_dump()  # compare like with like (older rows have fewer keys)
     before_images = (await images_for(session, [p.id])).get(p.id, [])
@@ -543,7 +546,7 @@ async def restore_product(product_id: uuid.UUID, seller: SellerAccount, user: Cu
 
 @router.get("/categories")
 async def seller_categories(seller: SellerAccount, session: SessionDep) -> list[dict]:
-    """Leaf categories with their commission and default GST, for the listing form."""
+    """Leaf categories with their commission, default GST and return policy, for the listing form."""
     cats = list((await session.execute(select(Category).where(Category.is_active.is_(True)).order_by(Category.position, Category.name))).scalars())
     parents = {c.parent_id for c in cats if c.parent_id}
     by_id = {c.id: c for c in cats}
@@ -557,6 +560,7 @@ async def seller_categories(seller: SellerAccount, session: SessionDep) -> list[
             cur = by_id[cur.parent_id]
             path.insert(0, cur.name)
         bps = seller.commission_bps_override if seller.commission_bps_override is not None else c.commission_bps
-        out.append({"id": str(c.id), "name": c.name, "path": " › ".join(path), "commission_bps": bps, "default_gst_bps": c.default_gst_bps})
+        out.append({"id": str(c.id), "name": c.name, "path": " › ".join(path), "commission_bps": bps, "default_gst_bps": c.default_gst_bps,
+                    "return_window_days": c.return_window_days, "min_return_window_days": c.min_return_window_days})
     return sorted(out, key=lambda x: x["path"])
 
