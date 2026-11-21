@@ -81,6 +81,8 @@ async def get(session: AsyncSession, *, reveal: bool = False) -> dict[str, Any]:
     else:
         cfg["decision"]["laya_key_set"] = bool(enc)
         cfg["decision"]["laya_key"] = ""
+        url = cfg["decision"]["laya_url"]
+        cfg["decision"]["laya_url_blocked"] = bool(url) and not laya_allowed(url)  # saved before the public https rule
     return cfg
 
 
@@ -114,6 +116,15 @@ def _laya_url(value: Any) -> str:
     return url
 
 
+def laya_allowed(url: str) -> bool:
+    """Whether the decision layer may send questions to this address. One saved before the public https rule is
+    kept in the settings until someone changes it, but questions never go there."""
+    try:
+        return bool(_laya_url(url))
+    except ValueError:
+        return False
+
+
 def laya_changed(before: dict[str, Any], after: dict[str, Any]) -> bool:
     """Whether a save changes where questions go (address, path) or the token. Takes stored decision settings."""
     return any(before.get(k, "") != after.get(k, "") for k in ("laya_url", "laya_path", "laya_key"))
@@ -142,7 +153,9 @@ def validate(data: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     if not 0 <= d["min_confidence"] <= 1 or not 100 <= d["laya_timeout_ms"] <= 5000:
         raise ValueError("Confidence is 0–1 and the Laya timeout 100–5000 ms")
     d["prefetch"] = bool(d["prefetch"])
-    d["laya_url"] = _laya_url(d["laya_url"])
+    url = _text(d["laya_url"], 300).rstrip("/")
+    # An unchanged address saved before the public https rule does not block saving other settings; it is not used.
+    d["laya_url"] = url if url and url == current.get("laya_url") else _laya_url(url)
     d["laya_path"] = _text(d["laya_path"], 60) or "/predict"
     if not d["laya_path"].startswith("/"):
         raise ValueError("Laya path must start with /")
