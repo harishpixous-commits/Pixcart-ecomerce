@@ -1,5 +1,6 @@
 """Return policy: one line per item in a return request, the return window promised when the order was placed,
-returns of damaged, faulty, wrong or incomplete items, and each category's return policy."""
+returns of damaged, faulty, wrong or incomplete items, each category's return policy, and returns staff open for
+a customer."""
 from __future__ import annotations
 
 import uuid
@@ -12,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db import SessionLocal
 from app.models import AuditLog, Order, ReturnItem, SubOrder
 from app.shop_assistant.views import order_view
-from tests.conftest import add_address, login_phone, upload_image
+from tests.conftest import Api, add_address, login_phone, upload_image
 from tests.test_gallery import body_from
 from tests.test_phase2_money import key, setup, ship_and_deliver
 from tests.test_product_import import make_csv, upload
@@ -199,3 +200,44 @@ async def test_category_return_policy(client, admin, categories):
     assert [p["errors"] for p in out["products"]] == [[], ["Listings in Men's Shirts need a return window of at least 10 days"]]
     created = (await tn.get(f"/api/seller/products/{out['created'][0]['id']}")).json()
     assert created["return_window_days"] == 15
+
+
+async def staff(client, admin, email: str, role: str) -> Api:
+    r = await admin.post("/api/admin/staff", {"email": email, "name": role.title(), "role": role, "password": "Staff@2026xyz"})
+    assert r.status_code == 201, r.text
+    r = await client.post("/api/auth/login", json={"email": email, "password": "Staff@2026xyz"})
+    assert r.status_code == 200, r.text
+    client.cookies.clear()
+    return Api(client, r.json()["access_token"], r.json()["user"])
+
+
+async def test_staff_open_a_return_for_the_customer(client, admin, categories):
+    tn, buyer, o, sub_id, *_ = await delivered_order(client, admin, categories, qty=2)
+    support = await staff(client, admin, "help@pixcart.in", "support")
+    catalog = await staff(client, admin, "cat@pixcart.in", "catalog")
+
+    # Staff need the orders permission.
+    assert (await catalog.get(f"/api/admin/orders/{o['id']}/returnable")).status_code == 403
+    found = (await support.get(f"/api/admin/orders/{o['id']}/returnable")).json()
+    item = found["items"][sub_id][0]
+    assert found["needs_upi"] and item["eligible"] and item["qty_left"] == 2
+    body = {"sub_order_id": sub_id, "items": [{"order_item_id": item["order_item_id"], "qty": 1}], "reason": "defective",
+            "comment": "Customer called: it does not switch on"}
+    assert (await catalog.post("/api/admin/returns", body)).status_code == 403
+    assert (await support.post("/api/admin/returns", body | {"sub_order_id": str(uuid.uuid4())})).status_code == 404
+
+    # The customer's own checks apply: a cash-on-delivery refund needs their UPI ID.
+    r = await support.post("/api/admin/returns", body)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "upi_required"
+    r = await support.post("/api/admin/returns", body | {"refund_upi": "priya@okaxis"})
+    assert r.status_code == 201, r.text
+    ret = r.json()
+    assert ret["status"] == "requested" and ret["refund_upi"] == "priya@okaxis" and ret["refund_amount"] == item["unit_refund"]
+
+    # It is the customer's return: they see it, the seller is asked as usual, and the audit log names the staff member.
+    mine = (await buyer.get(f"/api/orders/{o['id']}/returnable")).json()
+    assert [x["number"] for x in mine["returns"]] == [ret["number"]] and mine["items"][sub_id][0]["qty_left"] == 1
+    assert any(n["title"].startswith("Return requested") for n in (await tn.get("/api/notifications")).json()["items"])
+    async with SessionLocal() as s:
+        row = (await s.execute(select(AuditLog).where(AuditLog.action == "return.admin_open"))).scalar_one()
+        assert row.entity_id == ret["id"] and row.actor_user_id == uuid.UUID(support.user["id"])

@@ -135,6 +135,10 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 - A return request lists each item once; an item named twice is counted once, with its quantities added up.
 - Flow: requested → approved (or rejected with a reason) → picked up → received → refunded. Admins can step
   in at every stage; "approve returns automatically" skips the seller's approval.
+- Staff with the orders permission ("Orders and returns") can open a return for a customer from the order
+  (Admin → Orders → Open a return), for example when the customer calls support. The customer's own rules apply
+  (windows, reasons, UPI ID for cash-on-delivery refunds); the return is the customer's, and the audit log names
+  the staff member.
 - On receipt: stock goes back to the warehouse, the seller's ledger is reversed for those items, a credit
   note is issued, and online payments are refunded to the original method. For cash on delivery, the
   customer gives a UPI ID and finance records the UPI reference when the refund is paid.

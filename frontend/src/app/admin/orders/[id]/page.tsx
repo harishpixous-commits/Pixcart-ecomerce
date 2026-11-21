@@ -4,11 +4,12 @@ import { Bike, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { ReturnRequestModal } from "@/components/order-returns";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Modal, PageLoader, StatusPill, Textarea, useToast } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
-import type { FleetTracking, OrderDetail } from "@/lib/types";
+import type { FleetTracking, OrderDetail, ReturnableItem } from "@/lib/types";
 import { CustomerMessage } from "./message";
 import { RiskBrief } from "@/components/ai";
 
@@ -22,6 +23,11 @@ export default function AdminOrderDetail() {
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => api<OrderDetail>(`/api/admin/orders/${id}`).then(setO).catch((e) => setError(e.message)), [id]);
   useEffect(() => { load(); }, [load]);
+  // what the customer can still return, package by package: staff can open a return for them
+  const [returnable, setReturnable] = useState<{ items: Record<string, ReturnableItem[]>; needs_upi: boolean } | null>(null);
+  const [returnFor, setReturnFor] = useState<string | null>(null);
+  const loadReturnable = useCallback(() => api<typeof returnable>(`/api/admin/orders/${id}/returnable`).then(setReturnable).catch(quietly), [id]);
+  useEffect(() => { loadReturnable(); }, [loadReturnable]);
 
   async function act(path: string, body?: object, msg = "Updated") {
     setBusy(true);
@@ -68,6 +74,7 @@ export default function AdminOrderDetail() {
                 }}>Mark delivered</Button>
               )}
               {["pending_payment", "placed", "confirmed", "packed"].includes(s.status) && <Button size="sm" variant="danger" onClick={() => setCancelId(s.id)}>Cancel and refund</Button>}
+              {(returnable?.items[s.id] ?? []).some((i) => i.eligible) && <Button size="sm" variant="secondary" onClick={() => setReturnFor(s.id)}>Open a return</Button>}
             </div>
           </div>
           <ul className="mb-2 text-[15px]">
@@ -102,6 +109,10 @@ export default function AdminOrderDetail() {
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason shown to the customer and seller" aria-label="Reason" />
         <Button className="mt-3" variant="buy" disabled={reason.trim().length < 5} loading={busy} onClick={() => act(`/api/admin/sub-orders/${cancelId}/cancel`, { reason }, "Cancelled")}>Cancel and refund</Button>
       </Modal>
+      {returnFor && returnable && (
+        <ReturnRequestModal staff subId={returnFor} items={returnable.items[returnFor] ?? []} needsUpi={returnable.needs_upi} open onClose={() => setReturnFor(null)}
+          onDone={() => { setReturnFor(null); loadReturnable(); }} />
+      )}
     </div>
   );
 }

@@ -26,7 +26,20 @@ export async function openPdf(path: string, onError: (m: string) => void) {
   }
 }
 
-export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDone }: { subId: string; items: ReturnableItem[]; needsUpi: boolean; open: boolean; onClose: () => void; onDone: () => void }) {
+// The customer asks for a return themselves; staff (Admin → order) open one on the customer's behalf, by the same rules.
+const REQUEST_COPY = {
+  customer: {
+    path: "/api/returns", title: "Return items", why: "Why are you returning?", upi: "UPI ID for your refund",
+    upiHint: "You paid cash on delivery, so we send the refund to this UPI ID", submit: "Request return", done: "Return requested", failed: "Could not request the return",
+  },
+  staff: {
+    path: "/api/admin/returns", title: "Open a return for the customer", why: "Why is the customer returning?", upi: "Customer's UPI ID for the refund",
+    upiHint: "They paid cash on delivery, so the refund goes to this UPI ID", submit: "Open return", done: "Return opened", failed: "Could not open the return",
+  },
+};
+
+export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDone, staff = false }: { subId: string; items: ReturnableItem[]; needsUpi: boolean; open: boolean; onClose: () => void; onDone: () => void; staff?: boolean }) {
+  const copy = REQUEST_COPY[staff ? "staff" : "customer"];
   const [reasons, setReasons] = useState<{ code: string; label: string; defect: boolean }[]>([]);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("");
@@ -48,17 +61,17 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
     setBusy(true);
     setError(null);
     try {
-      await api("/api/returns", { method: "POST", body: { sub_order_id: subId, items: chosen.map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: why, comment, refund_upi: upi } });
-      toast("Return requested");
+      await api(copy.path, { method: "POST", body: { sub_order_id: subId, items: chosen.map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: why, comment, refund_upi: upi } });
+      toast(copy.done);
       onDone();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not request the return");
+      setError(e instanceof ApiError ? e.message : copy.failed);
     } finally {
       setBusy(false);
     }
   }
   return (
-    <Modal open={open} onClose={onClose} title="Return items" wide>
+    <Modal open={open} onClose={onClose} title={copy.title} wide>
       <div className="flex flex-col gap-4">
         <ErrorNote message={error} />
         <div className="flex flex-col gap-3">
@@ -78,17 +91,17 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
             </div>
           ))}
         </div>
-        <Field label="Why are you returning?" htmlFor="rr" hint={defectsOnly ? "Some items you chose are past their return window, so only these reasons apply" : undefined}>
+        <Field label={copy.why} htmlFor="rr" hint={defectsOnly ? "Some items you chose are past their return window, so only these reasons apply" : undefined}>
           <Select id="rr" value={why} onChange={(e) => setReason(e.target.value)}>
             <option value="">Choose a reason</option>
             {allowed.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
           </Select>
         </Field>
         <Field label="More details (optional)" htmlFor="rc"><Textarea id="rc" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={3} /></Field>
-        {needsUpi && <TextField label="UPI ID for your refund" value={upi} onChange={(e) => setUpi(e.target.value.trim())} placeholder="yourname@okbank" hint="You paid cash on delivery, so we send the refund to this UPI ID" />}
+        {needsUpi && <TextField label={copy.upi} value={upi} onChange={(e) => setUpi(e.target.value.trim())} placeholder="yourname@okbank" hint={copy.upiHint} />}
         <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
           <p>Refund: <span className="font-display text-lg font-bold">{rupees(refund)}</span></p>
-          <Button onClick={submit} loading={busy} disabled={!chosen.length || !why || (needsUpi && !upi)}>Request return</Button>
+          <Button onClick={submit} loading={busy} disabled={!chosen.length || !why || (needsUpi && !upi)}>{copy.submit}</Button>
         </div>
       </div>
     </Modal>

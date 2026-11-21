@@ -460,6 +460,12 @@ class ReturnIn(BaseModel):
     comment: str = Field(default="", max_length=2000)
     refund_upi: str = Field(default="", max_length=60)
 
+    def lines(self) -> list[tuple[uuid.UUID, int]]:
+        try:
+            return [(uuid.UUID(str(i["order_item_id"])), int(i["qty"])) for i in self.items]
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ApiError("Choose the items and quantities to return", "invalid_items") from exc
+
 
 @router.get("/api/returns/reasons")
 async def return_reasons() -> dict:
@@ -482,11 +488,7 @@ async def returnable(order_id: uuid.UUID, user: CurrentUser, session: SessionDep
 
 @router.post("/api/returns", status_code=201)
 async def create_return(body: ReturnIn, user: CurrentUser, session: SessionDep) -> dict:
-    try:
-        items = [(uuid.UUID(str(i["order_item_id"])), int(i["qty"])) for i in body.items]
-    except (KeyError, ValueError, TypeError) as exc:
-        raise ApiError("Choose the items and quantities to return", "invalid_items") from exc
-    ret = await returns_svc.create(session, user, body.sub_order_id, items, body.reason, body.comment, body.refund_upi.strip())
+    ret = await returns_svc.create(session, user, body.sub_order_id, body.lines(), body.reason, body.comment, body.refund_upi.strip())
     await session.commit()
     return await returns_svc.return_out(session, ret)
 
