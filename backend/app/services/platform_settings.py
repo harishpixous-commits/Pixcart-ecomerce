@@ -24,6 +24,7 @@ DEFAULTS: dict[str, Any] = {
     "tds_bps": 10,
     "commission_gst_bps": 1800,
     "max_qty_per_item": 10,
+    "low_stock_threshold": 5,  # "Only N left" for shoppers, sellers' low-stock alert, filter and dashboard count
     # features customers and sellers see
     "feature_wishlist": True,
     "feature_reviews": True,
@@ -110,6 +111,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "tds_bps": (int, 0, 500),
     "commission_gst_bps": (int, 0, 2800),
     "max_qty_per_item": (int, 1, 10),
+    "low_stock_threshold": (int, 1, 1000),
     "feature_wishlist": (bool, 0, 1),
     "feature_reviews": (bool, 0, 1),
     "feature_returns": (bool, 0, 1),

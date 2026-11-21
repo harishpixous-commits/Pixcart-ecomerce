@@ -14,6 +14,8 @@ type Grid = {
   total: number;
   page: number;
   page_size: number;
+  /** "low stock" means this many or fewer (Admin → Marketplace settings) */
+  low_stock_threshold?: number;
 };
 type Move = { at: string; warehouse: string; kind: string; delta: number; balance: number; reference: string; note: string };
 
@@ -99,7 +101,7 @@ function Inventory() {
       />
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Input placeholder="Search by title or SKU" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="max-w-sm" aria-label="Search stock" />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-peacock" checked={low} onChange={(e) => router.push(e.target.checked ? "/seller/inventory?low_stock=1" : "/seller/inventory")} /> Only 5 or fewer left</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-peacock" checked={low} onChange={(e) => router.push(e.target.checked ? "/seller/inventory?low_stock=1" : "/seller/inventory")} /> Only {g?.low_stock_threshold ?? 5} or fewer left</label>
       </div>
       {importResult && (
         <div className="mb-3 rounded-xl bg-white p-4 text-sm">
@@ -133,7 +135,7 @@ function Inventory() {
                       </button>
                     </td>
                   ))}
-                  <td className={it.total <= 5 ? "px-4 py-2.5 text-right font-semibold text-vermilion" : "px-4 py-2.5 text-right font-semibold"}>{it.total}</td>
+                  <td className={it.total <= (g.low_stock_threshold ?? 5) ? "px-4 py-2.5 text-right font-semibold text-vermilion" : "px-4 py-2.5 text-right font-semibold"}>{it.total}</td>
                   <td className="px-2 py-2.5">
                     <button aria-label="Stock history" className="rounded p-1.5 text-ink-faint hover:bg-mist" onClick={() => api<{ items: Move[] }>(`/api/seller/inventory/${it.variant_id}/movements`).then((r) => setMoves({ title: `${it.title} (${it.sku})`, items: r.items })).catch(quietly)}>
                       <History className="h-4 w-4" />

@@ -522,6 +522,20 @@ async def invoice(sub_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> 
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="invoice-{sub.number}.pdf"', "Cache-Control": "private, no-store"})
 
 
+@router.get("/api/orders/{order_id}/fee-invoice.pdf")
+async def fee_invoice(order_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> Response:
+    """The marketplace's own tax invoice for the fees on the order (handling, platform, bad weather, ...)."""
+    from app.services import fee_invoices
+
+    order = await session.get(Order, order_id)
+    if order is None or order.user_id != user.id or not order.fees_total:
+        raise NotFound("Invoice")
+    if not order.fee_invoice_number:
+        raise ApiError("The invoice for the marketplace fees is issued when your first package is delivered", "invoice_not_ready")
+    return Response(await fee_invoices.pdf(session, order), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="fee-invoice-{order.number}.pdf"', "Cache-Control": "private, no-store"})
+
+
 @router.get("/api/credit-notes/{return_id}.pdf")
 async def credit_note(return_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> Response:
     ret = await session.get(ReturnRequest, return_id)

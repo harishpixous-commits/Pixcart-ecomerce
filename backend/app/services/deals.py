@@ -72,13 +72,32 @@ async def sync(session, *, force: bool = False) -> int:
 
 async def record_sale(session, variant_id: uuid.UUID, qty: int) -> None:
     """Called while an order is placed (the version row is already locked): counts units sold at the deal price and
-    ends a lightning deal when its quantity is gone."""
+    ends a lightning deal when its quantity is gone. The cart and checkout never let more than the units left through
+    (``units_left``), so one order cannot take more than the seller offered."""
     d = (await session.execute(select(Deal).where(Deal.variant_id == variant_id, Deal.status == "active").with_for_update())).scalar_one_or_none()
     if d is None:
         return
     d.sold_qty += qty
     if d.qty_limit and d.sold_qty >= d.qty_limit:
         await _end(session, d, "All deal units were claimed")
+
+
+async def release_sale(session, variant_id: uuid.UUID, qty: int, unit_price: int) -> None:
+    """Units bought at a still-running deal's price came back (the order was cancelled or never paid): they are on
+    offer at the deal price again."""
+    d = (await session.execute(select(Deal).where(Deal.variant_id == variant_id, Deal.status == "active").with_for_update())).scalar_one_or_none()
+    if d is None or unit_price != d.deal_price_paise:
+        return
+    d.sold_qty = max(0, d.sold_qty - qty)
+
+
+async def units_left(session, variant_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """Units still offered at the deal price, for versions with a running lightning deal (one with a quantity)."""
+    if not variant_ids:
+        return {}
+    rows = (await session.execute(select(Deal.variant_id, Deal.qty_limit, Deal.sold_qty).where(
+        Deal.variant_id.in_(variant_ids), Deal.status == "active", Deal.qty_limit.is_not(None)))).all()
+    return {v: max(0, q - s) for v, q, s in rows}
 
 
 def _rules(cfg: dict) -> dict:
@@ -147,7 +166,7 @@ def public(d: Deal) -> dict:
     claimed = round(100 * d.sold_qty / d.qty_limit) if d.qty_limit else None
     return {"kind": d.kind, "label": KINDS[d.kind], "ends_at": d.ends_at.isoformat(), "deal_price": d.deal_price_paise,
             "regular_price": d.regular_price_paise, "claimed_pct": min(100, claimed) if claimed is not None else None,
-            "variant_id": str(d.variant_id)}
+            "units_left": max(0, d.qty_limit - d.sold_qty) if d.qty_limit else None, "variant_id": str(d.variant_id)}
 
 
 async def active_for_products(session, product_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict]:

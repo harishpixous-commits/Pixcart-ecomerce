@@ -591,6 +591,18 @@ async def get_order(order_id: uuid.UUID, admin: Perm("orders"), session: Session
     return data
 
 
+@router.get("/orders/{order_id}/fee-invoice.pdf")
+async def order_fee_invoice(order_id: uuid.UUID, admin: Perm("orders"), session: SessionDep) -> Response:
+    """The marketplace's own tax invoice for the fees on an order."""
+    from app.services import fee_invoices
+
+    o = await session.get(Order, order_id)
+    if o is None or not o.fee_invoice_number:
+        raise NotFound("Fee invoice")
+    return Response(await fee_invoices.pdf(session, o), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="fee-invoice-{o.number}.pdf"', "Cache-Control": "private, no-store"})
+
+
 async def _sub(session, sub_id: uuid.UUID) -> SubOrder:
     s = (await session.execute(select(SubOrder).where(SubOrder.id == sub_id).with_for_update())).scalar_one_or_none()
     if s is None:

@@ -395,6 +395,10 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setRows([...rows, { key: newKey(), sku: "", options: {}, mrp: rows[0]?.mrp ?? "", price: rows[0]?.price ?? "", stock: "", weight: "500", net: rows[0]?.net ?? "", is_active: true }])}>
           <Plus className="h-4 w-4" /> Add a version
         </Button>
+        <p className="mt-1 text-xs text-ink-faint">
+          Stock is the total you can sell from your warehouses that are switched on. With more than one warehouse, a change here goes to your main
+          warehouse; to move stock or change another warehouse, use <Link href="/seller/inventory" className="font-semibold text-peacock hover:underline">Inventory</Link>.
+        </p>
         {rows[0] && toPaise(rows[0].price) && cat && (
           <p className="mt-3 rounded-lg bg-peacock-light p-3 text-sm text-peacock">
             On a sale at {rupees(toPaise(rows[0].price)!)}, commission is {rupees(Math.round((toPaise(rows[0].price)! * cat.commission_bps) / 10000))} plus 18% GST on the commission. TCS (0.5%) and TDS (0.1%) are also deducted and can be claimed back in your returns.

@@ -15,6 +15,7 @@ type Dash = {
   earnings: { in_return_window: number; ready_for_payout: number };
   products: Record<string, number>;
   low_stock_variants: number;
+  low_stock_threshold?: number;
 };
 
 function SalesBars({ days }: { days: Dash["daily_sales"] }) {
@@ -74,7 +75,7 @@ export default function SellerDashboard() {
         <Stat label="Live products" value={live} href="/seller/products?status=approved" />
         <Stat label="Waiting for review" value={d.products.pending ?? 0} href="/seller/products?status=pending" />
         <Stat label="Need changes" value={d.products.rejected ?? 0} href="/seller/products?status=rejected" />
-        <Stat label="Low stock options" value={d.low_stock_variants} hint="5 or fewer left" href="/seller/products?low_stock=1" />
+        <Stat label="Low stock options" value={d.low_stock_variants} hint={`${d.low_stock_threshold ?? 5} or fewer left`} href="/seller/products?low_stock=1" />
       </div>
       <p className="text-sm text-ink-faint">
         Confirm new orders quickly: customers can cancel until you ship. <Link href="/seller/orders" className="font-semibold text-peacock">Open orders</Link>

@@ -62,6 +62,8 @@ export interface DealInfo {
   deal_price: Paise;
   regular_price: Paise | null;
   claimed_pct: number | null;
+  /** lightning deals: units still offered at the deal price */
+  units_left?: number | null;
   variant_id: string;
 }
 
@@ -237,6 +239,8 @@ export interface CartLine {
   mrp: Paise;
   line_total: Paise;
   stock_left: number;
+  /** the most this line can hold now (stock, the per-item limit, units left at a deal price) */
+  max_qty?: number;
   problem: string;
 }
 
@@ -293,6 +297,8 @@ export interface CartView {
   cod_available: boolean;
   cod_max_order_paise: Paise;
   online_available: boolean;
+  /** after adding or changing a quantity: why it was lowered (stock, the per-item limit, a deal's units) */
+  notice?: string;
   cod_allowed?: boolean;
   hints?: string[];
   checkout?: CheckoutOptions;
@@ -358,6 +364,8 @@ export interface SubOrderView {
   cancel_reason: string;
   cancelled_by: string;
   can_cancel: boolean;
+  /** paid online: what cancelling this package refunds now (0 when nothing would be refunded) */
+  refund_if_cancelled?: Paise;
   items: OrderItem[];
   commission?: Paise;
   commission_gst?: Paise;
@@ -395,6 +403,8 @@ export interface OrderDetail {
   tip?: Paise;
   buyer_gstin?: string;
   buyer_business?: string;
+  /** the marketplace's own tax invoice for the fees, once issued (at the first delivery) */
+  fee_invoice_number?: string | null;
   grand_total: Paise;
   refunded_total: Paise;
   discount_total?: Paise;
@@ -560,7 +570,7 @@ export interface SellerOrder {
   total: Paise;
   seller_payout: Paise;
   item_count: number;
-  items: { title: string; variant_label: string; sku: string; image: string; qty: number; unit_price: Paise; line_total: Paise }[];
+  items: { id?: string; title: string; variant_label: string; sku: string; image: string; qty: number; unit_price: Paise; line_total: Paise }[];
   ship_to_city: string;
   ship_to_pincode: string;
   courier_name: string;
@@ -646,6 +656,8 @@ export interface Site {
   free_shipping_threshold_paise: number;
   gallery: { zoom: boolean; zoom_level: number; max_video_mb: number; max_videos: number };
   shipping_fee_paise?: number;
+  /** most units of one item per order (Admin → Marketplace settings) */
+  max_qty_per_item?: number;
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
   nav: NavSettings;

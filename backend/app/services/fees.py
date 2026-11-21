@@ -69,6 +69,8 @@ DEFAULTS: dict[str, Any] = {
     "late_night_label": "Late night fee",
     "late_night_info": "Orders placed late at night cost more to pack and deliver.",
     "fees_gst_bps": 1800,            # GST included in the marketplace's own fees
+    "fees_sac_code": "998599",       # SAC on the marketplace's tax invoice for its fees (other support services)
+    "fee_invoice_prefix": "MKT",     # that invoice's number series: MKT/26-27/000001
     "fees_refund_on_cancel": True,   # refunded when every package of the order is cancelled
     "tip_enabled": False,
     "tip_presets": [1000, 2000, 3000],
@@ -87,6 +89,8 @@ _TEXTS = {"delivery_label": 40, "delivery_info": 300, "handling_label": 40, "han
           "cancellation_note": 600}
 TIMES = ("late_night_from", "late_night_to")
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_CODES = {"fees_sac_code": (re.compile(r"^\d{4,8}$"), "The SAC code is 4 to 8 digits, like 998599"),
+          "fee_invoice_prefix": (re.compile(r"^[A-Z0-9]{2,4}$"), "The invoice prefix is 2 to 4 capital letters or digits, like MKT")}
 
 
 def valid_time(v: Any) -> bool:
@@ -139,6 +143,10 @@ async def update(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
         elif k in TIMES:
             if not valid_time(v):
                 raise CheckoutSettingsError("Late night times use the 24-hour clock, like 23:00")
+        elif k in _CODES:
+            v = str(v or "").strip().upper()
+            if not _CODES[k][0].match(v):
+                raise CheckoutSettingsError(_CODES[k][1])
         elif k in _INTS:
             lo, hi = _INTS[k]
             if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:

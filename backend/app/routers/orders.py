@@ -48,6 +48,7 @@ from app.services.orders import (
     notify_refund,
     place_order,
     process_refund,
+    refund_on_cancel,
 )
 from app.services.platform_settings import get_settings
 
@@ -117,6 +118,16 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
     by_sub: dict[uuid.UUID, list[OrderItem]] = {}
     for it in items:
         by_sub.setdefault(it.sub_order_id, []).append(it)
+    # what cancelling each package would refund now (the same rule cancel_sub_order applies), for the cancel dialog
+    prepaid = o.payment_method == "online" and o.payment_status in ("paid", "partially_refunded")
+    fees_back = bool((await fees_svc.get(session))["fees_refund_on_cancel"]) if prepaid else False
+    live = sum(1 for s in subs if s.status != "cancelled")
+
+    def refund_if_cancelled(s: SubOrder) -> int:
+        if not prepaid or s.status not in CUSTOMER_CANCELLABLE:
+            return 0
+        return refund_on_cancel(s, o, others_live=live - 1, fees_back=fees_back)
+
     out = {
         "id": str(o.id),
         "number": o.number,
@@ -132,6 +143,7 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
         "tip": o.tip_paise,
         "buyer_gstin": o.buyer_gstin,
         "buyer_business": o.buyer_business,
+        "fee_invoice_number": o.fee_invoice_number or None,
         "grand_total": o.grand_total,
         "refunded_total": o.refunded_total,
         "discount_total": o.discount_total,
@@ -161,6 +173,7 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
                 "cancel_reason": s.cancel_reason,
                 "cancelled_by": s.cancelled_by,
                 "can_cancel": s.status in CUSTOMER_CANCELLABLE,
+                "refund_if_cancelled": refund_if_cancelled(s),
                 "items": [
                     {
                         "title": i.title,

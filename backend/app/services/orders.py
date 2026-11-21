@@ -43,8 +43,8 @@ from app.models import (
     Variant,
     Warehouse,
 )
+from app.services import fee_invoices, inventory, razorpay
 from app.services import fees as fees_svc
-from app.services import inventory, razorpay
 from app.services.catalog import images_for, refresh_product_aggregates, variant_label
 from app.services.coupons import CouponResult, evaluate
 from app.services.delivery import estimate
@@ -84,10 +84,23 @@ class CartLine:
     qty: int
     image: str
     problem: str = ""  # why this line cannot be bought right now
+    max_qty: int = 0  # the most this line can hold now: stock, the per-item limit and units left at a deal price
 
     @property
     def line_total(self) -> int:
         return self.variant.price_paise * self.qty
+
+
+@dataclass
+class Piece:
+    """The part of a cart line shipped from one warehouse: the whole line, unless no single warehouse holds all of it."""
+
+    line: CartLine
+    qty: int
+
+    @property
+    def line_total(self) -> int:
+        return self.line.variant.price_paise * self.qty
 
 
 @dataclass
@@ -113,10 +126,16 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
     if lock:
         stmt = stmt.with_for_update(of=Variant)
     rows = (await session.execute(stmt)).all()
+    from app.services import deals as deals_svc
+
     imgs = await images_for(session, list({r.Product.id for r in rows}))
+    per_item = (await get_settings(session))["max_qty_per_item"]
+    at_deal = await deals_svc.units_left(session, [r.Variant.id for r in rows])  # read after the version rows are locked
     lines = []
     for item, variant, product, seller in rows:
         line = CartLine(item.id, variant, product, seller, item.qty, (imgs.get(product.id) or [""])[0])
+        deal_left = at_deal.get(variant.id)
+        line.max_qty = max(0, min(variant.stock, per_item, deal_left if deal_left else per_item))
         if product.status != "approved" or seller.status != "approved" or not variant.is_active:
             line.problem = "This item is no longer available"
         elif seller.holiday_mode:
@@ -125,6 +144,10 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
             line.problem = "Out of stock"
         elif variant.stock < item.qty:
             line.problem = f"Only {variant.stock} left in stock"
+        elif item.qty > per_item:
+            line.problem = f"You can buy at most {per_item} of this item in one order"
+        elif deal_left and item.qty > deal_left:
+            line.problem = f"Only {deal_left} left at the deal price"
         lines.append(line)
     return lines
 
@@ -167,6 +190,7 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, c
                         "mrp": line.variant.mrp_paise,
                         "line_total": line.line_total,
                         "stock_left": line.variant.stock,
+                        "max_qty": line.max_qty,
                         "problem": line.problem,
                     }
                     for line in g.lines
@@ -269,18 +293,34 @@ async def place_order(
     is_online = payment_method == "online"
     categories = {c.id: c for c in (await session.execute(select(Category))).scalars()}
 
-    # Plan sub-orders: one per (seller, warehouse) the stock is allocated from.
+    # Plan sub-orders: one per (seller, warehouse) the stock is allocated from. A line no single warehouse can fill is
+    # split across warehouses; each part ships in that warehouse's package.
     plans: list[dict] = []
     for g in groups:
-        alloc = await inventory.allocate(session, g.seller, [(ln.variant, ln.qty) for ln in g.lines], address.state_code)
-        by_wh: dict[uuid.UUID, list[CartLine]] = {}
+        try:
+            alloc = await inventory.allocate(session, g.seller, [(ln.variant, ln.qty) for ln in g.lines], address.state_code)
+        except inventory.InsufficientStock as exc:
+            short = next(ln for ln in g.lines if ln.variant.id == exc.variant_id)
+            left = f"only {exc.available} left in stock" if exc.available else "it just sold out"
+            raise Conflict(f"'{short.product.title}': {left}. Update your cart and try again.", "cart_changed") from exc
+        by_wh: dict[uuid.UUID, list[Piece]] = {}
         whs: dict[uuid.UUID, Warehouse] = {}
         for ln in g.lines:
-            wh = alloc[ln.variant.id]
-            by_wh.setdefault(wh.id, []).append(ln)
-            whs[wh.id] = wh
-        for n, (wh_id, wh_lines) in enumerate(by_wh.items()):
-            plans.append({"seller": g.seller, "warehouse": whs[wh_id], "lines": wh_lines, "shipping": g.shipping_fee if n == 0 else 0})
+            for wh, qty in alloc[ln.variant.id]:
+                by_wh.setdefault(wh.id, []).append(Piece(ln, qty))
+                whs[wh.id] = wh
+        for n, (wh_id, pieces) in enumerate(by_wh.items()):
+            plans.append({"seller": g.seller, "warehouse": whs[wh_id], "lines": pieces, "shipping": g.shipping_fee if n == 0 else 0})
+    # A line's coupon discount is shared by its parts in proportion to their quantity (the last part takes the rest).
+    piece_disc: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
+    for ln in lines:
+        whole = coupon.per_line.get(ln.variant.id, 0) if coupon else 0
+        parts = [(plan["warehouse"].id, pc.qty) for plan in plans for pc in plan["lines"] if pc.line is ln]
+        given = 0
+        for i, (wh_id, q) in enumerate(parts):
+            share = whole - given if i == len(parts) - 1 else whole * q // ln.qty
+            piece_disc[(ln.variant.id, wh_id)] = share
+            given += share
 
     items_total = sum(ln.line_total for ln in lines)
     shipping_total = sum(p["shipping"] for p in plans)
@@ -349,12 +389,13 @@ async def place_order(
 
     seller_funded = bool(coupon and coupon.coupon.funded_by == "seller")
     sub_status = "pending_payment" if is_online else "placed"
+    counted: set[uuid.UUID] = set()  # a split line counts as one order of the product in the stats
     for idx, plan in enumerate(plans, start=1):
         seller, wh = plan["seller"], plan["warehouse"]
         interstate = wh.state_code != address.state_code
         sub_cod = cod_fee if idx == 1 else 0
-        sub_items = sum(ln.line_total for ln in plan["lines"])
-        line_disc = {ln.variant.id: (coupon.per_line.get(ln.variant.id, 0) if coupon else 0) for ln in plan["lines"]}
+        sub_items = sum(pc.line_total for pc in plan["lines"])
+        line_disc = {pc.line.variant.id: piece_disc[(pc.line.variant.id, wh.id)] for pc in plan["lines"]}
         sub_seller_disc = sum(line_disc.values()) if seller_funded else 0
         sub_platform_disc = 0 if seller_funded else sum(line_disc.values())
         sub = SubOrder(
@@ -376,13 +417,14 @@ async def place_order(
         session.add(sub)
         await session.flush()
         taxable = commission = max_rate = 0
-        for ln in plan["lines"]:
+        for pc in plan["lines"]:
+            ln = pc.line
             v, p = ln.variant, ln.product
-            await inventory.change(session, v, wh.id, -ln.qty, "sale", reference=sub.number)
-            p.sold_count += ln.qty
+            await inventory.change(session, v, wh.id, -pc.qty, "sale", reference=sub.number)
+            p.sold_count += pc.qty
             item_seller_disc = line_disc[v.id] if seller_funded else 0
             item_platform_disc = 0 if seller_funded else line_disc[v.id]
-            value = ln.line_total - item_seller_disc
+            value = pc.line_total - item_seller_disc
             split = split_inclusive_gst(value, p.gst_bps, interstate=interstate)
             cat = categories.get(p.category_id)
             bps = seller.commission_bps_override if seller.commission_bps_override is not None else (cat.commission_bps if cat else 0)
@@ -393,15 +435,16 @@ async def place_order(
             session.add(
                 OrderItem(
                     sub_order_id=sub.id, product_id=p.id, variant_id=v.id, title=p.title, variant_label=variant_label(v.options),
-                    image_url=ln.image, sku=v.sku, hsn_code=p.hsn_code, qty=ln.qty, unit_price=v.price_paise, unit_mrp=v.mrp_paise,
-                    line_total=ln.line_total, gst_bps=p.gst_bps, taxable_value=split.taxable, cgst=split.cgst, sgst=split.sgst,
+                    image_url=ln.image, sku=v.sku, hsn_code=p.hsn_code, qty=pc.qty, unit_price=v.price_paise, unit_mrp=v.mrp_paise,
+                    line_total=pc.line_total, gst_bps=p.gst_bps, taxable_value=split.taxable, cgst=split.cgst, sgst=split.sgst,
                     igst=split.igst, commission_bps=bps, commission_paise=line_commission,
                     seller_discount=item_seller_disc, platform_discount=item_platform_disc,
                 )
             )
-            await bump(session, p.id, orders=1, units=ln.qty, revenue=value)
+            await bump(session, p.id, orders=0 if v.id in counted else 1, units=pc.qty, revenue=value)
+            counted.add(v.id)
             # after the item is recorded at the deal price: may end a lightning deal whose units are now gone
-            await deals_svc.record_sale(session, v.id, ln.qty)
+            await deals_svc.record_sale(session, v.id, pc.qty)
         extra = sub.shipping_fee + sub.cod_fee
         taxable += split_inclusive_gst(extra, max_rate, interstate=interstate).taxable if extra else 0
         sub.shipping_gst_bps = max_rate
@@ -472,12 +515,22 @@ def checkout_payload(order: Order, payment: Payment | None, user: User, brand: s
 
 
 async def mark_paid(session: AsyncSession, payment: Payment, provider_payment_id: str, method: str, amount: int) -> str:
-    """Idempotently records a captured payment. Returns 'paid', 'already' or 'refund' (late payment)."""
+    """Idempotently records a captured payment. Returns 'paid', 'already' or 'refund' (a duplicate or late payment,
+    refunded in full). The order's first captured payment stays its payment: cancellations and returns are refunded
+    against it, so a duplicate never takes its place."""
     order = (await session.execute(select(Order).where(Order.id == payment.order_id).with_for_update())).scalar_one()
+    payment = (await session.execute(select(Payment).where(Payment.id == payment.id).with_for_update().execution_options(populate_existing=True))).scalar_one()
     if payment.status == "captured" and payment.provider_payment_id == provider_payment_id:
         return "already"
+    if (await session.execute(select(Refund.id).where(Refund.provider_payment_id == provider_payment_id))).first():
+        return "already"  # a duplicate payment already being refunded
     if amount != payment.amount_paise:
         raise ApiError("Payment amount does not match the order", "amount_mismatch")
+    if payment.status == "captured":
+        # A second successful payment for the same order (two tabs, a retried UPI request): refund it in full, to itself.
+        session.add(Refund(order_id=order.id, payment_id=payment.id, provider_payment_id=provider_payment_id, amount_paise=amount,
+                           reason="Duplicate payment"))
+        return "refund"
     payment.status = "captured"
     payment.provider_payment_id = provider_payment_id
     payment.method = method[:20]
@@ -494,10 +547,6 @@ async def mark_paid(session: AsyncSession, payment: Payment, provider_payment_id
         await session.flush()
         await _announce_placed(session, order)
         return "paid"
-    if order.status == "placed" and order.payment_status == "paid":
-        # A second successful payment for the same order (e.g. two tabs): give it back.
-        session.add(Refund(order_id=order.id, payment_id=payment.id, amount_paise=amount, reason="Duplicate payment"))
-        return "refund"
     # Paid after the order was cancelled (payment window expired): refund in full.
     order.payment_status = "refunded"
     session.add(Refund(order_id=order.id, payment_id=payment.id, amount_paise=amount, reason="Payment received after order was cancelled"))
@@ -525,6 +574,8 @@ async def confirm_with_gateway(session: AsyncSession, payment: Payment, provider
 
 
 async def _release_stock(session: AsyncSession, sub: SubOrder, kind: str = "release") -> None:
+    from app.services import deals as deals_svc
+
     items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
     for it in sorted(items, key=lambda i: i.variant_id):
         qty = it.qty - it.returned_qty
@@ -535,6 +586,7 @@ async def _release_stock(session: AsyncSession, sub: SubOrder, kind: str = "rele
             await inventory.change(session, variant, sub.warehouse_id, qty, kind, reference=sub.number)
         else:
             variant.stock += qty
+        await deals_svc.release_sale(session, it.variant_id, qty, it.unit_price)  # units back on offer at the deal price
         await session.execute(update(Product).where(Product.id == it.product_id).values(sold_count=func.greatest(Product.sold_count - qty, 0)))
     for pid in {it.product_id for it in items}:
         p = (await session.execute(select(Product).where(Product.id == pid).execution_options(populate_existing=True))).scalar_one()
@@ -583,6 +635,7 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
         order = await session.get(Order, sub.order_id)
         await _sync_cod_status(session, order)
         await post_delivery(session, sub)
+        await fee_invoices.issue(session, order)  # the marketplace's own invoice for its fees, at the first delivery
         await notify(
             session, "order_delivered", await session.get(User, order.user_id),
             {"order_number": order.number, "item": await _first_title(session, sub), "return_by": sub.settlement_due_at.strftime("%d %b %Y")},
@@ -603,6 +656,16 @@ async def collect_amount(session: AsyncSession, sub: SubOrder, order: Order) -> 
                                        .order_by(SubOrder.number).limit(1))).scalar_one_or_none()
         if first == sub.id:
             amount += order.fees_total + order.tip_paise
+    return amount
+
+
+def refund_on_cancel(sub: SubOrder, order: Order, *, others_live: int, fees_back: bool) -> int:
+    """What cancelling this package gives back to a customer who paid online: the package's share (less what the
+    marketplace's coupon paid), plus, when no other package of the order is left, the tip (it was for a delivery that
+    will not happen) and the marketplace's fees when Admin → Checkout and fees says they are refunded."""
+    amount = sub.total - sub.platform_discount
+    if others_live == 0:
+        amount += order.tip_paise + (order.fees_total if fees_back else 0)
     return amount
 
 
@@ -634,14 +697,13 @@ async def cancel_sub_order(session: AsyncSession, sub: SubOrder, *, actor: str, 
         await fleet.on_cancelled(session, sub, reason)
 
     refund = None
-    paid_share = sub.total - sub.platform_discount  # what the customer actually paid for this part
     others_live = (
         await session.execute(select(func.count()).where(SubOrder.order_id == order.id, SubOrder.status != "cancelled", SubOrder.id != sub.id))
     ).scalar_one()
-    if others_live == 0 and (order.fees_total or order.tip_paise):
-        # nothing of the order will be delivered: the marketplace's fees and the tip go back too (when switched on)
-        if (await fees_svc.get(session))["fees_refund_on_cancel"]:
-            paid_share += order.fees_total + order.tip_paise
+    fees_back = bool((await fees_svc.get(session))["fees_refund_on_cancel"])
+    paid_share = refund_on_cancel(sub, order, others_live=others_live, fees_back=fees_back)
+    if others_live == 0 and not fees_back and order.payment_method == "online" and order.payment_status in ("paid", "partially_refunded"):
+        await fee_invoices.issue(session, order)  # the marketplace keeps its fees: they are invoiced
     if order.payment_method == "online" and order.payment_status in ("paid", "partially_refunded"):
         payment = (
             await session.execute(select(Payment).where(Payment.order_id == order.id, Payment.status == "captured").order_by(Payment.created_at).limit(1))
@@ -685,7 +747,8 @@ async def process_refund(session: AsyncSession, refund_id: uuid.UUID) -> None:
     payment = await session.get(Payment, refund.payment_id)
     refund.attempts += 1
     try:
-        data = await razorpay.refund_payment(payment.provider_payment_id or "", refund.amount_paise, str(refund.id), {"refund_id": str(refund.id)})
+        data = await razorpay.refund_payment(refund.provider_payment_id or payment.provider_payment_id or "", refund.amount_paise, str(refund.id),
+                                             {"refund_id": str(refund.id)})
     except razorpay.GatewayError as exc:
         refund.last_error = str(exc)[:500]
         if refund.attempts >= 8:

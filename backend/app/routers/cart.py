@@ -10,6 +10,7 @@ from app.core.deps import CurrentUser, SessionDep
 from app.core.errors import ApiError, NotFound
 from app.integrations import get as get_integrations
 from app.models import CartItem, Product, SavedItem, Seller, Variant
+from app.services import deals as deals_svc
 from app.services import fees as fees_svc
 from app.services.orders import cart_payload, group_by_seller, load_cart
 from app.services.platform_settings import get_settings
@@ -48,19 +49,28 @@ async def _purchasable(session, variant_id: uuid.UUID) -> Variant:
     return row
 
 
-async def _set(session, user, variant_id: uuid.UUID, qty: int, *, add: bool = False) -> None:
+async def _set(session, user, variant_id: uuid.UUID, qty: int, *, add: bool = False) -> str:
+    """Puts the quantity in the cart, lowered to what can be bought (stock, the per-item limit in Admin → Marketplace
+    settings, units left at a deal price). Returns a note for the shopper when it had to be lowered."""
     item = (await session.execute(select(CartItem).where(CartItem.user_id == user.id, CartItem.variant_id == variant_id))).scalar_one_or_none()
     if qty <= 0 and not add:
         if item:
             await session.delete(item)
-        return
+        return ""
     variant = await _purchasable(session, variant_id)
     cfg = await get_settings(session)
-    new_qty = (item.qty if item and add else 0) + qty
-    new_qty = min(new_qty, cfg["max_qty_per_item"])
     if variant.stock <= 0:
         raise ApiError("This item is out of stock", "out_of_stock")
-    new_qty = min(new_qty, variant.stock)
+    wanted = (item.qty if item and add else 0) + qty
+    new_qty, note = wanted, ""
+    deal_left = (await deals_svc.units_left(session, [variant.id])).get(variant.id)
+    for cap, why in ((cfg["max_qty_per_item"], f"You can buy at most {cfg['max_qty_per_item']} of this item in one order"),
+                     (variant.stock, f"Only {variant.stock} left in stock"),
+                     (deal_left or 0, f"Only {deal_left} left at the deal price")):
+        if 0 < cap < new_qty:
+            new_qty, note = cap, why
+    if note:
+        note = f"{note}, so your cart has {new_qty}."
     if item is None:
         count = len((await session.execute(select(CartItem.id).where(CartItem.user_id == user.id))).all())
         if count >= MAX_LINES:
@@ -68,6 +78,7 @@ async def _set(session, user, variant_id: uuid.UUID, qty: int, *, add: bool = Fa
         session.add(CartItem(user_id=user.id, variant_id=variant_id, qty=new_qty))
     else:
         item.qty = new_qty
+    return note
 
 
 @router.get("")
@@ -79,16 +90,16 @@ async def get_cart(user: CurrentUser, session: SessionDep) -> dict:
 async def add_item(body: SetQty, user: CurrentUser, session: SessionDep) -> dict:
     if body.qty < 1:
         raise ApiError("Quantity must be at least 1", "invalid_qty")
-    await _set(session, user, body.variant_id, body.qty, add=True)
+    note = await _set(session, user, body.variant_id, body.qty, add=True)
     await session.commit()
-    return await _view(session, user)
+    return {**(await _view(session, user)), "notice": note}
 
 
 @router.put("/items")
 async def set_item(body: SetQty, user: CurrentUser, session: SessionDep) -> dict:
-    await _set(session, user, body.variant_id, body.qty)
+    note = await _set(session, user, body.variant_id, body.qty)
     await session.commit()
-    return await _view(session, user)
+    return {**(await _view(session, user)), "notice": note}
 
 
 @router.post("/merge")

@@ -149,14 +149,17 @@ async def low_stock_job() -> None:
     from app.models import Product, Variant
 
     async def run(session):
+        from app.services.platform_settings import get_settings
+
+        threshold = (await get_settings(session))["low_stock_threshold"]
         rows = (
             await session.execute(
                 select(Variant.seller_id, func.count()).join(Product, Product.id == Variant.product_id)
-                .where(Variant.is_active.is_(True), Variant.stock <= 5, Product.status == "approved").group_by(Variant.seller_id)
+                .where(Variant.is_active.is_(True), Variant.stock <= threshold, Product.status == "approved").group_by(Variant.seller_id)
             )
         ).all()
         for seller_id, count in rows:
-            await notify_seller(session, seller_id, "low_stock", {"count": count}, link="/seller/inventory?low_stock=1")
+            await notify_seller(session, seller_id, "low_stock", {"count": count, "threshold": threshold}, link="/seller/inventory?low_stock=1")
         await session.commit()
 
     await _with_lock(_LOCK_LOWSTOCK, run)

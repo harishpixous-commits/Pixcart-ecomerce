@@ -3,7 +3,6 @@ sum, kept in step here so listing and cart queries stay cheap. Every change writ
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -112,32 +111,39 @@ async def set_quantity(session: AsyncSession, variant: Variant, warehouse_id: uu
 
 
 async def set_total_via_default(session: AsyncSession, seller: Seller, variant: Variant, total: int, *, actor_id=None) -> None:
-    """Product-form stock edits: the default warehouse absorbs the difference to reach the requested total."""
+    """Product-form stock edits: the default warehouse absorbs the difference to reach the requested total of
+    sellable stock (the stock in the seller's other ACTIVE warehouses; switched-off warehouses do not count, exactly
+    as for the total shoppers see). Below what the other warehouses hold, the main warehouse goes to 0 (the form says
+    to lower the other warehouses in Inventory)."""
     wh = await default_warehouse(session, seller)
     if wh is None:
         variant.stock = total
         return
     others = (
         await session.execute(
-            select(func.coalesce(func.sum(InventoryLevel.quantity), 0)).where(
-                InventoryLevel.variant_id == variant.id, InventoryLevel.warehouse_id != wh.id
-            )
+            select(func.coalesce(func.sum(InventoryLevel.quantity), 0))
+            .join(Warehouse, Warehouse.id == InventoryLevel.warehouse_id)
+            .where(InventoryLevel.variant_id == variant.id, InventoryLevel.warehouse_id != wh.id, Warehouse.is_active.is_(True))
         )
     ).scalar_one()
     await set_quantity(session, variant, wh.id, max(0, total - int(others)), actor_id=actor_id, note="Edited in product form")
 
 
-@dataclass
-class Allocation:
-    warehouse: Warehouse
-    variant_ids: list[uuid.UUID]
+class InsufficientStock(ApiError):
+    """Fewer units are left in the seller's active warehouses than the line asks for (another buyer was quicker)."""
+
+    def __init__(self, variant_id: uuid.UUID, available: int):
+        super().__init__("Not enough stock", "insufficient_stock")
+        self.variant_id, self.available = variant_id, available
 
 
 async def allocate(
     session: AsyncSession, seller: Seller, lines: list[tuple[Variant, int]], ship_state: str
-) -> dict[uuid.UUID, Warehouse]:
-    """Chooses a warehouse per line. Prefers one warehouse that can ship everything (same state as the
-    customer first, then the default), otherwise the fullest warehouse per line. Rows are locked."""
+) -> dict[uuid.UUID, list[tuple[Warehouse, int]]]:
+    """Where each line ships from, as (warehouse, quantity) pieces. Prefers one warehouse that can ship everything
+    (same state as the customer first, then the default); otherwise each line from the best warehouse that holds all
+    of it; otherwise the line is split across warehouses, fullest first, so the fewest packages carry it. Any quantity
+    the seller holds in total across active warehouses can be ordered. Rows are locked."""
     warehouses = list(
         (await session.execute(select(Warehouse).where(Warehouse.seller_id == seller.id, Warehouse.is_active.is_(True)))).scalars()
     )
@@ -159,15 +165,27 @@ async def allocate(
     def rank(w: Warehouse) -> tuple:
         return (w.state_code != ship_state, not w.is_default, w.code)
 
-    for w in sorted(warehouses, key=rank):
+    ranked = sorted(warehouses, key=rank)
+    for w in ranked:
         if all(qty_at.get((v.id, w.id), 0) >= q for v, q in lines):
-            return {v.id: w for v, _ in lines}
-    out: dict[uuid.UUID, Warehouse] = {}
+            return {v.id: [(w, q)] for v, q in lines}
+    out: dict[uuid.UUID, list[tuple[Warehouse, int]]] = {}
     for v, q in lines:
-        candidates = [w for w in sorted(warehouses, key=rank) if qty_at.get((v.id, w.id), 0) >= q]
-        if not candidates:
-            raise ApiError("Not enough stock", "insufficient_stock")
-        out[v.id] = candidates[0]
+        whole = next((w for w in ranked if qty_at.get((v.id, w.id), 0) >= q), None)
+        if whole is not None:
+            out[v.id] = [(whole, q)]
+            continue
+        pieces: list[tuple[Warehouse, int]] = []
+        left = q
+        for w in sorted(ranked, key=lambda w: (-qty_at.get((v.id, w.id), 0), rank(w))):
+            have = qty_at.get((v.id, w.id), 0)
+            if have <= 0 or left == 0:
+                break
+            pieces.append((w, min(have, left)))
+            left -= pieces[-1][1]
+        if left:
+            raise InsufficientStock(v.id, q - left)
+        out[v.id] = pieces
     return out
 
 

@@ -73,8 +73,8 @@ function QuickAdd({ p, compact }: { p: Card; compact?: boolean }) {
     e.stopPropagation();
     setBusy(true);
     try {
-      await addToCart({ variant_id: p.variant_id!, qty: 1, title: p.title, image: p.image, price: p.price, mrp: p.mrp, slug: p.slug, variant_label: "", seller_name: p.seller_name });
-      toast("Added to your cart");
+      const note = await addToCart({ variant_id: p.variant_id!, qty: 1, title: p.title, image: p.image, price: p.price, mrp: p.mrp, slug: p.slug, variant_label: "", seller_name: p.seller_name });
+      toast(note ?? "Added to your cart");
     } catch (x) {
       toast(x instanceof ApiError ? x.message : "Could not add to cart", "error");
     } finally {

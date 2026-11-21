@@ -29,7 +29,7 @@ type Fees = {
   platform_enabled: boolean; platform_paise: number; platform_label: string; platform_info: string;
   surge_enabled: boolean; surge_paise: number; surge_until: string; surge_label: string; surge_info: string;
   late_night_enabled: boolean; late_night_paise: number; late_night_from: string; late_night_to: string; late_night_label: string; late_night_info: string;
-  fees_gst_bps: number; fees_refund_on_cancel: boolean;
+  fees_gst_bps: number; fees_refund_on_cancel: boolean; fees_sac_code: string; fee_invoice_prefix: string;
   tip_enabled: boolean; tip_presets: number[]; tip_max_paise: number;
   gstin_enabled: boolean; instructions_enabled: boolean; no_bag_enabled: boolean; cancellation_note: string;
 };
@@ -46,7 +46,7 @@ const MONEY = [...MARKET_MONEY, ...FEE_MONEY];
 const FEE_FLAGS = ["handling_enabled", "small_cart_enabled", "platform_enabled", "surge_enabled", "late_night_enabled", "fees_refund_on_cancel", "tip_enabled",
   "gstin_enabled", "instructions_enabled", "no_bag_enabled"] as const;
 const FEE_TEXTS = ["delivery_label", "delivery_info", "handling_label", "handling_info", "small_cart_label", "small_cart_info", "platform_label", "platform_info",
-  "surge_label", "surge_info", "late_night_label", "late_night_info", "cancellation_note"] as const;
+  "surge_label", "surge_info", "late_night_label", "late_night_info", "cancellation_note", "fees_sac_code", "fee_invoice_prefix"] as const;
 const LABELS = ["delivery_label", "handling_label", "small_cart_label", "platform_label", "surge_label", "late_night_label"] as const;
 const TIMES = ["late_night_from", "late_night_to"] as const;
 /** How long the bad weather fee runs once saved ("" keeps what is saved; "0" until switched off). */
@@ -57,7 +57,7 @@ type FlagKey = "cod_enabled" | (typeof FEE_FLAGS)[number];
 type TextKey = (typeof FEE_TEXTS)[number];
 type LabelKey = (typeof LABELS)[number];
 type TimeKey = (typeof TIMES)[number];
-type IssueKey = MoneyKey | LabelKey | TimeKey | "gst" | "surge_for";
+type IssueKey = MoneyKey | LabelKey | TimeKey | "gst" | "surge_for" | "fees_sac_code" | "fee_invoice_prefix";
 
 /** The form as typed: amounts (rupees) and the GST rate (percent) stay text until they are sent. */
 type Draft = {
@@ -136,6 +136,8 @@ function findIssues(d: Draft, surgeEnded: boolean): Partial<Record<IssueKey, str
   for (const k of TIMES) if (!HHMM.test(d.times[k])) out[k] = "Pick a time";
   if (!out.late_night_to && d.times.late_night_from === d.times.late_night_to) out.late_night_to = "Make it different from the start time";
   if (d.flags.surge_enabled && surgeEnded && d.surgeFor === "") out.surge_for = "The last period ended. Choose how long to charge it now.";
+  if (!/^\d{4,8}$/.test(d.text.fees_sac_code.trim())) out.fees_sac_code = "4 to 8 digits, like 998599";
+  if (!/^[A-Z0-9]{2,4}$/.test(d.text.fee_invoice_prefix.trim().toUpperCase())) out.fee_invoice_prefix = "2 to 4 letters or digits, like MKT";
   return out;
 }
 
@@ -488,7 +490,13 @@ export default function CheckoutAndFees() {
             sub="For the marketplace's own fees (handling, small cart, platform, bad weather, late night). Delivery and cash on delivery fees are taxed with the goods in each package instead.">
             <TextField label="GST included in these fees (%)" value={d.gst} inputMode="decimal" error={issues.gst} hint="0 to 28. The bill shows the GST inside each fee." data-testid="gst-percent"
               onChange={(e) => { const v = e.target.value; setD((x) => x && { ...x, gst: v }); }} />
-            <Toggle {...toggle("fees_refund_on_cancel")} label="Refund these fees when every package of an order is cancelled" hint="The tip goes back too. Off: the marketplace keeps the fees." />
+            <Toggle {...toggle("fees_refund_on_cancel")} label="Refund these fees when every package of an order is cancelled"
+              hint="Off: the marketplace keeps the fees. A tip always goes back when nothing of the order is delivered." />
+            <TextField label="SAC code on the fee invoice" value={d.text.fees_sac_code} error={issues.fees_sac_code} inputMode="numeric" maxLength={8}
+              hint="The marketplace issues its own tax invoice for these fees at the first delivery" onChange={(e) => setText("fees_sac_code", e.target.value)} />
+            <TextField label="Fee invoice number prefix" value={d.text.fee_invoice_prefix} error={issues.fee_invoice_prefix} maxLength={4}
+              hint={`Numbers look like ${(d.text.fee_invoice_prefix || "MKT").toUpperCase()}/26-27/000001. Needs the GSTIN in Storefront → Business.`}
+              onChange={(e) => setText("fee_invoice_prefix", e.target.value.toUpperCase())} />
           </Section>
 
           <Section icon={HandCoins} title="Delivery partner tip" on={d.flags.tip_enabled}

@@ -37,7 +37,7 @@ async def site(session: SessionDep) -> dict:
             "free_shipping_threshold_paise": cfg["free_shipping_threshold_paise"],
             "gallery": {"zoom": cfg["gallery_zoom"], "zoom_level": cfg["gallery_zoom_level"] / 10,
                         "max_video_mb": cfg["max_video_mb"], "max_videos": cfg["max_videos_per_listing"]},
-            "shipping_fee_paise": cfg["shipping_fee_paise"],
+            "shipping_fee_paise": cfg["shipping_fee_paise"], "max_qty_per_item": cfg["max_qty_per_item"],
             "pdp": {k.removeprefix("pdp_"): v for k, v in cfg.items() if k.startswith("pdp_")}
                    | {"header_pincode": cfg["header_pincode"], "page_loading_bar": cfg["page_loading_bar"]},
             "reviews": review_settings.public(await review_settings.get(session))}

@@ -14,8 +14,10 @@ from app.core.errors import ApiError, NotFound
 from app.db import utcnow
 from app.models import DeliveryBoy, Order, OrderEvent, OrderItem, Product, SubOrder, Variant
 from app.routers.orders import run_refunds
-from app.services import delivery_settings, fleet
+from app.services import delivery_settings, fleet, inventory
+from app.services.catalog import refresh_product_aggregates
 from app.services.orders import cancel_sub_order, transition
+from app.services.platform_settings import get_settings
 
 router = APIRouter(prefix="/api/seller", tags=["seller-orders"])
 
@@ -31,6 +33,8 @@ class ShipIn(BaseModel):
 class RejectIn(BaseModel):
     reason: Literal["out_of_stock", "cannot_ship_to_pincode", "pricing_error", "other"]
     note: str = Field(default="", max_length=200)
+    # out of stock: the order lines whose stock in this package's warehouse is really gone (empty = every line)
+    out_of_stock_items: list[uuid.UUID] = Field(default_factory=list, max_length=100)
 
 
 REASON_TEXT = {
@@ -55,7 +59,8 @@ def sub_out(s: SubOrder, o: Order, items: list[OrderItem], *, full: bool) -> dic
         "seller_payout": s.seller_payout_paise,
         "item_count": sum(i.qty for i in items),
         "items": [
-            {"title": i.title, "variant_label": i.variant_label, "sku": i.sku, "image": i.image_url, "qty": i.qty, "unit_price": i.unit_price, "line_total": i.line_total}
+            {"id": str(i.id), "title": i.title, "variant_label": i.variant_label, "sku": i.sku, "image": i.image_url, "qty": i.qty, "unit_price": i.unit_price,
+             "line_total": i.line_total}
             for i in items
         ],
         "ship_to_city": o.ship_to.get("city"),
@@ -257,14 +262,23 @@ async def reject(sub_id: uuid.UUID, body: RejectIn, seller: SellerAccount, user:
     s, o = await _own_sub(session, seller.id, sub_id)
     if s.status not in ("placed", "confirmed", "packed"):
         raise ApiError("Only orders that are not yet shipped can be cancelled", "not_cancellable")
+    items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == s.id))).scalars())
+    gone = {i.variant_id for i in items if not body.out_of_stock_items or i.id in set(body.out_of_stock_items)} if body.reason == "out_of_stock" else set()
+    if body.reason == "out_of_stock" and body.out_of_stock_items and not gone:
+        raise ApiError("Choose the items that are out of stock in this order", "invalid_items")
     reason = REASON_TEXT[body.reason] + (f": {body.note.strip()}" if body.note.strip() else "")
     refund = await cancel_sub_order(session, s, actor="seller", reason=reason)
-    if body.reason == "out_of_stock":
-        # The stock that was just released does not exist; zero it so the item stops selling.
-        item_variants = [i.variant_id for i in (await session.execute(select(OrderItem).where(OrderItem.sub_order_id == s.id))).scalars()]
-        for v in (await session.execute(select(Variant).where(Variant.id.in_(item_variants)))).scalars():
-            v.stock = 0
-    audit(session, user, "suborder.seller_cancel", "sub_order", s.id, reason)
+    if gone:
+        # The units just put back do not exist: set this warehouse's stock of those items to 0 through a recorded stock
+        # change (the warehouse levels are the truth; the total follows), so they stop selling and do not come back.
+        for v in (await session.execute(select(Variant).where(Variant.id.in_(gone)).order_by(Variant.id).with_for_update())).scalars():
+            if s.warehouse_id:
+                await inventory.set_quantity(session, v, s.warehouse_id, 0, actor_id=user.id, note=f"Out of stock: seller cancelled {s.number}")
+            else:
+                v.stock = 0
+        for p in (await session.execute(select(Product).where(Product.id.in_({i.product_id for i in items if i.variant_id in gone})))).scalars():
+            await refresh_product_aggregates(session, p)
+    audit(session, user, "suborder.seller_cancel", "sub_order", s.id, reason + (f" ({len(gone)} item(s) set to 0 in stock)" if gone else ""))
     await session.flush()
     rid = refund.id if refund else None
     await session.commit()
@@ -303,10 +317,11 @@ async def dashboard(seller: SellerAccount, session: SessionDep) -> dict:
         )
     ).one()
     product_counts = dict((await session.execute(select(Product.status, func.count()).where(Product.seller_id == seller.id).group_by(Product.status))).all())
+    threshold = (await get_settings(session))["low_stock_threshold"]
     low_stock = (
         await session.execute(
             select(func.count()).select_from(Variant).join(Product, Product.id == Variant.product_id)
-            .where(Variant.seller_id == seller.id, Variant.is_active.is_(True), Variant.stock <= 5, Product.status == "approved")
+            .where(Variant.seller_id == seller.id, Variant.is_active.is_(True), Variant.stock <= threshold, Product.status == "approved")
         )
     ).scalar_one()
     return {
@@ -324,6 +339,7 @@ async def dashboard(seller: SellerAccount, session: SessionDep) -> dict:
         "earnings": {"in_return_window": int(earnings[0]), "ready_for_payout": int(earnings[1])},
         "products": product_counts,
         "low_stock_variants": low_stock,
+        "low_stock_threshold": threshold,
     }
 
 

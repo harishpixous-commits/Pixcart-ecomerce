@@ -115,8 +115,11 @@ function OrderView() {
     if (!cancelSub) return;
     setBusy(true);
     try {
-      setOrder(await api<OrderDetail>(`/api/orders/${id}/cancel`, { method: "POST", body: { sub_order_id: cancelSub.id, reason: reason.trim() || "Changed my mind" } }));
-      toast(order?.payment_status === "paid" ? "Cancelled. Your refund has been started." : "Cancelled");
+      const refundBefore = order?.refunded_total ?? 0;
+      const next = await api<OrderDetail>(`/api/orders/${id}/cancel`, { method: "POST", body: { sub_order_id: cancelSub.id, reason: reason.trim() || "Changed my mind" } });
+      setOrder(next);
+      const refunded = (next.refunded_total ?? 0) - refundBefore;
+      toast(refunded > 0 ? `Cancelled. A refund of ${rupees(refunded)} has been started.` : "Cancelled");
       setCancelSub(null);
       setReason("");
     } catch (e) {
@@ -322,6 +325,12 @@ function OrderView() {
             {order.refunds.length > 0 && (
               <p className="text-sm text-ink-soft">Refunds reach your original payment method in 5 to 7 working days.</p>
             )}
+            {order.fee_invoice_number && (
+              <Button variant="ghost" size="sm" className="self-start" data-testid="fee-invoice"
+                onClick={() => openPdf(`/api/orders/${order.id}/fee-invoice.pdf`, (m) => toast(m, "error"))}>
+                <FileText className="h-4 w-4" /> Invoice for the fees {order.fee_invoice_number}
+              </Button>
+            )}
           </section>
 
           <a href={`/support/new?order=${order.id}&subject=${encodeURIComponent(`Help with order ${order.number}`)}`}
@@ -345,9 +354,11 @@ function OrderView() {
 
       <Modal open={!!cancelSub} onClose={() => setCancelSub(null)} title="Cancel this package?">
         <p className="mb-3 text-ink-soft">
-          {order.payment_status === "paid" || order.payment_status === "partially_refunded"
-            ? `We will refund ${cancelSub ? rupees(cancelSub.total) : ""} to your original payment method.`
-            : "Nothing has been charged for this package."}
+          {(cancelSub?.refund_if_cancelled ?? 0) > 0
+            ? `We will refund ${rupees(cancelSub!.refund_if_cancelled!)} to your original payment method.`
+            : order.payment_method === "online" && order.payment_status === "pending"
+              ? "The payment for this order is not complete, so nothing is refunded."
+              : "Nothing has been charged for this package."}
         </p>
         <label htmlFor="reason" className="text-sm font-medium">Reason (optional)</label>
         <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="For example: ordered by mistake" />

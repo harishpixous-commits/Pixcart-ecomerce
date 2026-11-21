@@ -97,7 +97,7 @@ function GuestCart() {
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2 sm:mt-2 sm:pl-28">
-                <Qty value={l.qty} max={10} onChange={(n) => setGuestQty(l.variant_id, n)} />
+                <Qty value={l.qty} max={l.max ?? 10} onChange={(n) => setGuestQty(l.variant_id, n)} />
                 <button type="button" className={clsx(LINE_ACTION, "text-ink-soft hover:bg-vermilion-light hover:text-vermilion")} onClick={() => setGuestQty(l.variant_id, 0)}>
                   <Trash2 className="h-4 w-4" aria-hidden /> Remove
                 </button>
@@ -151,7 +151,7 @@ function CartLineRow({ line: l, busy, onQty, onSave }: { line: CartLine; busy: b
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-2 sm:mt-2 sm:pl-28">
-        <Qty value={l.qty} max={Math.max(1, Math.min(10, l.stock_left))} onChange={onQty} disabled={busy} />
+        <Qty value={l.qty} max={Math.max(1, l.max_qty ?? Math.min(10, l.stock_left))} onChange={onQty} disabled={busy} />
         <button type="button" className={clsx(LINE_ACTION, "text-ink-soft hover:bg-vermilion-light hover:text-vermilion")} disabled={busy} onClick={() => onQty(0)}>
           <Trash2 className="h-4 w-4" aria-hidden /> Delete
         </button>
@@ -286,7 +286,10 @@ export default function CartPage() {
   async function setQty(variantId: string, qty: number) {
     setBusy(variantId);
     try {
-      await track(api<CartView>("/api/cart/items", { method: "PUT", body: { variant_id: variantId, qty } }), setCart);
+      await track(api<CartView>("/api/cart/items", { method: "PUT", body: { variant_id: variantId, qty } }), (c) => {
+        setCart(c);
+        if (c.notice) toast(c.notice);
+      });
       await refreshCart();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Could not update the cart", "error");

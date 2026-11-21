@@ -21,11 +21,11 @@ function List() {
   const lowStock = sp.get("low_stock") === "1";
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<Paged<Row> | null>(null);
+  const [data, setData] = useState<(Paged<Row> & { low_stock_threshold?: number }) | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
-      api<Paged<Row>>("/api/seller/products", { query: { status: status || undefined, q, page, low_stock: lowStock || undefined } }).then(setData).catch(quietly);
+      api<Paged<Row> & { low_stock_threshold?: number }>("/api/seller/products", { query: { status: status || undefined, q, page, low_stock: lowStock || undefined } }).then(setData).catch(quietly);
     }, q ? 250 : 0);
     return () => clearTimeout(t);
   }, [status, q, page, lowStock]);
@@ -64,7 +64,7 @@ function List() {
                   </Link>
                 </td>
                 <td className="px-4 py-3">{p.price_from ? rupees(p.price_from) : "—"}</td>
-                <td className={p.total_stock <= 5 ? "px-4 py-3 font-semibold text-vermilion" : "px-4 py-3"}>{p.total_stock}</td>
+                <td className={p.total_stock <= (data.low_stock_threshold ?? 5) ? "px-4 py-3 font-semibold text-vermilion" : "px-4 py-3"}>{p.total_stock}</td>
                 <td className="px-4 py-3"><StatusPill status={p.status} label={STATUS_LABEL[p.status]} /></td>
                 <td className="px-4 py-3 text-sm text-ink-faint">{date(p.updated_at)}</td>
               </tr>

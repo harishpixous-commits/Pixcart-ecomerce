@@ -75,6 +75,9 @@ class Order(IdMixin, TimestampMixin, Base):
     fees_total: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     tip_paise: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")  # goes to the delivery partner
     buyer_gstin: Mapped[str] = mapped_column(String(15), default="", server_default="")  # business purchase: on the tax invoices
+    # the marketplace's own tax invoice for the fees on this order (services/fee_invoices)
+    fee_invoice_number: Mapped[str] = mapped_column(String(16), default="", server_default="")
+    fee_invoice_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     buyer_business: Mapped[str] = mapped_column(String(160), default="", server_default="")
     grand_total: Mapped[int] = mapped_column(BigInteger)
     refunded_total: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -228,6 +231,8 @@ class Refund(IdMixin, TimestampMixin, Base):
 
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"), index=True)
     payment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("payments.id", ondelete="RESTRICT"))
+    # the gateway payment this refund goes back to, when it is not the order's payment itself (a duplicate payment)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(40), unique=True)
     sub_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sub_orders.id", ondelete="RESTRICT"))
     amount_paise: Mapped[int] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(String(10), default="pending")

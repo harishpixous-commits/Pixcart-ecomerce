@@ -153,15 +153,16 @@ export function ProductMain({ p }: { p: ProductPage }) {
     if (!variant || !variant.in_stock) return;
     setBusy(then);
     try {
-      await addToCart({
+      const note = await addToCart({
         variant_id: variant.id, qty, title: p.title, image: p.images[0] ?? "", price: variant.price, mrp: variant.mrp, slug: p.slug,
-        variant_label: variant.label, seller_name: p.seller.name,
+        variant_label: variant.label, seller_name: p.seller.name, max: maxQty,
       });
       api("/api/events", { method: "POST", body: { type: "add_to_cart", product_id: p.id } }).catch(() => {});
       if (then === "buy") {
+        if (note) toast(note);
         window.dispatchEvent(new Event("route-progress:start"));
         router.push(user ? "/checkout" : "/login?next=/checkout");
-      } else toast("Added to your cart");
+      } else toast(note ?? "Added to your cart");
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Could not add to cart", "error");
     } finally {
@@ -171,7 +172,9 @@ export function ProductMain({ p }: { p: ProductPage }) {
 
   const shown = variant ?? firstAvailable;
   const dealHere = Boolean(p.deal && shown && shown.id === p.deal.variant_id);
-  const maxQty = Math.min(10, variant?.stock_left ?? 10);
+  // the quantity picker stops at the stock, the per-item limit (Admin → Marketplace settings) and a lightning deal's units left
+  const dealLeft = dealHere && variant && p.deal!.units_left ? p.deal!.units_left : null;
+  const maxQty = Math.max(1, Math.min(site.max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
   const netRow = shown?.net_quantity ? [{ label: "Net quantity", value: shown.net_quantity }] : [];
   const stock = variant ? (variant.in_stock
     ? <p className={clsx("text-lg font-semibold", variant.low_stock ? "text-vermilion" : "text-leaf")}>{variant.low_stock ? `Only ${variant.stock_left} left in stock` : "In stock"}</p>
@@ -231,6 +234,9 @@ export function ProductMain({ p }: { p: ProductPage }) {
                     <p className="text-sm text-ink-soft">
                       Deal price {rupees(shown.price)}{p.deal!.regular_price && p.deal!.regular_price > shown.price ? <> · was <span className="line-through">{rupees(p.deal!.regular_price)}</span></> : null}
                     </p>
+                    {p.deal!.units_left != null && p.deal!.units_left <= 10 && (
+                      <p className="text-sm font-semibold text-vermilion" data-testid="deal-left">Only {p.deal!.units_left} left at the deal price</p>
+                    )}
                   </div>
                 )}
               </>

@@ -328,7 +328,8 @@ async def list_products(
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Product.title.ilike(like), Product.id.in_(select(Variant.product_id).where(Variant.sku.ilike(like)))))
     if low_stock:
-        stmt = stmt.where(Product.id.in_(select(Variant.product_id).where(Variant.is_active.is_(True), Variant.stock <= 5)))
+        stmt = stmt.where(Product.id.in_(select(Variant.product_id).where(Variant.is_active.is_(True),
+                                                                         Variant.stock <= (await get_settings(session))["low_stock_threshold"])))
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = list((await session.execute(stmt.order_by(Product.updated_at.desc()).offset((page - 1) * page_size).limit(page_size))).scalars())
     imgs = await images_for(session, [p.id for p in rows])
@@ -360,6 +361,7 @@ async def list_products(
         "page": page,
         "page_size": page_size,
         "status_counts": counts,
+        "low_stock_threshold": (await get_settings(session))["low_stock_threshold"],
     }
 
 

@@ -389,8 +389,8 @@ async def product_page(slug: str, session: SessionDep) -> dict:
                 "mrp": v.mrp_paise,
                 "discount_pct": discount_pct(v.price_paise, v.mrp_paise),
                 "in_stock": v.stock > 0,
-                "low_stock": 0 < v.stock <= 5,
-                "stock_left": v.stock if v.stock <= 5 else None,
+                "low_stock": 0 < v.stock <= cfg["low_stock_threshold"],
+                "stock_left": v.stock if v.stock <= cfg["low_stock_threshold"] else None,
                 "net_quantity": fmt_qty(v.net_qty, unit),
                 "unit_price": unit_price(v.price_paise, v.net_qty, unit) if cfg["pdp_unit_price"] else None,
             }

@@ -94,7 +94,7 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "sms": ("", "{{brand}} security notice: {{what}}. Not you? Contact support at once."),
     },
     "low_stock": {
-        "inapp": ("Low stock", "{{count}} of your product options have 5 or fewer units left."),
+        "inapp": ("Low stock", "{{count}} of your product options have {{threshold}} or fewer units left."),
     },
     "back_in_stock": {
         "inapp": ("Back in stock", "{{item}} is available again. Order before it sells out."),

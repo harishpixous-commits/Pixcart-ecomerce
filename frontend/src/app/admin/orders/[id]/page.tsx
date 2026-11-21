@@ -11,6 +11,7 @@ import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@
 import type { FleetTracking, OrderDetail } from "@/lib/types";
 import { CustomerMessage } from "./message";
 import { RiskBrief } from "@/components/ai";
+import { openPdf } from "@/components/order-returns";
 
 export default function AdminOrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -52,7 +53,14 @@ export default function AdminOrderDetail() {
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Customer</h2><p>{o.customer?.name}</p><p className="text-ink-soft">{o.customer?.phone} {o.customer?.email}</p></section>
         <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Ship to</h2><p className="text-ink-soft">{a.full_name}, {a.phone}, {a.line1}, {a.city}, {a.state} {a.pincode}</p></section>
-        <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Totals</h2><p>Order {rupeesExact(o.grand_total)}</p>{o.refunded_total > 0 && <p className="text-leaf">Refunded {rupeesExact(o.refunded_total)}</p>}</section>
+        <section className="rounded-xl bg-white p-4">
+          <h2 className="mb-1 font-semibold">Totals</h2><p>Order {rupeesExact(o.grand_total)}</p>{o.refunded_total > 0 && <p className="text-leaf">Refunded {rupeesExact(o.refunded_total)}</p>}
+          {o.fee_invoice_number && (
+            <button type="button" className="mt-1 text-sm font-semibold text-peacock hover:underline" onClick={() => openPdf(`/api/admin/orders/${o.id}/fee-invoice.pdf`, (m) => toast(m, "error"))}>
+              Fee invoice {o.fee_invoice_number}
+            </button>
+          )}
+        </section>
       </div>
       {o.sub_orders.map((s) => (
         <section key={s.id} className="rounded-xl bg-white p-4">

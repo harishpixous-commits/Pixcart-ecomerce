@@ -27,6 +27,8 @@ export interface GuestLine {
   slug: string;
   variant_label: string;
   seller_name: string;
+  /** most units allowed when added (stock, the per-item limit, units left at a deal price); the server checks again */
+  max?: number;
 }
 
 const GUEST_KEY = "pc_guest_cart_v1";
@@ -71,7 +73,8 @@ interface SessionCtx {
   reloadUser: () => Promise<void>;
   cartCount: number;
   guestLines: GuestLine[];
-  addToCart: (line: GuestLine) => Promise<void>;
+  /** resolves to a note when the quantity had to be lowered (stock, the per-item limit, a deal's units), else null */
+  addToCart: (line: GuestLine) => Promise<string | null>;
   setGuestQty: (variantId: string, qty: number) => void;
   refreshCart: () => Promise<CartView | null>;
 }
@@ -180,18 +183,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await refreshCart();
   }, [refreshCart]);
 
+  /** Adds to the cart; returns a note for the shopper when the quantity had to be lowered (or null). */
   const addToCart = useCallback(
-    async (line: GuestLine) => {
+    async (line: GuestLine): Promise<string | null> => {
+      let note: string | null = null;
       if (userRef.current) {
-        await api("/api/cart/items", { method: "POST", body: { variant_id: line.variant_id, qty: line.qty } });
+        const r = await api<CartView>("/api/cart/items", { method: "POST", body: { variant_id: line.variant_id, qty: line.qty } });
+        note = r.notice || null;
       } else {
         const g = readGuest();
+        const cap = Math.max(1, line.max ?? 10);
         const existing = g.find((l) => l.variant_id === line.variant_id);
-        if (existing) existing.qty = Math.min(10, existing.qty + line.qty);
-        else g.push(line);
+        const wanted = (existing?.qty ?? 0) + line.qty;
+        if (wanted > cap) note = `You can add at most ${cap} of this item, so your cart has ${cap}.`;
+        if (existing) Object.assign(existing, { qty: Math.min(cap, wanted), max: cap });
+        else g.push({ ...line, qty: Math.min(cap, line.qty), max: cap });
         writeGuest(g);
       }
       await refreshCart();
+      return note;
     },
     [refreshCart],
   );

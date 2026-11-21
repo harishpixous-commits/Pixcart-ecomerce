@@ -31,6 +31,7 @@ export default function SellerOrderDetail() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [ship, setShip] = useState({ courier_name: "", tracking_number: "", tracking_url: "" });
   const [reject, setReject] = useState({ reason: "out_of_stock", note: "" });
+  const [keepIds, setKeepIds] = useState<string[]>([]); // out of stock: items the seller unticked (they still have stock)
   const [provider, setProvider] = useState("manual");
   useEffect(() => {
     api<{ provider: string }>("/api/seller/shipping").then((r) => setProvider(r.provider)).catch(() => {});
@@ -212,13 +213,34 @@ export default function SellerOrderDetail() {
       </Modal>
       <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Cancel this order?">
         <p className="mb-3 text-ink-soft">The customer is notified and refunded in full. Frequent cancellations affect your seller rating.</p>
-        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); act("reject", reject, "Order cancelled"); }}>
+        <form className="flex flex-col gap-3" onSubmit={(e) => {
+          e.preventDefault();
+          const ids = o.items.map((it) => it.id).filter((x): x is string => !!x);
+          const gone = ids.filter((x) => !keepIds.includes(x));
+          if (reject.reason === "out_of_stock" && ids.length > 1 && gone.length === 0) return setError("Tick the items that are out of stock");
+          act("reject", reject.reason === "out_of_stock" && ids.length > 1 ? { ...reject, out_of_stock_items: gone } : reject, "Order cancelled");
+        }}>
+          <ErrorNote message={error} />
           <Field label="Reason" htmlFor="rr">
             <Select id="rr" value={reject.reason} onChange={(e) => setReject({ ...reject, reason: e.target.value })}>
               {REJECT_REASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </Select>
           </Field>
-          {reject.reason === "out_of_stock" && <p className="text-sm text-ink-soft">Stock for these items will be set to 0 so they stop selling.</p>}
+          {reject.reason === "out_of_stock" && (o.items.length > 1 ? (
+            <fieldset className="flex flex-col gap-1.5" data-testid="oos-items">
+              <legend className="mb-1 text-sm font-medium">Which items are out of stock?</legend>
+              {o.items.map((it) => it.id && (
+                <label key={it.id} className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-peacock" checked={!keepIds.includes(it.id)}
+                    onChange={(e) => setKeepIds((k) => e.target.checked ? k.filter((x) => x !== it.id) : [...k, it.id!])} />
+                  <span>{it.title}{it.variant_label ? `, ${it.variant_label}` : ""}</span>
+                </label>
+              ))}
+              <p className="text-sm text-ink-soft">Their stock in this order&apos;s warehouse is set to 0 so they stop selling. Other items keep their stock.</p>
+            </fieldset>
+          ) : (
+            <p className="text-sm text-ink-soft">Its stock in this order&apos;s warehouse is set to 0 so it stops selling.</p>
+          ))}
           <TextField label="Note (optional)" value={reject.note} onChange={(e) => setReject({ ...reject, note: e.target.value })} maxLength={200} />
           <Button type="submit" variant="buy" loading={busy}>Cancel order</Button>
         </form>

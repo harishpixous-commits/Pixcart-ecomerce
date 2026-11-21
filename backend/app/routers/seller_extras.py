@@ -47,7 +47,7 @@ from app.services.catalog import refresh_product_aggregates
 from app.services.invoices import credit_note_pdf, invoice_pdf
 from app.services.ledger import balances, payout_out
 from app.services.orders import transition
-from app.services.platform_settings import PRODUCT_REPORT_REASONS
+from app.services.platform_settings import PRODUCT_REPORT_REASONS, get_settings
 
 router = APIRouter(prefix="/api/seller", tags=["seller-extras"])
 
@@ -157,15 +157,19 @@ async def edit_warehouse(wid: uuid.UUID, body: WarehouseIn, seller: ApprovedSell
     if wh.is_default and not body.is_active:
         raise ApiError("The main warehouse cannot be switched off", "default_locked")
     gstin = _check_gst(seller, body)
+    was_active = wh.is_active
     for k, v in body.model_dump(exclude={"gstin", "code"}).items():
         setattr(wh, k, v)
     wh.gstin = gstin
-    if not wh.is_active:
-        # Stock there stops counting as available.
-        for v in (await session.execute(select(Variant).join(InventoryLevel, InventoryLevel.variant_id == Variant.id).where(InventoryLevel.warehouse_id == wh.id))).scalars():
+    if wh.is_active != was_active:
+        # Switched off, its stock stops counting as available; switched back on, it counts (and sells) again.
+        await session.flush()
+        stmt = (select(Variant).join(InventoryLevel, InventoryLevel.variant_id == Variant.id).where(InventoryLevel.warehouse_id == wh.id)
+                .order_by(Variant.id).with_for_update(of=Variant))
+        for v in (await session.execute(stmt)).scalars():
             await inventory.refresh_variant_total(session, v)
             await refresh_product_aggregates(session, await session.get(Product, v.product_id))
-    audit(session, user, "warehouse.update", "seller", seller.id, wh.code)
+    audit(session, user, "warehouse.update", "seller", seller.id, wh.code + ("" if wh.is_active == was_active else (" switched on" if wh.is_active else " switched off")))
     await session.commit()
     return await inventory.warehouse_summary(session, seller.id)
 
@@ -186,8 +190,9 @@ async def inventory_grid(
     if q.strip():
         like = f"%{q.strip()}%"
         stmt = stmt.where((Product.title.ilike(like)) | (Variant.sku.ilike(like)))
+    threshold = (await get_settings(session))["low_stock_threshold"]
     if low_stock:
-        stmt = stmt.where(Variant.stock <= 5, Variant.is_active.is_(True))
+        stmt = stmt.where(Variant.stock <= threshold, Variant.is_active.is_(True))
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (await session.execute(stmt.order_by(Product.title, Variant.sku).offset((page - 1) * 50).limit(50))).all()
     levels = {}
@@ -204,7 +209,7 @@ async def inventory_grid(
             }
             for v, title, pid in rows
         ],
-        "total": total, "page": page, "page_size": 50,
+        "total": total, "page": page, "page_size": 50, "low_stock_threshold": threshold,
     }
 
 

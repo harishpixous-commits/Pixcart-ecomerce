@@ -11,7 +11,7 @@ type S = {
   shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number;
   feature_wishlist: boolean; feature_reviews: boolean; feature_returns: boolean; feature_coupons: boolean; feature_support: boolean;
   reviews_need_approval: boolean; auto_approve_returns: boolean; transit_days_same_city: number; transit_days_same_state: number; transit_days_national: number;
-  auto_cancel_unconfirmed_hours: number; auto_payouts: boolean; payout_min_paise: number;
+  auto_cancel_unconfirmed_hours: number; auto_payouts: boolean; payout_min_paise: number; low_stock_threshold: number;
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
 };
 
@@ -42,7 +42,7 @@ export default function AdminSettings() {
         shipping: paiseToInput(x.shipping_fee_paise), free: paiseToInput(x.free_shipping_threshold_paise), codFee: paiseToInput(x.cod_fee_paise),
         codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item),
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
-        autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise),
+        autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
       });
     }).catch(quietly);
   }, []);
@@ -58,7 +58,7 @@ export default function AdminSettings() {
         shipping_fee_paise: toPaise(f.shipping), free_shipping_threshold_paise: toPaise(f.free), cod_enabled: cod, cod_fee_paise: toPaise(f.codFee),
         cod_max_order_paise: toPaise(f.codMax), tcs_bps: bps(f.tcs), tds_bps: bps(f.tds), commission_gst_bps: bps(f.cgst), max_qty_per_item: Number(f.qty),
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
-        auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), ...flags,
+        auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
       setS(await api<S>("/api/admin/settings", { method: "PUT", body }));
@@ -83,7 +83,9 @@ export default function AdminSettings() {
         </p>
         <TextField label="Delivery fee per seller package (₹)" {...bind("shipping")} />
         <TextField label="Free delivery from (₹, per seller)" {...bind("free")} />
-        <TextField label="Maximum quantity per item" {...bind("qty")} />
+        <TextField label="Maximum quantity per item" {...bind("qty")} hint="1 to 10 units of one item in an order" />
+        <TextField label="Low stock at (units)" {...bind("lowStock")} inputMode="numeric"
+          hint="Shoppers see “Only N left”, and sellers get a low-stock alert, at or below this many units" />
       </section>
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
         <h2 className="text-lg font-semibold sm:col-span-2">Cash on delivery</h2>
