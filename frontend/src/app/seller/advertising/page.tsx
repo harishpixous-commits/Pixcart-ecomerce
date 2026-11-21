@@ -10,7 +10,8 @@ import { Button, EmptyState, ErrorNote, Field, Input, Modal, PageLoader, TextFie
 import { api, ApiError, latestOnly, quietly } from "@/lib/api";
 import { dateTime, paiseToInput, pct, rupees, toLocalInput, toPaise } from "@/lib/format";
 
-type Totals = { impressions: number; clicks: number; spend: number; orders: number; sales: number; acos: number | null };
+type Totals = { impressions: number; clicks: number; invalid_clicks: number; spend: number; orders: number; sales: number; acos: number | null };
+type ReportProduct = { title: string; impressions: number; clicks: number; invalid_clicks: number; spend: number };
 type Data = { campaigns: Campaign[]; rules: AdRules; totals_30d: Totals; billing: { amount: number; description: string; at: string }[] };
 type AdProduct = { id: string; title: string; image: string; price: number; in_stock: boolean; rating_avg: number };
 
@@ -66,9 +67,10 @@ export default function SellerAdvertising() {
         <p className="mb-4 rounded-xl bg-marigold-light px-4 py-3 text-sm">Sponsored products are switched off on the marketplace right now. Your campaigns are not showing.</p>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5" aria-label="Last 30 days">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" aria-label="Last 30 days">
         <Stat label="Impressions (30 days)" value={t.impressions.toLocaleString("en-IN")} />
         <Stat label="Clicks" value={t.clicks.toLocaleString("en-IN")} hint={`${ctr}% of impressions`} />
+        <Stat label="Invalid clicks" value={t.invalid_clicks.toLocaleString("en-IN")} hint="Free: you are not charged" />
         <Stat label="Spend" value={rupees(t.spend)} hint={`+ GST ${pct(d.rules.gst_bps)}`} />
         <Stat label="Ad sales" value={rupees(t.sales)} hint={`${t.orders} order${t.orders === 1 ? "" : "s"} within ${d.rules.attribution_days} days of a click`} />
         <Stat label="ACOS" value={t.acos === null ? "—" : `${t.acos}%`} hint="Spend as a share of ad sales; lower is better" />
@@ -101,7 +103,14 @@ export default function SellerAdvertising() {
 
       <section className="mt-6 rounded-xl bg-white p-4" aria-labelledby="ad-charges">
         <h2 id="ad-charges" className="font-semibold">Ad charges</h2>
-        <p className="text-sm text-ink-soft">Each day&apos;s clicks plus GST ({pct(d.rules.gst_bps)}) are taken from your next payout. A shopper&apos;s repeat clicks on the same day are free.</p>
+        <p className="text-sm text-ink-soft">Each day&apos;s clicks plus GST ({pct(d.rules.gst_bps)}) are taken from your next payout. You pay only for genuine clicks:</p>
+        <ul className="mt-1 list-disc pl-5 text-sm text-ink-soft" data-testid="ad-click-rules">
+          <li>Each ad link counts once, and only for the shopper it was shown to.</li>
+          <li>A shopper&apos;s repeat clicks on the same product within 24 hours are free.</li>
+          <li>Each campaign pays for at most {d.rules.paid_clicks_per_address} clicks a day from one internet address, and {d.rules.paid_clicks_per_network} from one network.</li>
+          <li>Links from pages opened more than {d.rules.link_hours} hours ago are free.</li>
+        </ul>
+        <p className="mt-1 text-sm text-ink-soft">Other clicks still open your product, cost you nothing and show as invalid clicks in your reports.</p>
         {d.billing.length === 0 ? <p className="mt-2 text-sm text-ink-faint">No charges yet.</p> : (
           <ul className="mt-2 divide-y divide-line">
             {d.billing.map((b, i) => (
@@ -146,7 +155,7 @@ function HowItWorks({ rules, onStart }: { rules: AdRules; onStart: () => void })
   const steps = [
     { icon: Target, title: "Choose products and places", text: "Pick the products to promote and where they show: search results, similar product pages, the home page." },
     { icon: BadgeIndianRupee, title: "Set a bid and a budget", text: `Your bid is the most you pay for a click (from ${rupees(rules.min_bid_paise)}). The daily budget caps what you spend in a day.` },
-    { icon: MousePointerClick, title: "Pay only for clicks", text: `Ads are marked "Sponsored". Orders placed within ${rules.attribution_days} days of a click count as ad sales in your reports.` },
+    { icon: MousePointerClick, title: "Pay only for genuine clicks", text: `Ads are marked "Sponsored". Repeat, reused and suspicious clicks are free. Orders placed within ${rules.attribution_days} days of a click count as ad sales in your reports.` },
   ];
   return (
     <section className="rounded-xl bg-white p-5" data-testid="ads-how">
@@ -329,25 +338,28 @@ function CampaignEditor({ rules, campaign, onDone }: { rules: AdRules; campaign:
 function CampaignReport({ campaign }: { campaign: Campaign }) {
   const [days, setDays] = useState(30);
   const [metric, setMetric] = useState<"clicks" | "spend" | "impressions">("clicks");
-  const [r, setR] = useState<{ key: string; days: AdDay[]; products: { title: string; impressions: number; clicks: number; spend: number }[] } | null>(null);
+  const [r, setR] = useState<{ key: string; days: AdDay[]; products: ReportProduct[] } | null>(null);
   const key = `${campaign.id}:${days}`;
   useEffect(() => {
     let live = true;
-    api<{ days: AdDay[]; products: { title: string; impressions: number; clicks: number; spend: number }[] }>(`/api/seller/ads/${campaign.id}/report`, { query: { days } })
+    api<{ days: AdDay[]; products: ReportProduct[] }>(`/api/seller/ads/${campaign.id}/report`, { query: { days } })
       .then((x) => { if (live) setR({ key, ...x }); })
       .catch(quietly);
     return () => { live = false; };
   }, [campaign.id, days, key]);
   if (!r || r.key !== key) return <PageLoader />;
   const series = fillDays(r.days, days);
-  const sum = series.reduce((a, x) => ({ impressions: a.impressions + x.impressions, clicks: a.clicks + x.clicks, spend: a.spend + x.spend }), { impressions: 0, clicks: 0, spend: 0 });
+  const sum = series.reduce((a, x) => ({ impressions: a.impressions + x.impressions, clicks: a.clicks + x.clicks, invalid: a.invalid + x.invalid_clicks, spend: a.spend + x.spend }),
+    { impressions: 0, clicks: 0, invalid: 0, spend: 0 });
   return (
     <div className="flex flex-col gap-4" data-testid="campaign-report">
       <div className="flex flex-wrap items-center gap-2">
         {([7, 30, 90] as const).map((n) => (
           <button key={n} type="button" onClick={() => setDays(n)} className={clsx("rounded-full px-3 py-1 text-sm font-semibold", days === n ? "bg-peacock text-white" : "bg-mist hover:bg-line")}>{n} days</button>
         ))}
-        <span className="ml-auto text-sm text-ink-soft">{sum.impressions.toLocaleString("en-IN")} impressions · {sum.clicks.toLocaleString("en-IN")} clicks · {rupees(sum.spend)}</span>
+        <span className="ml-auto text-sm text-ink-soft">
+          {sum.impressions.toLocaleString("en-IN")} impressions · {sum.clicks.toLocaleString("en-IN")} clicks · {rupees(sum.spend)} · {sum.invalid.toLocaleString("en-IN")} invalid clicks (free)
+        </span>
       </div>
       <div className="flex gap-1 rounded-lg bg-mist p-1 text-sm" role="tablist" aria-label="Chart">
         {(["clicks", "spend", "impressions"] as const).map((m) => (
@@ -359,7 +371,8 @@ function CampaignReport({ campaign }: { campaign: Campaign }) {
       <div>
         <h3 className="mb-2 font-semibold">Clicks by product</h3>
         {r.products.length === 0 ? <p className="text-sm text-ink-faint">No clicks in this period yet.</p> : (
-          <HBar items={r.products.map((p) => ({ label: p.title, value: p.clicks, display: `${p.clicks} clicks · ${rupees(p.spend)}` }))} />
+          <HBar items={r.products.map((p) => ({ label: p.title, value: p.clicks,
+            display: `${p.clicks} clicks · ${rupees(p.spend)}${p.invalid_clicks ? ` · ${p.invalid_clicks} invalid` : ""}` }))} />
         )}
       </div>
     </div>

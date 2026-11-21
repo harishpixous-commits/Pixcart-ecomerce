@@ -92,6 +92,8 @@ DEFAULTS: dict[str, Any] = {
     "ads_home": True,
     "ads_per_search": 2,               # sponsored results at the top of search results (0 = only the rail below)
     "ads_per_rail": 8,                 # products in a "Sponsored" rail
+    "ads_paid_clicks_per_address": 3,  # clicks a campaign pays for from one internet address a day (India time) ...
+    "ads_paid_clicks_per_network": 10,  # ... and from one network; later clicks are free and count as invalid
     # discovery pages
     "new_release_days": 45,            # "Hot new releases" = approved within this many days
     # questions and answers, alerts, compare, bought together (Admin -> Product page)
@@ -175,6 +177,8 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "ads_home": (bool, 0, 1),
     "ads_per_search": (int, 0, 6),
     "ads_per_rail": (int, 4, 20),
+    "ads_paid_clicks_per_address": (int, 1, 50),
+    "ads_paid_clicks_per_network": (int, 1, 500),
     "new_release_days": (int, 7, 180),
     "feature_qa": (bool, 0, 1),
     "qa_need_approval": (bool, 0, 1),

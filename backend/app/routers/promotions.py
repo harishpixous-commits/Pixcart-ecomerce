@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import case, func, or_, select
@@ -318,21 +318,26 @@ async def coupons_page(session: SessionDep) -> dict:
 
 
 @router.get("/api/ads/serve")
-async def ads_serve(session: SessionDep, placement: Literal["search", "product", "home"], q: str = Query(default="", max_length=100),
-                    product: str | None = Query(default=None, max_length=230), limit: int | None = Query(default=None, ge=1, le=20)) -> dict:
+async def ads_serve(request: Request, response: Response, session: SessionDep, placement: Literal["search", "product", "home"],
+                    q: str = Query(default="", max_length=100), product: str | None = Query(default=None, max_length=230),
+                    limit: int | None = Query(default=None, ge=1, le=20)) -> dict:
     prod = None
     if placement == "product":
         prod = (await session.execute(select(Product).where(Product.slug == product))).scalar_one_or_none() if product else None
         if prod is None:
             return {"items": []}
-    served = await ads_svc.serve(session, placement, query=q, product=prod, limit=limit)
+    vid = ads_svc.visitor_id(request)
+    served = await ads_svc.serve(session, placement, visitor=vid, ip=client_ip(request), query=q, product=prod, limit=limit)
+    if served:
+        ads_svc.keep_visitor(response, vid)
     return {"items": await product_cards(session, [x[0] for x in served], sponsored={x[0].id: x[1] for x in served})}
 
 
 @router.get("/api/ads/click")
 async def ads_click(request: Request, session: SessionDep, t: str = Query(max_length=400)) -> RedirectResponse:
-    visitor = ads_svc.visitor_key(client_ip(request), request.headers.get("user-agent", ""))
-    p, ck = await ads_svc.click(session, t, visitor=visitor)
+    """Opens the product behind a sponsored link. Only a genuine click is charged (services/ads.py); any other click is
+    free and counted as invalid, but still opens the product."""
+    p, ck = await ads_svc.click(session, t, visitor=request.cookies.get(ads_svc.VISITOR_COOKIE), ip=client_ip(request))
     if p is None:
         return RedirectResponse("/", status_code=302)
     return RedirectResponse(f"/p/{p.slug}" + (f"?sp={ck.id}" if ck else ""), status_code=302)
@@ -355,7 +360,8 @@ def _ads_rules(cfg: dict) -> dict:
     return {"enabled": cfg["feature_ads"], "need_approval": cfg["ads_need_approval"], "min_bid_paise": cfg["ads_min_bid_paise"],
             "min_daily_budget_paise": cfg["ads_min_daily_budget_paise"], "gst_bps": cfg["commission_gst_bps"],
             "placements": {k: {"label": v, "enabled": cfg[f"ads_{k}"]} for k, v in ads_svc.PLACEMENTS.items()},
-            "attribution_days": ads_svc.ATTRIBUTION_DAYS}
+            "attribution_days": ads_svc.ATTRIBUTION_DAYS, "link_hours": int(ads_svc.LINK_TTL.total_seconds() // 3600),
+            "paid_clicks_per_address": cfg["ads_paid_clicks_per_address"], "paid_clicks_per_network": cfg["ads_paid_clicks_per_network"]}
 
 
 class CampaignIn(BaseModel):
@@ -440,7 +446,7 @@ async def seller_ads(seller: SellerAccount, session: SessionDep) -> dict:
     items = await _campaigns_out(session, campaigns)
     since = ads_svc.today_ist() - timedelta(days=29)
     report = await ads_svc.campaign_report(session, [c.id for c in campaigns], since=since)
-    totals = {k: sum(r[k] for r in report.values()) for k in ("impressions", "clicks", "spend", "orders", "sales")}
+    totals = {k: sum(r[k] for r in report.values()) for k in ("impressions", "clicks", "invalid_clicks", "spend", "orders", "sales")}
     totals["acos"] = round(100 * totals["spend"] / totals["sales"], 1) if totals["sales"] else None
     billing = (await session.execute(select(LedgerEntry).where(LedgerEntry.seller_id == seller.id, LedgerEntry.kind == "ad_spend")
                                      .order_by(LedgerEntry.created_at.desc()).limit(10))).scalars()
@@ -527,13 +533,14 @@ async def seller_campaign_report(campaign_id: uuid.UUID, seller: SellerAccount, 
     if c is None or c.seller_id != seller.id:
         raise NotFound("Campaign")
     since = ads_svc.today_ist() - timedelta(days=days - 1)
-    by_day = (await session.execute(select(AdStat.day, func.sum(AdStat.impressions), func.sum(AdStat.clicks), func.sum(AdStat.spend_paise))
+    sums = (func.sum(AdStat.impressions), func.sum(AdStat.clicks), func.sum(AdStat.invalid_clicks), func.sum(AdStat.spend_paise))
+    by_day = (await session.execute(select(AdStat.day, *sums)
                                     .where(AdStat.campaign_id == c.id, AdStat.day >= since).group_by(AdStat.day).order_by(AdStat.day))).all()
-    by_product = (await session.execute(select(Product.title, func.sum(AdStat.impressions), func.sum(AdStat.clicks), func.sum(AdStat.spend_paise))
+    by_product = (await session.execute(select(Product.title, *sums)
                                         .join(Product, Product.id == AdStat.product_id).where(AdStat.campaign_id == c.id, AdStat.day >= since)
                                         .group_by(Product.title).order_by(func.sum(AdStat.clicks).desc()))).all()
-    return {"days": [{"day": d.isoformat(), "impressions": int(i), "clicks": int(k), "spend": int(s)} for d, i, k, s in by_day],
-            "products": [{"title": t, "impressions": int(i), "clicks": int(k), "spend": int(s)} for t, i, k, s in by_product]}
+    return {"days": [{"day": d.isoformat(), "impressions": int(i), "clicks": int(k), "invalid_clicks": int(x), "spend": int(s)} for d, i, k, x, s in by_day],
+            "products": [{"title": t, "impressions": int(i), "clicks": int(k), "invalid_clicks": int(x), "spend": int(s)} for t, i, k, x, s in by_product]}
 
 
 # ============================================================================ sponsored products: admin
@@ -556,13 +563,13 @@ async def admin_ads(admin: Perm("marketing"), session: SessionDep, status: str |
     for it, c in zip(items, campaigns, strict=True):
         it["seller"], it["seller_id"] = names.get(c.seller_id, ""), str(c.seller_id)
     since = ads_svc.today_ist() - timedelta(days=29)
-    by_day = (await session.execute(select(AdStat.day, func.sum(AdStat.impressions), func.sum(AdStat.clicks), func.sum(AdStat.spend_paise))
-                                    .where(AdStat.day >= since).group_by(AdStat.day).order_by(AdStat.day))).all()
+    by_day = (await session.execute(select(AdStat.day, func.sum(AdStat.impressions), func.sum(AdStat.clicks), func.sum(AdStat.invalid_clicks),
+                                           func.sum(AdStat.spend_paise)).where(AdStat.day >= since).group_by(AdStat.day).order_by(AdStat.day))).all()
+    days = [{"day": d.isoformat(), "impressions": int(i), "clicks": int(k), "invalid_clicks": int(x), "spend": int(s)} for d, i, k, x, s in by_day]
     counts = dict((await session.execute(select(AdCampaign.status, func.count()).group_by(AdCampaign.status))).all())
     cfg = await get_settings(session)
     return {"items": items, "total": total, "page": page, "page_size": 30, "counts": counts, "rules": _ads_rules(cfg),
-            "revenue_30d": {"impressions": sum(int(r[1]) for r in by_day), "clicks": sum(int(r[2]) for r in by_day), "spend": sum(int(r[3]) for r in by_day),
-                            "days": [{"day": d.isoformat(), "impressions": int(i), "clicks": int(k), "spend": int(s)} for d, i, k, s in by_day]}}
+            "revenue_30d": {**{k: sum(r[k] for r in days) for k in ("impressions", "clicks", "invalid_clicks", "spend")}, "days": days}}
 
 
 @router.post("/api/admin/ads/bill")

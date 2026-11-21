@@ -169,11 +169,15 @@ discount, rating and price filters).
 
 **Sponsored products.** Sellers run cost-per-click campaigns in *Seller hub → Advertising*: products, placements (search
 results, other product pages, home page), optional keywords (otherwise automatic targeting), bid, daily and total
-budget, dates. Ads are ranked by bid and rating, shown only while there is budget, labelled "Sponsored", and every click
-goes through a signed link: the first click by a shopper in 24 hours is charged, repeats are free. Sellers see
-impressions, clicks, CTR, spend, orders and sales attributed within 7 days of a click, and ACoS. Each finished day's spend
-plus GST goes to the seller ledger (hourly job, or *Bill now*) and comes off the next payout. *Admin → Advertising* approves,
-pauses or ends campaigns, shows ad revenue, and sets minimum bid and budget, placements and how many ads appear.
+budget, dates. Ads are ranked by bid and rating, shown only while there is budget, and labelled "Sponsored". Only genuine
+clicks are charged: every ad shown is an impression whose signed click link works once, only for the shopper it was
+shown to (a first-party visitor cookie), for 48 hours; a shopper's repeat clicks within 24 hours are free; and a campaign
+pays for at most a set number of clicks a day from one internet address and from one network, whatever the browser.
+Other clicks still open the product, cost nothing and show as *invalid clicks*; ad requests and clicks are rate limited
+per address. Sellers see impressions, clicks, invalid clicks, CTR, spend, orders and sales attributed within 7 days of a
+click, and ACoS. Each finished day's spend plus GST goes to the seller ledger (hourly job, or *Bill now*) and comes off
+the next payout. *Admin → Advertising* approves, pauses or ends campaigns, shows ad revenue and invalid clicks, and sets
+minimum bid and budget, placements, how many ads appear and the paid-click limits per address and network.
 
 **Discovery pages and header.** **Bestsellers** and **Hot new releases** (`/bestsellers`, `/new-releases`, ranked by units
 sold in the last 30 days, per department and category), **Coupons** (`/coupons`, every offer with copy-code) and a **Help**

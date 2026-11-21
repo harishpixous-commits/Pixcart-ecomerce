@@ -146,12 +146,17 @@ async def test_sponsored_products_serving_clicks_budget_attribution_and_billing(
     r = await client.get("/api/ads/click", params={"t": token}, headers={"user-agent": "A"}, follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].startswith(f"/p/{slug}?sp=")
     click_id = r.headers["location"].split("sp=")[1]
-    await client.get("/api/ads/click", params={"t": token}, headers={"user-agent": "A"}, follow_redirects=False)  # repeat: free
-    await client.get("/api/ads/click", params={"t": token}, headers={"user-agent": "B"}, follow_redirects=False)
+    for agent in ("A", "B"):  # the same link again, whatever the browser: opens the product, free, counted as invalid
+        again = await client.get("/api/ads/click", params={"t": token}, headers={"user-agent": agent}, follow_redirects=False)
+        assert again.headers["location"] == f"/p/{slug}"
     bad = await client.get("/api/ads/click", params={"t": token[:-3] + "xyz"}, follow_redirects=False)
     assert bad.headers["location"] == "/"
+    client.cookies.clear()  # another shopper clicks the ad they were shown
+    home = (await client.get("/api/ads/serve", params={"placement": "home"})).json()["items"][0]["href"].split("t=")[1]
+    assert (await client.get("/api/ads/click", params={"t": home}, follow_redirects=False)).headers["location"].startswith(f"/p/{slug}?sp=")
     mine = (await tn.get("/api/seller/ads")).json()["campaigns"][0]
-    assert mine["stats"]["clicks"] == 2 and mine["spend_paise"] == 10000 and mine["spent_today_paise"] == 10000
+    assert mine["stats"]["clicks"] == 2 and mine["stats"]["invalid_clicks"] == 2
+    assert mine["spend_paise"] == 10000 and mine["spent_today_paise"] == 10000
     # the daily budget is used up: no more ads today
     assert (await client.get("/api/ads/serve", params={"placement": "home"})).json()["items"] == []
 

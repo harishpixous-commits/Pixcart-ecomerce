@@ -2,14 +2,16 @@
 
 /*
  * Sponsored-product campaigns as the seller hub and the admin see them: status, products, where the ads show, the bid
- * and budgets with today's spend, and the results (impressions, clicks, spend, ad sales, ACOS).
+ * and budgets with today's spend, and the results (impressions, clicks, invalid clicks, spend, ad sales, ACOS).
  */
 
 import clsx from "clsx";
 import { Pill } from "@/components/ui";
 import { date, rupees } from "@/lib/format";
 
-export type AdStats = { impressions: number; clicks: number; spend: number; orders: number; sales: number; ctr: number; acos: number | null };
+export type AdStats = {
+  impressions: number; clicks: number; invalid_clicks: number; spend: number; orders: number; sales: number; ctr: number; acos: number | null;
+};
 
 export type Campaign = {
   id: string; name: string; status: string; note: string; placements: string[]; keywords: string[]; bid_paise: number;
@@ -21,6 +23,7 @@ export type Campaign = {
 export type AdRules = {
   enabled: boolean; need_approval: boolean; min_bid_paise: number; min_daily_budget_paise: number; gst_bps: number;
   placements: Record<string, { label: string; enabled: boolean }>; attribution_days: number;
+  link_hours: number; paid_clicks_per_address: number; paid_clicks_per_network: number;
 };
 
 type Tone = "green" | "amber" | "red" | "blue" | "gray";
@@ -44,10 +47,10 @@ export function deliveryNote(c: Campaign, now: number): string | null {
   return null;
 }
 
-export type AdDay = { day: string; impressions: number; clicks: number; spend: number };
+export type AdDay = { day: string; impressions: number; clicks: number; invalid_clicks: number; spend: number };
 
 /** A continuous run of days ending today (days without ads as zero), for the charts. */
-export function fillDays(rows: AdDay[], days: number): { date: string; impressions: number; clicks: number; spend: number }[] {
+export function fillDays(rows: AdDay[], days: number): { date: string; impressions: number; clicks: number; invalid_clicks: number; spend: number }[] {
   const byDay = new Map(rows.map((r) => [r.day, r]));
   const now = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
@@ -58,7 +61,7 @@ export function fillDays(rows: AdDay[], days: number): { date: string; impressio
     d.setUTCDate(d.getUTCDate() - k);
     const key = d.toISOString().slice(0, 10);
     const r = byDay.get(key);
-    out.push({ date: key, impressions: r?.impressions ?? 0, clicks: r?.clicks ?? 0, spend: r?.spend ?? 0 });
+    out.push({ date: key, impressions: r?.impressions ?? 0, clicks: r?.clicks ?? 0, invalid_clicks: r?.invalid_clicks ?? 0, spend: r?.spend ?? 0 });
   }
   return out;
 }
@@ -67,6 +70,7 @@ export function StatsLine({ s, className }: { s: AdStats; className?: string }) 
   const cells: [string, string][] = [
     ["Impressions", s.impressions.toLocaleString("en-IN")],
     ["Clicks", s.clicks.toLocaleString("en-IN")],
+    ["Invalid", s.invalid_clicks.toLocaleString("en-IN")],
     ["CTR", `${s.ctr}%`],
     ["Spend", rupees(s.spend)],
     ["Orders", s.orders.toLocaleString("en-IN")],
@@ -74,7 +78,7 @@ export function StatsLine({ s, className }: { s: AdStats; className?: string }) 
     ["ACOS", s.acos === null ? "—" : `${s.acos}%`],
   ];
   return (
-    <dl className={clsx("grid grid-cols-4 gap-x-3 gap-y-2 rounded-lg bg-mist/70 p-3 sm:grid-cols-7", className)}>
+    <dl className={clsx("grid grid-cols-4 gap-x-3 gap-y-2 rounded-lg bg-mist/70 p-3 lg:grid-cols-8", className)}>
       {cells.map(([k, v]) => (
         <div key={k} className="min-w-0">
           <dt className="text-[11px] uppercase tracking-wide text-ink-faint">{k}</dt>
