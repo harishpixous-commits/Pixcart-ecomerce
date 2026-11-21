@@ -82,7 +82,9 @@ async def cleanup_job() -> None:
         await session.execute(delete(OtpChallenge).where(OtpChallenge.created_at < utcnow() - timedelta(days=2)))
         # Files given to the AI assistant are kept for 7 days only; stale action proposals expire.
         from app.models import AssistantAction, AssistantUpload
+        from app.services import ads
 
+        await ads.prune_impressions(session)  # sponsored-product impressions whose click links have expired
         await session.execute(delete(AssistantUpload).where(AssistantUpload.expires_at < utcnow()))
         await session.execute(update(AssistantAction).where(AssistantAction.status == "pending", AssistantAction.created_at < utcnow() - timedelta(hours=1)).values(status="expired"))
         await session.commit()

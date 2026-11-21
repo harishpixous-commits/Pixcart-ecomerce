@@ -84,8 +84,22 @@ class AdStat(Base):
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     impressions: Mapped[int] = mapped_column(Integer, default=0)
     clicks: Mapped[int] = mapped_column(Integer, default=0)
+    # never charged: a reused or expired link, a visitor the ad was not shown to, or over the address or network limit
+    invalid_clicks: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     spend_paise: Mapped[int] = mapped_column(BigInteger, default=0)
     billed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AdImpression(IdMixin, Base):
+    """A sponsored product shown to one visitor. Its id is the one-use nonce in that ad's signed click link (which also
+    carries the campaign, product and time), so a link is charged at most once and only for the visitor it was shown
+    to. The cleanup job deletes rows once their links have expired."""
+
+    __tablename__ = "ad_impressions"
+
+    visitor: Mapped[str] = mapped_column(String(64))  # keyed hash of the visitor cookie
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # set by the link's first click
 
 
 class AdClick(IdMixin, Base):
@@ -94,7 +108,11 @@ class AdClick(IdMixin, Base):
     campaign_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ad_campaigns.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"))
     placement: Mapped[str] = mapped_column(String(10))
-    visitor: Mapped[str] = mapped_column(String(64), index=True)  # hash of address and browser; no raw IP is kept
+    visitor: Mapped[str] = mapped_column(String(64), index=True)  # keyed hash of the visitor cookie; no raw IP is kept
+    ip_hash: Mapped[str] = mapped_column(String(32), default="", server_default="")  # keyed hashes of the address
+    net_hash: Mapped[str] = mapped_column(String(32), default="", server_default="")  # and its network (click limits)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True)
-    cost_paise: Mapped[int] = mapped_column(BigInteger, default=0)  # 0 = repeat click, not charged
+    cost_paise: Mapped[int] = mapped_column(BigInteger, default=0)  # 0 = a free click (repeat, or no budget left)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+    __table_args__ = (Index("ix_ad_clicks_campaign_day", "campaign_id", "created_at"),)

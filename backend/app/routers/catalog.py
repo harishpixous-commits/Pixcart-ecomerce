@@ -4,10 +4,10 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, Response
 from sqlalchemy import and_, desc, func, literal, or_, select
 
-from app.core.deps import SessionDep
+from app.core.deps import SessionDep, client_ip
 from app.core.errors import NotFound
 from app.core.validators import STATES
 from app.db import utcnow
@@ -175,6 +175,8 @@ async def seller_delivery(session, seller_ids: list, pin: str) -> dict:
 
 @router.get("/products")
 async def search(
+    request: Request,
+    response: Response,
     session: SessionDep,
     q: str = Query(default="", max_length=100),
     category: str | None = Query(default=None, max_length=90),
@@ -274,8 +276,10 @@ async def search(
     sponsored_rail: list[dict] = []
     if text and page == 1:
         cfg = await get_settings(session)
-        served = await ads_svc.serve(session, "search", query=text, limit=cfg["ads_per_search"] + cfg["ads_per_rail"])
+        vid = ads_svc.visitor_id(request)
+        served = await ads_svc.serve(session, "search", visitor=vid, ip=client_ip(request), query=text, limit=cfg["ads_per_search"] + cfg["ads_per_rail"])
         if served:
+            ads_svc.keep_visitor(response, vid)
             cards = await product_cards(session, [x[0] for x in served], sponsored={x[0].id: x[1] for x in served},
                                         delivery={k: v["date"] for k, v in eta.items()} if pincode else None)
             sponsored, sponsored_rail = cards[: cfg["ads_per_search"]], cards[cfg["ads_per_search"]:]
