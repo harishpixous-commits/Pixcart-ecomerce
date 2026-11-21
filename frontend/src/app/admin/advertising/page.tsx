@@ -14,7 +14,7 @@ import { rupees } from "@/lib/format";
 
 type Data = {
   items: Campaign[]; total: number; page: number; page_size: number; counts: Record<string, number>; rules: AdRules;
-  revenue_30d: { impressions: number; clicks: number; spend: number; days: AdDay[] };
+  revenue_30d: { impressions: number; clicks: number; invalid_clicks: number; spend: number; days: AdDay[] };
 };
 type Action = "approve" | "reject" | "pause" | "resume" | "end";
 
@@ -28,6 +28,10 @@ const SETTINGS: SettingField[] = [
   { k: "ads_min_daily_budget_paise", kind: "rupees", label: "Lowest daily budget (₹)", hint: "₹10 to ₹1,00,000", min: 1000, max: 10_000_000, needs: "feature_ads" },
   { k: "ads_per_search", kind: "int", label: "Sponsored results at the top of search", hint: "0 to 6 (0 = only the Sponsored row below the results)", min: 0, max: 6, needs: "feature_ads" },
   { k: "ads_per_rail", kind: "int", label: "Products in a Sponsored row", hint: "4 to 20", min: 4, max: 20, needs: "feature_ads" },
+  { k: "ads_paid_clicks_per_address", kind: "int", label: "Paid clicks from one internet address a day", min: 1, max: 50, needs: "feature_ads",
+    hint: "1 to 50, per campaign. Later clicks from that address are free and show as invalid clicks." },
+  { k: "ads_paid_clicks_per_network", kind: "int", label: "Paid clicks from one network a day", min: 1, max: 500, needs: "feature_ads",
+    hint: "1 to 500, per campaign. A network is addresses that start the same, like 49.36.12.x. Many shoppers can share one mobile network." },
 ];
 
 export default function AdminAdvertising() {
@@ -100,6 +104,10 @@ export default function AdminAdvertising() {
             <Stat label="Clicks" value={rev.clicks.toLocaleString("en-IN")} hint={rev.clicks ? `${rupees(Math.round(rev.spend / rev.clicks))} per click on average` : undefined} />
             <Stat label="Impressions" value={rev.impressions.toLocaleString("en-IN")} />
             <Stat label="Click-through rate" value={rev.impressions ? `${Math.round((10000 * rev.clicks) / rev.impressions) / 100}%` : "—"} />
+            <div className="col-span-2">
+              <Stat label="Invalid clicks" value={rev.invalid_clicks.toLocaleString("en-IN")}
+                hint="Not charged: reused or expired links, clicks by someone the ad was not shown to, or too many from one address or network" />
+            </div>
           </div>
           <div className="rounded-xl bg-white p-4">
             <div className="mb-2 flex gap-1 rounded-lg bg-mist p-1 text-sm" role="tablist" aria-label="Chart">
@@ -122,7 +130,7 @@ export default function AdminAdvertising() {
         ...(canSettings ? [{ value: "settings", label: "Settings" }] : []),
       ]} />
       {tab === "settings" ? (
-        <SettingsBlock title="Sponsored products settings" sub="Where ads may show, the lowest bid and budget, and how many sponsored products appear." fields={SETTINGS} saveLabel="Save ad settings" />
+        <SettingsBlock title="Sponsored products settings" sub="Where ads may show, the lowest bid and budget, how many sponsored products appear, and how many clicks from one place sellers pay for." fields={SETTINGS} saveLabel="Save ad settings" />
       ) : (
         <>
           <div className="relative mb-3 max-w-md">

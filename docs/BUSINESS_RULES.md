@@ -115,6 +115,23 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
   parts add up exactly. Limits: date window, total uses, uses per customer, first order only, minimum order,
   category. A coupon used on an order that is fully cancelled is released.
 
+## Sponsored products (ads)
+
+- Sellers pay per click within a daily and an optional total budget. Each finished day's spend plus GST is posted to
+  the seller ledger and comes off the next payout.
+- Only genuine clicks are charged. Every ad shown is an impression recorded for the shopper it was shown to (a random
+  id in a first-party, HttpOnly cookie; only a keyed hash of it is stored), and its signed click link carries that
+  impression's one-use code. A click is charged only on the link's first use, within 48 hours, by that shopper.
+- A shopper's repeat clicks on the same product within 24 hours are free (they still count for ad sales).
+- A campaign pays for at most a set number of clicks a day (India time) from one internet address and from one
+  network (Admin → Advertising; 3 and 10 by default), whatever browser the clicks claim to come from. For IPv4 an
+  address is one address and a network is its /24; for IPv6 an address is a /64 (one home or phone) and a network a /48.
+  Addresses are stored only as keyed hashes.
+- Any other click (a reused, expired or unknown link, someone the ad was not shown to, no visitor cookie, over a limit)
+  still opens the product, costs nothing and counts as an invalid click in the seller's and staff's reports.
+- Ad requests and clicks are rate limited per address (120 ad requests and 30 clicks a minute). Beyond that no ads are
+  shown and clicks only open the product, so floods cannot inflate impressions, clicks or spend.
+
 ## Invoices and credit notes
 
 - An invoice is issued per package when it ships, in the seller's name and GSTIN. Numbers follow GST rule 46:

@@ -87,7 +87,7 @@ DEFAULTS: dict[str, Any] = {
     "ads_per_search": 2,               # sponsored results at the top of search results (0 = only the rail below)
     "ads_per_rail": 8,                 # products in a "Sponsored" rail
     "ads_paid_clicks_per_address": 3,  # clicks a campaign pays for from one internet address a day (India time) ...
-    "ads_paid_clicks_per_network": 10, # ... and from one network; later clicks are free and count as invalid
+    "ads_paid_clicks_per_network": 10,  # ... and from one network; later clicks are free and count as invalid
     # discovery pages
     "new_release_days": 45,            # "Hot new releases" = approved within this many days
     # questions and answers, alerts, compare, bought together (Admin -> Product page)
