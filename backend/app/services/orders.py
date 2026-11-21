@@ -52,6 +52,7 @@ from app.services.invoices import assign_invoice
 from app.services.ledger import post_delivery
 from app.services.notify import notify, notify_seller
 from app.services.platform_settings import get_settings
+from app.services.reports import IST
 from app.services.stats import bump
 
 log = logging.getLogger("pixcart.orders")
@@ -397,6 +398,7 @@ async def place_order(
                     line_total=ln.line_total, gst_bps=p.gst_bps, taxable_value=split.taxable, cgst=split.cgst, sgst=split.sgst,
                     igst=split.igst, commission_bps=bps, commission_paise=line_commission,
                     seller_discount=item_seller_disc, platform_discount=item_platform_disc,
+                    return_window_days=p.return_window_days,
                 )
             )
             await bump(session, p.id, orders=1, units=ln.qty, revenue=value)
@@ -572,12 +574,9 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
             )
     elif dst == "delivered":
         sub.delivered_at = now
-        windows = (
-            await session.execute(
-                select(func.max(Product.return_window_days)).join(OrderItem, OrderItem.product_id == Product.id).where(OrderItem.sub_order_id == sub.id)
-            )
-        ).scalar_one() or 0
-        sub.settlement_due_at = now + timedelta(days=int(windows))
+        # the return windows saved on the items when the order was placed (a later edit to the listing changes nothing)
+        window = (await session.execute(select(func.max(OrderItem.return_window_days)).where(OrderItem.sub_order_id == sub.id))).scalar_one() or 0
+        sub.settlement_due_at = now + timedelta(days=int(window))
         sub.settlement_status = "pending"
         await session.flush()
         order = await session.get(Order, sub.order_id)
@@ -585,7 +584,7 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
         await post_delivery(session, sub)
         await notify(
             session, "order_delivered", await session.get(User, order.user_id),
-            {"order_number": order.number, "item": await _first_title(session, sub), "return_by": sub.settlement_due_at.strftime("%d %b %Y")},
+            {"order_number": order.number, "item": await _first_title(session, sub), "return_by": sub.settlement_due_at.astimezone(IST).strftime("%d %b %Y")},
             link=f"/orders/{order.id}",
         )
     add_event(session, sub.order_id, sub, src, dst, actor, note)

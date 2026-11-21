@@ -54,7 +54,7 @@ All amounts are integer paise and rates are basis points (100 bps = 1%). Roundin
 | TCS (CGST Act s.52) | 0.5% of net taxable value; split CGST/SGST or IGST in the GSTR-8 report |
 | TDS (Income-tax s.194-O / s.393 of the 2025 Act) | 0.1% of gross amount |
 | Seller payout | gross − commission − GST on commission − TCS − TDS |
-| Payout date | delivery date + the longest return window among the items |
+| Payout date | delivery date + the longest return window among the items (as saved on the order) |
 
 The GSTR-8 report (Admin → TCS report) lists supplier-wise net taxable value and TCS for sub-orders placed
 in the month, excluding cancelled ones, less the taxable value and TCS of returns received in the month.
@@ -123,7 +123,9 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 
 ## Returns
 
-- A customer can return eligible items within the product's return window, counted from delivery.
+- A customer can return eligible items within the return window the listing showed when the order was placed,
+  counted from delivery. Each order item keeps that window: a later edit to the listing changes only new orders.
+- A return request lists each item once; an item named twice is counted once, with its quantities added up.
 - Flow: requested → approved (or rejected with a reason) → picked up → received → refunded. Admins can step
   in at every stage; "approve returns automatically" skips the seller's approval.
 - On receipt: stock goes back to the warehouse, the seller's ledger is reversed for those items, a credit

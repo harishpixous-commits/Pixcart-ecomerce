@@ -17,7 +17,6 @@ from app.models import (
     Order,
     OrderItem,
     Payment,
-    Product,
     Refund,
     ReturnItem,
     ReturnRequest,
@@ -59,7 +58,6 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
     if sub.status != "delivered" or not sub.delivered_at:
         return []
     items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
-    windows = dict((await session.execute(select(Product.id, Product.return_window_days).where(Product.id.in_([i.product_id for i in items])))).all())
     pending = dict(
         (
             await session.execute(
@@ -73,7 +71,7 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
     now = utcnow()
     out = []
     for it in items:
-        days = windows.get(it.product_id, 0)
+        days = it.return_window_days  # as promised when the order was placed
         until = sub.delivered_at + timedelta(days=days)
         left = it.qty - it.returned_qty - int(pending.get(it.id, 0))
         out.append({

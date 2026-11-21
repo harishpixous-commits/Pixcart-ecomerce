@@ -1,8 +1,9 @@
-"""returns: one line per item in a return request
+"""returns: one line per item in a return request; the return window saved on each order item
 
 Revision ID: 0019
 Revises: 0017
 """
+import sqlalchemy as sa
 from alembic import op
 
 revision = "0019"
@@ -35,6 +36,12 @@ def upgrade() -> None:
     """)
     op.create_unique_constraint("uq_return_items_return_order_item", "return_items", ["return_id", "order_item_id"])
 
+    # The return window promised at the sale is kept on the order item. Orders placed before this have only the
+    # listing's current window to go by.
+    op.add_column("order_items", sa.Column("return_window_days", sa.Integer(), server_default="0", nullable=False))
+    op.execute("UPDATE order_items oi SET return_window_days = p.return_window_days FROM products p WHERE p.id = oi.product_id")
+
 
 def downgrade() -> None:
+    op.drop_column("order_items", "return_window_days")
     op.drop_constraint("uq_return_items_return_order_item", "return_items", type_="unique")

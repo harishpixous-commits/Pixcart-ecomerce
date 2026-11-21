@@ -185,6 +185,9 @@ class OrderItem(IdMixin, Base):
     seller_discount: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     platform_discount: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     returned_qty: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # The listing's return window when the order was placed: what the customer was promised, whatever the seller
+    # changes on the listing later.
+    return_window_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     __table_args__ = (
         CheckConstraint("qty > 0", name="qty"),
