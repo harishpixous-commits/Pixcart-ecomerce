@@ -634,7 +634,9 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
         await session.flush()
         order = await session.get(Order, sub.order_id)
         await _sync_cod_status(session, order)
-        await post_delivery(session, sub)
+        # cash on delivery taken by the seller's own courier is already with the seller: it comes off their payout
+        held = await collect_amount(session, sub, order) if order.payment_method == "cod" and sub.shipping_provider == "manual" else 0
+        await post_delivery(session, sub, cod_held_by_seller=held)
         await fee_invoices.issue(session, order)  # the marketplace's own invoice for its fees, at the first delivery
         await notify(
             session, "order_delivered", await session.get(User, order.user_id),

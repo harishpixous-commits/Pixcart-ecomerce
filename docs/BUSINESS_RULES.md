@@ -38,7 +38,11 @@ chartered accountant before going live. This document is not legal or tax advice
   retried every 5 minutes, up to 8 times. After that the refund appears in Admin → Refunds for a manual retry.
   Our refund id is sent as Razorpay's `receipt`, so a retry never refunds twice.
 - A payment that arrives after the order was cancelled, or a second payment for an already-paid order, is
-  refunded in full automatically.
+  refunded in full automatically. A second payment is refunded to itself (its own gateway payment id is kept on the
+  refund); the order's first payment stays its payment, so later cancellations and returns refund it.
+- Cancelling a prepaid package refunds its share (less the marketplace's coupon). When no other package of the order
+  is left, the tip goes back too (always), and the marketplace's fees when "Refund these fees" is on. The cancel
+  dialog shows exactly this amount.
 
 ## Money per sub-order
 
@@ -101,8 +105,17 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 - Stock is kept per warehouse. Every change (set, adjust, sale, cancellation, return, transfer) is written to
   the stock history with who did it.
 - At checkout each seller's items are allocated to one warehouse if possible (same state as the customer
-  first, then the main warehouse), otherwise line by line from the warehouse with the most stock. Each
-  warehouse becomes its own package, with its own invoice and tax split based on the warehouse's state.
+  first, then the main warehouse), otherwise line by line from the best warehouse that holds the whole line; a
+  line no single warehouse can fill is split across warehouses, fullest first. Each warehouse becomes its own
+  package, with its own invoice and tax split based on the warehouse's state; a coupon is shared between the parts.
+- Only switched-on warehouses count as sellable stock; switching one off or on moves its stock out of or back into
+  sale at once. The product form sets the total of sellable stock through the main warehouse.
+- A seller who cancels an order as "out of stock" picks the items; their stock in that package's warehouse is set
+  to 0 through a recorded stock change, so the units do not come back with the next stock movement.
+- "Low stock" (shoppers' "Only N left", sellers' daily alert, filters and dashboard) means at or below the number set
+  in Admin → Marketplace settings (default 5). One order holds at most the per-item limit set there.
+- A lightning deal never sells more units at the deal price than the seller offered: the cart and checkout stop at
+  the units left ("Only N left at the deal price"), and units of a cancelled order go back on offer while the deal runs.
 - Holiday mode hides the seller's products and blocks new orders; orders already placed stay open.
 
 ## Coupons
@@ -120,6 +133,11 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 - An invoice is issued per package when it ships, in the seller's name and GSTIN. Numbers follow GST rule 46:
   gap-free per seller per financial year, at most 16 characters, e.g. `KOV/26-27/000001`.
 - A received return produces a credit note (`KOVCN/26-27/000001`) against that invoice.
+- The marketplace invoices its own fees on an order (handling, small cart, platform, bad weather, late night) under
+  its GSTIN, in its own series (`MKT/26-27/000001`; prefix and SAC code in Admin → Checkout and fees), with CGST +
+  SGST when the customer is in the operator's state and IGST otherwise. It is issued at the first delivery of the
+  order, or when a prepaid order is fully cancelled and the marketplace keeps the fees; fees refunded on
+  cancellation are never invoiced. Without a GSTIN in Admin → Storefront → Business no fee invoice is issued.
 
 ## Returns
 
@@ -134,10 +152,19 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
 
 - When a package is delivered, the ledger gets the sale value and the deductions (commission, GST on
   commission, TCS, TDS). These become available once the return window closes.
-- Returns post the reverse entries. The statement (with CSV export) shows every line.
+- Cash on delivery collected by the seller's own courier (not our delivery partners, not Shiprocket) is already
+  with the seller: the ledger posts it as "Cash your courier collected" at the same time as the sale, so the payout
+  nets it off. The packing slip shows the exact amount to collect (the marketplace's coupon, fees and tip included).
+- Returns post the reverse entries for the returned lines only: each line's own commission (its category rate), GST
+  on it at the rate charged, TCS on the returned taxable value and TDS on the returned gross. The statement (with CSV
+  export) shows every line. The seller dashboard's figures come from the same ledger.
 - A payout run sweeps everything available per seller above the minimum payout. Manual mode produces a
   bank bulk-transfer CSV and finance records each UTR; RazorpayX mode sends the payout and confirms it by
-  webhook. A failed or cancelled payout puts the money back to available.
+  webhook. A failed or cancelled payout puts its own money and orders back to available.
+- A payout is made out to the bank account on file when it is created, and the bank file and RazorpayX pay exactly
+  that. If the seller's account changes afterwards, the payout is held (left out of the bank file, not sent) until
+  Finance confirms the new account on it. Staff changing a seller's bank details confirm with their password (and
+  authenticator code) and the seller is told.
 - Weekly automatic payouts (Monday morning) can be switched on in Admin → Settings.
 
 ## Notifications

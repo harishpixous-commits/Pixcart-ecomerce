@@ -87,7 +87,7 @@ export default function SellerOrderDetail() {
       <div className="print:hidden">
         <PageHeader
           title={`Order ${o.number}`}
-          sub={`Placed ${dateTime(o.created_at)}, ${o.payment_method === "cod" ? "cash on delivery: collect " + rupees(o.total) : "prepaid"}`}
+          sub={`Placed ${dateTime(o.created_at)}, ${o.payment_method === "cod" ? "cash on delivery: collect " + rupees(o.cod_to_collect ?? o.total) : "prepaid"}`}
           actions={
             <>
               {o.status === "placed" && <Button onClick={() => act("confirm", undefined, "Order confirmed")} loading={busy}>Confirm order</Button>}
@@ -174,7 +174,7 @@ export default function SellerOrderDetail() {
       {/* Packing slip / tax summary, printed on A4 */}
       <div className="hidden print:block">
         <h1 className="text-2xl font-bold">Packing slip and tax summary</h1>
-        <p>Order {o.number} ({o.order_number}), {dateTime(o.created_at)}, {o.payment_method === "cod" ? `COD: collect ${rupeesExact(o.total)}` : "Prepaid"}</p>
+        <p>Order {o.number} ({o.order_number}), {dateTime(o.created_at)}, {o.payment_method === "cod" ? `COD: collect ${rupeesExact(o.cod_to_collect ?? o.total)}` : "Prepaid"}</p>
         <p className="mt-2"><strong>Sold by:</strong> {user?.seller?.display_name}</p>
         {a && <p><strong>Ship to:</strong> {a.full_name}, {a.phone}, {[a.line1, a.line2, a.landmark, a.city, a.state, a.pincode].filter(Boolean).join(", ")}</p>}
         <table className="mt-3 w-full border-collapse text-sm">

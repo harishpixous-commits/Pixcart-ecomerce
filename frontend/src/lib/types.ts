@@ -571,6 +571,8 @@ export interface SellerOrder {
   seller_payout: Paise;
   item_count: number;
   items: { id?: string; title: string; variant_label: string; sku: string; image: string; qty: number; unit_price: Paise; line_total: Paise }[];
+  /** cash on delivery: what the courier collects for this package (the marketplace's coupon, fees and tip included) */
+  cod_to_collect?: Paise;
   ship_to_city: string;
   ship_to_pincode: string;
   courier_name: string;

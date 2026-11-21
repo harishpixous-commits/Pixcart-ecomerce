@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query
 from pydantic import BaseModel, Field, HttpUrl
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import func, or_, select
 
 from app.core.deps import ApprovedSeller, CurrentUser, SellerAccount, SessionDep, audit
 from app.core.errors import ApiError, NotFound
@@ -16,7 +16,8 @@ from app.models import DeliveryBoy, Order, OrderEvent, OrderItem, Product, SubOr
 from app.routers.orders import run_refunds
 from app.services import delivery_settings, fleet, inventory
 from app.services.catalog import refresh_product_aggregates
-from app.services.orders import cancel_sub_order, transition
+from app.services.ledger import balances
+from app.services.orders import cancel_sub_order, collect_amount, transition
 from app.services.platform_settings import get_settings
 
 router = APIRouter(prefix="/api/seller", tags=["seller-orders"])
@@ -177,6 +178,9 @@ async def get_order(sub_id: uuid.UUID, seller: SellerAccount, session: SessionDe
     events = (await session.execute(select(OrderEvent).where(OrderEvent.sub_order_id == s.id).order_by(OrderEvent.created_at))).scalars()
     data["timeline"] = [{"from": e.from_status, "to": e.to_status, "actor": e.actor, "note": e.note, "at": e.created_at.isoformat()} for e in events]
     data["fleet"] = await fleet_info(session, s, o)
+    # what the courier collects for this package: the total less the marketplace's coupon, plus the marketplace's fees
+    # and the tip on the first package of the order (0 when prepaid)
+    data["cod_to_collect"] = await collect_amount(session, s, o) if s.status not in ("cancelled", "pending_payment") else 0
     return data
 
 
@@ -308,14 +312,8 @@ async def dashboard(seller: SellerAccount, session: SessionDep) -> dict:
             .order_by("d")
         )
     ).all()
-    earnings = (
-        await session.execute(
-            select(
-                func.coalesce(func.sum(case((SubOrder.settlement_due_at > now, SubOrder.seller_payout_paise), else_=0)), 0),
-                func.coalesce(func.sum(case((SubOrder.settlement_due_at <= now, SubOrder.seller_payout_paise), else_=0)), 0),
-            ).where(SubOrder.seller_id == seller.id, SubOrder.settlement_status == "pending")
-        )
-    ).one()
+    # from the ledger, like the Payouts page: returns, ad spend and cash your courier holds are already netted
+    bal = await balances(session, seller.id)
     product_counts = dict((await session.execute(select(Product.status, func.count()).where(Product.seller_id == seller.id).group_by(Product.status))).all())
     threshold = (await get_settings(session))["low_stock_threshold"]
     low_stock = (
@@ -336,7 +334,7 @@ async def dashboard(seller: SellerAccount, session: SessionDep) -> dict:
         },
         "sales_30d": {"amount": int(sales[0]), "orders": sales[1]},
         "daily_sales": [{"date": d.date().isoformat(), "amount": int(a or 0), "orders": c} for d, a, c in daily],
-        "earnings": {"in_return_window": int(earnings[0]), "ready_for_payout": int(earnings[1])},
+        "earnings": {"in_return_window": bal["upcoming"], "ready_for_payout": bal["available"]},
         "products": product_counts,
         "low_stock_variants": low_stock,
         "low_stock_threshold": threshold,

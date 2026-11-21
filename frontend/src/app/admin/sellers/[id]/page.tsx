@@ -10,6 +10,7 @@ import { api, ApiError, downloadBlob } from "@/lib/api";
 import { dateTime, pct, STATE_OPTIONS } from "@/lib/format";
 import type { SellerProfile } from "@/lib/types";
 import { RiskBrief } from "@/components/ai";
+import { useAdmin } from "@/lib/admin";
 
 export default function AdminSellerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +25,7 @@ export default function AdminSellerDetail() {
   const [f, setF] = useState<Record<string, string>>({});
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [editErr, setEditErr] = useState<string | null>(null);
+  const me = useAdmin();
 
   function openEdit(kind: NonNullable<typeof edit>) {
     if (!s) return;
@@ -193,6 +195,9 @@ export default function AdminSellerDetail() {
             <TextField label="IFSC" {...bind("ifsc")} maxLength={11} className="uppercase" required />
             <TextField label="Account number" {...bind("account_number")} inputMode="numeric" autoComplete="off" required />
             <TextField label="Confirm account number" {...bind("confirm_account_number")} inputMode="numeric" autoComplete="off" required />
+            <p className="text-sm text-ink-soft sm:col-span-2">Changing where money goes needs your password{me?.totp_enabled ? " and authenticator code" : ""}. Pending payouts keep the old account until Finance confirms the new one.</p>
+            <TextField label="Your password" type="password" autoComplete="current-password" {...bind("password")} required />
+            {me?.totp_enabled && <TextField label="Authenticator code" inputMode="numeric" maxLength={8} {...bind("totp")} required />}
           </>}
           {edit === "grievance-officer" && <>
             <TextField label="Name" {...bind("name")} required />

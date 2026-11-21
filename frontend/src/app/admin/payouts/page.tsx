@@ -9,7 +9,12 @@ import { api, ApiError, downloadFile, latestOnly } from "@/lib/api";
 import { date, rupeesExact } from "@/lib/format";
 import { ExportButton } from "@/components/export-button";
 
-type P = { id: string; number: string; seller_name: string; amount: number; status: string; mode: string; utr: string; failure_reason: string; bank: { holder?: string; account_last4?: string; ifsc?: string }; created_at: string; paid_at: string | null };
+type P = {
+  id: string; number: string; seller_name: string; amount: number; status: string; mode: string; utr: string; failure_reason: string;
+  bank: { holder?: string; account_last4?: string; ifsc?: string }; created_at: string; paid_at: string | null;
+  /** the seller's bank details changed after this payout was made: confirm the new account (or cancel) before paying */
+  bank_changed?: boolean;
+};
 type D = { mode: string; razorpayx_ready: boolean; due: { seller: string; amount: number }[]; items: P[]; total: number };
 
 function AdminPayoutsInner() {
@@ -56,7 +61,7 @@ function AdminPayoutsInner() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Seller payouts"
-        sub={d.mode === "razorpayx" ? "Payouts are sent through RazorpayX and confirmed automatically." : "Manual mode: download the bank file, upload it in your bank's bulk-transfer screen, then record each UTR here."}
+        sub={d.mode === "razorpayx" ? "Payouts are sent through RazorpayX and confirmed automatically." : "Manual mode: download the bank file, upload it in your bank's bulk-transfer screen, then record each UTR here. Payouts whose seller changed bank details are left out of the file until you confirm the new account."}
         actions={
           <>
             {d.mode !== "razorpayx" && <Button variant="secondary" onClick={bankFile}><Download className="h-4 w-4" /> Bank file</Button>}
@@ -79,7 +84,14 @@ function AdminPayoutsInner() {
               <td className="px-4 py-2.5 font-medium">{p.number}</td>
               <td className="px-4 py-2.5">{p.seller_name}</td>
               <td className="px-4 py-2.5 font-semibold">{rupeesExact(p.amount)}</td>
-              <td className="px-4 py-2.5 text-sm">{p.bank.holder}<br /><span className="text-ink-faint">XXXX{p.bank.account_last4}, {p.bank.ifsc}</span></td>
+              <td className="px-4 py-2.5 text-sm">
+                {p.bank.holder}<br /><span className="text-ink-faint">XXXX{p.bank.account_last4}, {p.bank.ifsc}</span>
+                {p.bank_changed && (
+                  <span className="mt-1 block max-w-[220px] rounded bg-marigold-light px-2 py-1 text-xs font-semibold text-ink" data-testid="bank-changed">
+                    The seller&apos;s bank account changed after this payout was made. Check with the seller before paying.
+                  </span>
+                )}
+              </td>
               <td className="px-4 py-2.5 text-sm">{date(p.created_at)}</td>
               <td className="px-4 py-2.5">
                 <StatusPill status={p.status === "paid" ? "approved" : p.status === "failed" || p.status === "cancelled" ? "failed" : "pending"} label={p.status} />
@@ -89,9 +101,15 @@ function AdminPayoutsInner() {
               <td className="px-4 py-2.5">
                 {p.status === "pending" && (
                   <div className="flex flex-wrap gap-1">
-                    {d.mode === "razorpayx" ? (
+                    {p.bank_changed && (
+                      <Button size="sm" variant="secondary" onClick={() => window.confirm("Pay this payout to the seller's new bank account? Do this only after checking the change with the seller.")
+                        && call(() => api(`/api/admin/payouts/${p.id}/use-current-bank`, { method: "POST" }), "The payout now goes to the new account")}>
+                        Use the new account
+                      </Button>
+                    )}
+                    {d.mode === "razorpayx" ? (!p.bank_changed && (
                       <Button size="sm" onClick={() => call(() => api(`/api/admin/payouts/${p.id}/send`, { method: "POST" }), "Sent to RazorpayX")}><Send className="h-4 w-4" /> Send</Button>
-                    ) : (
+                    )) : (
                       <Button size="sm" onClick={() => setPaid(p)}>Record UTR</Button>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => window.confirm("Cancel this payout? The balance returns to the seller's available amount.") && call(() => api(`/api/admin/payouts/${p.id}/cancel`, { method: "POST" }), "Payout cancelled")}>Cancel</Button>

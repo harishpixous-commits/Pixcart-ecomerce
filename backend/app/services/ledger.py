@@ -34,7 +34,10 @@ def _entry(seller_id, kind, amount, available_at, *, sub=None, ret=None, desc=""
     )
 
 
-async def post_delivery(session: AsyncSession, sub: SubOrder) -> None:
+async def post_delivery(session: AsyncSession, sub: SubOrder, *, cod_held_by_seller: int = 0) -> None:
+    """Posts the sale and its deductions, available after the return window. ``cod_held_by_seller``: cash on delivery
+    the seller's own courier collected for this package (it is already with the seller, so it comes off the payout at
+    the same time as the sale is paid)."""
     exists = (await session.execute(select(LedgerEntry.id).where(LedgerEntry.sub_order_id == sub.id, LedgerEntry.kind == "sale"))).first()
     if exists:
         return
@@ -48,23 +51,32 @@ async def post_delivery(session: AsyncSession, sub: SubOrder) -> None:
     ):
         if amount:
             session.add(_entry(sub.seller_id, kind, amount, due, sub=sub, desc=f"{kind.replace('_', ' ').title()} {sub.number}"))
+    if cod_held_by_seller:
+        session.add(_entry(sub.seller_id, "cod_collected", -cod_held_by_seller, due, sub=sub, desc=f"Cash collected by your courier {sub.number}"))
 
 
 async def post_return(session: AsyncSession, sub: SubOrder, ret: ReturnRequest, seller_value: int) -> None:
-    """Reverses the share of the sale and its deductions for a refunded return.
+    """Reverses, for a refunded return, the returned lines' sale value and exactly the deductions charged on them:
+    each line's own commission (charged per line at its category's rate), the GST on that commission at the rate
+    charged, TCS on the returned taxable value and TDS on the returned gross.
 
     seller_value: the part of the seller's sale value being returned (excludes platform-funded discount).
     """
     if sub.total <= 0 or seller_value <= 0:
         return
-    share = seller_value / sub.total
+    from app.models import OrderItem, ReturnItem
+
+    lines = (await session.execute(select(ReturnItem.qty, OrderItem).join(OrderItem, OrderItem.id == ReturnItem.order_item_id)
+                                   .where(ReturnItem.return_id == ret.id))).all()
+    commission = sum(it.commission_paise * qty // it.qty for qty, it in lines if it.qty)
+    taxable = sum(it.taxable_value * qty // it.qty for qty, it in lines if it.qty)
     now = utcnow()
     rows = [
         ("return", -seller_value),
-        ("commission_reversal", round(sub.commission_paise * share)),
-        ("commission_gst_reversal", round(sub.commission_gst_paise * share)),
-        ("tcs_reversal", round(sub.tcs_paise * share)),
-        ("tds_reversal", round(sub.tds_paise * share)),
+        ("commission_reversal", commission),
+        ("commission_gst_reversal", round(sub.commission_gst_paise * commission / sub.commission_paise) if sub.commission_paise else 0),
+        ("tcs_reversal", round(sub.tcs_paise * taxable / sub.taxable_total) if sub.taxable_total else 0),
+        ("tds_reversal", round(sub.tds_paise * seller_value / sub.total)),
     ]
     for kind, amount in rows:
         if amount:
@@ -110,13 +122,12 @@ async def create_payouts(session: AsyncSession, *, min_amount: int = 100, seller
         total = (await session.execute(select(func.sum(LedgerEntry.amount)).where(LedgerEntry.id.in_(entry_ids)))).scalar_one()
         if not total or int(total) < min_amount:
             continue
-        acct = decrypt_field(seller.bank_account_enc)
         payout = Payout(
             number=f"PO{now:%y%m%d}{secrets.token_hex(3).upper()}",
             seller_id=seller_id,
             amount=int(total),
             mode=payout_mode,
-            bank_snapshot={"holder": seller.bank_holder_name, "account_last4": acct[-4:], "ifsc": seller.bank_ifsc},
+            bank_snapshot=bank_snapshot(seller),
         )
         session.add(payout)
         await session.flush()
@@ -144,12 +155,28 @@ async def mark_paid(session: AsyncSession, payout: Payout, utr: str) -> None:
 
 
 async def fail_payout(session: AsyncSession, payout: Payout, reason: str) -> None:
-    """Returns the swept entries to the available balance so the next run picks them up again."""
+    """Returns the swept entries to the available balance so the next run picks them up again. Only the packages whose
+    sale was in THIS payout go back to unpaid (other sellers' and other payouts' packages are left alone)."""
     payout.status, payout.failure_reason = "failed", reason[:300]
+    own_sales = select(LedgerEntry.sub_order_id).where(LedgerEntry.payout_id == payout.id, LedgerEntry.kind == "sale")
+    await session.execute(update(SubOrder).where(SubOrder.settlement_status == "paid", SubOrder.id.in_(own_sales)).values(settlement_status="pending"))
     await session.execute(update(LedgerEntry).where(LedgerEntry.payout_id == payout.id).values(payout_id=None))
-    await session.execute(
-        update(SubOrder).where(SubOrder.settlement_status == "paid", SubOrder.id.in_(select(LedgerEntry.sub_order_id).where(LedgerEntry.payout_id.is_(None)))).values(settlement_status="pending")
-    )
+
+
+def bank_snapshot(seller: Seller) -> dict:
+    """The account a payout is made out to, fixed when it is created: the bank file and RazorpayX pay exactly this.
+    ``account_enc`` stays encrypted and is never sent to a screen (see payout_out)."""
+    acct = decrypt_field(seller.bank_account_enc)
+    return {"holder": seller.bank_holder_name, "account_last4": acct[-4:], "ifsc": seller.bank_ifsc, "account_enc": seller.bank_account_enc}
+
+
+def bank_changed(payout: Payout, seller: Seller) -> bool:
+    """The seller's bank details changed after this payout was created (staff must confirm before it is paid)."""
+    snap = payout.bank_snapshot or {}
+    if not snap.get("account_enc"):
+        return False  # made before snapshots kept the account: nothing to compare
+    return (decrypt_field(snap["account_enc"]) != decrypt_field(seller.bank_account_enc) or snap.get("ifsc") != seller.bank_ifsc
+            or snap.get("holder") != seller.bank_holder_name)
 
 
 # ----------------------------------------------------------------------------- RazorpayX
@@ -170,9 +197,13 @@ async def _rx(cfg: Settings, method: str, path: str, json: dict, idem: str | Non
 
 async def execute_razorpayx(session: AsyncSession, payout: Payout) -> None:
     cfg = await get_integrations(session)
+    seller = await session.get(Seller, payout.seller_id)
+    if bank_changed(payout, seller):
+        # the fund account below is the seller's current one: never send money to an account staff did not see
+        raise Conflict("The seller's bank account changed after this payout was created. Check it with the seller, then confirm the new "
+                       "account on the payout (or cancel it) before sending.", "bank_changed")
     if not (cfg.razorpay_enabled and cfg.razorpayx_account_number):
         raise ApiError("RazorpayX is not configured", "payout_not_configured")
-    seller = await session.get(Seller, payout.seller_id)
     if not seller.payout_fund_account_id:
         contact = await _rx(cfg, "POST", "/contacts", {"name": seller.legal_name[:50], "email": seller.contact_email, "contact": seller.contact_phone, "type": "vendor", "reference_id": str(seller.id)[:40]})
         fund = await _rx(
@@ -229,16 +260,24 @@ def _csv_cell(value: str) -> str:
 
 
 def bank_csv(rows: list[tuple[Payout, Seller]], brand: str) -> str:
+    """The bank's bulk-transfer file: each payout to the account fixed on it when it was created (payouts whose
+    seller changed bank details since are left out: staff confirm them first)."""
     out = ["Payout number,Beneficiary name,Account number,IFSC,Amount (INR),Narration"]
     for p, s in rows:
-        acct = decrypt_field(s.bank_account_enc)
-        out.append(",".join([_csv_cell(p.number), _csv_cell(s.bank_holder_name), _csv_cell(acct), _csv_cell(s.bank_ifsc), f"{p.amount / 100:.2f}", _csv_cell(_narration(brand, p.number))]))
+        snap = p.bank_snapshot or {}
+        if bank_changed(p, s):
+            continue
+        acct = decrypt_field(snap["account_enc"]) if snap.get("account_enc") else decrypt_field(s.bank_account_enc)
+        holder, ifsc = snap.get("holder") or s.bank_holder_name, snap.get("ifsc") or s.bank_ifsc
+        out.append(",".join([_csv_cell(p.number), _csv_cell(holder), _csv_cell(acct), _csv_cell(ifsc), f"{p.amount / 100:.2f}", _csv_cell(_narration(brand, p.number))]))
     return "\n".join(out) + "\n"
 
 
-def payout_out(p: Payout, seller_name: str = "") -> dict:
+def payout_out(p: Payout, seller_name: str = "", *, seller: Seller | None = None) -> dict:
     return {
         "id": str(p.id), "number": p.number, "seller_id": str(p.seller_id), "seller_name": seller_name, "amount": p.amount,
-        "status": p.status, "mode": p.mode, "utr": p.utr, "failure_reason": p.failure_reason, "bank": p.bank_snapshot,
+        "status": p.status, "mode": p.mode, "utr": p.utr, "failure_reason": p.failure_reason,
+        "bank": {k: v for k, v in (p.bank_snapshot or {}).items() if k != "account_enc"},
+        "bank_changed": bool(seller and p.status == "pending" and bank_changed(p, seller)),
         "created_at": p.created_at.isoformat(), "paid_at": p.paid_at.isoformat() if p.paid_at else None,
     }

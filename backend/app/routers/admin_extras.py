@@ -355,7 +355,7 @@ async def admin_return_action(return_id: uuid.UUID, body: AdminReturnAction, adm
 @router.get("/payouts")
 async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1),
                   seller_id: uuid.UUID | None = None) -> dict:
-    stmt = select(Payout, Seller.display_name).join(Seller, Seller.id == Payout.seller_id)
+    stmt = select(Payout, Seller).join(Seller, Seller.id == Payout.seller_id)
     if status:
         stmt = stmt.where(Payout.status == status)
     if seller_id:
@@ -377,8 +377,22 @@ async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | Non
         "mode": ic.payout_mode,
         "razorpayx_ready": bool(ic.razorpay_enabled and ic.razorpayx_account_number),
         "due": [{"seller": n, "amount": int(a)} for n, a in due],
-        "items": [ledger.payout_out(p, n) for p, n in rows],
+        "items": [ledger.payout_out(p, s.display_name, seller=s) for p, s in rows],
     }
+
+
+@router.post("/payouts/{payout_id}/use-current-bank")
+async def payout_use_current_bank(payout_id: uuid.UUID, admin: Perm("payouts"), session: SessionDep) -> dict:
+    """After checking with the seller that their new bank account is genuine, pay this payout to it."""
+    p = (await session.execute(select(Payout).where(Payout.id == payout_id).with_for_update())).scalar_one_or_none()
+    if p is None or p.status != "pending":
+        raise Conflict("Only pending payouts can be changed", "invalid_status")
+    seller = await session.get(Seller, p.seller_id)
+    before = (p.bank_snapshot or {}).get("account_last4", "")
+    p.bank_snapshot = ledger.bank_snapshot(seller)
+    audit(session, admin, "payout.bank_confirmed", "payout", p.id, f"account …{before} → …{p.bank_snapshot['account_last4']}")
+    await session.commit()
+    return ledger.payout_out(p, seller.display_name, seller=seller)
 
 
 @router.post("/payouts/run")

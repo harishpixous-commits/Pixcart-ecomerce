@@ -14,6 +14,7 @@ const KIND: Record<string, string> = {
   sale: "Sale", commission: "Commission", commission_gst: "GST on commission", tcs: "GST TCS", tds: "Income-tax TDS",
   return: "Return", commission_reversal: "Commission returned", commission_gst_reversal: "GST on commission returned",
   tcs_reversal: "TCS returned", tds_reversal: "TDS returned", adjustment: "Adjustment", payout_reversal: "Payout reversed",
+  ad_spend: "Sponsored products", cod_collected: "Cash your courier collected",
 };
 
 export default function PayoutsPage() {

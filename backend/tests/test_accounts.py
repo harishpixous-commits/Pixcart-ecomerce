@@ -159,11 +159,13 @@ async def test_admin_edits_seller_kyc_and_sellers_are_told(client, admin, catego
     # the seller cannot change bank details once approved; staff can, and the seller is told
     r = await tn.put("/api/seller/bank", {"holder_name": "Kovai Textiles", "account_number": "998877665544", "confirm_account_number": "998877665544", "ifsc": "HDFC0001234"})
     assert r.status_code == 409
-    r = await admin.put(f"/api/admin/sellers/{sid}/bank", {"holder_name": "Kovai Textiles Pvt Ltd", "account_number": "998877665544",
-                                                           "confirm_account_number": "998877665544", "ifsc": "HDFC0001234"})
+    bank = {"holder_name": "Kovai Textiles Pvt Ltd", "account_number": "998877665544", "confirm_account_number": "998877665544", "ifsc": "HDFC0001234"}
+    # where money goes is sensitive: staff confirm with their password
+    assert (await admin.put(f"/api/admin/sellers/{sid}/bank", bank)).json()["error"]["code"] == "wrong_password"
+    r = await admin.put(f"/api/admin/sellers/{sid}/bank", bank | {"password": "Admin@12345"})
     assert r.status_code == 200 and r.json()["bank"]["account_number"] == "998877665544"
     assert (await admin.put(f"/api/admin/sellers/{sid}/bank", {"holder_name": "X Y Z", "account_number": "1234567890", "confirm_account_number": "1234567899",
-                                                               "ifsc": "HDFC0001234"})).json()["error"]["code"] == "account_mismatch"
+                                                               "ifsc": "HDFC0001234", "password": "Admin@12345"})).json()["error"]["code"] == "account_mismatch"
     notes = (await tn.get("/api/notifications")).json()["items"]
     assert any("bank account changed" in n["title"] for n in notes)
     from app.db import SessionLocal

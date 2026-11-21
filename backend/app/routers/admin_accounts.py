@@ -18,6 +18,7 @@ from app.config import settings as env
 from app.core.deps import SessionDep, audit
 from app.core.errors import ApiError, Conflict, Forbidden, NotFound
 from app.core.permissions import Perm, permissions_for
+from app.core.step_up import confirm_identity
 from app.core.validators import STATES, normalize_mobile, slugify
 from app.db import utcnow
 from app.integrations import get as get_integrations
@@ -314,9 +315,17 @@ async def admin_seller_pickup(seller_id: uuid.UUID, body: PickupIn, admin: Perm(
     return await seller_profile(session, s, reveal=True)
 
 
+class StaffBankIn(BankIn):
+    # changing where money goes is sensitive: the staff member confirms with their password (and authenticator code)
+    password: str = Field(default="", max_length=200)
+    totp: str = Field(default="", max_length=8)
+
+
 @router.put("/sellers/{seller_id}/bank")
-async def admin_seller_bank(seller_id: uuid.UUID, body: BankIn, admin: Perm("sellers"), session: SessionDep) -> dict:
-    """Changes where payouts go. The seller is told at once, so a change they did not ask for is noticed."""
+async def admin_seller_bank(seller_id: uuid.UUID, body: StaffBankIn, admin: Perm("sellers"), session: SessionDep) -> dict:
+    """Changes where payouts go. The staff member confirms it is them; the seller is told at once, so a change they did
+    not ask for is noticed; payouts already created keep the old account until Finance confirms the new one."""
+    await confirm_identity(session, admin, body.password, body.totp, purpose="seller-bank")
     s = await _seller_for_edit(session, seller_id)
     old = s.bank_account_last4
     apply_bank(s, body)

@@ -271,7 +271,7 @@ class LedgerEntry(IdMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('sale','commission','commission_gst','tcs','tds','return','commission_reversal','commission_gst_reversal','tcs_reversal','tds_reversal','adjustment','payout_reversal','ad_spend')",
+            "kind IN ('sale','commission','commission_gst','tcs','tds','return','commission_reversal','commission_gst_reversal','tcs_reversal','tds_reversal','adjustment','payout_reversal','ad_spend','cod_collected')",
             name="kind",
         ),
     )
