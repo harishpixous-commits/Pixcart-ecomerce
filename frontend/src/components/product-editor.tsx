@@ -15,6 +15,15 @@ import { VideoEditor } from "@/components/video-editor";
 import { ProductInfoSection, EMPTY_DETAILS, UNIT_LABEL } from "@/components/product-info-editor";
 
 type VRow = { id?: string; key: string; sku: string; options: Record<string, string>; mrp: string; price: string; stock: string; weight: string; net: string; is_active: boolean };
+type Fees = { commission_gst_bps: number; tcs_bps: number; tds_bps: number };
+
+/** What a sale at this price pays, at the rates the marketplace sets (the same ones the payout statement uses). */
+function feeNote(price: number, commissionBps: number, f: Fees): string {
+  const gst = f.commission_gst_bps > 0 ? ` plus ${pct(f.commission_gst_bps)} GST on the commission` : "";
+  const held = [f.tcs_bps > 0 && `TCS (${pct(f.tcs_bps)})`, f.tds_bps > 0 && `TDS (${pct(f.tds_bps)})`].filter(Boolean);
+  const tax = held.length ? ` ${held.join(" and ")} ${held.length > 1 ? "are" : "is"} also deducted and can be claimed back in your returns.` : "";
+  return `On a sale at ${rupees(price)}, commission is ${rupees(Math.round((price * commissionBps) / 10000))}${gst}.${tax}`;
+}
 
 let keySeq = 0;
 const newKey = () => `v${++keySeq}`;
@@ -42,6 +51,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   const router = useRouter();
   const toast = useToast();
   const [cats, setCats] = useState<SellerCategory[]>([]);
+  const [fees, setFees] = useState<Fees | null>(null);
   const [categoryId, setCategoryId] = useState(product?.category_id ?? "");
   const [title, setTitle] = useState(product?.title ?? "");
   const [brand, setBrand] = useState(product?.brand ?? "");
@@ -100,6 +110,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
 
   useEffect(() => {
     api<SellerCategory[]>("/api/seller/categories").then(setCats).catch(quietly);
+    api<Fees>("/api/seller/fees").then(setFees).catch(quietly);
   }, []);
 
   const cat = useMemo(() => cats.find((c) => c.id === categoryId), [cats, categoryId]);
@@ -395,10 +406,8 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setRows([...rows, { key: newKey(), sku: "", options: {}, mrp: rows[0]?.mrp ?? "", price: rows[0]?.price ?? "", stock: "", weight: "500", net: rows[0]?.net ?? "", is_active: true }])}>
           <Plus className="h-4 w-4" /> Add a version
         </Button>
-        {rows[0] && toPaise(rows[0].price) && cat && (
-          <p className="mt-3 rounded-lg bg-peacock-light p-3 text-sm text-peacock">
-            On a sale at {rupees(toPaise(rows[0].price)!)}, commission is {rupees(Math.round((toPaise(rows[0].price)! * cat.commission_bps) / 10000))} plus 18% GST on the commission. TCS (0.5%) and TDS (0.1%) are also deducted and can be claimed back in your returns.
-          </p>
+        {rows[0] && toPaise(rows[0].price) && cat && fees && (
+          <p className="mt-3 rounded-lg bg-peacock-light p-3 text-sm text-peacock">{feeNote(toPaise(rows[0].price)!, cat.commission_bps, fees)}</p>
         )}
       </section>
 
