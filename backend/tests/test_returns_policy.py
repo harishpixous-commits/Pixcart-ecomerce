@@ -1,11 +1,12 @@
-"""Return policy: one line per item in a return request, and the return window promised when the order was placed."""
+"""Return policy: one line per item in a return request, the return window promised when the order was placed, and
+returns of damaged, faulty, wrong or incomplete items."""
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
@@ -81,6 +82,8 @@ async def test_an_item_named_twice_is_one_line(client, admin, categories):
 
 
 async def test_return_window_is_the_one_promised_at_the_sale(client, admin, categories):
+    # only the listing's own window here (no period for damaged or wrong items)
+    assert (await admin.put("/api/admin/settings", {"defect_return_days": 0})).status_code == 200
     tn, buyer, o, sub_id, shirt, addr = await delivered_order(client, admin, categories)
     before = (await returnable(buyer, o["id"], sub_id))[0]
     assert before["eligible"]
@@ -108,3 +111,43 @@ async def test_return_window_is_the_one_promised_at_the_sale(client, admin, cate
     # Raising the window later does not reopen returns on orders that were already delivered.
     await set_listing_window(tn, admin, shirt["id"], 30)
     assert not (await returnable(buyer, o2["id"], sub2))[0]["eligible"]
+
+
+async def test_damaged_faulty_or_wrong_items_come_back_even_when_not_returnable(client, admin, categories):
+    r = await admin.put("/api/admin/settings", {"defect_return_days": 31})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_setting"
+    r = await admin.put("/api/admin/settings", {"defect_return_days": 10})
+    assert r.status_code == 200 and r.json()["defect_return_days"] == 10
+    reasons = (await client.get("/api/returns/reasons")).json()["reasons"]
+    assert {x["code"] for x in reasons if x["defect"]} == {"damaged", "defective", "wrong_item", "missing_parts"}
+
+    # The seller makes the listing non-returnable before the sale.
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    await set_listing_window(tn, admin, shirt["id"], 0)
+    buyer = await login_phone(client, "9500000102")
+    o = await place(buyer, await add_address(buyer, state="33"), shirt["variants"][0]["id"], 2)
+    sub_id = o["sub_orders"][0]["id"]
+    await ship_and_deliver(tn, sub_id)
+
+    # For 10 days after delivery the items can come back, but only when they arrived damaged, faulty, wrong or incomplete,
+    # and the seller is paid after that period.
+    item = (await returnable(buyer, o["id"], sub_id))[0]
+    assert item["eligible"] and item["defects_only"]
+    async with SessionLocal() as s:
+        sub = await s.get(SubOrder, uuid.UUID(sub_id))
+        assert datetime.fromisoformat(item["return_by"]) == sub.delivered_at + timedelta(days=10)
+        assert sub.settlement_due_at == sub.delivered_at + timedelta(days=10)
+    body = {"sub_order_id": sub_id, "items": [{"order_item_id": item["order_item_id"], "qty": 1}], "refund_upi": "priya@okaxis"}
+    r = await buyer.post("/api/returns", {**body, "reason": "size_fit"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "reason_not_allowed"
+    r = await buyer.post("/api/returns", {**body, "reason": "damaged"})
+    assert r.status_code == 201, r.text
+
+    # After the period nothing more can be returned.
+    async with SessionLocal() as s:
+        await s.execute(update(SubOrder).where(SubOrder.id == uuid.UUID(sub_id)).values(delivered_at=SubOrder.delivered_at - timedelta(days=11)))
+        await s.commit()
+    item = (await returnable(buyer, o["id"], sub_id))[0]
+    assert item["qty_left"] == 1 and not item["eligible"] and not item["defects_only"]
+    r = await buyer.post("/api/returns", {**body, "reason": "defective"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "not_returnable"

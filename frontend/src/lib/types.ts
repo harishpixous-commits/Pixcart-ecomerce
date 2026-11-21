@@ -734,5 +734,7 @@ export interface ReturnableItem {
   qty_left: number;
   return_by: string;
   eligible: boolean;
+  /** past its own return window (or not returnable): it can come back only if it arrived damaged, faulty, wrong or incomplete */
+  defects_only: boolean;
   unit_refund: Paise;
 }

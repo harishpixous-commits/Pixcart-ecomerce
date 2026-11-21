@@ -574,9 +574,10 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
             )
     elif dst == "delivered":
         sub.delivered_at = now
-        # the return windows saved on the items when the order was placed (a later edit to the listing changes nothing)
+        # the return windows saved on the items when the order was placed (a later edit to the listing changes nothing),
+        # and the period in which damaged, defective or wrong items are taken back whatever the listing says
         window = (await session.execute(select(func.max(OrderItem.return_window_days)).where(OrderItem.sub_order_id == sub.id))).scalar_one() or 0
-        sub.settlement_due_at = now + timedelta(days=int(window))
+        sub.settlement_due_at = now + timedelta(days=max(int(window), (await get_settings(session))["defect_return_days"]))
         sub.settlement_status = "pending"
         await session.flush()
         order = await session.get(Order, sub.order_id)

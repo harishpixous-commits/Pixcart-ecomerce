@@ -29,7 +29,7 @@ from app.services import inventory
 from app.services.invoices import next_number
 from app.services.ledger import post_return
 from app.services.notify import notify, notify_seller
-from app.services.platform_settings import RETURN_REASONS, get_settings
+from app.services.platform_settings import DEFECT_REASONS, RETURN_REASONS, get_settings
 
 OPEN = ("requested", "approved", "picked_up")
 UPI = re.compile(r"^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$")
@@ -55,9 +55,15 @@ def seller_value(it: OrderItem, qty: int) -> int:
 
 
 async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
+    """What can still be returned from a delivered package. Each item can be returned for any reason within the window
+    saved on it when the order was placed. After that, or when the listing is not returnable, an item that arrived
+    damaged, defective, wrong or incomplete can still be returned for the marketplace's ``defect_return_days``
+    (``defects_only``)."""
     if sub.status != "delivered" or not sub.delivered_at:
         return []
-    items = list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
+    defect_days = (await get_settings(session))["defect_return_days"]
+    defect_until = sub.delivered_at + timedelta(days=defect_days)
+    items =list((await session.execute(select(OrderItem).where(OrderItem.sub_order_id == sub.id))).scalars())
     pending = dict(
         (
             await session.execute(
@@ -71,12 +77,14 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
     now = utcnow()
     out = []
     for it in items:
-        days = it.return_window_days  # as promised when the order was placed
-        until = sub.delivered_at + timedelta(days=days)
+        until = sub.delivered_at + timedelta(days=it.return_window_days)
+        any_reason = it.return_window_days > 0 and now <= until
+        defects_only = not any_reason and defect_days > 0 and now <= defect_until
         left = it.qty - it.returned_qty - int(pending.get(it.id, 0))
         out.append({
             "order_item_id": str(it.id), "title": it.title, "variant_label": it.variant_label, "image": it.image_url,
-            "qty_left": max(0, left), "return_by": until.isoformat(), "eligible": days > 0 and now <= until and left > 0,
+            "qty_left": max(0, left), "return_by": (defect_until if defects_only else until).isoformat(),
+            "eligible": (any_reason or defects_only) and left > 0, "defects_only": defects_only,
             "unit_refund": paid_value(it, 1),
         })
     return out
@@ -102,6 +110,9 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
         e = eligible.get(str(item_id))
         if e is None or not e["eligible"]:
             raise ApiError("One of the items can no longer be returned", "not_returnable")
+        if e["defects_only"] and reason not in DEFECT_REASONS:
+            raise ApiError(f"'{e['title']}' can now be returned only if it arrived damaged, faulty, wrong or with parts missing. "
+                           "Choose that reason, or leave this item out.", "reason_not_allowed")
         if qty < 1:
             raise ApiError(f"Choose how many of '{e['title']}' to return", "invalid_qty")
         wanted[item_id] = wanted.get(item_id, 0) + qty
