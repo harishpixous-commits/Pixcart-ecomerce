@@ -107,7 +107,7 @@ export default function SellerAdvertising() {
         <ul className="mt-1 list-disc pl-5 text-sm text-ink-soft" data-testid="ad-click-rules">
           <li>Each ad link counts once, and only for the shopper it was shown to.</li>
           <li>A shopper&apos;s repeat clicks on the same product within 24 hours are free.</li>
-          <li>You pay for at most {d.rules.paid_clicks_per_address} clicks a day from one internet address, and {d.rules.paid_clicks_per_network} from one network.</li>
+          <li>Each campaign pays for at most {d.rules.paid_clicks_per_address} clicks a day from one internet address, and {d.rules.paid_clicks_per_network} from one network.</li>
           <li>Links from pages opened more than {d.rules.link_hours} hours ago are free.</li>
         </ul>
         <p className="mt-1 text-sm text-ink-soft">Other clicks still open your product, cost you nothing and show as invalid clicks in your reports.</p>

@@ -131,6 +131,8 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
   still opens the product, costs nothing and counts as an invalid click in the seller's and staff's reports.
 - Ad requests and clicks are rate limited per address (120 ad requests and 30 clicks a minute). Beyond that no ads are
   shown and clicks only open the product, so floods cannot inflate impressions, clicks or spend.
+- These limits need the shopper's real address: behind a load balancer `TRUST_PROXY_HEADERS` must be on (the AWS setup
+  does this). Without it every shopper shares the proxy's address and few clicks are charged.
 
 ## Invoices and credit notes
 

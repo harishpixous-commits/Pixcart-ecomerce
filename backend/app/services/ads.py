@@ -180,8 +180,8 @@ async def serve(session, placement: str, *, visitor: str, ip: str, query: str = 
     nonces = [uuid.uuid4() for _ in picked]
     await session.execute(insert(AdImpression), [{"id": n, "visitor": shown_to, "created_at": now} for n in nonces])
     # one row order for every request, so two pages counting the same ads at once never deadlock
-    keys = sorted((c.id, p.id) for c, p in picked)
-    ins = pg_insert(AdStat).values([{"campaign_id": cid, "product_id": pid, "day": today_ist(), "impressions": 1, "clicks": 0,
+    keys, day = sorted((c.id, p.id) for c, p in picked), today_ist()
+    ins = pg_insert(AdStat).values([{"campaign_id": cid, "product_id": pid, "day": day, "impressions": 1, "clicks": 0,
                                      "invalid_clicks": 0, "spend_paise": 0, "billed": False} for cid, pid in keys])
     await session.execute(ins.on_conflict_do_update(index_elements=["campaign_id", "product_id", "day"],
                                                     set_={"impressions": AdStat.impressions + 1}))
