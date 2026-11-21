@@ -208,7 +208,10 @@ class ReturnItem(IdMixin, Base):
     qty: Mapped[int] = mapped_column(Integer)
     amount: Mapped[int] = mapped_column(BigInteger)  # what the customer paid for these units
 
-    __table_args__ = (CheckConstraint("qty > 0", name="qty"),)
+    __table_args__ = (
+        CheckConstraint("qty > 0", name="qty"),
+        UniqueConstraint("return_id", "order_item_id", name="uq_return_items_return_order_item"),
+    )
 
 
 class Coupon(IdMixin, TimestampMixin, Base):

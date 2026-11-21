@@ -97,6 +97,20 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
     eligible = {r["order_item_id"]: r for r in await returnable_items(session, sub)}
     if not items:
         raise ApiError("Choose at least one item to return", "no_items")
+    # One line per item: an item named twice counts once, with its quantities added up, before the check against
+    # what is left to return.
+    wanted: dict[uuid.UUID, int] = {}
+    for item_id, qty in items:
+        e = eligible.get(str(item_id))
+        if e is None or not e["eligible"]:
+            raise ApiError("One of the items can no longer be returned", "not_returnable")
+        if qty < 1:
+            raise ApiError(f"Choose how many of '{e['title']}' to return", "invalid_qty")
+        wanted[item_id] = wanted.get(item_id, 0) + qty
+    for item_id, qty in wanted.items():
+        e = eligible[str(item_id)]
+        if qty > e["qty_left"]:
+            raise ApiError(f"You can return at most {e['qty_left']} of '{e['title']}'", "invalid_qty")
     if order.payment_method == "cod" and not UPI.match(refund_upi or ""):
         raise ApiError("Enter the UPI ID where we should send your refund (for example name@okbank)", "upi_required", fields={"refund_upi": "Required"})
     ret = ReturnRequest(
@@ -106,12 +120,7 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
     session.add(ret)
     await session.flush()
     total = 0
-    for item_id, qty in items:
-        e = eligible.get(str(item_id))
-        if e is None or not e["eligible"]:
-            raise ApiError("One of the items can no longer be returned", "not_returnable")
-        if qty < 1 or qty > e["qty_left"]:
-            raise ApiError(f"You can return at most {e['qty_left']} of '{e['title']}'", "invalid_qty")
+    for item_id, qty in wanted.items():
         it = await session.get(OrderItem, item_id)
         amount = paid_value(it, qty)
         total += amount
