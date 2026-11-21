@@ -30,6 +30,8 @@ from typing import Any
 
 import httpx
 
+from app.assistant.settings import laya_allowed
+
 log = logging.getLogger("pixcart.assistant")
 
 # Tests replace this with an httpx.MockTransport.
@@ -236,6 +238,8 @@ LAYA_QUESTIONS = {
 
 
 async def laya(text: str, cfg: dict[str, Any]) -> Decision | None:
+    if not laya_allowed(cfg.get("laya_url", "")):
+        return None  # not a public https address (saved before that rule): staff questions never go there
     started = time.perf_counter()
     url = cfg.get("laya_url", "").rstrip("/") + (cfg.get("laya_path") or "/predict")
     headers = {"content-type": "application/json"}

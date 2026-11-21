@@ -566,3 +566,11 @@ async def seller_categories(seller: SellerAccount, session: SessionDep) -> list[
                     "return_window_days": c.return_window_days, "min_return_window_days": c.min_return_window_days})
     return sorted(out, key=lambda x: x["path"])
 
+
+@router.get("/fees")
+async def seller_fees(seller: SellerAccount, session: SessionDep) -> dict:
+    """What each sale pays besides the category commission, at the rates set in Admin → Marketplace settings (the
+    same ones the payout statement uses), for the fee preview in the listing form."""
+    cfg = await get_settings(session)
+    return {k: cfg[k] for k in ("commission_gst_bps", "tcs_bps", "tds_bps")}
+

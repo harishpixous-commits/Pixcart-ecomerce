@@ -14,6 +14,8 @@ import { isPincode, setPincode, usePincode } from "@/lib/pincode";
 import type { ProductCard, SearchResult } from "@/lib/types";
 
 type Result = SearchResult & { sponsored?: ProductCard[]; sponsored_rail?: ProductCard[]; categories?: { name: string; slug: string; count: number }[] };
+/** Query changes applied together in one navigation; null removes the parameter. */
+type QueryChanges = Record<string, string | string[] | null>;
 
 const SORTS = [
   ["relevance", "Featured"],
@@ -40,7 +42,7 @@ function PinInline() {
   );
 }
 
-function Filters({ data, params, set, inCategory }: { data: Result; params: URLSearchParams; set: (k: string, v: string | string[] | null) => void; inCategory: boolean }) {
+function Filters({ data, params, set, inCategory }: { data: Result; params: URLSearchParams; set: (changes: QueryChanges) => void; inCategory: boolean }) {
   const pin = usePincode();
   const brands = params.getAll("brand");
   const [min, setMin] = useState(params.get("min_price") ? String(Number(params.get("min_price")) / 100) : "");
@@ -54,7 +56,7 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
           <>
             {[["1", "Get it by tomorrow"], ["2", "Get it in 2 days"], ["4", "Get it in 4 days"]].map(([d, label]) => (
               <label key={d} className="flex cursor-pointer items-center gap-2 py-0.5">
-                <input type="checkbox" className="h-4 w-4 accent-peacock" checked={delivery === d} onChange={(e) => set("delivery", e.target.checked ? d : null)} /> {label}
+                <input type="checkbox" className="h-4 w-4 accent-peacock" checked={delivery === d} onChange={(e) => set({ delivery: e.target.checked ? d : null })} /> {label}
               </label>
             ))}
             <p className="mt-1 text-xs text-ink-faint">To PIN {pin}</p>
@@ -62,7 +64,7 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
         ) : <PinInline />}
       </fieldset>
       <label className="flex cursor-pointer items-center gap-2 font-semibold">
-        <input type="checkbox" className="h-4 w-4 accent-peacock" checked={params.get("deal") === "true"} onChange={(e) => set("deal", e.target.checked ? "true" : null)} />
+        <input type="checkbox" className="h-4 w-4 accent-peacock" checked={params.get("deal") === "true"} onChange={(e) => set({ deal: e.target.checked ? "true" : null })} />
         <Zap className="h-4 w-4 text-vermilion" /> Today&apos;s deals
       </label>
       {!inCategory && (data.categories?.length ?? 0) > 0 && (
@@ -70,7 +72,7 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
           <legend className="mb-2 font-semibold">Department</legend>
           <div className="flex flex-col gap-1">
             {data.categories!.map((c) => (
-              <button key={c.slug} type="button" onClick={() => set("category", params.get("category") === c.slug ? null : c.slug)}
+              <button key={c.slug} type="button" onClick={() => set({ category: params.get("category") === c.slug ? null : c.slug })}
                 className={clsx("text-left text-[15px] hover:text-peacock", params.get("category") === c.slug && "font-semibold text-peacock")}>
                 {c.name} <span className="text-ink-faint">({c.count})</span>
               </button>
@@ -85,7 +87,7 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
             {data.facets.brands.map((b) => (
               <label key={b.name} className="flex cursor-pointer items-center gap-2 text-[15px]">
                 <input type="checkbox" className="h-4 w-4 accent-peacock" checked={brands.includes(b.name)}
-                  onChange={(e) => set("brand", e.target.checked ? [...brands, b.name] : brands.filter((x) => x !== b.name))} />
+                  onChange={(e) => set({ brand: e.target.checked ? [...brands, b.name] : brands.filter((x) => x !== b.name) })} />
                 {b.name} <span className="text-ink-faint">({b.count})</span>
               </label>
             ))}
@@ -98,8 +100,7 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
           e.preventDefault();
           const lo = min ? toPaise(min) : null;
           const hi = max ? toPaise(max) : null;
-          set("min_price", lo !== null ? String(lo) : null);
-          set("max_price", hi !== null ? String(hi) : null);
+          set({ min_price: lo !== null ? String(lo) : null, max_price: hi !== null ? String(hi) : null });
         }}>
           <input aria-label="Minimum price in rupees" inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} placeholder="Min ₹" className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
           <span className="text-ink-faint">to</span>
@@ -112,7 +113,7 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
         <legend className="mb-2 font-semibold">Customer reviews</legend>
         {["4", "3"].map((r) => (
           <label key={r} className="flex cursor-pointer items-center gap-2 py-0.5">
-            <input type="radio" name="rating" className="accent-peacock" checked={params.get("min_rating") === r} onChange={() => set("min_rating", r)} />
+            <input type="radio" name="rating" className="accent-peacock" checked={params.get("min_rating") === r} onChange={() => set({ min_rating: r })} />
             {r}★ &amp; up
           </label>
         ))}
@@ -121,13 +122,13 @@ function Filters({ data, params, set, inCategory }: { data: Result; params: URLS
         <legend className="mb-2 font-semibold">Discount</legend>
         {["10", "25", "50", "70"].map((d) => (
           <label key={d} className="flex cursor-pointer items-center gap-2 py-0.5">
-            <input type="radio" name="discount" className="accent-peacock" checked={params.get("min_discount") === d} onChange={() => set("min_discount", d)} />
+            <input type="radio" name="discount" className="accent-peacock" checked={params.get("min_discount") === d} onChange={() => set({ min_discount: d })} />
             {d}% off or more
           </label>
         ))}
       </fieldset>
       <label className="flex cursor-pointer items-center gap-2">
-        <input type="checkbox" className="h-4 w-4 accent-peacock" checked={params.get("in_stock") === "true"} onChange={(e) => set("in_stock", e.target.checked ? "true" : null)} />
+        <input type="checkbox" className="h-4 w-4 accent-peacock" checked={params.get("in_stock") === "true"} onChange={(e) => set({ in_stock: e.target.checked ? "true" : null })} />
         Hide out of stock items
       </label>
     </div>
@@ -173,13 +174,17 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchKey, track]);
 
-  function set(k: string, v: string | string[] | null) {
+  // Every change goes into one navigation: two pushes would each start from the current query, and the last would win.
+  function set(changes: QueryChanges) {
     const next = new URLSearchParams(key);
-    next.delete(k);
-    if (Array.isArray(v)) v.forEach((x) => next.append(k, x));
-    else if (v) next.set(k, v);
-    if (k !== "page") next.delete("page");
-    router.push(`${pathname}?${next.toString()}`, { scroll: k === "page" });
+    for (const [k, v] of Object.entries(changes)) {
+      next.delete(k);
+      if (Array.isArray(v)) v.forEach((x) => next.append(k, x));
+      else if (v) next.set(k, v);
+    }
+    const paging = "page" in changes;
+    if (!paging) next.delete("page");
+    router.push(`${pathname}?${next.toString()}`, { scroll: paging });
   }
 
   if (error && error.key === fetchKey) return <EmptyState title="Search is unavailable right now" body={error.message} />;
@@ -202,6 +207,11 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
   const shownIds = new Set(results.map((p) => p.id));
   const railItems = (data.sponsored_rail ?? []).filter((p) => !shownIds.has(p.id));
   const params = new URLSearchParams(key);
+  const paise = (v: string | null) => (v && /^\d+$/.test(v) ? Number(v) : null);
+  const lo = paise(sp.get("min_price"));
+  const hi = paise(sp.get("max_price"));
+  const priceLabel = lo !== null && hi !== null ? `${rupees(lo)} to ${rupees(hi)}` : lo !== null ? `${rupees(lo)} and above` : hi !== null ? `Up to ${rupees(hi)}` : null;
+  const priceKey = `${lo}-${hi}`; // the price boxes start again from the applied range when a chip or Clear all changes it
 
   return (
     <div className="flex flex-col gap-3">
@@ -214,7 +224,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
       <div className="grid gap-4 lg:grid-cols-[250px_1fr]">
         <aside className="hidden self-start rounded-xl bg-white p-4 lg:sticky lg:top-40 lg:block" aria-label="Filters">
           <h2 className="mb-4 text-lg font-semibold">Filters</h2>
-          <Filters data={data} params={params} set={set} inCategory={Boolean(category)} />
+          <Filters key={priceKey} data={data} params={params} set={set} inCategory={Boolean(category)} />
         </aside>
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3">
@@ -230,7 +240,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
                 <SlidersHorizontal className="h-4 w-4" /> Filters{activeFilters ? " (on)" : ""}
               </Button>
               <label className="sr-only" htmlFor="sort">Sort by</label>
-              <Select id="sort" value={sp.get("sort") ?? "relevance"} onChange={(e) => set("sort", e.target.value)} className="h-9 w-auto text-sm">
+              <Select id="sort" value={sp.get("sort") ?? "relevance"} onChange={(e) => set({ sort: e.target.value })} className="h-9 w-auto text-sm">
                 {SORTS.map(([v, l]) => <option key={v} value={v}>Sort by: {l}</option>)}
               </Select>
             </div>
@@ -238,7 +248,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
           {!category && (data.categories?.length ?? 0) > 1 && (
             <div className="scroll-x flex gap-2 overflow-x-auto" aria-label="Departments">
               {data.categories!.map((c) => (
-                <button key={c.slug} type="button" onClick={() => set("category", sp.get("category") === c.slug ? null : c.slug)} aria-pressed={sp.get("category") === c.slug}
+                <button key={c.slug} type="button" onClick={() => set({ category: sp.get("category") === c.slug ? null : c.slug })} aria-pressed={sp.get("category") === c.slug}
                   className={clsx("shrink-0 rounded-full border px-3 py-1 text-sm", sp.get("category") === c.slug ? "border-peacock bg-peacock text-white" : "border-line bg-white hover:border-peacock")}>
                   {c.name} <span className={sp.get("category") === c.slug ? "text-white/80" : "text-ink-faint"}>({c.count})</span>
                 </button>
@@ -247,11 +257,12 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
           )}
           {activeFilters && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              {sp.get("deal") && <Chip label="Today's deals" onClear={() => set("deal", null)} />}
-              {sp.get("delivery") && <Chip label={sp.get("delivery") === "1" ? "Get it by tomorrow" : `Get it in ${sp.get("delivery")} days`} onClear={() => set("delivery", null)} />}
-              {params.getAll("brand").map((b) => <Chip key={b} label={b} onClear={() => set("brand", params.getAll("brand").filter((x) => x !== b))} />)}
-              {sp.get("min_rating") && <Chip label={`${sp.get("min_rating")}★ & up`} onClear={() => set("min_rating", null)} />}
-              {sp.get("min_discount") && <Chip label={`${sp.get("min_discount")}% off or more`} onClear={() => set("min_discount", null)} />}
+              {sp.get("deal") && <Chip label="Today's deals" onClear={() => set({ deal: null })} />}
+              {sp.get("delivery") && <Chip label={sp.get("delivery") === "1" ? "Get it by tomorrow" : `Get it in ${sp.get("delivery")} days`} onClear={() => set({ delivery: null })} />}
+              {params.getAll("brand").map((b) => <Chip key={b} label={b} onClear={() => set({ brand: params.getAll("brand").filter((x) => x !== b) })} />)}
+              {priceLabel && <Chip label={priceLabel} onClear={() => set({ min_price: null, max_price: null })} />}
+              {sp.get("min_rating") && <Chip label={`${sp.get("min_rating")}★ & up`} onClear={() => set({ min_rating: null })} />}
+              {sp.get("min_discount") && <Chip label={`${sp.get("min_discount")}% off or more`} onClear={() => set({ min_discount: null })} />}
               <button type="button" onClick={() => router.push(q ? `${pathname}?q=${encodeURIComponent(q)}` : pathname)} className="font-semibold text-peacock hover:underline">Clear all</button>
             </div>
           )}
@@ -260,14 +271,14 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
               body={activeFilters ? "Try removing a filter or two." : "Try a different word, or browse the categories above."}
               action={activeFilters ? <Button variant="secondary" onClick={() => router.push(q ? `${pathname}?q=${encodeURIComponent(q)}` : pathname)}>Clear filters</Button> : undefined} />
           ) : <ResultGrid items={results} />}
-          <Pagination page={data.page} pageSize={data.page_size} total={data.total} onPage={(p) => set("page", String(p))} />
+          <Pagination page={data.page} pageSize={data.page_size} total={data.total} onPage={(p) => set({ page: String(p) })} />
           {data.page === 1 && railItems.length > 0 && (
             <ProductRail title={q ? "Sponsored products related to your search" : "Sponsored products"} items={railItems} note="Sponsored" />
           )}
         </div>
       </div>
       <Modal open={showFilters} onClose={() => setShowFilters(false)} title="Filters">
-        <Filters data={data} params={params} set={(k, v) => { set(k, v); setShowFilters(false); }} inCategory={Boolean(category)} />
+        <Filters key={priceKey} data={data} params={params} set={(changes) => { set(changes); setShowFilters(false); }} inCategory={Boolean(category)} />
       </Modal>
     </div>
   );

@@ -67,7 +67,8 @@ Runs before the model, in milliseconds:
 
 - **Rules (default)** — English, Tamil, Hindi and Tanglish keywords and dates; detects order numbers, phones, emails.
 - **Laya** — an open-weight System 1 decision model (Apache-2.0) that returns a calibrated choice and confidence
-  instead of generating text. Run it next to the API and enter its address in Admin → AI assistant:
+  instead of generating text. Run it, serve it over https at a public address (for example behind the load
+  balancer) and enter that address in Admin → AI assistant:
 
   ```bash
   pip install "laya[serve]"
@@ -75,6 +76,10 @@ Runs before the model, in milliseconds:
   ```
   The assistant calls `POST <address>/predict` with `{"state": <question>, "questions": {intent, area}}` and uses
   `answers.<q>.choice/confidence`. If Laya does not answer within the timeout, the rules decide.
+  Every staff question goes to this server, so the address must be https and public (no private, loopback,
+  link-local or cloud metadata addresses), and changing the address, path or token needs the **AI providers**
+  permission plus your password (and authenticator code when two-step sign-in is on). A new address or path
+  drops the saved token unless a new one is entered with it.
 - **Off** — every tool offered, nothing prefetched.
 
 Low confidence always offers every tool, so the layer only speeds things up; it never hides a capability.

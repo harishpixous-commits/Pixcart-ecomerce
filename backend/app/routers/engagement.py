@@ -12,12 +12,14 @@ from typing import Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.deps import CurrentUser, OptionalUser, SellerAccount, SessionDep, audit, rate_limit
 from app.core.errors import ApiError, NotFound
 from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import (
+    AnswerReport,
     AnswerVote,
     Deal,
     Order,
@@ -26,6 +28,7 @@ from app.models import (
     ProductAnswer,
     ProductQuestion,
     ProductReport,
+    QuestionReport,
     Seller,
     StockAlert,
     SubOrder,
@@ -43,7 +46,6 @@ from app.services.product_info import details_of, info_rows
 router = APIRouter(tags=["engagement"])
 
 _CONTACT = re.compile(r"(https?://|www\.|\b[\w.+-]+@[\w-]+\.[\w.]+\b|(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{9}(?!\d))", re.IGNORECASE)
-REPORT_HIDE_AT = 3
 ROLE_LABEL = {"seller": "Seller", "buyer": "Verified buyer", "customer": "Customer", "staff": "Store team"}
 
 
@@ -197,19 +199,28 @@ class QaReportIn(BaseModel):
 
 @router.post("/api/qa/report")
 async def qa_report(body: QaReportIn, user: CurrentUser, session: SessionDep) -> dict:
-    """Flags a question or answer; after a few reports it waits for staff."""
+    """Flags a question or answer. Each person counts once; reports from enough different people (Admin → Product
+    page) take it off the product page until staff check it. ``report_count`` counts reporters since that check."""
     await rate_limit(session, f"qa-report:{user.id}", limit=30, window_seconds=86400)
-    obj = await session.get(ProductQuestion if body.kind == "question" else ProductAnswer, body.id)
+    question = body.kind == "question"
+    post, report = (ProductQuestion, QuestionReport) if question else (ProductAnswer, AnswerReport)
+    obj = await session.get(post, body.id, with_for_update=True)  # reports arriving together count one by one
     if obj is None or obj.status != "published":
         raise NotFound("Post")
+    first = (await session.execute(pg_insert(report).values({"question_id" if question else "answer_id": obj.id, "user_id": user.id, "created_at": utcnow()})
+                                   .on_conflict_do_nothing().returning(report.user_id))).first()
+    if first is None:
+        return {"ok": True, "already": True, "hidden": False}
     obj.report_count += 1
-    if obj.report_count >= REPORT_HIDE_AT:
+    hide_at = (await get_settings(session))["qa_report_hide_at"]
+    hidden = bool(hide_at) and obj.report_count >= hide_at
+    if hidden:
         obj.status = "pending"
-        if body.kind == "answer":
+        if not question:
             await session.flush()
             await _refresh_count(session, obj.question_id)
     await session.commit()
-    return {"ok": True}
+    return {"ok": True, "already": False, "hidden": hidden}
 
 
 # ============================================================================ alerts

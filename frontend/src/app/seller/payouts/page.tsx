@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { PageHeader, Stat, Table, Tabs } from "@/components/portal-shell";
 import { Button, EmptyState, ErrorNote, PageLoader, Pill, StatusPill } from "@/components/ui";
 import { api, ApiError, downloadFile, quietly } from "@/lib/api";
-import { date, rupeesExact } from "@/lib/format";
+import { date, rupees, rupeesExact, WEEKDAYS } from "@/lib/format";
 
+/** Automatic payout runs as the marketplace sets them (Admin → Settings); next_at is null when they are off. */
+type Schedule = { auto: boolean; weekday: number; every_weeks: number; min_paise: number; next_at: string | null };
 type P = { id: string; number: string; amount: number; status: string; mode: string; utr: string; failure_reason: string; bank: { holder?: string; account_last4?: string; ifsc?: string }; created_at: string; paid_at: string | null };
 type L = { at: string; kind: string; amount: number; description: string; order: string | null; available_at: string; available: boolean; payout: string | null };
 
@@ -19,7 +21,7 @@ const KIND: Record<string, string> = {
 
 export default function PayoutsPage() {
   const [tab, setTab] = useState("payouts");
-  const [d, setD] = useState<{ balances: { available: number; upcoming: number; paid_out: number }; payouts: P[] } | null>(null);
+  const [d, setD] = useState<{ balances: { available: number; upcoming: number; paid_out: number }; payouts: P[]; schedule: Schedule } | null>(null);
   const [ledger, setLedger] = useState<L[] | null>(null);
   useEffect(() => {
     api<typeof d>("/api/seller/payouts").then(setD).catch(quietly);
@@ -39,12 +41,15 @@ export default function PayoutsPage() {
     }
   }
   if (!d) return <PageLoader />;
+  const sch = d.schedule;
+  const when = sch.auto ? `every ${sch.every_weeks === 2 ? "second " : ""}${WEEKDAYS[sch.weekday]}` : "when the marketplace runs payouts";
+  const minimum = `if it is ${rupees(sch.min_paise)} or more`;
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Payouts" sub="Money from delivered orders becomes available when the return window closes, and is paid to your bank every week." actions={<Button variant="secondary" onClick={exportCsv}><Download className="h-4 w-4" /> Statement, last 12 months</Button>} />
+      <PageHeader title="Payouts" sub={`Money from delivered orders becomes available when the return window closes, and is paid to your bank ${when}.`} actions={<Button variant="secondary" onClick={exportCsv}><Download className="h-4 w-4" /> Statement, last 12 months</Button>} />
       <ErrorNote message={exportError} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat label="Available for the next payout" value={rupeesExact(d.balances.available)} />
+        <Stat label="Available for the next payout" value={rupeesExact(d.balances.available)} hint={sch.next_at ? `Paid on ${date(sch.next_at)} ${minimum}` : `Paid at the next payout ${minimum}`} />
         <Stat label="In the return window" value={rupeesExact(d.balances.upcoming)} hint="Moves to available when the window closes" />
         <Stat label="Paid out so far" value={rupeesExact(d.balances.paid_out)} />
       </div>

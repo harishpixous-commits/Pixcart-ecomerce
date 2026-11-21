@@ -10,7 +10,8 @@ from sqlalchemy import delete, text, update
 from app.core.deps import prune_rate_limits
 from app.db import SessionLocal, engine, utcnow
 from app.models import OtpChallenge
-from app.services.ledger import create_payouts
+from app.services.delivery import IST
+from app.services.ledger import PAYOUT_RUN_IST, create_payouts, is_payout_day
 from app.services.notify import dispatch_pending, notify_seller
 from app.services.orders import (
     cancel_unconfirmed,
@@ -104,12 +105,13 @@ async def unconfirmed_job() -> None:
 
 
 async def payouts_job() -> None:
+    """Runs every day; pays only on the payout day set in Admin → Settings (weekday, every one or two weeks)."""
     async def run(session):
         cfg = await get_settings(session)
-        if cfg["auto_payouts"]:
+        if cfg["auto_payouts"] and is_payout_day(cfg, utcnow().astimezone(IST).date()):
             created = await create_payouts(session, min_amount=cfg["payout_min_paise"])
             await session.commit()
-            log.info("weekly payout run created %d payout(s)", len(created))
+            log.info("scheduled payout run created %d payout(s)", len(created))
 
     await _with_lock(_LOCK_PAYOUTS, run)
 
@@ -247,7 +249,7 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(cleanup_job, "interval", hours=6, id="cleanup", max_instances=1, coalesce=True)
     scheduler.add_job(notify_job, "interval", seconds=30, id="notify", max_instances=1, coalesce=True)
     scheduler.add_job(unconfirmed_job, "interval", minutes=30, id="unconfirmed", max_instances=1, coalesce=True)
-    scheduler.add_job(payouts_job, "cron", day_of_week="mon", hour=4, minute=30, id="payouts", max_instances=1, coalesce=True)  # 10:00 IST
+    scheduler.add_job(payouts_job, "cron", hour=PAYOUT_RUN_IST.hour, minute=PAYOUT_RUN_IST.minute, timezone=IST, id="payouts", max_instances=1, coalesce=True)
     scheduler.add_job(review_summary_job, "interval", hours=1, id="review_summaries", max_instances=1, coalesce=True)
     scheduler.add_job(low_stock_job, "cron", hour=3, minute=0, id="low_stock", max_instances=1, coalesce=True)  # 08:30 IST
     scheduler.add_job(deals_job, "interval", minutes=1, id="deals", max_instances=1, coalesce=True)

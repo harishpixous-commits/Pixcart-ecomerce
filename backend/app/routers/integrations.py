@@ -12,11 +12,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete
 
 from app.config import settings
-from app.core import totp
 from app.core.deps import SessionDep, audit, rate_limit
 from app.core.errors import ApiError
 from app.core.permissions import Perm
-from app.core.security import decrypt_field, verify_password
+from app.core.step_up import confirm_identity
 from app.integrations import checks, runtime, store
 from app.integrations.registry import BY_KEY, GROUP_LABELS
 from app.models import IntegrationToken
@@ -57,13 +56,7 @@ class SaveIn(BaseModel):
 async def save_integration(key: str, body: SaveIn, admin: Perm("integrations"), session: SessionDep) -> dict:
     if key not in BY_KEY:
         raise ApiError("Unknown integration", "not_found", 404)
-    await rate_limit(session, f"integrations-save:{admin.id}", limit=30, window_seconds=600)
-    if not verify_password(body.password, admin.password_hash):
-        await session.commit()  # keep the rate-limit hit
-        raise ApiError("Your password is not correct", "wrong_password", 403, fields={"password": "Incorrect"})
-    if admin.totp_enabled and not totp.verify(decrypt_field(admin.totp_secret_enc), body.totp):
-        await session.commit()
-        raise ApiError("Enter the current 6-digit code from your authenticator app", "totp_required", 403, fields={"totp": "Required"})
+    await confirm_identity(session, admin, body.password, body.totp, purpose="integrations-save")
     try:
         changed = await store.save(session, key, values=body.values, clear=body.clear, enabled=body.enabled, actor_name=admin.name or admin.email or "")
     except store.IntegrationError as exc:

@@ -116,10 +116,15 @@ export default function ProductPageSettings() {
       setError("Price drop alerts: enter 1 to 90 percent");
       return;
     }
+    if (Number(s.qa_report_hide_at) > 50) {
+      setError("Questions and answers: enter 0 to 50 reports");
+      return;
+    }
     setBusy(true);
     setError(null);
     const keys = [...GROUPS.flatMap((g) => g.items.map(([k]) => k)), "pdp_bought_min", "pdp_offers_max", "top_seller_min_rating_x10", "top_seller_min_orders",
-      "gallery_zoom", "gallery_zoom_level", "feature_product_videos", "max_video_mb", "max_videos_per_listing", "new_release_days", "price_alert_min_drop_pct"];
+      "gallery_zoom", "gallery_zoom_level", "feature_product_videos", "max_video_mb", "max_videos_per_listing", "new_release_days", "price_alert_min_drop_pct",
+      "qa_report_hide_at"];
     try {
       setS(await api<S>("/api/admin/settings", { method: "PUT", body: Object.fromEntries(keys.map((k) => [k, s[k]])) }));
       toast("Product page settings saved");
@@ -159,6 +164,10 @@ export default function ProductPageSettings() {
             {g.sub && <p className="text-sm text-ink-soft">{g.sub}</p>}
           </div>
           {g.items.map(([k, label, hint]) => <Toggle key={k} k={k} label={label} hint={hint} s={s} set={set} />)}
+          {g.title === "Questions and answers" && (
+            <TextField label="Hide a post after this many reports" {...num("qa_report_hide_at")} disabled={!s.feature_qa}
+              hint="Each shopper counts once. The post waits in Questions until staff check it. 0 = never hide automatically; up to 50." />
+          )}
           {g.title === "Alerts" && (
             <TextField label="Price drop: at least (%)" {...num("price_alert_min_drop_pct")} hint="Smaller drops are not sent. 1 to 90." disabled={!s.feature_price_alerts} />
           )}

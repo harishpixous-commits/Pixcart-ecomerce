@@ -56,6 +56,26 @@ class AnswerVote(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class QuestionReport(Base):
+    """A shopper reported a question. Each person counts once, so one account cannot hide a post alone."""
+
+    __tablename__ = "question_reports"
+
+    question_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("product_questions.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AnswerReport(Base):
+    """A shopper reported an answer; each person counts once."""
+
+    __tablename__ = "answer_reports"
+
+    answer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("product_answers.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class StockAlert(Base):
     """'Notify me': tell the shopper when an out-of-stock version is back."""
 

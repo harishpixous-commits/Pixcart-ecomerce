@@ -44,6 +44,8 @@ DEFAULTS: dict[str, Any] = {
     "auto_cancel_unconfirmed_hours": 72,  # 0 = off; placed orders the seller never confirms
     # payouts
     "auto_payouts": False,
+    "payout_weekday": 0,      # automatic payouts run at 10:00 IST on this day: 0 = Monday ... 6 = Sunday
+    "payout_every_weeks": 1,  # 1 = every week, 2 = every second week
     # product page gallery
     "gallery_zoom": True,  # magnify the photo on hover (desktop)
     "gallery_zoom_level": 25,  # zoom ×10: 25 = 2.5×
@@ -96,6 +98,7 @@ DEFAULTS: dict[str, Any] = {
     "feature_qa": True,                # shoppers ask questions on product pages
     "qa_need_approval": False,         # questions and answers wait for staff before they appear
     "qa_buyers_answer_only": False,    # only the seller and verified buyers may answer
+    "qa_report_hide_at": 3,            # reports from this many different shoppers hide a post until staff check it; 0 = never
     "feature_stock_alerts": True,      # "Notify me when it is back"
     "feature_price_alerts": True,      # wishlist price-drop alerts
     "price_alert_min_drop_pct": 10,
@@ -128,6 +131,8 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "transit_days_national": (int, 0, 30),
     "auto_cancel_unconfirmed_hours": (int, 0, 720),
     "auto_payouts": (bool, 0, 1),
+    "payout_weekday": (int, 0, 6),
+    "payout_every_weeks": (int, 1, 2),
     "gallery_zoom": (bool, 0, 1),
     "gallery_zoom_level": (int, 15, 40),
     "feature_product_videos": (bool, 0, 1),
@@ -174,6 +179,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "feature_qa": (bool, 0, 1),
     "qa_need_approval": (bool, 0, 1),
     "qa_buyers_answer_only": (bool, 0, 1),
+    "qa_report_hide_at": (int, 0, 50),
     "feature_stock_alerts": (bool, 0, 1),
     "feature_price_alerts": (bool, 0, 1),
     "price_alert_min_drop_pct": (int, 1, 90),

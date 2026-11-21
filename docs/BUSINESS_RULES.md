@@ -54,11 +54,14 @@ All amounts are integer paise and rates are basis points (100 bps = 1%). Roundin
 | GST split | `taxable = gross × 100 / (100 + rate)`. Seller state = buyer state → CGST + SGST (half each); otherwise IGST |
 | Delivery / COD fee | Taxed with the goods (composite supply) at the highest item rate in the package |
 | Commission | Category rate (or the seller's override) × item price |
-| GST on commission | 18% of commission |
-| TCS (CGST Act s.52) | 0.5% of net taxable value; split CGST/SGST or IGST in the GSTR-8 report |
-| TDS (Income-tax s.194-O / s.393 of the 2025 Act) | 0.1% of gross amount |
+| GST on commission | 18% of commission (default) |
+| TCS (CGST Act s.52) | 0.5% (default) of net taxable value; split CGST/SGST or IGST in the GSTR-8 report |
+| TDS (Income-tax s.194-O / s.393 of the 2025 Act) | 0.1% (default) of gross amount |
 | Seller payout | gross − commission − GST on commission − TCS − TDS |
 | Payout date | delivery date + the longest return window among the items (as saved on the order), and never before the period for damaged, faulty or wrong items ends |
+
+The GST on commission, TCS and TDS rates are set in Admin → Settings. The fee preview in the seller's listing
+form (`GET /api/seller/fees`) uses the same rates as the payout statement, so a rate change shows there at once.
 
 The GSTR-8 report (Admin → TCS report) lists supplier-wise net taxable value and TCS for sub-orders placed
 in the month, excluding cancelled ones, less the taxable value and TCS of returns received in the month.
@@ -178,7 +181,11 @@ encrypted at rest. Admin views of KYC and documents are written to the audit log
   that. If the seller's account changes afterwards, the payout is held (left out of the bank file, not sent) until
   Finance confirms the new account on it. Staff changing a seller's bank details confirm with their password (and
   authenticator code) and the seller is told.
-- Weekly automatic payouts (Monday morning) can be switched on in Admin → Settings.
+- Automatic payouts are off by default and can be switched on in Admin → Settings, with the payout day
+  (default Monday) and how often (every week, or every second week counted from Monday 1 January 2024).
+  The job checks every day at 10:00 IST and runs only on a payout day. Sellers' Payouts page shows the
+  real schedule and the next payout date, or "when the marketplace runs payouts" while automatic payouts
+  are off.
 
 ## Notifications
 

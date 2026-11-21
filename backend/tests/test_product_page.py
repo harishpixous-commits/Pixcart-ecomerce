@@ -43,6 +43,17 @@ def test_dispatch_cutoff_countdown():
     assert after["min_date"] > before["min_date"] == none["min_date"]
 
 
+async def test_listing_fee_preview_uses_the_marketplace_rates(client, admin, categories):
+    """The listing form's fee preview takes GST on commission, TCS and TDS from Admin → Marketplace settings."""
+    seller = await login_phone(client, "9400000061", name="Fee Check Owner")
+    assert (await seller.post("/api/seller/register", {"display_name": "Fee Check Traders"})).status_code == 201
+    assert (await seller.get("/api/seller/fees")).json() == {"commission_gst_bps": 1800, "tcs_bps": 50, "tds_bps": 10}
+    assert (await admin.put("/api/admin/settings", {"commission_gst_bps": 1200, "tcs_bps": 100, "tds_bps": 0})).status_code == 200
+    assert (await seller.get("/api/seller/fees")).json() == {"commission_gst_bps": 1200, "tcs_bps": 100, "tds_bps": 0}
+    shopper = await login_phone(client, "9600000061", name="Shopper")
+    assert (await shopper.get("/api/seller/fees")).status_code == 403  # sellers only
+
+
 async def test_product_information_unit_price_and_category_requirements(client, admin, categories):
     tn, ka, shirt, _ = await setup(client, admin, categories)
     cats = (await admin.get("/api/admin/categories")).json()

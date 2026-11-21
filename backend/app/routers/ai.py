@@ -22,7 +22,7 @@ from app.ai.tasks import TASKS, TONES
 from app.config import settings as env
 from app.core.deps import AdminUser, CurrentUser, SellerAccount, SessionDep, audit
 from app.core.errors import ApiError, Forbidden, NotFound
-from app.core.permissions import Perm, permissions_for
+from app.core.permissions import Perm, load_roles, permissions_for
 from app.models import AiRun, Order, Seller, User
 from app.services.notify import notify
 
@@ -123,6 +123,7 @@ async def admin_run(task: str, body: RunIn, admin: AdminUser, session: SessionDe
     spec = TASKS.get(task)
     if spec is None or spec.audience != "admin":
         raise NotFound("AI task")
+    await load_roles(session)  # the role's permissions as the owner set them now, also on a fresh worker
     if spec.permission not in permissions_for(admin):
         raise Forbidden(f"Your role does not allow this ({spec.permission})")
     r, _ = await ai.run(session, task, actor=admin, inputs=await _inputs(session, task, body), subject_id=body.subject_id)
@@ -131,6 +132,7 @@ async def admin_run(task: str, body: RunIn, admin: AdminUser, session: SessionDe
 
 
 async def _own_admin_run(session, run_id: uuid.UUID, admin: User) -> AiRun:
+    await load_roles(session)
     r = await session.get(AiRun, run_id)
     if r is None or r.seller_id is not None:
         raise NotFound("AI draft")

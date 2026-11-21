@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, Input, PageLoader, Select, TextField, Textarea, useToast } from "@/components/ui";
+import { useAdmin, useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
 import { openAssistant } from "@/lib/assistant-bus";
 
@@ -17,10 +18,14 @@ type D = { settings: Settings; languages: Record<string, string>; tools: { name:
 
 export default function AssistantSettings() {
   const toast = useToast();
+  const me = useAdmin();
+  const canLaya = useCan("ai_providers"); // the Laya server receives every staff question, like an AI provider
   const [d, setD] = useState<D | null>(null);
   const [s, setS] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
   const [probe, setProbe] = useState("இன்னைக்கு sales evlo?");
   const [probeOut, setProbeOut] = useState<Record<string, unknown> | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -38,15 +43,20 @@ export default function AssistantSettings() {
   if (!d || !s) return <PageLoader />;
   const setDec = (x: Partial<Settings["decision"]>) => setS({ ...s, decision: { ...s.decision, ...x } });
   const setVoice = (x: Partial<Settings["voice"]>) => setS({ ...s, voice: { ...s.voice, ...x } });
+  // A new Laya address or path drops the saved token; changing the server or token asks for the password again.
+  const layaMoved = s.decision.laya_url !== d.settings.decision.laya_url || s.decision.laya_path !== d.settings.decision.laya_path;
+  const layaChanged = layaMoved || s.decision.laya_key !== "";
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const r = await api<D>("/api/admin/assistant/settings", { method: "PUT", body: s });
+      const r = await api<D>("/api/admin/assistant/settings", { method: "PUT", body: layaChanged ? { ...s, password, totp } : s });
       setD(r);
       setS(r.settings);
+      setPassword("");
+      setTotp("");
       toast("Assistant settings saved");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save");
@@ -91,10 +101,18 @@ export default function AssistantSettings() {
         </div>
         {s.decision.provider === "laya" && (
           <>
-            <TextField label="Laya server address" placeholder="http://laya:8000" value={s.decision.laya_url} onChange={(e) => setDec({ laya_url: e.target.value })} hint="Run: pip install “laya[serve]” then laya-serve (see docs/AI_ASSISTANT.md)" />
-            <TextField label="Path" value={s.decision.laya_path} onChange={(e) => setDec({ laya_path: e.target.value })} />
-            <TextField label="Bearer token (LAYA_API_KEY)" type="password" autoComplete="off" placeholder={s.decision.laya_key_set ? "Saved. Type to replace." : "Optional"} value={s.decision.laya_key} onChange={(e) => setDec({ laya_key: e.target.value })} />
+            {!canLaya && <p className="text-sm text-ink-soft md:col-span-2">Only staff with the AI providers permission can change the Laya server and its token.</p>}
+            <TextField label="Laya server address" placeholder="https://laya.example.com" disabled={!canLaya} value={s.decision.laya_url} onChange={(e) => setDec({ laya_url: e.target.value })} hint="A public https address. Run: pip install “laya[serve]” then laya-serve (see docs/AI_ASSISTANT.md)" />
+            <TextField label="Path" disabled={!canLaya} value={s.decision.laya_path} onChange={(e) => setDec({ laya_path: e.target.value })} />
+            <TextField label="Bearer token (LAYA_API_KEY)" type="password" autoComplete="off" disabled={!canLaya} placeholder={s.decision.laya_key_set && !layaMoved ? "Saved. Type to replace." : "Optional"} value={s.decision.laya_key} onChange={(e) => setDec({ laya_key: e.target.value })}
+              hint={s.decision.laya_key_set && layaMoved && !s.decision.laya_key ? "A new address or path removes the saved token. Enter it again if the server needs one." : undefined} />
             <TextField label="Wait at most (ms)" type="number" min={100} max={5000} value={String(s.decision.laya_timeout_ms)} onChange={(e) => setDec({ laya_timeout_ms: Number(e.target.value) })} />
+          </>
+        )}
+        {layaChanged && (
+          <>
+            <TextField label="Your password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required hint="Needed to change the Laya server or its token" />
+            {me?.totp_enabled && <TextField label="Authenticator code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={totp} onChange={(e) => setTotp(e.target.value)} required />}
           </>
         )}
         {s.decision.provider !== "off" && (

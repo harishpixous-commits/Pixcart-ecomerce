@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ReturnRequestModal } from "@/components/order-returns";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Modal, PageLoader, StatusPill, Textarea, useToast } from "@/components/ui";
+import { useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
 import type { FleetTracking, OrderDetail, ReturnableItem } from "@/lib/types";
@@ -17,6 +18,7 @@ import { openPdf } from "@/components/order-returns";
 export default function AdminOrderDetail() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
+  const canRefund = useCan("refunds"); // retrying a failed refund needs the Refunds permission
   const [o, setO] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
@@ -103,7 +105,9 @@ export default function AdminOrderDetail() {
             <div key={r.id} className="flex flex-wrap items-center gap-3 border-t border-line py-2 text-[15px]">
               <span>{rupeesExact(r.amount)}</span><StatusPill status={r.status} /><span className="text-ink-soft">{r.reason}</span>
               {r.last_error && <span className="text-sm text-vermilion">{r.last_error}</span>}
-              {r.status === "failed" && r.id && <Button size="sm" variant="secondary" className="ml-auto" onClick={() => act(`/api/admin/refunds/${r.id}/retry`, undefined, "Refund retried")}>Retry</Button>}
+              {r.status === "failed" && r.id && (canRefund
+                ? <Button size="sm" variant="secondary" className="ml-auto" onClick={() => act(`/api/admin/refunds/${r.id}/retry`, undefined, "Refund retried")}>Retry</Button>
+                : <span className="ml-auto text-sm text-ink-soft">Ask Finance, or anyone with the Refunds permission, to retry this refund.</span>)}
             </div>
           ))}
         </section>

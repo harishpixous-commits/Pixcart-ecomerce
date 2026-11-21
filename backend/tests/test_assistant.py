@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 from test_phase2_money import key, setup
 
 from app.assistant import decision
+from app.core import totp
 from app.llm import adapters
 from app.llm import router as llm_router
 
@@ -256,14 +257,27 @@ async def test_actions_need_confirmation_and_permission(client, admin, categorie
     assert r.status_code == 403  # no assistant_voice
 
 
-async def test_settings_memory_and_decision_test(admin):
+def laya_down(monkeypatch) -> list[httpx.Request]:
+    """The Laya server is unreachable; returns the requests the decision layer tried to send."""
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        raise httpx.ConnectError("down", request=req)
+
+    monkeypatch.setattr(decision, "transport", httpx.MockTransport(handler))
+    return seen
+
+
+async def test_settings_memory_and_decision_test(admin, monkeypatch):
+    laya_down(monkeypatch)
     r = await admin.get("/api/admin/assistant/settings")
     cfg = r.json()["settings"]
     cfg["decision"]["provider"] = "laya"
     assert (await admin.put("/api/admin/assistant/settings", cfg)).status_code == 400  # needs an address
-    cfg["decision"] |= {"laya_url": "http://laya:8000", "laya_key": "secret-token-1"}
+    cfg["decision"] |= {"laya_url": "https://laya.example.com", "laya_key": "secret-token-1"}
     cfg["voice"]["languages"] = ["ta-IN", "en-IN", "xx-YY"]
-    r = await admin.put("/api/admin/assistant/settings", cfg)
+    r = await admin.put("/api/admin/assistant/settings", cfg | {"password": PW})
     assert r.status_code == 200, r.text
     saved = r.json()["settings"]
     assert saved["decision"]["laya_key"] == "" and saved["decision"]["laya_key_set"] and saved["voice"]["languages"] == ["ta-IN", "en-IN"]
@@ -272,3 +286,61 @@ async def test_settings_memory_and_decision_test(admin):
     assert d["source"] == "rules" and d["period"] == "today"
     r = await admin.put("/api/admin/assistant/memory", {"notes": ["Reply in Tamil", " "]})
     assert r.json()["notes"] == ["Reply in Tamil"]
+
+
+async def test_laya_server_is_public_https_and_moving_it_needs_the_password(admin, client, monkeypatch):
+    seen = laya_down(monkeypatch)
+    cfg = (await admin.get("/api/admin/assistant/settings")).json()["settings"]
+    cfg["decision"] |= {"provider": "laya", "laya_key": "secret-token-1"}
+    for bad in ("http://laya.example.com", "https://laya:8000", "https://169.254.169.254", "https://10.0.0.5:8000", "https://127.1",
+                "https://localhost", "https://metadata.google.internal", "https://user@laya.example.com"):
+        cfg["decision"]["laya_url"] = bad
+        r = await admin.put("/api/admin/assistant/settings", cfg | {"password": PW})
+        assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_assistant_settings", bad
+
+    cfg["decision"]["laya_url"] = "https://laya.example.com"
+    r = await admin.put("/api/admin/assistant/settings", cfg)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "wrong_password"
+    r = await admin.put("/api/admin/assistant/settings", cfg | {"password": PW})
+    assert r.status_code == 200, r.text
+    saved = r.json()["settings"]
+    assert saved["decision"]["laya_key_set"]
+    await admin.post("/api/admin/assistant/decision-test", {"text": "sales today"})
+    assert str(seen[-1].url) == "https://laya.example.com/predict" and seen[-1].headers["authorization"] == "Bearer secret-token-1"
+
+    # other changes need no password and keep the token
+    saved["voice"]["rate"] = 1.2
+    r = await admin.put("/api/admin/assistant/settings", saved)
+    assert r.status_code == 200 and r.json()["settings"]["decision"]["laya_key_set"]
+
+    # a new address or path without a new token drops the saved one, so it never reaches another server
+    saved = r.json()["settings"]
+    saved["decision"]["laya_path"] = "/v2/predict"
+    r = await admin.put("/api/admin/assistant/settings", saved | {"password": PW})
+    assert r.status_code == 200 and not r.json()["settings"]["decision"]["laya_key_set"]
+    await admin.post("/api/admin/assistant/decision-test", {"text": "sales today"})
+    assert str(seen[-1].url) == "https://laya.example.com/v2/predict" and "authorization" not in seen[-1].headers
+
+    # with two-step sign-in on, the authenticator code is needed too
+    secret = (await admin.post("/api/auth/totp/setup")).json()["secret"]
+    assert (await admin.post("/api/auth/totp/enable", {"code": totp.current(secret)})).status_code == 200
+    saved = r.json()["settings"]
+    saved["decision"] |= {"laya_url": "https://laya.example.net", "laya_key": "secret-token-2"}
+    r = await admin.put("/api/admin/assistant/settings", saved | {"password": PW})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "totp_required"
+    r = await admin.put("/api/admin/assistant/settings", saved | {"password": PW, "totp": totp.current(secret)})
+    assert r.status_code == 200 and r.json()["settings"]["decision"]["laya_key_set"]
+    assert "laya_server=changed" in (await admin.get("/api/admin/audit?action=assistant.settings")).text
+
+    # the settings permission alone cannot move the Laya server
+    code = (await admin.post("/api/admin/roles", {"name": "Settings desk", "permissions": ["settings"]})).json()["code"]
+    await admin.post("/api/admin/staff", {"email": "desk@kadai.in", "name": "Desk", "role": code, "password": "Settings@2026x"})
+    h = {"Authorization": "Bearer " + (await client.post("/api/auth/login", json={"email": "desk@kadai.in", "password": "Settings@2026x"})).json()["access_token"]}
+    mine = (await client.get("/api/admin/assistant/settings", headers=h)).json()["settings"]
+    mine["decision"]["laya_url"] = "https://collector.example.org"
+    r = await client.put("/api/admin/assistant/settings", json=mine | {"password": "Settings@2026x"}, headers=h)
+    assert r.status_code == 403 and "AI providers" in r.json()["error"]["message"]
+    mine["decision"]["laya_url"] = "https://laya.example.net"
+    mine["name"] = "Helper"
+    r = await client.put("/api/admin/assistant/settings", json=mine, headers=h)
+    assert r.status_code == 200 and r.json()["settings"]["decision"]["laya_key_set"]

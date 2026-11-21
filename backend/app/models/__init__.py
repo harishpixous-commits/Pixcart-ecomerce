@@ -9,7 +9,7 @@ from app.models.delivery import (
     OrderStatusLog,
     PushToken,
 )
-from app.models.engagement import AnswerVote, ProductAnswer, ProductQuestion, StockAlert
+from app.models.engagement import AnswerReport, AnswerVote, ProductAnswer, ProductQuestion, QuestionReport, StockAlert
 from app.models.extended import (
     AdminRole,
     AiRun,
@@ -70,7 +70,7 @@ __all__ = [
     "DeliveryAssignment", "DeliveryBoy", "DeliveryCashDeposit", "DeliveryComplaint", "DeliveryPayout", "DeliveryZone",
     "OrderStatusLog", "PushToken",
     "AdCampaign", "AdCampaignProduct", "AdClick", "AdStat", "Deal", "SavedItem",
-    "AnswerVote", "ProductAnswer", "ProductQuestion", "StockAlert",
+    "AnswerReport", "AnswerVote", "ProductAnswer", "ProductQuestion", "QuestionReport", "StockAlert",
     "AdminRole", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
     "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle", "ProductVideo",
     "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",

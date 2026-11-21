@@ -77,6 +77,50 @@ async def test_questions_and_answers(client, admin, categories):
     assert (await asker.post(f"/api/catalog/products/{slug}/questions", {"text": "Is there a bigger size available?"})).json()["error"]["code"] == "qa_off"
 
 
+async def test_qa_reports_count_each_person_once(client, admin, categories):
+    """One account cannot hide a post by reporting it again and again; the owner sets how many people it takes."""
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    slug = shirt["slug"]
+    asker = await login_phone(client, "9600000091", name="Meena Asker")
+    qid = (await asker.post(f"/api/catalog/products/{slug}/questions", {"text": "Does the colour fade after washing?"})).json()["id"]
+
+    async def visible() -> bool:
+        return any(q["id"] == qid for q in (await client.get(f"/api/catalog/products/{slug}/questions")).json()["items"])
+
+    async def report(api) -> dict:
+        return (await api.post("/api/qa/report", {"kind": "question", "id": qid})).json()
+
+    rival = await login_phone(client, "9600000092", name="Rival")
+    assert await report(rival) == {"ok": True, "already": False, "hidden": False}
+    for _ in range(4):
+        assert (await report(rival))["already"] is True
+    assert await visible()
+    second, third = [await login_phone(client, f"96000000{n}", name="Shopper") for n in (93, 94)]
+    assert (await report(second))["hidden"] is False
+    assert (await report(third))["hidden"] is True  # three different people by default
+    assert not await visible()
+
+    # staff put it back: earlier reporters cannot hide it again; the owner's number applies to new reporters
+    assert (await admin.post(f"/api/admin/questions/question/{qid}/publish")).json()["status"] == "published"
+    assert (await admin.put("/api/admin/settings", {"qa_report_hide_at": 51})).status_code == 400
+    assert (await admin.put("/api/admin/settings", {"qa_report_hide_at": 2})).json()["qa_report_hide_at"] == 2
+    for api in (rival, second, third):
+        assert (await report(api))["already"] is True
+    assert await visible()
+    fourth, fifth = [await login_phone(client, f"96000000{n}", name="Shopper") for n in (95, 96)]
+    assert (await report(fourth))["hidden"] is False and (await report(fifth))["hidden"] is True
+    assert not await visible()
+
+    # 0 = reports never hide a post by themselves
+    await admin.post(f"/api/admin/questions/question/{qid}/publish")
+    await admin.put("/api/admin/settings", {"qa_report_hide_at": 0})
+    for n in (97, 98):
+        assert (await report(await login_phone(client, f"96000000{n}", name="Shopper")))["hidden"] is False
+    assert await visible()
+    queue = (await admin.get("/api/admin/questions", params={"status": "published"})).json()["items"]
+    assert next(i for i in queue if i["id"] == qid)["report_count"] == 2  # reports since staff last checked it
+
+
 async def test_back_in_stock_and_price_drop_alerts(client, admin, categories):
     tn, ka, shirt, phone = await setup(client, admin, categories)
     vid = shirt["variants"][0]["id"]

@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
+from app.core import permissions
 from app.db import SessionLocal
 from app.llm import adapters as llm_adapters
 from app.models import AiRun, Notification, Product
@@ -188,6 +189,20 @@ async def test_permissions_and_seller_scoping(client, admin, categories):
     # AI usage export
     csv = await admin.get("/api/admin/exports/ai-runs.csv")
     assert csv.status_code == 200 and b"listing_writer" in csv.content
+
+
+async def test_ai_drafts_load_the_current_roles(client, admin, monkeypatch):
+    """A worker that has not loaded the roles yet still knows a custom role when staff draft or discard with AI."""
+    code = (await admin.post("/api/admin/roles", {"name": "Brief readers", "permissions": []})).json()["code"]
+    await admin.post("/api/admin/staff", {"email": "brief@kadai.in", "name": "Brief", "role": code, "password": "Briefing@2026x"})
+    token = (await client.post("/api/auth/login", json={"email": "brief@kadai.in", "password": "Briefing@2026x"})).json()["access_token"]
+    h = {"Authorization": f"Bearer {token}"}
+    monkeypatch.setattr(permissions, "_roles", {})  # a freshly started worker
+    r = await client.post("/api/admin/ai/tasks/business_brief", json={"subject_id": "7"}, headers=h)
+    assert r.status_code == 200, r.text
+    monkeypatch.setattr(permissions, "_roles", {})
+    r = await client.post(f"/api/admin/ai/runs/{r.json()['id']}/discard", json={}, headers=h)
+    assert r.status_code == 200, r.text
 
 
 async def test_business_brief_uses_only_supplied_figures(client, admin, categories, live):

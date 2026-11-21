@@ -89,6 +89,9 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
 
 export const GST_RATES = [0, 25, 300, 500, 1200, 1800, 2800, 4000];
 
+/** Day names by the backend's weekday number (Python's date.weekday(): 0 = Monday). */
+export const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 /** "Under 1 hour", "5 hours", "2.5 days" — for averages measured in hours. */
 export function hoursLabel(h: number | null | undefined): string {
   if (h === null || h === undefined) return "—";
