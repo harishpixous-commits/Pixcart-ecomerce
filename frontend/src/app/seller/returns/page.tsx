@@ -15,6 +15,8 @@ export default function SellerReturns() {
   const [status, setStatus] = useState("requested");
   const [data, setData] = useState<{ items: ReturnView[]; status_counts: Record<string, number> } | null>(null);
   const [act, setAct] = useState<{ r: ReturnView; action: "reject" | "picked_up" } | null>(null);
+  // receiving a return: each item back in sellable stock, or damaged and kept out of stock
+  const [receive, setReceive] = useState<{ r: ReturnView; conditions: Record<string, "sellable" | "damaged"> } | null>(null);
   const [note, setNote] = useState("");
   const [courier, setCourier] = useState("");
   const [tracking, setTracking] = useState("");
@@ -31,6 +33,7 @@ export default function SellerReturns() {
       await api(`/api/seller/returns/${r.id}`, { method: "POST", body: { action, ...body } });
       toast("Return updated");
       setAct(null);
+      setReceive(null);
       setNote("");
       setRefresh((n) => n + 1);
     } catch (e) {
@@ -55,7 +58,11 @@ export default function SellerReturns() {
               {r.items.map((i, n) => (
                 <div key={n} className="flex items-center gap-3 py-1">
                   <ProductImage src={i.image} alt="" className="h-12 w-12 shrink-0" />
-                  <p className="flex-1">{i.title}{i.variant_label ? ` (${i.variant_label})` : ""} × {i.qty}</p>
+                  <p className="flex-1">
+                    {i.title}{i.variant_label ? ` (${i.variant_label})` : ""} × {i.qty}
+                    {i.condition === "damaged" && <span className="ml-2 rounded bg-vermilion-light px-1.5 py-0.5 text-xs font-semibold text-vermilion">Kept out of stock</span>}
+                    {i.condition === "sellable" && <span className="ml-2 rounded bg-leaf-light px-1.5 py-0.5 text-xs font-semibold text-leaf">Back in stock</span>}
+                  </p>
                   <p className="font-semibold">{rupees(i.amount)}</p>
                 </div>
               ))}
@@ -84,7 +91,11 @@ export default function SellerReturns() {
                 {r.status === "approved" && (
                   <Button size="sm" variant="secondary" onClick={() => setAct({ r, action: "picked_up" })}>{r.fleet_pickup?.requested ? "Use my own courier instead" : "Pickup booked"}</Button>
                 )}
-                {(r.status === "approved" || r.status === "picked_up") && <Button size="sm" onClick={() => run(r, "received")}>Mark received and refund</Button>}
+                {(r.status === "approved" || r.status === "picked_up") && (
+                  <Button size="sm" onClick={() => setReceive({ r, conditions: Object.fromEntries(r.items.filter((i) => i.order_item_id).map((i) => [i.order_item_id!, i.suggested_condition ?? "sellable"])) })}>
+                    Mark received and refund
+                  </Button>
+                )}
                 {r.credit_note_number && (
                   <Button size="sm" variant="ghost" onClick={() => openPdf(`/api/seller/returns/${r.id}/credit-note.pdf`, (m) => toast(m, "error"))}><FileText className="h-4 w-4" /> Credit note {r.credit_note_number}</Button>
                 )}
@@ -107,6 +118,29 @@ export default function SellerReturns() {
             <Button onClick={() => run(act.r, "picked_up", { courier, tracking })}>Save</Button>
           </div>
         ) : null}
+      </Modal>
+      <Modal open={!!receive} onClose={() => setReceive(null)} title="Mark this return received">
+        {receive && (
+          <div className="flex flex-col gap-3" data-testid="receive-return">
+            <ErrorNote message={error} />
+            <p className="text-ink-soft">Check each item. The customer is refunded {rupees(receive.r.refund_amount)} either way.</p>
+            {receive.r.items.map((i) => i.order_item_id && (
+              <fieldset key={i.order_item_id} className="rounded-xl border border-line p-3">
+                <legend className="px-1 text-sm font-semibold">{i.title}{i.variant_label ? ` (${i.variant_label})` : ""} × {i.qty}</legend>
+                {(["sellable", "damaged"] as const).map((c) => (
+                  <label key={c} className="flex items-start gap-2 py-1 text-sm">
+                    <input type="radio" className="mt-0.5 h-4 w-4 accent-peacock" name={`cond-${i.order_item_id}`} checked={receive.conditions[i.order_item_id!] === c}
+                      onChange={() => setReceive({ ...receive, conditions: { ...receive.conditions, [i.order_item_id!]: c } })} />
+                    <span>{c === "sellable" ? "Good: put it back in stock for sale" : "Damaged, used or not the item ordered: keep it out of stock"}</span>
+                  </label>
+                ))}
+              </fieldset>
+            ))}
+            <Button onClick={() => run(receive.r, "received", { items: Object.entries(receive.conditions).map(([order_item_id, condition]) => ({ order_item_id, condition })) })}>
+              Mark received and refund
+            </Button>
+          </div>
+        )}
       </Modal>
     </div>
   );

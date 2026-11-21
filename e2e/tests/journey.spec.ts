@@ -92,6 +92,10 @@ test.describe.serial("order to refund, across customer, seller and admin", () =>
     await expect(seller.getByText("Return updated").first()).toBeVisible();
     await seller.getByRole("tab", { name: /Awaiting pickup/ }).click();
     await seller.locator("section", { hasText: `${orderNumber}-1` }).getByRole("button", { name: "Mark received and refund" }).click();
+    // the seller checks the item: a size return is good to sell again (the suggested choice)
+    const receive = seller.getByRole("dialog");
+    await expect(receive.getByRole("radio", { name: /put it back in stock/ })).toBeChecked();
+    await receive.getByRole("button", { name: "Mark received and refund" }).click();
     await expect(seller.getByText("Return updated").first()).toBeVisible();
 
     await admin.goto("/admin/returns");

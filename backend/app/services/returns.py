@@ -63,9 +63,10 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
     pending = dict(
         (
             await session.execute(
+                # returns still on their way; a received one is already counted in returned_qty
                 select(ReturnItem.order_item_id, func.sum(ReturnItem.qty))
                 .join(ReturnRequest, ReturnRequest.id == ReturnItem.return_id)
-                .where(ReturnRequest.sub_order_id == sub.id, ReturnRequest.status.in_(OPEN + ("received",)))
+                .where(ReturnRequest.sub_order_id == sub.id, ReturnRequest.status.in_(OPEN))
                 .group_by(ReturnItem.order_item_id)
             )
         ).all()
@@ -144,11 +145,12 @@ ALLOWED = {
 
 
 async def set_status(session: AsyncSession, ret: ReturnRequest, dst: str, *, note: str = "", courier: str = "", tracking: str = "",
-                     by_fleet: bool = False) -> list[uuid.UUID]:
+                     by_fleet: bool = False, conditions: dict[uuid.UUID, str] | None = None) -> list[uuid.UUID]:
     """Moves a return forward. Returns refund ids to send to the gateway after commit.
 
     For a package our own delivery partners delivered, approving the return asks a partner to collect it (the customer
-    gets a pickup code); cancelling it, or the seller handing it to a courier, stops that pickup."""
+    gets a pickup code); cancelling it, or the seller handing it to a courier, stops that pickup. ``conditions`` (on
+    receipt): order item id → "sellable" (back in stock) or "damaged" (kept out of stock); see ``default_condition``."""
     from app.services import fleet
 
     if dst not in ALLOWED.get(ret.status, ()):
@@ -171,7 +173,7 @@ async def set_status(session: AsyncSession, ret: ReturnRequest, dst: str, *, not
             await fleet.cancel_return_pickup(session, ret, "The seller arranged another pickup")
     elif dst == "received":
         ret.received_at = now
-        refund_ids = await _receive(session, ret)
+        refund_ids = await _receive(session, ret, conditions or {})
         await fleet.close_pickup_on_receive(session, ret, None)
     elif dst == "refunded":
         ret.refunded_at = now
@@ -182,7 +184,16 @@ async def set_status(session: AsyncSession, ret: ReturnRequest, dst: str, *, not
     return refund_ids
 
 
-async def _receive(session: AsyncSession, ret: ReturnRequest) -> list[uuid.UUID]:
+NOT_RESTOCKED_BY_DEFAULT = ("damaged", "defective", "missing_parts", "wrong_item")
+
+
+def default_condition(reason: str) -> str:
+    """Unless the seller says otherwise on receipt: an item returned as damaged, faulty or incomplete is not put back on
+    sale, and for a wrong item the unit that comes back is not the ordered one, so the ordered one's stock is not raised."""
+    return "damaged" if reason in NOT_RESTOCKED_BY_DEFAULT else "sellable"
+
+
+async def _receive(session: AsyncSession, ret: ReturnRequest, conditions: dict[uuid.UUID, str]) -> list[uuid.UUID]:
     sub = (await session.execute(select(SubOrder).where(SubOrder.id == ret.sub_order_id).with_for_update())).scalar_one()
     order = (await session.execute(select(Order).where(Order.id == sub.order_id).with_for_update())).scalar_one()
     seller = await session.get(Seller, sub.seller_id)
@@ -191,6 +202,9 @@ async def _receive(session: AsyncSession, ret: ReturnRequest) -> list[uuid.UUID]
     for ri, it in rows:
         it.returned_qty += ri.qty
         s_value += seller_value(it, ri.qty)
+        ri.condition = conditions.get(it.id) or default_condition(ret.reason)
+        if ri.condition != "sellable":
+            continue  # recorded on the return; the customer is refunded all the same
         variant = (await session.execute(select(Variant).where(Variant.id == it.variant_id).with_for_update())).scalar_one()
         if sub.warehouse_id:
             await inventory.change(session, variant, sub.warehouse_id, ri.qty, "return", reference=ret.number)
@@ -227,5 +241,6 @@ async def return_out(session: AsyncSession, ret: ReturnRequest, *, with_upi: boo
         "sub_order_id": str(ret.sub_order_id), "sub_order_number": sub.number if sub else "", "order_id": str(sub.order_id) if sub else "",
         "created_at": ret.created_at.isoformat(), "approved_at": ret.approved_at.isoformat() if ret.approved_at else None,
         "received_at": ret.received_at.isoformat() if ret.received_at else None, "refunded_at": ret.refunded_at.isoformat() if ret.refunded_at else None,
-        "items": [{"title": it.title, "variant_label": it.variant_label, "image": it.image_url, "qty": ri.qty, "amount": ri.amount} for ri, it in rows],
+        "items": [{"order_item_id": str(it.id), "title": it.title, "variant_label": it.variant_label, "image": it.image_url, "qty": ri.qty, "amount": ri.amount,
+                   "condition": ri.condition, "suggested_condition": default_condition(ret.reason)} for ri, it in rows],
     }

@@ -126,7 +126,8 @@ async def test_cod_multi_seller_order_full_lifecycle(client, admin, categories):
     assert "commission" not in mine["sub_orders"][0]  # settlement figures are not shown to customers
 
     dash = (await tn.get("/api/seller/dashboard")).json()
-    assert dash["orders"]["delivered"] == 1 and dash["earnings"]["in_return_window"] == tn_sub["seller_payout"]
+    # the seller's own courier collected the cash, so the ledger already nets it off the payout
+    assert dash["orders"]["delivered"] == 1 and dash["earnings"]["in_return_window"] == tn_sub["seller_payout"] - tn_sub["total"]
     earn = (await tn.get("/api/seller/earnings")).json()
     assert earn["totals"]["payout"] == tn_sub["seller_payout"] and earn["items"][0]["eligible"] is False
 

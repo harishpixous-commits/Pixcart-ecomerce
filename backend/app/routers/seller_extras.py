@@ -324,11 +324,18 @@ async def import_stock(seller: SellerAccount, user: CurrentUser, session: Sessio
 # ----------------------------------------------------------------------------- returns
 
 
+class ItemCondition(BaseModel):
+    order_item_id: uuid.UUID
+    condition: Literal["sellable", "damaged"]
+
+
 class ReturnAction(BaseModel):
     action: Literal["approve", "reject", "picked_up", "received"]
     note: str = Field(default="", max_length=2000)
     courier: str = Field(default="", max_length=60)
     tracking: str = Field(default="", max_length=60)
+    # on receipt: each item back in sellable stock, or damaged and kept out of stock (missing = by the return reason)
+    items: list[ItemCondition] = Field(default_factory=list, max_length=100)
 
 
 @router.get("/returns")
@@ -349,8 +356,10 @@ async def act_return(return_id: uuid.UUID, body: ReturnAction, seller: SellerAcc
     if body.action == "reject" and len(body.note.strip()) < 10:
         raise ApiError("Explain to the customer why the return cannot be accepted", "note_required", fields={"note": "Required"})
     dst = {"approve": "approved", "reject": "rejected", "picked_up": "picked_up", "received": "received"}[body.action]
-    refund_ids = await returns_svc.set_status(session, ret, dst, note=body.note, courier=body.courier, tracking=body.tracking)
-    audit(session, user, f"return.{dst}", "return", ret.id, body.note[:200])
+    conditions = {c.order_item_id: c.condition for c in body.items}
+    refund_ids = await returns_svc.set_status(session, ret, dst, note=body.note, courier=body.courier, tracking=body.tracking, conditions=conditions)
+    damaged = sum(1 for c in conditions.values() if c == "damaged")
+    audit(session, user, f"return.{dst}", "return", ret.id, (body.note[:150] + (f" ({damaged} item(s) kept out of stock)" if damaged else "")).strip())
     await session.commit()
     if refund_ids:
         background.add_task(run_refunds, refund_ids)

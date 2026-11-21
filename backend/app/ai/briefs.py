@@ -42,11 +42,13 @@ def _result(factors: list[tuple[int, str]], notes: list[str], insufficient: bool
 
 async def seller_risk(session: AsyncSession, seller: Seller) -> dict:
     since = utcnow() - timedelta(days=90)
-    total, cancelled_by_seller, late = (await session.execute(
+    total, cancelled_by_seller, late, rto = (await session.execute(
         select(
             func.count(),
-            func.count().filter(SubOrder.status == "cancelled", SubOrder.cancelled_by == "seller"),
+            func.count().filter(SubOrder.status == "cancelled", SubOrder.cancelled_by == "seller", SubOrder.shipped_at.is_(None)),
             func.count().filter(SubOrder.shipped_at.is_not(None), SubOrder.shipped_at - SubOrder.created_at > timedelta(days=max(1, seller.dispatch_days) + 1)),
+            # shipped by the seller's own courier and brought back (marked "Returned to me")
+            func.count().filter(SubOrder.status == "cancelled", SubOrder.cancelled_by == "seller", SubOrder.shipped_at.is_not(None)),
         ).where(SubOrder.seller_id == seller.id, SubOrder.created_at >= since, SubOrder.status != "pending_payment")
     )).one()
     delivered = (await session.execute(select(func.count()).where(SubOrder.seller_id == seller.id, SubOrder.delivered_at >= since))).scalar_one()
@@ -61,6 +63,11 @@ async def seller_risk(session: AsyncSession, seller: Seller) -> dict:
         late_rate = late / total
         if late_rate > 0.1:
             factors.append((min(25, int(late_rate * 100)), f"{late_rate:.0%} shipped later than promised"))
+        rto_rate = rto / total
+        if rto_rate > 0.1:
+            factors.append((min(25, int(rto_rate * 100)), f"{rto_rate:.0%} of packages came back undelivered (RTO), by the seller's own courier"))
+    if rto:
+        notes.append(f"{rto} package(s) marked as returned to the seller (RTO).")
     if delivered:
         return_rate = returns / delivered
         if return_rate > 0.1:

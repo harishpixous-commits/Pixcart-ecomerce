@@ -42,12 +42,18 @@ async def setup(client, admin, categories):
     return tn, ka, shirt, phone
 
 
-async def ship_and_deliver(seller, sub_id: str) -> None:
+async def ship_and_deliver(seller, sub_id: str, *, marketplace_courier: bool = False) -> None:
+    """Confirm, pack, ship and deliver. ``marketplace_courier``: booked on the marketplace's courier account, which
+    remits cash on delivery to the marketplace (by default the seller's own courier collects it for the seller)."""
     for step in ("confirm", "pack"):
         r = await seller.post(f"/api/seller/orders/{sub_id}/{step}")
         assert r.status_code == 200, r.text
     r = await seller.post(f"/api/seller/orders/{sub_id}/ship", {"courier_name": "DTDC", "tracking_number": "AWB12345"})
     assert r.status_code == 200, r.text
+    if marketplace_courier:
+        async with SessionLocal() as s:
+            await s.execute(update(SubOrder).where(SubOrder.id == uuid.UUID(sub_id)).values(shipping_provider="shiprocket"))
+            await s.commit()
     r = await seller.post(f"/api/seller/orders/{sub_id}/deliver")
     assert r.status_code == 200, r.text
 
@@ -160,7 +166,9 @@ async def test_return_cod_and_ledger_and_payout(client, admin, categories):
     # Not returnable before delivery.
     ret = (await buyer.get(f"/api/orders/{o['id']}/returnable")).json()
     assert ret["items"][sub_id] == []
-    await ship_and_deliver(tn, sub_id)
+    # booked on the marketplace's courier account, which remits the cash to the marketplace (a seller's own courier
+    # would leave the cash with the seller: see test_ledger_fixes)
+    await ship_and_deliver(tn, sub_id, marketplace_courier=True)
 
     # Invoice number assigned at shipping; customer and seller can open the PDF, others cannot.
     async with SessionLocal() as s:
@@ -261,7 +269,7 @@ async def test_razorpayx_payout_and_webhook(client, admin, categories, monkeypat
     addr = await add_address(buyer, state="33")
     await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
     o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
-    await ship_and_deliver(tn, o["sub_orders"][0]["id"])
+    await ship_and_deliver(tn, o["sub_orders"][0]["id"], marketplace_courier=True)
     async with SessionLocal() as s:
         await s.execute(update(LedgerEntry).values(available_at=utcnow() - timedelta(minutes=1)))
         await s.commit()

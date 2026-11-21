@@ -573,6 +573,8 @@ export interface SellerOrder {
   items: { id?: string; title: string; variant_label: string; sku: string; image: string; qty: number; unit_price: Paise; line_total: Paise }[];
   /** cash on delivery: what the courier collects for this package (the marketplace's coupon, fees and tip included) */
   cod_to_collect?: Paise;
+  /** manual (the seller's own courier), shiprocket or fleet (our delivery partners) */
+  shipping_provider?: string;
   ship_to_city: string;
   ship_to_pincode: string;
   courier_name: string;
@@ -727,7 +729,13 @@ export interface ReturnView {
   created_at: string;
   received_at: string | null;
   refunded_at: string | null;
-  items: { title: string; variant_label: string; image: string; qty: number; amount: Paise }[];
+  items: {
+    order_item_id?: string; title: string; variant_label: string; image: string; qty: number; amount: Paise;
+    /** after receipt: back in sellable stock, or damaged and kept out of stock */
+    condition?: "" | "sellable" | "damaged";
+    /** what receipt does unless the seller says otherwise (by the return reason) */
+    suggested_condition?: "sellable" | "damaged";
+  }[];
   /** our delivery partner collecting the item (the code is the one meant for whoever is looking) */
   fleet_pickup?: {
     requested: boolean;

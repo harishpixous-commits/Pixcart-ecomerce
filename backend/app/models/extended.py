@@ -207,8 +207,10 @@ class ReturnItem(IdMixin, Base):
     order_item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("order_items.id", ondelete="CASCADE"))
     qty: Mapped[int] = mapped_column(Integer)
     amount: Mapped[int] = mapped_column(BigInteger)  # what the customer paid for these units
+    # set when the seller receives it: back in sellable stock, or damaged (kept out of stock)
+    condition: Mapped[str] = mapped_column(String(10), default="", server_default="")
 
-    __table_args__ = (CheckConstraint("qty > 0", name="qty"),)
+    __table_args__ = (CheckConstraint("qty > 0", name="qty"), CheckConstraint("condition IN ('','sellable','damaged')", name="condition"))
 
 
 class Coupon(IdMixin, TimestampMixin, Base):

@@ -57,6 +57,7 @@ def sub_out(s: SubOrder, o: Order, items: list[OrderItem], *, full: bool) -> dic
         "items_total": s.items_total,
         "shipping_fee": s.shipping_fee,
         "total": s.total,
+        "shipping_provider": s.shipping_provider,  # manual (the seller's own courier), shiprocket or fleet
         "seller_payout": s.seller_payout_paise,
         "item_count": sum(i.qty for i in items),
         "items": [
@@ -283,6 +284,36 @@ async def reject(sub_id: uuid.UUID, body: RejectIn, seller: SellerAccount, user:
         for p in (await session.execute(select(Product).where(Product.id.in_({i.product_id for i in items if i.variant_id in gone})))).scalars():
             await refresh_product_aggregates(session, p)
     audit(session, user, "suborder.seller_cancel", "sub_order", s.id, reason + (f" ({len(gone)} item(s) set to 0 in stock)" if gone else ""))
+    await session.flush()
+    rid = refund.id if refund else None
+    await session.commit()
+    if rid:
+        background.add_task(run_refunds, [rid])
+    return sub_out(s, o, (await _items(session, [s.id])).get(s.id, []), full=True)
+
+
+class RtoIn(BaseModel):
+    note: str = Field(default="", max_length=200)
+
+
+RTO_REASON = "Returned to the seller by the courier (RTO)"
+
+
+@router.post("/orders/{sub_id}/rto")
+async def returned_to_origin(sub_id: uuid.UUID, body: RtoIn, seller: ApprovedSeller, user: CurrentUser, session: SessionDep,
+                             background: BackgroundTasks) -> dict:
+    """The seller's own courier brought a shipped package back (refused, nobody home, address not found): the order
+    part is cancelled, its stock goes back to the warehouse and a prepaid customer is refunded; no sale is ever posted.
+    Packages with our delivery partners or Shiprocket come back through those flows instead."""
+    s, o = await _own_sub(session, seller.id, sub_id)
+    if s.status != "shipped":
+        raise ApiError("Only a package that has shipped and not been delivered can come back to you", "not_shipped")
+    if s.shipping_provider != "manual":
+        who = "our delivery partners" if s.shipping_provider == "fleet" else "Shiprocket"
+        raise ApiError(f"This package travels with {who}; it comes back to you through them", "not_own_courier")
+    reason = RTO_REASON + (f": {body.note.strip()}" if body.note.strip() else "")
+    refund = await cancel_sub_order(session, s, actor="seller", reason=reason)
+    audit(session, user, "suborder.rto", "sub_order", s.id, reason)
     await session.flush()
     rid = refund.id if refund else None
     await session.commit()

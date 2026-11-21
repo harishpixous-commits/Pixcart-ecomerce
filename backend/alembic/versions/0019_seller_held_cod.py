@@ -1,11 +1,11 @@
 """cash on delivery collected by a seller's own courier is a ledger debit, so the payout nets it off
 
-Revision ID: 0020
+Revision ID: 0019
 Revises: 0018
 """
 from alembic import op
 
-revision = "0020"
+revision = "0019"
 down_revision = "0018"
 branch_labels = None
 depends_on = None

@@ -32,6 +32,8 @@ export default function SellerOrderDetail() {
   const [ship, setShip] = useState({ courier_name: "", tracking_number: "", tracking_url: "" });
   const [reject, setReject] = useState({ reason: "out_of_stock", note: "" });
   const [keepIds, setKeepIds] = useState<string[]>([]); // out of stock: items the seller unticked (they still have stock)
+  const [rtoOpen, setRtoOpen] = useState(false); // the seller's courier brought the package back (RTO)
+  const [rtoNote, setRtoNote] = useState("");
   const [provider, setProvider] = useState("manual");
   useEffect(() => {
     api<{ provider: string }>("/api/seller/shipping").then((r) => setProvider(r.provider)).catch(() => {});
@@ -68,6 +70,7 @@ export default function SellerOrderDetail() {
       toast(msg ?? "Updated");
       setShipOpen(false);
       setRejectOpen(false);
+      setRtoOpen(false);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not update");
     } finally {
@@ -105,6 +108,9 @@ export default function SellerOrderDetail() {
               {o.label_url && <a href={o.label_url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-white px-4 font-semibold">Shipping label</a>}
               {o.invoice_number && <Button variant="secondary" onClick={() => openPdf(`/api/seller/orders/${o.id}/invoice.pdf`, (m) => toast(m, "error"))}><FileText className="h-4 w-4" /> Invoice {o.invoice_number}</Button>}
               {o.status === "shipped" && !f?.active && <Button onClick={() => act("deliver", undefined, "Marked as delivered")} loading={busy}>Mark as delivered</Button>}
+              {o.status === "shipped" && o.shipping_provider === "manual" && (
+                <Button variant="secondary" onClick={() => setRtoOpen(true)} data-testid="rto">Returned to me</Button>
+              )}
               {["confirmed", "packed", "shipped", "delivered"].includes(o.status) && (
                 <Button variant="secondary" onClick={() => window.print()}><Printer className="h-4 w-4" /> Packing slip</Button>
               )}
@@ -209,6 +215,17 @@ export default function SellerOrderDetail() {
           <TextField label="Tracking link (optional)" type="url" value={ship.tracking_url} onChange={(e) => setShip({ ...ship, tracking_url: e.target.value })} placeholder="https://" />
           <ErrorNote message={error} />
           <Button type="submit" loading={busy}>Mark as shipped</Button>
+        </form>
+      </Modal>
+      <Modal open={rtoOpen} onClose={() => setRtoOpen(false)} title="Package returned to you?">
+        <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); act("rto", { note: rtoNote }, "Marked as returned. The order is cancelled."); }}>
+          <ErrorNote message={error} />
+          <p className="text-ink-soft">
+            Use this when your courier brought the package back undelivered (refused, nobody at home, address not found). The order is cancelled, the
+            stock goes back to your warehouse{o.payment_method === "online" ? " and the customer is refunded" : ""}. No sale is paid for it.
+          </p>
+          <TextField label="What happened (optional)" value={rtoNote} onChange={(e) => setRtoNote(e.target.value)} maxLength={200} placeholder="For example: customer refused the package" />
+          <Button type="submit" variant="danger" loading={busy}>Mark as returned to me</Button>
         </form>
       </Modal>
       <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Cancel this order?">
