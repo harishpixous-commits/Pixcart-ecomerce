@@ -5,6 +5,7 @@ hard-coded elsewhere. Per-person memory notes live under ``asst_mem:<user id>``.
 """
 from __future__ import annotations
 
+import ipaddress
 import re
 from copy import deepcopy
 from typing import Any
@@ -38,9 +39,9 @@ DEFAULTS: dict[str, Any] = {
         "provider": "rules",  # off | rules | laya
         "min_confidence": 0.55,  # below this, every tool is offered to the model
         "prefetch": True,  # run the obvious first lookup before the model is called (one round trip less)
-        "laya_url": "",  # e.g. http://laya:8000 (laya-serve)
+        "laya_url": "",  # e.g. https://laya.example.com (laya-serve); public https only
         "laya_path": "/predict",
-        "laya_key": "",  # stored encrypted
+        "laya_key": "",  # stored encrypted; dropped when the address or path changes
         "laya_timeout_ms": 600,
     },
     "voice": {
@@ -66,9 +67,14 @@ def _merge(saved: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-async def get(session: AsyncSession, *, reveal: bool = False) -> dict[str, Any]:
+async def stored(session: AsyncSession) -> dict[str, Any]:
+    """The saved settings over the defaults, with the Laya token still encrypted."""
     row = await session.get(PlatformSetting, KEY)
-    cfg = _merge(row.value if row else {})
+    return _merge(row.value if row else {})
+
+
+async def get(session: AsyncSession, *, reveal: bool = False) -> dict[str, Any]:
+    cfg = await stored(session)
     enc = cfg["decision"].get("laya_key") or ""
     if reveal:
         cfg["decision"]["laya_key"] = decrypt_field(enc) if enc else ""
@@ -82,7 +88,39 @@ def _text(v: Any, limit: int) -> str:
     return re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", str(v or ""))[:limit].strip()
 
 
-def validate(data: dict[str, Any], current_enc_key: str) -> dict[str, Any]:
+_LAYA_URL = re.compile(r"^https://([A-Za-z0-9.\-]+)(:\d{1,5})?(/[\w./-]*)?$")
+
+
+def _public_host(host: str) -> bool:
+    """A name or address on the public internet: not private, loopback, link-local or cloud metadata."""
+    host = host.lower().rstrip(".")
+    if host.rsplit(".", 1)[-1].isdigit():  # an IPv4 address: no real top-level domain is a number
+        try:
+            ip = ipaddress.IPv4Address(host)
+        except ValueError:
+            return False  # short or octal forms such as 127.1
+        return ip.is_global and not ip.is_multicast
+    return "." in host and not host.endswith((".internal", ".local", ".localhost"))  # e.g. laya, metadata.google.internal
+
+
+def _laya_url(value: Any) -> str:
+    """Every staff question and the bearer token go to this address, so it must be public https."""
+    url = _text(value, 300).rstrip("/")
+    m = _LAYA_URL.match(url)
+    if url and not m:
+        raise ValueError("Laya address must start with https://, like https://laya.example.com")
+    if m and not _public_host(m.group(1)):
+        raise ValueError("Laya address must be a public https address, not a private, local or cloud metadata one")
+    return url
+
+
+def laya_changed(before: dict[str, Any], after: dict[str, Any]) -> bool:
+    """Whether a save changes where questions go (address, path) or the token. Takes stored decision settings."""
+    return any(before.get(k, "") != after.get(k, "") for k in ("laya_url", "laya_path", "laya_key"))
+
+
+def validate(data: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """Checks and cleans new settings. ``current`` is the stored decision settings (``stored()['decision']``)."""
     cfg = _merge(data)
     if not isinstance(cfg["enabled"], bool) or not isinstance(cfg["share_contact_details"], bool):
         raise ValueError("Switches must be on or off")
@@ -104,9 +142,7 @@ def validate(data: dict[str, Any], current_enc_key: str) -> dict[str, Any]:
     if not 0 <= d["min_confidence"] <= 1 or not 100 <= d["laya_timeout_ms"] <= 5000:
         raise ValueError("Confidence is 0–1 and the Laya timeout 100–5000 ms")
     d["prefetch"] = bool(d["prefetch"])
-    d["laya_url"] = _text(d["laya_url"], 300).rstrip("/")
-    if d["laya_url"] and not re.match(r"^https?://[A-Za-z0-9.\-]+(:\d+)?(/[\w./-]*)?$", d["laya_url"]):
-        raise ValueError("Laya address must look like http://laya:8000")
+    d["laya_url"] = _laya_url(d["laya_url"])
     d["laya_path"] = _text(d["laya_path"], 60) or "/predict"
     if not d["laya_path"].startswith("/"):
         raise ValueError("Laya path must start with /")
@@ -114,7 +150,11 @@ def validate(data: dict[str, Any], current_enc_key: str) -> dict[str, Any]:
         raise ValueError("Enter the Laya server address, or choose the built-in rules")
     new_key = _text(d.pop("laya_key", ""), 300)
     d.pop("laya_key_set", None)
-    d["laya_key"] = encrypt_field(new_key) if new_key else ("" if data.get("decision", {}).get("clear_laya_key") else current_enc_key)
+    # The saved token only ever goes to the server it was entered for: a new address or path drops it.
+    moved = (d["laya_url"], d["laya_path"]) != (current.get("laya_url", ""), current.get("laya_path", "/predict"))
+    asked = data.get("decision")
+    drop = moved or (isinstance(asked, dict) and bool(asked.get("clear_laya_key")))
+    d["laya_key"] = encrypt_field(new_key) if new_key else ("" if drop else current.get("laya_key", ""))
     v = cfg["voice"]
     v["languages"] = [lang for lang in (v["languages"] or []) if lang in LANGS][:8] or ["en-IN"]
     if v["default_language"] not in v["languages"]:
@@ -131,10 +171,9 @@ def validate(data: dict[str, Any], current_enc_key: str) -> dict[str, Any]:
     return cfg
 
 
-async def save(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
+async def save(session: AsyncSession, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Stores settings that ``validate`` returned."""
     row = await session.get(PlatformSetting, KEY)
-    current_enc = ((row.value or {}).get("decision") or {}).get("laya_key", "") if row else ""
-    cfg = validate(data, current_enc)
     if row is None:
         session.add(PlatformSetting(key=KEY, value=cfg, updated_at=utcnow()))
     else:

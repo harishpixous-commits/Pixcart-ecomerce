@@ -2,7 +2,8 @@
 memory, settings, and the AI providers (LLM connections and fallback routes).
 
 Who can do what is decided by role permissions: ``assistant`` (chat), ``assistant_files``,
-``assistant_actions``, ``assistant_voice``; ``settings`` for assistant settings; ``ai_providers`` for keys.
+``assistant_actions``, ``assistant_voice``; ``settings`` for assistant settings; ``ai_providers`` for keys,
+including the Laya decision server's address and token (changing those also asks for the password again).
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from app.assistant import settings as asst_settings
 from app.core.deps import SessionDep, audit, rate_limit
 from app.core.errors import ApiError, Forbidden, NotFound
 from app.core.permissions import Perm, permissions_for
+from app.core.step_up import confirm_identity
 from app.db import utcnow
 from app.llm import config as llm_config
 from app.llm import router as llm_router
@@ -61,11 +63,21 @@ async def get_settings(admin: Perm("settings"), session: SessionDep) -> dict:
 
 @router.put("/assistant/settings")
 async def put_settings(body: dict[str, Any], admin: Perm("settings"), session: SessionDep) -> dict:
+    password, code = str(body.pop("password", "") or ""), str(body.pop("totp", "") or "")
+    before = (await asst_settings.stored(session))["decision"]
     try:
-        cfg = await asst_settings.save(session, body)
+        cfg = asst_settings.validate(body, before)
     except ValueError as exc:
         raise ApiError(str(exc), "invalid_assistant_settings") from exc
-    audit(session, admin, "assistant.settings", "settings", "assistant", f"decision={cfg['decision']['provider']} voice={cfg['voice']['enabled']}")
+    laya = asst_settings.laya_changed(before, cfg["decision"])
+    if laya:
+        # Every staff question (and the token) goes to the Laya server: the same bar as connecting an AI provider.
+        if "ai_providers" not in permissions_for(admin):
+            raise Forbidden("Changing the Laya server or its token needs the AI providers permission")
+        await confirm_identity(session, admin, password, code, purpose="assistant-laya")
+    cfg = await asst_settings.save(session, cfg)
+    audit(session, admin, "assistant.settings", "settings", "assistant",
+          f"decision={cfg['decision']['provider']} voice={cfg['voice']['enabled']}" + (" laya_server=changed" if laya else ""))
     await session.commit()
     return await get_settings(admin, session)
 
