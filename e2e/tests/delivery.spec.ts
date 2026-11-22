@@ -242,6 +242,9 @@ test("own delivery partner: request pops up, pickup code, OTP, cash, photo, deli
     const card = seller.locator("section", { hasText: orderNo }).first();
     await expect(card.getByTestId("seller-return-pickup")).toBeVisible();
     await card.getByRole("button", { name: "Mark received and refund" }).click();
+    // the seller records the item's condition (the suggested choice) before confirming
+    const receive = seller.getByRole("dialog");
+    await receive.getByRole("button", { name: "Mark received and refund" }).click();
     await expect(seller.locator("section", { hasText: orderNo })).toHaveCount(0); // moved to Received
   });
 
