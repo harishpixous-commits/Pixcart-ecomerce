@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Loader2, Star, X } from "lucide-react";
 import Link from "next/link";
 import { cloneElement, createContext, forwardRef, isValidElement, useCallback, useContext, useEffect, useId, useState } from "react";
+import { DetailSkeleton, FormSkeleton, ListSkeleton, PageSkeleton, ProductGridSkeleton, TableSkeleton } from "@/components/skeletons";
 import { rupees } from "@/lib/format";
 
 /* ---------------------------------------------------------------- buttons */
@@ -32,12 +33,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   { variant = "primary", size = "md", loading, className, children, disabled, ...rest },
   ref,
 ) {
+  // While busy the button keeps its size: the label stays in place but hidden, under a centred spinner.
   return (
     <button
       ref={ref}
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55",
+        "pc-press relative inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55",
         size === "sm" && "h-8 px-3 text-sm",
         size === "md" && "h-10 px-4 text-[15px]",
         size === "lg" && "h-12 px-6 text-base",
@@ -46,8 +49,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       )}
       {...rest}
     >
-      {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-      {children}
+      {loading ? (
+        <>
+          {/* opacity, not visibility: screen readers still hear the button's name */}
+          <span className="inline-flex items-center justify-center gap-2 opacity-0">{children}</span>
+          <Loader2 className="absolute inset-0 m-auto h-4 w-4 animate-spin" aria-hidden />
+        </>
+      ) : children}
     </button>
   );
 });
@@ -132,12 +140,17 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={clsx("animate-spin text-peacock", className ?? "h-6 w-6")} aria-label="Loading" />;
 }
 
-export function PageLoader() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <Spinner className="h-8 w-8" />
-    </div>
-  );
+/**
+ * While a page loads its data: a skeleton in the shape of the page (after a short delay, so quick loads show
+ * nothing), never a blank screen or a lone spinner. Pick the shape closest to what is coming.
+ */
+export function PageLoader({ variant = "page" }: { variant?: "page" | "list" | "table" | "detail" | "form" | "grid" }) {
+  if (variant === "list") return <ListSkeleton title />;
+  if (variant === "table") return <TableSkeleton />;
+  if (variant === "detail") return <DetailSkeleton />;
+  if (variant === "form") return <FormSkeleton narrow />;
+  if (variant === "grid") return <ProductGridSkeleton />;
+  return <PageSkeleton />;
 }
 
 export function Price({ price, mrp, discount, size = "md" }: { price: number; mrp?: number; discount?: number; size?: "sm" | "md" | "lg" }) {
