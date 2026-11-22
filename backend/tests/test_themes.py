@@ -64,6 +64,24 @@ async def test_theme_change_keeps_other_site_settings(client, admin):
     assert site["tagline"] == "Fresh every day" and site["theme"] == "fresh" and site["theme_settings"] == {"fresh": {"preset": "citrus"}}
 
 
+async def test_layout_changes_per_theme(client, admin):
+    r = await admin.put("/api/admin/storefront/theme", {
+        "theme": "classic",
+        "settings": {"classic": {"layout": {"productGrid": "cards", "gridColumns": "4", "pdp": "gallery", "filters": "", "evil": "x"}}},
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["theme_settings"]["classic"] == {"layout": {"productGrid": "cards", "gridColumns": 4, "pdp": "gallery"}}
+    site = (await client.get("/api/site")).json()
+    assert site["theme_settings"]["classic"]["layout"]["pdp"] == "gallery"
+
+    put = lambda layout: admin.put("/api/admin/storefront/theme", {"theme": "classic", "settings": {"classic": {"layout": layout}}})  # noqa: E731
+    for bad in ({"productGrid": "masonry"}, {"gridColumns": 7}, {"gridColumns": True}, {"cart": "<script>"}):
+        assert (await put(bad)).status_code == 400, bad
+    # an empty layout goes back to the theme's own
+    r = await put({})
+    assert r.status_code == 200 and "classic" not in r.json()["theme_settings"]
+
+
 async def test_a_removed_theme_reads_as_classic(client, admin):
     await admin.put("/api/admin/storefront/site", {"brand_name": "Kadai"})
     async with SessionLocal() as s:

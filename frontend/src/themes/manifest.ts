@@ -11,8 +11,8 @@ import { classic } from "@/themes/classic/theme";
 import { fresh } from "@/themes/fresh/theme";
 import { luxe } from "@/themes/luxe/theme";
 import {
-  DEFAULT_THEME, EDITABLE_COLORS, THEME_IDS, isThemeId,
-  type ActiveTheme, type ColorPreset, type InkColors, type ThemeColors, type ThemeData, type ThemeId,
+  DEFAULT_THEME, EDITABLE_COLORS, LAYOUT_CHOICES, THEME_IDS, isThemeId,
+  type ActiveTheme, type ColorPreset, type InkColors, type LayoutOverrides, type ThemeColors, type ThemeData, type ThemeId, type ThemeLayout,
 } from "@/themes/types";
 
 export const THEMES: Record<ThemeId, ThemeData> = { classic, bazaar, fresh, luxe };
@@ -29,6 +29,8 @@ export interface ThemeSetting {
   preset?: string;
   /** the owner's own changes on top of the preset */
   colors?: Partial<ThemeColors>;
+  /** the owner's changes to the theme's layout */
+  layout?: LayoutOverrides;
 }
 export interface ThemeSiteFields {
   theme?: string;
@@ -41,6 +43,34 @@ export interface ThemePreview {
   theme: ThemeId;
   preset?: string;
   colors?: Partial<ThemeColors>;
+  layout?: LayoutOverrides;
+}
+
+/** Keeps only known layout options with allowed values. */
+export function cleanLayout(raw: unknown): LayoutOverrides {
+  const out: Record<string, unknown> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, allowed] of Object.entries(LAYOUT_CHOICES)) {
+    let v = (raw as Record<string, unknown>)[k];
+    if (k === "gridColumns" && typeof v === "string") v = Number(v);
+    if ((allowed as readonly unknown[]).includes(v)) out[k] = v;
+  }
+  return out as LayoutOverrides;
+}
+
+/** A theme's layout with the owner's changes applied. */
+export function applyLayout(base: ThemeLayout, o: LayoutOverrides | undefined): ThemeLayout {
+  if (!o) return base;
+  return {
+    container: o.container ?? base.container,
+    productGrid: o.productGrid ?? base.productGrid,
+    gridColumns: o.gridColumns ?? base.gridColumns,
+    home: { categories: o.categories ?? base.home.categories, sections: o.sections ?? base.home.sections },
+    listing: { filters: o.filters ?? base.listing.filters },
+    pdp: { layout: o.pdp ?? base.pdp.layout },
+    cart: { summary: o.cart ?? base.cart.summary },
+    auth: { layout: o.auth ?? base.auth.layout },
+  };
 }
 
 export function cleanColors(raw: unknown): Partial<ThemeColors> {
@@ -68,19 +98,24 @@ export function presetColors(data: ThemeData, presetId: string, brand: ThemeColo
   return { ...(findPreset(data, presetId) ?? data.presets[0]).colors };
 }
 
-/** The theme the shop renders: the live one, or a preview; its preset; and the final colours. */
+/**
+ * The theme the shop renders: the live one, or a preview; its preset; the final colours; and its layout with the
+ * owner's changes (the returned data.layout already includes them).
+ */
 export function resolveTheme(site: ThemeSiteFields, preview?: ThemePreview | null): ActiveTheme {
   const live: ThemeId = isThemeId(site.theme) ? site.theme : DEFAULT_THEME;
   const id: ThemeId = preview?.theme ?? live;
-  const data = THEMES[id];
+  const base = THEMES[id];
   const saved = site.theme_settings?.[id] ?? {};
   let presetId = preview?.preset ?? saved.preset ?? defaultPreset(id);
-  if (presetId !== BRAND_PRESET && !findPreset(data, presetId)) presetId = defaultPreset(id);
+  if (presetId !== BRAND_PRESET && !findPreset(base, presetId)) presetId = defaultPreset(id);
   // A previewed preset starts from that preset; the saved preset keeps the owner's colour changes.
   const own = preview?.colors ?? (preview?.preset && preview.preset !== saved.preset ? {} : cleanColors(saved.colors));
-  const colors = { ...presetColors(data, presetId, site.colors), ...cleanColors(own) };
-  const ink: InkColors = { ...data.tokens.ink, ...(findPreset(data, presetId)?.ink ?? {}) };
-  return { data, presetId, colors, ink, preview: Boolean(preview) };
+  const colors = { ...presetColors(base, presetId, site.colors), ...cleanColors(own) };
+  const ink: InkColors = { ...base.tokens.ink, ...(findPreset(base, presetId)?.ink ?? {}) };
+  const layoutOwn = cleanLayout(preview?.layout ?? saved.layout);
+  const data = Object.keys(layoutOwn).length ? { ...base, layout: applyLayout(base.layout, layoutOwn) } : base;
+  return { data, presetId, colors, ink, preview: Boolean(preview), layoutOverrides: layoutOwn };
 }
 
 /** What the shop layout passes to the client (the theme's data is looked up there, not sent with every page). */
@@ -90,38 +125,54 @@ export interface ThemeState {
   colors: ThemeColors;
   ink: InkColors;
   preview: boolean;
+  /** the owner's layout changes (the client applies them to the theme's layout) */
+  layout?: LayoutOverrides;
 }
 
 export function toState(t: ActiveTheme): ThemeState {
-  return { id: t.data.id, presetId: t.presetId, colors: t.colors, ink: t.ink, preview: t.preview };
+  return { id: t.data.id, presetId: t.presetId, colors: t.colors, ink: t.ink, preview: t.preview, layout: t.layoutOverrides };
 }
 
 /* ------------------------------------------------------------------ preview cookie */
 
 export const PREVIEW_COOKIE = "pc_theme_preview";
 
+/** "k:v,k:v" pairs, used for colours and layout options in the preview cookie and the /theme-preview link. */
+export function parsePairs(raw: string | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const pair of (raw ?? "").split(",")) {
+    const [k, v] = pair.split(":");
+    if (k && v) out[k.trim()] = v.trim();
+  }
+  return out;
+}
+
+export function layoutPairs(o: LayoutOverrides | undefined): string {
+  const clean = cleanLayout(o);
+  return Object.entries(clean).map(([k, v]) => `${k}:${v}`).join(",");
+}
+
+/** Cookie value: theme|preset|colours|layout ("primary:0B5563,..." and "productGrid:cards,..."). */
 export function encodePreview(p: ThemePreview): string {
-  const parts = [p.theme, p.preset && PRESET_ID.test(p.preset) ? p.preset : ""];
   const c = cleanColors(p.colors);
   const colors = EDITABLE_COLORS.filter((k) => c[k]).map((k) => `${k}:${c[k]!.slice(1)}`).join(",");
-  if (colors) parts.push(colors);
-  return parts.join("|");
+  return [p.theme, p.preset && PRESET_ID.test(p.preset) ? p.preset : "", colors, layoutPairs(p.layout)].join("|").replace(/\|+$/, "");
 }
 
 export function decodePreview(raw: string | undefined | null): ThemePreview | null {
-  if (!raw || raw.length > 400) return null;
-  const [theme, preset, colors] = raw.split("|");
+  if (!raw || raw.length > 600) return null;
+  const [theme, preset, colors, layout] = raw.split("|");
   if (!isThemeId(theme)) return null;
   const out: ThemePreview = { theme };
   if (preset && PRESET_ID.test(preset)) out.preset = preset;
   if (colors) {
-    const c: Record<string, string> = {};
-    for (const pair of colors.split(",")) {
-      const [k, v] = pair.split(":");
-      if (k && v) c[k] = `#${v}`;
-    }
+    const c = Object.fromEntries(Object.entries(parsePairs(colors)).map(([k, v]) => [k, `#${v}`]));
     const clean = cleanColors(c);
     if (Object.keys(clean).length) out.colors = clean;
+  }
+  if (layout) {
+    const l = cleanLayout(parsePairs(layout));
+    if (Object.keys(l).length) out.layout = l;
   }
   return out;
 }

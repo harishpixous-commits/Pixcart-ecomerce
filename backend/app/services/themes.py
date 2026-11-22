@@ -16,6 +16,18 @@ DEFAULT_THEME = "classic"
 COLOR_KEYS = ("primary", "primary_dark", "accent", "buy", "success", "page")
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 PRESET = re.compile(r"^[a-z0-9_-]{1,24}$")
+# The owner's changes to a theme's layout (same keys and values as LAYOUT_CHOICES in frontend/src/themes/types.ts).
+LAYOUT_CHOICES: dict[str, tuple] = {
+    "container": ("boxed", "wide"),
+    "productGrid": ("hairline", "cards", "airy"),
+    "gridColumns": (4, 5, 6),
+    "categories": ("circles", "cards", "squares", "chips"),
+    "sections": ("panel", "plain"),
+    "filters": ("sidebar", "topbar"),
+    "pdp": ("three", "two", "gallery"),
+    "cart": ("side", "sticky"),
+    "auth": ("card", "split"),
+}
 
 
 def clean_theme(value: Any, *, strict: bool = False) -> str:
@@ -54,6 +66,26 @@ def clean_settings(raw: Any, *, strict: bool = False) -> dict[str, dict]:
                 raise ValueError(f"Colour '{k}' must be a hex value like #0B5563")
         if clean:
             entry["colors"] = clean
+        layout = clean_layout(value.get("layout"), strict=strict)
+        if layout:
+            entry["layout"] = layout
         if entry:
             out[theme_id] = entry
+    return out
+
+
+def clean_layout(raw: Any, *, strict: bool = False) -> dict[str, Any]:
+    """Layout changes for one theme: known options with allowed values only (None or "" means the theme's own)."""
+    out: dict[str, Any] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        if key not in LAYOUT_CHOICES or value in (None, ""):
+            continue
+        if key == "gridColumns" and isinstance(value, str) and value.isdigit():
+            value = int(value)
+        if value in LAYOUT_CHOICES[key] and not isinstance(value, bool):
+            out[key] = value
+        elif strict:
+            raise ValueError(f"Layout option '{key}' must be one of: {', '.join(str(v) for v in LAYOUT_CHOICES[key])}")
     return out

@@ -30,16 +30,20 @@ function PreviewBar() {
   if (framed) return null;
   const preset = t.presetId === BRAND_PRESET ? "brand colours" : findPreset(t.data, t.presetId)?.name ?? "";
   return (
-    <div className="sticky top-0 z-[35] bg-ink text-white" role="status" data-testid="theme-preview-bar">
-      <div className="mx-auto flex max-w-shop flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm sm:px-4">
-        <Eye className="h-4 w-4 shrink-0 text-marigold" aria-hidden />
-        <p className="min-w-0 flex-1">
-          Previewing <b>{t.data.name}</b>{preset ? <> with {preset}</> : null}. Only you see this; shoppers see the live theme.
+    <div className="relative z-[35] bg-ink text-white" role="status" data-testid="theme-preview-bar">
+      <div className="mx-auto flex max-w-shop flex-col gap-1.5 px-3 py-2 text-[13px] sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:text-sm">
+        <p className="flex min-w-0 flex-1 items-center gap-2">
+          <Eye className="h-4 w-4 shrink-0 text-marigold" aria-hidden />
+          <span className="min-w-0">
+            Previewing <b>{t.data.name}</b>{preset ? <> · {preset}</> : null}<span className="hidden md:inline">. Only you see this; shoppers see the live theme.</span>
+          </span>
         </p>
-        <Link href="/admin/storefront?tab=theme" className="rounded-md bg-white/15 px-2.5 py-1 font-semibold hover:bg-white/25">Back to theme settings</Link>
-        <a href={`/theme-preview?theme=off&to=${encodeURIComponent(pathname)}`} className="flex items-center gap-1 rounded-md px-2 py-1 font-semibold hover:bg-white/10" data-testid="theme-preview-exit">
-          <X className="h-4 w-4" /> Exit preview
-        </a>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href="/admin/storefront?tab=theme" className="rounded-md bg-white/15 px-2.5 py-1 font-semibold hover:bg-white/25">Theme settings</Link>
+          <a href={`/theme-preview?theme=off&to=${encodeURIComponent(pathname)}`} className="flex items-center gap-1 rounded-md px-2 py-1 font-semibold hover:bg-white/10" data-testid="theme-preview-exit">
+            <X className="h-4 w-4" /> Exit preview
+          </a>
+        </div>
       </div>
     </div>
   );

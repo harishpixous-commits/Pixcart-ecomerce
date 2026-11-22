@@ -66,8 +66,8 @@ export interface ThemeLayout {
   /** product tiles per row on large screens in full-width grids */
   gridColumns: 4 | 5 | 6;
   home: {
-    /** category blocks: round icons, raised cards, dense tinted tiles, or text chips */
-    categories: "circles" | "cards" | "tiles" | "chips";
+    /** category blocks: round icons, raised cards, dense tinted squares, or text chips (a home section can override it) */
+    categories: "circles" | "cards" | "squares" | "chips";
     /** home sections on white panels, or straight on the page */
     sections: "panel" | "plain";
   };
@@ -80,6 +80,35 @@ export interface ThemeLayout {
   /** sign-in and sign-up: a centred card, or split with a brand panel */
   auth: { layout: "card" | "split" };
 }
+
+/**
+ * The owner's changes to a theme's layout (Admin → Storefront → Theme and layout → Layout), as flat keys.
+ * Anything left out keeps the theme's own choice.
+ */
+export interface LayoutOverrides {
+  container?: ThemeLayout["container"];
+  productGrid?: ThemeLayout["productGrid"];
+  gridColumns?: ThemeLayout["gridColumns"];
+  categories?: ThemeLayout["home"]["categories"];
+  sections?: ThemeLayout["home"]["sections"];
+  filters?: ThemeLayout["listing"]["filters"];
+  pdp?: ThemeLayout["pdp"]["layout"];
+  cart?: ThemeLayout["cart"]["summary"];
+  auth?: ThemeLayout["auth"]["layout"];
+}
+
+/** Every layout option and its allowed values (also validated in backend/app/services/themes.py). */
+export const LAYOUT_CHOICES = {
+  container: ["boxed", "wide"],
+  productGrid: ["hairline", "cards", "airy"],
+  gridColumns: [4, 5, 6],
+  categories: ["circles", "cards", "squares", "chips"],
+  sections: ["panel", "plain"],
+  filters: ["sidebar", "topbar"],
+  pdp: ["three", "two", "gallery"],
+  cart: ["side", "sticky"],
+  auth: ["card", "split"],
+} as const satisfies { [K in keyof LayoutOverrides]-?: readonly NonNullable<LayoutOverrides[K]>[] };
 
 export interface ThemeData {
   id: ThemeId;
@@ -122,4 +151,6 @@ export interface ActiveTheme {
   ink: InkColors;
   /** true while an admin previews a theme that is not live */
   preview: boolean;
+  /** the owner's layout changes (already applied to data.layout) */
+  layoutOverrides?: LayoutOverrides;
 }

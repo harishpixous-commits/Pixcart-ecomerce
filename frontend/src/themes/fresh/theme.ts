@@ -20,7 +20,7 @@ export const fresh: ThemeData = {
     container: "wide",
     productGrid: "cards",
     gridColumns: 6,
-    home: { categories: "tiles", sections: "plain" },
+    home: { categories: "squares", sections: "plain" },
     listing: { filters: "topbar" },
     pdp: { layout: "two" },
     cart: { summary: "sticky" },
