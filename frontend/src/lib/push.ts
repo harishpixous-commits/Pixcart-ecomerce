@@ -123,7 +123,7 @@ export async function enablePush(app: PushApp, ask = true): Promise<PushResult> 
     if (perm !== "granted") return perm === "denied" ? "denied" : "later";
     const reg = await navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
     await navigator.serviceWorker.ready;
-    const [{ getApps, initializeApp }, { getMessaging, getToken, isSupported }] = await Promise.all([import("firebase/app"), import("firebase/messaging")]);
+    const [{ getApps, initializeApp }, { getMessaging, getToken, isSupported }] = await Promise.all([import("@firebase/app"), import("@firebase/messaging")]);
     if (!(await isSupported())) return "unsupported";
     const fb = getApps().find((a) => a.name === "pixcart")
       ?? initializeApp({ apiKey: cfg.apiKey, projectId: cfg.projectId, messagingSenderId: cfg.messagingSenderId, appId: cfg.appId }, "pixcart");
