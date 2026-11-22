@@ -33,26 +33,35 @@ const COLS: Record<ThemeLayout["gridColumns"], string> = {
 };
 const DENSE = "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5";
 
+// Hairline: cells draw their right and bottom lines and the frame (GridFrame) clips the outer ones, so a short last
+// row leaves white space, not a grey block.
 const GRID: Record<ThemeLayout["productGrid"], string> = {
-  hairline: "gap-px overflow-hidden rounded-xl bg-line",
+  hairline: "-mb-px -mr-px [&>*]:border-b [&>*]:border-r [&>*]:border-line",
   cards: "gap-2.5 sm:gap-4",
   airy: "gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10",
 };
 
-/** The grid classes for product lists in the active theme (search results use them too). */
+/** The grid classes for product lists in the active theme (wrap the grid in GridFrame). */
 export function useGridClass(dense?: boolean): string {
   const layout = useLayout();
   return clsx("grid", GRID[layout.productGrid], dense ? DENSE : COLS[layout.gridColumns]);
 }
 
-export function ProductGrid({ items, dense, showAdd, ranked }: { items: Card[]; dense?: boolean; showAdd?: boolean; ranked?: boolean }) {
+/** A product grid in the active theme: a framed hairline grid, raised cards or airy tiles. */
+export function GridFrame({ dense, className, children, ...rest }: { dense?: boolean; className?: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  const layout = useLayout();
   const cls = useGridClass(dense);
+  const grid = <div className={clsx(cls, className)} {...rest}>{children}</div>;
+  return layout.productGrid === "hairline" ? <div className="overflow-hidden rounded-xl bg-white ring-1 ring-line">{grid}</div> : grid;
+}
+
+export function ProductGrid({ items, dense, showAdd, ranked }: { items: Card[]; dense?: boolean; showAdd?: boolean; ranked?: boolean }) {
   return (
-    <div className={cls}>
+    <GridFrame dense={dense}>
       {items.map((p, i) => (
         <ProductTile key={`${p.id}-${i}`} p={p} showAdd={showAdd} rank={ranked ? i + 1 : undefined} />
       ))}
-    </div>
+    </GridFrame>
   );
 }
 
