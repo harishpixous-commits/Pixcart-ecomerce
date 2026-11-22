@@ -78,6 +78,27 @@
   .skeleton { animation: none; background: rgb(var(--c-line) / 0.75); }
 }
 
+/* Loaders (components/skeletons.tsx) stay invisible for a moment, so quick loads never flash one, then fade in.
+   Pure CSS, so a server-rendered loader waits too before the page's scripts run. Under reduced motion it simply
+   appears after the same wait (the global rule below shortens the fade). */
+.pc-delayed { animation: pc-delayed-in 220ms ease-out 180ms both; }
+@keyframes pc-delayed-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* A loader shown outside a page frame (while a sign-in is checked, or on a page without a frame) keeps page margins. */
+.pc-bare:not(main *) { width: 100%; max-width: 1280px; margin-inline: auto; padding: 1rem 0.75rem 2rem; }
+@media (min-width: 640px) {
+  .pc-bare:not(main *) { padding: 1.5rem 1rem 2.5rem; }
+}
+/* An inline loader below the page's own heading leaves out its placeholder title. */
+.pc-delayed[data-titled] .pc-sk-title { display: none; }
+
+/* A button busy with its action keeps its size: the label turns invisible under a centred spinner. */
+.pc-busy { position: relative; color: transparent !important; }
+.pc-busy > :not(.pc-busy-spin) { opacity: 0; }
+.pc-busy-spin { position: absolute; inset: 0; margin: auto; }
+
 /* Shop sections: a white panel, or straight on the page (theme layout "sections"). */
 .shop-panel { background: #fff; border-radius: var(--r-xl); box-shadow: var(--shadow-panel); }
 [data-sections="plain"] .shop-panel { background: transparent; border-radius: 0; box-shadow: none; }

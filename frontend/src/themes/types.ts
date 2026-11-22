@@ -59,7 +59,7 @@ export interface ThemeTokens {
 }
 
 export interface ThemeLayout {
-  /** shop page width: 1280 px boxed or 1440 px wide */
+  /** shop page width: a centred 1280 px column ("boxed") or the full screen with a thin margin, up to 1880 px ("wide") */
   container: "boxed" | "wide";
   /** product grids and rails: hairline grid, raised cards, or airy borderless */
   productGrid: "hairline" | "cards" | "airy";

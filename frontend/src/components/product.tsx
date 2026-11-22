@@ -24,11 +24,14 @@ export function ProductTile(props: ProductTileProps) {
   return <Tile {...props} />;
 }
 
+// One more column on very wide screens (2xl, 1536 px and up) so tiles keep a sensible size when the page fills
+// the screen.
 const COLS: Record<ThemeLayout["gridColumns"], string> = {
-  4: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
-  5: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5",
-  6: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6",
+  4: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5",
+  5: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-6",
+  6: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7",
 };
+const DENSE = "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5";
 
 const GRID: Record<ThemeLayout["productGrid"], string> = {
   hairline: "gap-px overflow-hidden rounded-xl bg-line",
@@ -39,7 +42,7 @@ const GRID: Record<ThemeLayout["productGrid"], string> = {
 /** The grid classes for product lists in the active theme (search results use them too). */
 export function useGridClass(dense?: boolean): string {
   const layout = useLayout();
-  return clsx("grid", GRID[layout.productGrid], dense ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" : COLS[layout.gridColumns]);
+  return clsx("grid", GRID[layout.productGrid], dense ? DENSE : COLS[layout.gridColumns]);
 }
 
 export function ProductGrid({ items, dense, showAdd, ranked }: { items: Card[]; dense?: boolean; showAdd?: boolean; ranked?: boolean }) {
@@ -55,25 +58,26 @@ export function ProductGrid({ items, dense, showAdd, ranked }: { items: Card[]; 
 
 const RAIL_ITEM: Record<ThemeLayout["productGrid"], Record<ThemeLayout["gridColumns"], string>> = {
   hairline: {
-    4: "w-[46%] border-r border-line last:border-r-0 sm:w-[30%] lg:w-[25%]",
-    5: "w-[46%] border-r border-line last:border-r-0 sm:w-[30%] lg:w-[16.66%]",
-    6: "w-[46%] border-r border-line last:border-r-0 sm:w-[30%] lg:w-[16.66%]",
+    4: "w-[46%] border-r border-line last:border-r-0 sm:w-[30%] lg:w-[25%] 2xl:w-[20%]",
+    5: "w-[46%] border-r border-line last:border-r-0 sm:w-[30%] lg:w-[16.66%] 2xl:w-[14.28%]",
+    6: "w-[46%] border-r border-line last:border-r-0 sm:w-[30%] lg:w-[16.66%] 2xl:w-[12.5%]",
   },
   cards: {
-    4: "w-[44%] sm:w-[30%] lg:w-[23.6%]",
-    5: "w-[44%] sm:w-[30%] lg:w-[18.7%]",
-    6: "w-[40%] sm:w-[28%] md:w-[23%] lg:w-[15.6%]",
+    4: "w-[44%] sm:w-[30%] lg:w-[23.6%] 2xl:w-[18.7%]",
+    5: "w-[44%] sm:w-[30%] lg:w-[18.7%] 2xl:w-[15.6%]",
+    6: "w-[40%] sm:w-[28%] md:w-[23%] lg:w-[15.6%] 2xl:w-[13.3%]",
   },
   airy: {
-    4: "w-[47%] sm:w-[31%] lg:w-[23.2%]",
-    5: "w-[47%] sm:w-[31%] lg:w-[18.4%]",
-    6: "w-[47%] sm:w-[31%] lg:w-[15.2%]",
+    4: "w-[47%] sm:w-[31%] lg:w-[23.2%] 2xl:w-[18.4%]",
+    5: "w-[47%] sm:w-[31%] lg:w-[18.4%] 2xl:w-[15.2%]",
+    6: "w-[47%] sm:w-[31%] lg:w-[15.2%] 2xl:w-[13%]",
   },
 };
 
 const RAIL_TRACK: Record<ThemeLayout["productGrid"], string> = {
   hairline: "",
-  cards: "gap-2.5 px-3 pb-3 pt-1 sm:gap-4 sm:px-4 sm:pb-4",
+  // scroll padding matches the side padding, so snapping never shifts the first card (and shows a stray arrow)
+  cards: "gap-2.5 px-3 pb-3 pt-1 scroll-px-3 sm:gap-4 sm:px-4 sm:pb-4 sm:scroll-px-4",
   airy: "gap-4 pb-2 sm:gap-6",
 };
 

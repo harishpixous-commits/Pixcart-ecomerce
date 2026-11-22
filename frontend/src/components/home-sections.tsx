@@ -1,5 +1,11 @@
 "use client";
 
+/*
+ * The home page, built from the sections in Admin → Storefront → Home page, in the active theme's layout:
+ * sections on white panels or straight on the page (theme "sections"), the category block as circles, cards, dense
+ * squares or text chips (theme "categories", or the section's own choice), banners and blocks with images or videos.
+ */
+
 import clsx from "clsx";
 import { BadgeCheck, Check, Gift, Headphones, RotateCcw, ShieldCheck, Truck, Wallet } from "lucide-react";
 import Link from "next/link";
@@ -7,38 +13,17 @@ import { CategoryIcon } from "@/components/category-icon";
 import {
   BuyAgainRail, CardRow, CountdownBanner, DealsRail, HeroCarousel, InspiredRail, SigninPrompt, SponsoredHomeRail, useViewed,
 } from "@/components/home-blocks";
+import { MediaBanner, MediaBlock, type BannerCfg, type MediaCfg } from "@/components/home-media";
 import { Markdown } from "@/components/markdown";
 import { ProductGrid, ProductRail } from "@/components/product";
 import { rupees } from "@/lib/format";
-import type { HomeSectionData } from "@/lib/types";
+import type { CategoryNode, HomeSectionData } from "@/lib/types";
 import { useSite } from "@/lib/site";
 import { fillTokens } from "@/lib/tokens";
+import { useLayout } from "@/themes/context";
+import type { ThemeLayout } from "@/themes/types";
 
 const USP_ICONS = { badge: BadgeCheck, wallet: Wallet, truck: Truck, return: RotateCcw, shield: ShieldCheck, gift: Gift, support: Headphones, check: Check };
-
-function Banner({ image, link, heading, text, cta, compact }: { image: string; link: string; heading?: string; text?: string; cta?: string; compact?: boolean }) {
-  const t = useT();
-  if (!image) return null;
-  const body = (
-    <div className="relative h-full w-full">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={image} alt={heading ? "" : "Banner"} className="h-full w-full rounded-xl object-cover" />
-      {(heading || text || cta) && (
-        <div className={clsx("absolute inset-0 flex flex-col justify-center gap-1 rounded-xl bg-gradient-to-r from-ink/60 to-transparent text-white", compact ? "p-4" : "p-6 sm:p-10")}>
-          {heading && <p className={clsx("max-w-md font-display font-bold", compact ? "text-xl" : "text-2xl sm:text-4xl")}>{t(heading)}</p>}
-          {text && <p className={clsx("max-w-md text-white/90", compact ? "text-sm" : "sm:text-lg")}>{t(text)}</p>}
-          {cta && <span className="mt-1 self-start rounded-lg bg-marigold px-3 py-1.5 text-sm font-semibold text-ink">{t(cta)}</span>}
-        </div>
-      )}
-    </div>
-  );
-  if (!link) return <div className="overflow-hidden rounded-xl">{body}</div>;
-  return link.startsWith("https://") ? (
-    <a href={link} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl">{body}</a>
-  ) : (
-    <Link href={link} className="block overflow-hidden rounded-xl">{body}</Link>
-  );
-}
 
 /** Storefront text with {brand} and {free_delivery_amount} filled in. */
 function useT() {
@@ -46,23 +31,100 @@ function useT() {
   return (x: string) => fillTokens(x, site);
 }
 
-function Recent({ title }: { title: string }) {
+/** A section heading: larger when sections sit straight on the page. */
+function SectionTitle({ children, plain, className }: { children: React.ReactNode; plain: boolean; className?: string }) {
+  return <h2 className={clsx("font-semibold", plain ? "text-2xl" : "text-xl", className)}>{children}</h2>;
+}
+
+function Recent({ title, plain }: { title: string; plain: boolean }) {
   const items = useViewed();
   if (items.length < 2) return null;
   return (
-    <section className="rounded-xl bg-white p-4">
-      <h2 className="mb-3 text-xl font-semibold">{title || "Recently viewed"}</h2>
+    <section className={clsx("shop-panel", !plain && "p-4")}>
+      <SectionTitle plain={plain} className="mb-3">{title || "Recently viewed"}</SectionTitle>
       <div className="scroll-x flex gap-3 overflow-x-auto">
         {items.map((p) => (
-          <Link key={p.id} href={`/p/${p.slug}`} className="w-32 shrink-0">
+          <Link key={p.id} href={`/p/${p.slug}`} className="group w-32 shrink-0 sm:w-36">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.image} alt={p.title} className="mb-1 aspect-square w-full rounded-lg bg-mist object-contain" />
-            <p className="line-clamp-2 text-sm">{p.title}</p>
+            <img src={p.image} alt={p.title} className="mb-1 aspect-square w-full rounded-lg bg-white object-contain ring-1 ring-line" />
+            <p className="line-clamp-2 text-sm group-hover:text-peacock">{p.title}</p>
             <p className="font-display font-bold">{rupees(p.price)}</p>
           </Link>
         ))}
       </div>
     </section>
+  );
+}
+
+/* ---------------------------------------------------------------- categories in four styles */
+
+type CatStyle = ThemeLayout["home"]["categories"];
+
+/** The section's own style wins; "auto" (and the old "tiles") means the theme's. */
+export function categoryStyle(sectionStyle: unknown, themeStyle: CatStyle): CatStyle {
+  return sectionStyle === "circles" || sectionStyle === "cards" || sectionStyle === "squares" || sectionStyle === "chips" ? sectionStyle : themeStyle;
+}
+
+function CatPicture({ cat, className, iconClass }: { cat: CategoryNode; className?: string; iconClass?: string }) {
+  return (
+    <span className={clsx("flex items-center justify-center overflow-hidden", className)}>
+      {cat.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={cat.image_url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <CategoryIcon slug={cat.slug} className={iconClass} />
+      )}
+    </span>
+  );
+}
+
+function Categories({ cats, style }: { cats: CategoryNode[]; style: CatStyle }) {
+  if (style === "chips") {
+    return (
+      <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+        {cats.map((cat) => (
+          <Link key={cat.slug} href={`/c/${cat.slug}`}
+            className="pc-press rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-ink hover:bg-mist">
+            {cat.name}
+          </Link>
+        ))}
+      </div>
+    );
+  }
+  if (style === "cards") {
+    return (
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 sm:gap-4 md:grid-cols-6 lg:grid-cols-8">
+        {cats.map((cat) => (
+          <Link key={cat.slug} href={`/c/${cat.slug}`} className="pc-lift group flex flex-col items-center gap-2 rounded-xl bg-white p-2.5 text-center shadow-card sm:p-3">
+            <CatPicture cat={cat} className="aspect-square w-full rounded-lg bg-peacock-light text-peacock transition-transform duration-300 motion-safe:group-hover:scale-[1.03]" iconClass="h-9 w-9" />
+            <span className="line-clamp-2 text-[13px] font-semibold leading-tight text-ink group-hover:text-peacock">{cat.name}</span>
+          </Link>
+        ))}
+      </div>
+    );
+  }
+  if (style === "squares") {
+    return (
+      <div className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+        {cats.map((cat) => (
+          <Link key={cat.slug} href={`/c/${cat.slug}`} className="group flex flex-col items-center gap-1.5 text-center">
+            <CatPicture cat={cat} className="pc-press aspect-square w-full rounded-2xl bg-peacock-light text-peacock ring-1 ring-peacock/10 transition-colors group-hover:bg-peacock/15" iconClass="h-8 w-8" />
+            <span className="line-clamp-2 text-[12px] font-semibold leading-tight text-ink">{cat.name}</span>
+          </Link>
+        ))}
+      </div>
+    );
+  }
+  // circles: the original look
+  return (
+    <div className="scroll-x flex gap-1 overflow-x-auto sm:grid sm:grid-cols-8 sm:overflow-visible">
+      {cats.map((cat) => (
+        <Link key={cat.slug} href={`/c/${cat.slug}`} className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded-lg px-1 py-2 text-center hover:bg-mist sm:w-auto">
+          <CatPicture cat={cat} className="h-14 w-14 rounded-full bg-peacock-light text-peacock" iconClass="h-7 w-7" />
+          <span className="text-[13px] font-medium leading-tight text-ink">{cat.name}</span>
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -72,52 +134,38 @@ const SOURCE_LINK: Record<string, string> = {
 
 export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
   const t = useT();
+  const layout = useLayout();
+  const plain = layout.home.sections === "plain";
   // Amazon-style: the block after a "fade" banner rides up over its lower edge (computers only).
   const lifted = new Set(sections.filter((s, i) => i > 0 && s.kind !== "hero" && sections[i - 1].kind === "hero" && sections[i - 1].config.style === "fade").map((s) => s.id));
   return (
-    <div className="flex flex-col gap-4">
+    <div className={clsx("flex flex-col", plain ? "gap-8 sm:gap-10" : "gap-4")}>
       {sections.map((s) => {
         const vis = s.device === "mobile" ? "sm:hidden" : s.device === "desktop" ? "hidden sm:block" : "";
         let body: React.ReactNode = null;
         const c = s.config;
-        switch (s.kind) {
+        switch (s.kind as HomeSectionData["kind"] | "media") {
           case "hero":
             body = <HeroCarousel slides={c.slides ?? []} autoplay={c.autoplay !== false} interval={c.interval ?? 5} style={c.style === "fade" ? "fade" : "boxed"} />;
             break;
-          case "categories":
-            body = (
-              <section aria-label={s.title || "Categories"} className="rounded-xl bg-white px-2 py-3">
-                {s.title && <h2 className="mb-2 px-2 text-xl font-semibold">{s.title}</h2>}
-                <div className={clsx("scroll-x flex gap-1 overflow-x-auto", c.style !== "chips" && "sm:grid sm:grid-cols-8 sm:overflow-visible")}>
-                  {(s.categories ?? []).map((cat) =>
-                    c.style === "chips" ? (
-                      <Link key={cat.slug} href={`/c/${cat.slug}`} className="shrink-0 rounded-full bg-mist px-4 py-2 text-sm font-medium hover:bg-peacock-light">{cat.name}</Link>
-                    ) : (
-                      <Link key={cat.slug} href={`/c/${cat.slug}`} className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded-lg px-1 py-2 text-center hover:bg-mist sm:w-auto">
-                        <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-peacock-light text-peacock">
-                          {cat.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={cat.image_url} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <CategoryIcon slug={cat.slug} className="h-7 w-7" />
-                          )}
-                        </span>
-                        <span className="text-[13px] font-medium leading-tight text-ink">{cat.name}</span>
-                      </Link>
-                    ),
-                  )}
-                </div>
+          case "categories": {
+            const style = categoryStyle(c.style, layout.home.categories);
+            body = (s.categories ?? []).length ? (
+              <section aria-label={s.title || "Categories"} className={clsx("shop-panel", !plain && (style === "circles" ? "px-2 py-3" : "p-4"))}>
+                {s.title && <SectionTitle plain={plain} className={clsx("mb-3", style === "circles" && !plain && "px-2", style === "chips" && "text-center")}>{s.title}</SectionTitle>}
+                <Categories cats={s.categories ?? []} style={style} />
               </section>
-            );
+            ) : null;
             break;
+          }
           case "products": {
             const href = c.see_all || (c.source === "category" ? `/c/${c.category_slug}` : SOURCE_LINK[c.source]);
             if (c.layout === "grid") {
               body = (
                 <section className="flex flex-col gap-3">
                   {s.title && (
-                    <div className="flex items-baseline justify-between px-1">
-                      <h2 className="text-xl font-semibold">{s.title}</h2>
+                    <div className={clsx("flex items-baseline justify-between", !plain && "px-1")}>
+                      <SectionTitle plain={plain}>{s.title}</SectionTitle>
                       {href && <Link href={href} className="text-sm font-semibold text-peacock hover:underline">See all</Link>}
                     </div>
                   )}
@@ -130,18 +178,21 @@ export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
             break;
           }
           case "banner":
-            body = <Banner image={c.image} link={c.link} heading={c.heading} text={c.text} cta={c.cta} />;
+            body = <MediaBanner {...(c as BannerCfg)} />;
             break;
           case "banner_grid":
             body = (
               <section className={clsx("grid gap-3", (c.items?.length ?? 0) >= 3 ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2")}>
-                {(c.items ?? []).map((b: { image: string; link: string; heading: string; text: string; cta: string }, n: number) => <Banner key={n} {...b} compact />)}
+                {(c.items ?? []).map((b: BannerCfg, n: number) => <MediaBanner key={n} {...b} compact />)}
               </section>
             );
             break;
+          case "media":
+            body = <MediaBlock cfg={c as MediaCfg} title={s.title} />;
+            break;
           case "text":
             body = (
-              <section className={clsx("rounded-xl bg-white p-6", c.align === "center" && "text-center")}>
+              <section className={clsx("shop-panel", !plain && "p-6", c.align === "center" && "text-center")}>
                 {s.title && <h2 className="mb-2 text-2xl font-semibold">{s.title}</h2>}
                 <Markdown source={t(c.markdown ?? "")} />
               </section>
@@ -149,7 +200,7 @@ export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
             break;
           case "usp":
             body = (
-              <ul className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line text-sm sm:grid-cols-4">
+              <ul className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line text-sm ring-1 ring-line sm:grid-cols-4">
                 {(c.items ?? []).map((it: { icon: keyof typeof USP_ICONS; text: string }) => {
                   const Icon = USP_ICONS[it.icon] ?? Check;
                   return (
@@ -163,7 +214,7 @@ export function HomeSections({ sections }: { sections: HomeSectionData[] }) {
             );
             break;
           case "recent":
-            body = <Recent title={s.title} />;
+            body = <Recent title={s.title} plain={plain} />;
             break;
           case "cards":
             body = <CardRow cards={c.cards ?? []} />;

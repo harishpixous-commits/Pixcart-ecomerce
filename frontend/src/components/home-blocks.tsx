@@ -10,6 +10,7 @@ import clsx from "clsx";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { MediaFill } from "@/components/media";
 import { DealCountdown, ProductRail } from "@/components/product";
 import { api } from "@/lib/api";
 import { rupees } from "@/lib/format";
@@ -47,7 +48,7 @@ function useProducts(url: string | null): ProductCard[] | null {
 
 /* ---------------------------------------------------------------- hero carousel */
 
-export type Slide = { image: string; image_mobile?: string; link: string; heading: string; text: string; cta: string; offer?: string; note?: string; theme?: "light" | "dark"; align?: "left" | "center" };
+export type Slide = { image: string; image_mobile?: string; video?: string; link: string; heading: string; text: string; cta: string; offer?: string; note?: string; theme?: "light" | "dark"; align?: "left" | "center" };
 
 export function HeroCarousel({ slides, autoplay, interval = 5, style = "boxed" }: { slides: Slide[]; autoplay: boolean; interval?: number; style?: "boxed" | "fade" }) {
   const t = useT();
@@ -61,6 +62,7 @@ export function HeroCarousel({ slides, autoplay, interval = 5, style = "boxed" }
     () => false,
   );
   const playing = autoplay && !stopped && !hover && !reduced && slides.length > 1;
+  const hasVideo = slides.some((x) => x.video);
   useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => setI((x) => (x + 1) % slides.length), Math.max(3, interval) * 1000);
@@ -72,16 +74,21 @@ export function HeroCarousel({ slides, autoplay, interval = 5, style = "boxed" }
   const dark = s.theme === "dark";
   const fade = style === "fade";
   const content = (
-    <div className={clsx("relative w-full", fade ? "aspect-[16/9] sm:aspect-[16/6]" : "aspect-[16/8] sm:aspect-[16/5]")}>
-      {s.image && (
+    // On wide screens the banner keeps a fixed height instead of its shape, so it never fills the whole screen.
+    // Phones get a taller shape so the heading, text and buttons always fit.
+    <div className={clsx("relative w-full", fade ? "aspect-[4/3] sm:aspect-[16/6] xl:aspect-auto xl:h-[560px]" : "aspect-[16/11] sm:aspect-[16/5] xl:aspect-auto xl:h-[440px]")}>
+      {s.video ? (
+        // a video plays in place of the picture (the picture is its poster); the pause button below stops it
+        <MediaFill image={s.image} video={s.video} alt={s.heading ? "" : "Offer"} eager={i === 0} playing={!stopped} className="absolute inset-0" />
+      ) : s.image && (
         <picture>
           {s.image_mobile && <source media="(max-width: 640px)" srcSet={s.image_mobile} />}
           <img src={s.image} alt={s.heading ? "" : "Offer"} className="absolute inset-0 h-full w-full object-cover" />
         </picture>
       )}
       {(s.heading || s.text) && (
-        <div className={clsx("absolute inset-0 flex flex-col justify-center gap-2 p-6 sm:p-12", s.align === "center" ? "items-center text-center" : "items-start",
-          dark ? "text-ink" : "bg-gradient-to-r from-ink/60 via-ink/20 to-transparent text-white", fade && "pb-16 sm:pb-40")}>
+        <div className={clsx("absolute inset-0 flex flex-col justify-center gap-2 px-5 py-6 sm:px-16 sm:py-12 lg:px-20", s.align === "center" ? "items-center text-center" : "items-start",
+          dark ? "text-ink" : "bg-gradient-to-r from-ink/60 via-ink/20 to-transparent text-white", fade && "pb-8 sm:pb-40")}>
           {s.heading && <p className="max-w-xl font-display text-2xl font-bold leading-tight sm:text-5xl">{t(s.heading)}</p>}
           {s.text && <p className={clsx("max-w-md sm:text-lg", dark ? "text-ink-soft" : "text-white/90")}>{t(s.text)}</p>}
           {s.cta && <span className="mt-2 rounded-lg bg-marigold px-4 py-2 text-sm font-semibold text-ink shadow sm:text-base">{t(s.cta)}</span>}
@@ -111,25 +118,29 @@ export function HeroCarousel({ slides, autoplay, interval = 5, style = "boxed" }
       {slides.length > 1 && (
         <>
           <button type="button" onClick={() => go(-1)} aria-label="Previous slide"
-            className={clsx("absolute left-2 hidden h-12 w-10 items-center justify-center rounded-lg bg-white/80 text-ink hover:bg-white sm:flex", fade ? "top-[30%]" : "top-1/2 -translate-y-1/2")}>
+            className={clsx("pc-press absolute left-2 hidden h-12 w-10 items-center justify-center rounded-lg bg-white/80 text-ink hover:bg-white sm:flex", fade ? "top-[30%]" : "top-1/2 -translate-y-1/2")}>
             <ChevronLeft className="h-6 w-6" />
           </button>
           <button type="button" onClick={() => go(1)} aria-label="Next slide"
-            className={clsx("absolute right-2 hidden h-12 w-10 items-center justify-center rounded-lg bg-white/80 text-ink hover:bg-white sm:flex", fade ? "top-[30%]" : "top-1/2 -translate-y-1/2")}>
+            className={clsx("pc-press absolute right-2 hidden h-12 w-10 items-center justify-center rounded-lg bg-white/80 text-ink hover:bg-white sm:flex", fade ? "top-[30%]" : "top-1/2 -translate-y-1/2")}>
             <ChevronRight className="h-6 w-6" />
           </button>
-          <div className={clsx("absolute right-3 flex items-center gap-1.5", fade ? "top-3" : "bottom-2")}>
-            {autoplay && (
-              <button type="button" onClick={() => setStopped((x) => !x)} aria-label={stopped ? "Play slides" : "Pause slides"} className="mr-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink/60 text-white hover:bg-ink">
-                {stopped ? <Play className="h-3 w-3 fill-white" /> : <Pause className="h-3 w-3 fill-white" />}
-              </button>
-            )}
-            {slides.map((_, n) => (
-              <button key={n} type="button" onClick={() => setI(n)} aria-label={`Slide ${n + 1}`} aria-current={n === i}
-                className={clsx("h-2 rounded-full transition-all", n === i ? "w-6 bg-white" : "w-2 bg-white/60")} />
-            ))}
-          </div>
         </>
+      )}
+      {(slides.length > 1 || hasVideo) && (
+        <div className={clsx("absolute right-3 flex items-center gap-1.5", fade ? "top-3" : "bottom-2")}>
+          {((autoplay && slides.length > 1) || hasVideo) && (
+            <button type="button" onClick={() => setStopped((x) => !x)} aria-pressed={stopped}
+              aria-label={hasVideo ? (stopped ? "Play" : "Pause") : stopped ? "Play slides" : "Pause slides"}
+              className="mr-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink/60 text-white hover:bg-ink">
+              {stopped ? <Play className="h-3 w-3 fill-white" /> : <Pause className="h-3 w-3 fill-white" />}
+            </button>
+          )}
+          {slides.length > 1 && slides.map((_, n) => (
+            <button key={n} type="button" onClick={() => setI(n)} aria-label={`Slide ${n + 1}`} aria-current={n === i}
+              className={clsx("h-2 rounded-full transition-all", n === i ? "w-6 bg-white" : "w-2 bg-white/60")} />
+          ))}
+        </div>
       )}
     </section>
   );
@@ -137,8 +148,25 @@ export function HeroCarousel({ slides, autoplay, interval = 5, style = "boxed" }
 
 /* ---------------------------------------------------------------- card row ("quad cards") */
 
-type Tile = { image: string; label: string; link: string; badge: string };
+type Tile = { image: string; video?: string; label: string; link: string; badge: string };
 type CardCfg = { title: string; link: string; link_text: string; mode: "tiles" | "products" | "recent" | "buy_again"; tiles?: Tile[]; products?: ProductCard[] };
+
+/**
+ * A tile's picture, or its video: small tiles play their video only while pointed at or focused (shoppers never have
+ * to stop several moving tiles), and show the picture otherwise.
+ */
+function TileMedia({ x, alt, className }: { x: Tile; alt: string; className: string }) {
+  const [active, setActive] = useState(false);
+  if (x.video) {
+    return (
+      <span className="contents" onMouseEnter={() => setActive(true)} onMouseLeave={() => setActive(false)} onFocus={() => setActive(true)} onBlur={() => setActive(false)}>
+        <MediaFill image={x.image} video={x.video} alt={alt} playing={active} className={className} />
+      </span>
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return x.image ? <img src={x.image} alt={alt} className={className} /> : null;
+}
 
 function TileGrid({ tiles }: { tiles: Tile[] }) {
   const t = useT();
@@ -146,8 +174,7 @@ function TileGrid({ tiles }: { tiles: Tile[] }) {
     const x = tiles[0];
     return (
       <Link href={x.link || "#"} className="group relative block flex-1 overflow-hidden rounded-lg bg-mist">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {x.image && <img src={x.image} alt={x.label} className="aspect-square h-full w-full object-cover transition group-hover:scale-[1.02]" />}
+        <TileMedia x={x} alt={x.label} className="aspect-square h-full w-full object-cover transition motion-safe:group-hover:scale-[1.02]" />
         {x.badge && <span className="absolute bottom-2 left-2 rounded-full bg-marigold px-2.5 py-1 text-xs font-bold text-ink shadow">{t(x.badge)}</span>}
         {x.label && <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/70 to-transparent p-2 pt-6 text-sm font-semibold text-white">{t(x.label)}</span>}
       </Link>
@@ -158,8 +185,7 @@ function TileGrid({ tiles }: { tiles: Tile[] }) {
       {tiles.map((x, n) => (
         <Link key={n} href={x.link || "#"} className="group flex flex-col gap-1">
           <span className="relative block aspect-square overflow-hidden rounded-lg bg-mist">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {x.image && <img src={x.image} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" />}
+            <TileMedia x={x} alt="" className="h-full w-full object-cover transition motion-safe:group-hover:scale-[1.03]" />
             {x.badge && <span className="absolute bottom-1.5 left-1.5 rounded-full bg-marigold px-2 py-0.5 text-[11px] font-bold text-ink shadow">{t(x.badge)}</span>}
           </span>
           {x.label && <span className="line-clamp-1 text-[13px] text-ink group-hover:text-peacock">{t(x.label)}</span>}
@@ -210,7 +236,7 @@ export function CardRow({ cards }: { cards: CardCfg[] }) {
   return (
     <section className={clsx("grid gap-4", shown.length >= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : shown.length === 3 ? "sm:grid-cols-3" : shown.length === 2 ? "sm:grid-cols-2" : "")} data-testid="card-row">
       {shown.map((c, n) => (
-        <article key={n} className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm">
+        <article key={n} className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-card">
           <h2 className="text-lg font-semibold leading-snug">{t(c.title)}</h2>
           {c.mode === "tiles" ? <TileGrid tiles={c.tiles ?? []} /> : <ProductQuad items={c.items} />}
           {c.link ? <Link href={c.link} className="mt-auto text-sm font-semibold text-peacock hover:underline">{t(c.link_text || "See more")}</Link>

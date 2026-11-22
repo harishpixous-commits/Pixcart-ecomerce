@@ -17,7 +17,7 @@ export const classic: ThemeData = {
     shadow: "none",
   },
   layout: {
-    container: "boxed",
+    container: "wide",
     productGrid: "hairline",
     gridColumns: 5,
     home: { categories: "circles", sections: "panel" },

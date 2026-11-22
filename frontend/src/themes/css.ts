@@ -38,7 +38,9 @@ export function themeVars(t: ActiveTheme, classicRadius?: string): Record<string
     "--f-display": tokens.fonts.display,
     "--f-sans": tokens.fonts.sans,
     "--h-tracking": tokens.headingTracking,
-    "--w-shop": layout.container === "wide" ? "1440px" : "1280px",
+    // "wide" fills large screens with only a thin margin (about 20 px a side on a 1920 px screen, like the big
+    // marketplaces); "boxed" keeps a centred 1280 px column.
+    "--w-shop": layout.container === "wide" ? "1880px" : "1280px",
     "--shadow-card": shadow.card,
     "--shadow-card-hover": shadow.hover,
     "--shadow-panel": shadow.panel,
