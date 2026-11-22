@@ -612,6 +612,28 @@ async def cms_site_save(body: dict[str, Any], admin: Perm("marketing"), session:
     return site
 
 
+class ThemeIn(BaseModel):
+    theme: str = Field(max_length=24)
+    # {theme id: {"preset": str, "colors": {key: hex}}}; themes left out keep their saved settings
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.put("/storefront/theme")
+async def cms_theme_save(body: ThemeIn, admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Switches the storefront theme and saves theme presets and colours, leaving every other site setting as it is
+    (so an unsaved edit in another Storefront tab is never overwritten)."""
+    site = await get_site(session)
+    site["theme"] = body.theme
+    site["theme_settings"] = {**site.get("theme_settings", {}), **body.settings}
+    try:
+        saved = await save_site(session, site)
+    except ValueError as exc:
+        raise ApiError(str(exc), "invalid_theme") from exc
+    audit(session, admin, "storefront.theme", "settings", "site", f"theme={saved['theme']}")
+    await session.commit()
+    return {"theme": saved["theme"], "theme_settings": saved["theme_settings"]}
+
+
 class SectionIn(BaseModel):
     kind: str
     title: str = Field(default="", max_length=120)

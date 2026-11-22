@@ -14,6 +14,7 @@ from app.config import settings
 from app.core.validators import validate_gstin
 from app.db import utcnow
 from app.models import HomeSection, PlatformSetting
+from app.services import themes
 
 SITE_KEY = "site"
 
@@ -34,6 +35,9 @@ def default_site() -> dict[str, Any]:
         "favicon_url": "",
         "colors": {"primary": "#0B5563", "primary_dark": "#073B45", "accent": "#F5A524", "buy": "#D7263D", "success": "#1E8E3E", "page": "#EEF2F4"},
         "radius": "rounded",  # rounded | soft | square
+        # Storefront theme (Admin → Storefront → Theme and layout); per-theme presets and colours are in
+        # "theme_settings", handled by services/themes.py (not merged key by key like the rest).
+        "theme": themes.DEFAULT_THEME,
         "announcement": {"enabled": True, "text": "Free delivery on orders over {free_delivery_amount} from a seller", "link": "/search?sort=discount", "tone": "accent"},
         "header_links": [{"label": "Become a seller", "href": "/sell"}],
         "footer_columns": [
@@ -119,7 +123,11 @@ def _upgrade(raw: dict) -> dict:
 
 async def get_site(session: AsyncSession) -> dict:
     row = await session.get(PlatformSetting, SITE_KEY)
-    return _merge(default_site(), _upgrade(row.value if row else {}))
+    raw = _upgrade(row.value if row else {})
+    site = _merge(default_site(), raw)
+    site["theme"] = themes.clean_theme(site.get("theme"))
+    site["theme_settings"] = themes.clean_settings(raw.get("theme_settings"))
+    return site
 
 
 def _links(items: Any, limit: int = 12) -> list[dict]:
@@ -211,12 +219,15 @@ def _business(data: dict) -> dict:
 
 
 def validate_site(data: dict) -> dict:
-    site = _merge(default_site(), _upgrade(data))
+    raw = _upgrade(data)
+    site = _merge(default_site(), raw)
     for k, v in site["colors"].items():
         if not HEX.match(str(v)):
             raise ValueError(f"Colour '{k}' must be a hex value like #0B5563")
     if site["radius"] not in ("rounded", "soft", "square"):
         raise ValueError("Corner style must be rounded, soft or square")
+    site["theme"] = themes.clean_theme(site.get("theme"), strict=True)
+    site["theme_settings"] = themes.clean_settings(raw.get("theme_settings"), strict=True)
     for k in ("logo_url", "favicon_url"):
         if site[k] and not SAFE_HREF.match(site[k]):
             raise ValueError("Upload the logo through the media library")

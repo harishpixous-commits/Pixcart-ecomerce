@@ -8,6 +8,8 @@ export const FALLBACK_SITE: Site = {
   favicon_url: "",
   colors: { primary: "#0B5563", primary_dark: "#073B45", accent: "#F5A524", buy: "#D7263D", success: "#1E8E3E", page: "#EEF2F4" },
   radius: "rounded",
+  theme: "classic",
+  theme_settings: {},
   announcement: { enabled: false, text: "", link: "", tone: "accent" },
   header_links: [{ label: "Become a seller", href: "/sell" }],
   footer_columns: [],

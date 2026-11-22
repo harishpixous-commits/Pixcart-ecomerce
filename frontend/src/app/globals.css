@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 @layer base {
+  /* Defaults (the Classic look). app/layout.tsx sets the brand colours; shop pages get the theme's tokens
+     (src/themes/css.ts); the admin "Glass" layout sets its own fonts. */
   :root {
     --c-primary: 11 85 99;
     --c-primary-dark: 7 59 69;
@@ -16,9 +18,20 @@
     --c-success: 30 142 62;
     --c-success-light: 230 244 234;
     --c-page: 238 242 244;
+    --c-ink: 27 36 48;
+    --c-ink-soft: 74 85 101;
+    --c-ink-faint: 122 133 148;
+    --c-line: 220 227 232;
     --r-lg: 0.5rem;
     --r-xl: 0.75rem;
     --r-2xl: 1rem;
+    --f-display: "Baloo 2", system-ui, sans-serif;
+    --f-sans: Mukta, system-ui, sans-serif;
+    --h-tracking: 0em;
+    --w-shop: 1280px;
+    --shadow-card: 0 0 0 1px rgb(var(--c-line));
+    --shadow-card-hover: 0 0 0 1px rgb(var(--c-ink) / 0.22);
+    --shadow-panel: none;
   }
   html {
     -webkit-text-size-adjust: 100%;
@@ -28,6 +41,7 @@
   }
   h1, h2, h3 {
     @apply font-display leading-tight;
+    letter-spacing: var(--h-tracking);
   }
   :focus-visible {
     outline: 2px solid rgb(var(--c-primary));
@@ -50,9 +64,9 @@
   display: none;
 }
 
-/* Loading placeholders: a soft shimmer in the shape of what is coming. */
+/* Loading placeholders: a soft shimmer in the shape of what is coming, in the theme's own line and page colours. */
 .skeleton {
-  background: linear-gradient(90deg, rgb(226 232 236) 0%, rgb(240 244 246) 50%, rgb(226 232 236) 100%);
+  background: linear-gradient(90deg, rgb(var(--c-line) / 0.75) 0%, rgb(var(--c-page) / 0.9) 50%, rgb(var(--c-line) / 0.75) 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.3s ease-in-out infinite;
 }
@@ -60,6 +74,22 @@
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: rgb(var(--c-line) / 0.75); }
+}
+
+/* Shop sections: a white panel, or straight on the page (theme layout "sections"). */
+.shop-panel { background: #fff; border-radius: var(--r-xl); box-shadow: var(--shadow-panel); }
+[data-sections="plain"] .shop-panel { background: transparent; border-radius: 0; box-shadow: none; }
+[data-sections="plain"] .shop-panel.shop-panel-pad { padding-left: 0; padding-right: 0; }
+
+/* Product cards (theme product grid "cards" and "airy"): lift and image zoom on hover, press on click. */
+.pc-lift { transition: transform 180ms ease, box-shadow 180ms ease; }
+@media (hover: hover) {
+  .pc-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+}
+.pc-press { transition: transform 120ms ease; }
+.pc-press:active { transform: scale(0.97); }
 
 /* The help button moves up while the compare tray is showing (the tray sits above the bottom nav on phones). */
 body[data-compare-tray="1"] .shop-assistant-launcher { bottom: 4.75rem; }

@@ -76,40 +76,65 @@ export function NotificationBell({ dark }: { dark?: boolean }) {
   );
 }
 
-function AccountMenu() {
+/** Header text colours: "dark" for a header on the brand colour (white text), "light" for a white header. */
+export type HeaderTone = "dark" | "light";
+const TONE_TEXT: Record<HeaderTone, { text: string; sub: string; hover: string }> = {
+  dark: { text: "text-white", sub: "text-white/80", hover: "hover:bg-white/10" },
+  light: { text: "text-ink", sub: "text-ink-faint", hover: "hover:bg-mist" },
+};
+
+/**
+ * Sign in, or the account menu (orders, wishlist, help, profile, selling, admin, sign out).
+ * compact: an icon with a short label instead of the two-line "Hello, name / Account & Lists".
+ */
+export function AccountMenu({ tone = "dark", compact = false }: { tone?: HeaderTone; compact?: boolean }) {
   const site = useSite();
   const { user, ready, signOut } = useSession();
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [path, setPath] = useState(pathname);
+  const box = useRef<HTMLDivElement>(null);
   if (pathname !== path) {
     // a new page: close the menu
     setPath(pathname);
     setOpen(false);
   }
-  if (!ready) return <div className="h-10 w-24" />;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const t = TONE_TEXT[tone];
+  if (!ready) return <div className={compact ? "h-10 w-10" : "h-10 w-24"} />;
   if (!user)
     return (
-      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="flex h-10 items-center gap-2 rounded-lg px-2 text-white hover:bg-white/10 sm:px-3" data-testid="account-signin">
-        <UserIcon className="h-5 w-5 sm:hidden" />
-        <span className="hidden flex-col leading-tight sm:flex">
-          <span className="text-xs text-white/80">Hello, sign in</span>
-          <span className="text-sm font-semibold">Account &amp; Lists</span>
-        </span>
+      <Link href={`/login?next=${encodeURIComponent(pathname)}`} className={clsx("flex h-10 items-center gap-2 rounded-lg px-2", t.text, t.hover, !compact && "sm:px-3")} data-testid="account-signin">
+        <UserIcon className={clsx("h-5 w-5", !compact && "sm:hidden")} />
+        {compact ? <span className="hidden text-sm font-semibold sm:inline">Sign in</span> : (
+          <span className="hidden flex-col leading-tight sm:flex">
+            <span className={clsx("text-xs", t.sub)}>Hello, sign in</span>
+            <span className="text-sm font-semibold">Account &amp; Lists</span>
+          </span>
+        )}
       </Link>
     );
   return (
-    <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="flex h-10 items-center gap-1.5 rounded-lg px-2 text-left text-white hover:bg-white/10 sm:px-3" aria-expanded={open}>
-        <UserIcon className="h-5 w-5 sm:hidden" />
-        <span className="hidden flex-col leading-tight sm:flex">
-          <span className="max-w-[130px] truncate text-xs text-white/80">Hello, {user.name?.split(" ")[0] || "there"}</span>
-          <span className="text-sm font-semibold">Account &amp; Lists</span>
-        </span>
+    <div className="relative" ref={box}>
+      <button onClick={() => setOpen((o) => !o)} className={clsx("flex h-10 items-center gap-1.5 rounded-lg px-2 text-left", t.text, t.hover, !compact && "sm:px-3")} aria-expanded={open} aria-haspopup="menu" data-testid="account-menu">
+        <UserIcon className={clsx("h-5 w-5", !compact && "sm:hidden")} />
+        {compact ? <span className="hidden max-w-[110px] truncate text-sm font-semibold sm:inline">{user.name?.split(" ")[0] || "Account"}</span> : (
+          <span className="hidden flex-col leading-tight sm:flex">
+            <span className={clsx("max-w-[130px] truncate text-xs", t.sub)}>Hello, {user.name?.split(" ")[0] || "there"}</span>
+            <span className="text-sm font-semibold">Account &amp; Lists</span>
+          </span>
+        )}
         <ChevronDown className="h-4 w-4" />
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-lg bg-white py-1 text-ink shadow-xl ring-1 ring-line">
+        <div className="absolute right-0 top-12 z-40 w-56 animate-rise-in overflow-hidden rounded-lg bg-white py-1 text-ink shadow-xl ring-1 ring-line" role="menu">
           <Link href="/orders" className="block px-4 py-2 hover:bg-mist">Your orders</Link>
           <Link href="/wishlist" className="block px-4 py-2 hover:bg-mist">Wishlist</Link>
           <Link href="/support" className="block px-4 py-2 hover:bg-mist">Help and support</Link>
@@ -131,7 +156,7 @@ function AccountMenu() {
 }
 
 /** "Deliver to 641001": one PIN code for the whole visit; product pages show delivery dates for it. */
-function DeliverTo() {
+export function DeliverTo({ tone = "light" }: { tone?: HeaderTone }) {
   const pin = usePincode();
   const { user } = useSession();
   const [open, setOpen] = useState(false);
@@ -166,9 +191,10 @@ function DeliverTo() {
   return (
     <div className="relative shrink-0" ref={box}>
       <button type="button" onClick={() => { setValue(pin); setError(""); setOpen((o) => !o); }} aria-expanded={open}
-        className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[14px] text-ink-soft hover:bg-peacock-light hover:text-peacock" data-testid="deliver-to">
-        <MapPin className="h-4 w-4 text-peacock" />
-        {pin ? <span>Deliver to <span className="font-semibold text-ink">{pin}</span></span> : <span className="font-semibold">Set delivery PIN</span>}
+        className={clsx("flex items-center gap-1 rounded-full px-2.5 py-1 text-[14px]",
+          tone === "dark" ? "text-white/85 hover:bg-white/10 hover:text-white" : "text-ink-soft hover:bg-peacock-light hover:text-peacock")} data-testid="deliver-to">
+        <MapPin className={clsx("h-4 w-4", tone === "dark" ? "text-marigold" : "text-peacock")} />
+        {pin ? <span>Deliver to <span className={clsx("font-semibold", tone === "dark" ? "text-white" : "text-ink")}>{pin}</span></span> : <span className="font-semibold">Set delivery PIN</span>}
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
       {open && (
@@ -205,15 +231,29 @@ function DeliverTo() {
   );
 }
 
-function CartLink() {
+/** The cart button with its item count. */
+export function CartLink({ tone = "dark", label = true }: { tone?: HeaderTone; label?: boolean }) {
   const { cartCount } = useSession();
+  const t = TONE_TEXT[tone];
   return (
-    <Link href="/cart" className="relative flex h-10 items-center gap-2 rounded-lg px-3 font-semibold text-white hover:bg-white/10" aria-label={`Cart, ${cartCount} items`}>
+    <Link href="/cart" className={clsx("relative flex h-10 items-center gap-2 rounded-lg px-3 font-semibold", t.text, t.hover)} aria-label={`Cart, ${cartCount} items`} data-testid="header-cart">
       <ShoppingCart className="h-5 w-5" />
-      <span className="hidden sm:inline">Cart</span>
+      {label && <span className="hidden sm:inline">Cart</span>}
       {cartCount > 0 && (
         <span className="absolute -top-0.5 left-6 min-w-[20px] rounded-full bg-marigold px-1 text-center text-xs font-bold leading-5 text-ink">{cartCount > 99 ? "99+" : cartCount}</span>
       )}
+    </Link>
+  );
+}
+
+/** The wishlist heart link (when wishlists are on). */
+export function WishlistLink({ tone = "dark" }: { tone?: HeaderTone }) {
+  const site = useSite();
+  if (!site.features.wishlist) return null;
+  const t = TONE_TEXT[tone];
+  return (
+    <Link href="/wishlist" className={clsx("hidden h-10 w-10 items-center justify-center rounded-lg sm:flex", t.text, t.hover)} aria-label="Wishlist">
+      <Heart className="h-5 w-5" />
     </Link>
   );
 }
@@ -283,6 +323,32 @@ export function MobileTabBar() {
       })}
     </nav>
   );
+}
+
+/**
+ * What every theme's footer shows (Admin → Storefront → Navigation and footer / Business): the link columns,
+ * contact details, social links, the grievance officer (Consumer Protection (E-Commerce) Rules 2020) and the legal line.
+ */
+export function useFooter() {
+  const site = useSite();
+  const b = site.business;
+  const f = site.footer;
+  const legal = b.legal_name || site.brand_name;
+  const contactOn = f.show_contact && site.contact.enabled && site.contact.items.some((i) => i.enabled);
+  const socialOn = f.show_social && site.social.enabled && site.social.links.some((l) => l.enabled && l.url);
+  const grievance = f.show_grievance && b.grievance.name ? b.grievance : null;
+  const copyright = f.copyright ? fillCopyright(f.copyright, { legal_name: legal, brand: site.brand_name }) : "";
+  const business = f.show_business && (b.registered_address || (f.show_gstin && b.gstin) || b.cin)
+    ? [b.legal_name, b.registered_address ? `Registered office: ${b.registered_address}` : "", f.show_gstin && b.gstin ? `GSTIN ${b.gstin}` : "", b.cin ? `CIN ${b.cin}` : ""].filter(Boolean).join(". ")
+    : "";
+  return { site, columns: site.footer_columns, contactOn, socialOn, grievance, copyright, business };
+}
+
+/** A footer link: outside links open in a new tab. */
+export function FooterLink({ href, label, className }: { href: string; label: string; className?: string }) {
+  return href.startsWith("https://")
+    ? <a href={href} target="_blank" rel="noopener noreferrer" className={className}>{label}</a>
+    : <Link href={href} className={className}>{label}</Link>;
 }
 
 export function ShopFooter() {

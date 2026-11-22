@@ -647,6 +647,9 @@ export interface Site {
   favicon_url: string;
   colors: { primary: string; primary_dark: string; accent: string; buy: string; success: string; page: string };
   radius: "rounded" | "soft" | "square";
+  /** the storefront theme (src/themes) and, per theme, the chosen colour preset and the owner's colour changes */
+  theme?: string;
+  theme_settings?: Partial<Record<string, { preset?: string; colors?: Partial<Site["colors"]> }>>;
   announcement: { enabled: boolean; text: string; link: string; tone: "accent" | "primary" | "dark" };
   header_links: LinkItem[];
   footer_columns: { title: string; links: LinkItem[] }[];
