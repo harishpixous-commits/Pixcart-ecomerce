@@ -17,8 +17,18 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
 - **AI assistant internals:** `docs/AI_ASSISTANT.md`.
 - **Customer chat on the website (shop assistant):** `docs/SHOP_ASSISTANT.md`.
 - **Own delivery fleet, checkout fees and push notifications:** `docs/DELIVERY.md`.
+- **Storefront themes, admin layouts, loaders and home media:** `docs/THEMES.md`.
 
 ## What is included
+
+- **Switchable storefront themes**: Classic (the original look), Bazaar (big store), Fresh (quick commerce) and Luxe
+  (boutique), each with its own colours, fonts and layout on every screen, five colour presets plus the brand colours,
+  editable colours with contrast checks, layout options the owner can change per theme, and a live preview on phone,
+  tablet and desktop before applying (Admin → Storefront → Theme and layout). Switching is instant and reversible.
+- **Admin layouts** each staff member picks: sidebar with quick find (Ctrl+K), top navigation, compact rail, or Glass
+  (inspired by Apple's design guidelines); the owner sets the default.
+- **Images or videos in any home block** (hero slides, banners, banner grids, card tiles, and an image or video block),
+  from the media library; skeleton loaders on every screen so pages are never blank.
 
 - **Own delivery fleet** (like Instamart or Flipkart's own delivery): partner app on the web and Android (sign-up with
   KYC, online switch, request pop-up with countdown, navigation, pickup code, customer OTP, cash collection, photo

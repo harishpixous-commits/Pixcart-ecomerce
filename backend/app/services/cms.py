@@ -6,6 +6,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -297,10 +298,11 @@ def public_business(site: dict) -> dict:
 
 SECTION_KINDS = {
     "hero": "Hero slides",
-    "categories": "Category tiles",
+    "categories": "Categories",
     "products": "Product row",
     "banner": "Single banner",
     "banner_grid": "Banner grid",
+    "media": "Image or video block",
     "text": "Text block",
     "usp": "Promise strip",
     "recent": "Recently viewed",
@@ -315,6 +317,26 @@ SECTION_KINDS = {
 PRODUCT_SOURCES = ("deals", "deals_live", "bestsellers", "new", "top_rated", "category", "manual")
 CARD_MODES = ("tiles", "products", "recent", "buy_again")
 TONES = ("accent", "primary", "dark", "buy")
+# "auto" follows the storefront theme's own category style; "tiles" (saved by earlier versions) means "auto".
+CATEGORY_STYLES = ("auto", "circles", "cards", "squares", "chips")
+MEDIA_ASPECTS = ("21/9", "16/9", "4/3", "1/1", "4/5")
+VIDEO_FILE = re.compile(r"\.(mp4|webm)$", re.IGNORECASE)
+
+
+def is_video_url(url: str) -> bool:
+    """True for an MP4 or WebM file (by the extension of the address's path, ignoring any ?query or #fragment)."""
+    try:
+        return bool(VIDEO_FILE.search(urlsplit(str(url or "")).path))
+    except ValueError:  # a malformed address, e.g. "https://[x"
+        return False
+
+
+def _video_url(value: object) -> str:
+    """An optional video from the media library: a site path or an https address of an MP4 or WebM file."""
+    v = str(value or "").strip()
+    if v and (len(v) > 400 or not SAFE_HREF.match(v) or not is_video_url(v)):
+        raise ValueError("Videos must be uploaded through the media library")
+    return v
 
 
 def validate_section(kind: str, config: dict) -> dict:
@@ -328,7 +350,9 @@ def validate_section(kind: str, config: dict) -> dict:
             raise ValueError("Images must be uploaded through the media library")
         if link and not SAFE_HREF.match(link):
             raise ValueError("Links must start with / or https://")
-        return {"image": img, "link": link, "heading": str(x.get("heading", ""))[:80], "text": str(x.get("text", ""))[:160], "cta": str(x.get("cta", ""))[:30]}
+        # an optional video plays in place of the image, which becomes its poster
+        return {"image": img, "video": _video_url(x.get("video")), "link": link, "heading": str(x.get("heading", ""))[:80],
+                "text": str(x.get("text", ""))[:160], "cta": str(x.get("cta", ""))[:30]}
 
     def link_only(v: object) -> str:
         v = str(v or "")[:300]
@@ -362,8 +386,8 @@ def validate_section(kind: str, config: dict) -> dict:
             if not card["title"]:
                 raise ValueError("Every card needs a title")
             if mode == "tiles":
-                tiles = [{"image": image_only(t.get("image")), "label": _text(t.get("label"), 30), "link": link_only(t.get("link")),
-                          "badge": _text(t.get("badge"), 20)} for t in (raw.get("tiles") or [])[:4]]
+                tiles = [{"image": image_only(t.get("image")), "video": _video_url(t.get("video")), "label": _text(t.get("label"), 30),
+                          "link": link_only(t.get("link")), "badge": _text(t.get("badge"), 20)} for t in (raw.get("tiles") or [])[:4]]
                 if not tiles:
                     raise ValueError(f"Add 1 to 4 tiles to '{card['title']}'")
                 card["tiles"] = tiles
@@ -417,7 +441,23 @@ def validate_section(kind: str, config: dict) -> dict:
             out["product_ids"] = [str(x) for x in c.get("product_ids", [])][:24]
         return out
     if kind == "categories":
-        return {"slugs": [str(x)[:90] for x in c.get("slugs", [])][:16], "style": "chips" if c.get("style") == "chips" else "tiles"}
+        style = c.get("style")
+        return {"slugs": [str(x)[:90] for x in c.get("slugs", [])][:16], "style": style if style in CATEGORY_STYLES else "auto"}
+    if kind == "media":
+        image, video = image_only(c.get("image")), _video_url(c.get("video"))
+        if not (image or video):
+            raise ValueError("Add an image or a video")
+        return {
+            "image": image, "video": video, "link": link_only(c.get("link")),
+            "heading": _text(c.get("heading"), 80), "text": _text(c.get("text"), 160), "cta": _text(c.get("cta"), 30),
+            "align": "center" if c.get("align") == "center" else "left",
+            # light: white words on a darkened picture; dark: ink words, no overlay
+            "tone": "dark" if c.get("tone") == "dark" else "light",
+            "aspect": c.get("aspect") if c.get("aspect") in MEDIA_ASPECTS else "16/9",
+            "width": "full" if c.get("width") == "full" else "contained",
+            # the video's own play, sound and seek buttons (the block is then not a link); only with a video
+            "controls": c.get("controls") is True and bool(video),
+        }
     if kind == "text":
         return {"markdown": str(c.get("markdown", ""))[:8000], "align": "center" if c.get("align") == "center" else "left"}
     if kind == "usp":
@@ -432,7 +472,7 @@ DEFAULT_SECTIONS = [
         {"title": "Bestsellers", "link": "/bestsellers", "link_text": "See more", "mode": "products", "source": "bestsellers"},
         {"title": "New on the store", "link": "/new-releases", "link_text": "Explore", "mode": "products", "source": "new"},
     ]}),
-    ("categories", "Shop by category", {"slugs": [], "style": "tiles"}),
+    ("categories", "Shop by category", {"slugs": [], "style": "auto"}),
     ("deals", "Today's deals", {"limit": 12, "kind": ""}),
     ("products", "Deals of the day", {"source": "deals", "limit": 12, "layout": "row"}),
     ("usp", "", {"items": [{"icon": "badge", "text": "Every seller is KYC-verified"}, {"icon": "wallet", "text": "Cash on delivery available"}, {"icon": "truck", "text": "Free delivery over {free_delivery_amount} per seller"}, {"icon": "return", "text": "Easy returns"}]}),

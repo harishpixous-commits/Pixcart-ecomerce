@@ -1,7 +1,8 @@
-"""File storage for product images (public) and seller KYC documents (private).
+"""File storage for product images and videos (public) and seller KYC documents (private).
 
 Images are decoded and re-encoded to WebP, which strips metadata (EXIF/GPS) and anything that
-is not pixel data. Documents are checked by magic bytes and never served publicly.
+is not pixel data. Videos (MP4, WebM) and documents are checked by magic bytes; documents are
+never served publicly.
 """
 from __future__ import annotations
 
@@ -75,13 +76,28 @@ async def save_image(data: bytes, folder: str) -> str:
     return f"{settings.media_base_url.rstrip('/')}/{key}"
 
 
+EBML = bytes.fromhex("1a45dfa3")  # WebM and Matroska files start with this
+# ISO media files (the MP4 family) whose brand says they hold still pictures: HEIC and AVIF photos, not video.
+IMAGE_BRANDS = frozenset({b"avif", b"avis", b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1"})
+
+
+def is_video(data: bytes) -> bool:
+    """True when a file starts like a video container (MP4, MOV, WebM, Matroska), so an upload that takes images and
+    videos can choose its path by content; sniff_video then decides whether it is a video the shop can play."""
+    if len(data) > 12 and data[4:8] == b"ftyp":
+        return data[8:12] not in IMAGE_BRANDS
+    return data[:4] == EBML
+
+
 def sniff_video(data: bytes) -> tuple[str, str]:
     """(content type, extension) for MP4 or WebM, by magic bytes; anything else is refused."""
     if len(data) > 12 and data[4:8] == b"ftyp":
         if data[8:12] == b"qt  ":
             raise ApiError("QuickTime .mov files do not play in every browser. Export the video as MP4 (H.264).", "invalid_video")
+        if data[8:12] in IMAGE_BRANDS:
+            raise ApiError("This is a photo (HEIC or AVIF), not a video. Upload an MP4 or WebM video.", "invalid_video")
         return "video/mp4", "mp4"
-    if data[:4] == bytes.fromhex("1a45dfa3") and b"webm" in data[:64]:
+    if data[:4] == EBML and b"webm" in data[:64]:
         return "video/webm", "webm"
     raise ApiError("Upload an MP4 or WebM video", "invalid_video")
 

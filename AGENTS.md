@@ -47,6 +47,15 @@ partner app (installable web app; `mobile/partner-app` wraps it for Android; blo
 (`assistant/` dock, blocks, voice) · `lib/api.ts` (fetch with token refresh, `downloadFile`, `downloadPost`,
 `streamPost` for SSE) · `lib/speech.ts` (browser speech) · `lib/admin.tsx` (`useCan(permission)`).
 
+Storefront themes (`docs/THEMES.md`): `themes/` holds each theme as a module (`<id>/theme.ts` data: tokens, layout
+options, colour presets; `<id>/slots.tsx` components: Header, Footer, MobileNav, ProductTile), `manifest.ts`
+(`resolveTheme`), `css.ts` (CSS variables), `context.tsx` (`useTheme`, `useLayout`), `shop-frame.tsx`. Shop screens
+read layout options with `useLayout()` and use only token classes (`peacock`, `marigold`, `vermilion`, `leaf`, `ink`,
+`mist`, `line`, `shadow-card`, `rounded-xl`, `max-w-shop`, `shop-panel`), never hex colours. Shared tile behaviour:
+`components/product-parts.tsx`; header parts: `components/shop-chrome.tsx`, `components/shop-nav.tsx`; images and
+videos in blocks: `components/media.tsx`; skeletons: `components/skeletons.tsx`. Admin layouts:
+`components/admin-shell/` (per staff member, `users.ui_prefs`).
+
 ## Rules for every change
 
 1. **No hard-coded business values.** Brand, contact, tax rates, fees, keys, models, prompts' house rules, voice
@@ -80,7 +89,10 @@ partner app (installable web app; `mobile/partner-app` wraps it for Android; blo
 | Add an assistant tool | `@tool(...)` in `assistant/tools.py` with a permission and cards; map it to a domain in `assistant/decision.DOMAIN_TOOLS` |
 | Add a shop assistant tool | `@tool(..., login=, feature=)` in `shop_assistant/tools.py`, output through `shop_assistant/views.py` (whitelist), filtered by the session's customer; see `docs/SHOP_ASSISTANT.md` |
 | Add an assistant action | `ActionDef` + `prepare` branch + `execute` branch in `assistant/actions.py`, calling the existing endpoint function |
-| Add an admin page | `frontend/src/app/admin/<page>/page.tsx` + a nav entry with its permission in `app/admin/layout.tsx` |
+| Add an admin page | `frontend/src/app/admin/<page>/page.tsx` + a nav entry with its permission in the admin nav model (`components/admin-shell/`) |
+| Add a storefront theme | Copy `frontend/src/themes/classic` to `themes/<id>`, change `theme.ts` and the slot components, register it in `themes/manifest.ts`, `themes/slots.tsx`, `THEME_IDS` and `backend/app/services/themes.py`; see `docs/THEMES.md` |
+| Add a layout option | A field in `ThemeLayout` + `LAYOUT_CHOICES` (`themes/types.ts`), `applyLayout` (`themes/manifest.ts`), `LAYOUT_CHOICES` in `services/themes.py`, each theme's value, the screen that reads it with `useLayout()`, and the picker |
+| Add a home block | A kind in `cms.SECTION_KINDS` + its config in `validate_section`, rendering in `components/home-sections.tsx` (images and videos through `MediaFill`), the editor in `app/admin/storefront/sections.tsx` |
 | Add a fleet setting | A default in `delivery_settings.DEFAULTS` (+ its bounds in `_INTS`/`_CHOICES`/`_TEXTS`), a field on `app/admin/delivery/settings/page.tsx`; read it with `await delivery_settings.get(session)` |
 | Add a notification | An entry in `notify.EVENTS` (channels and default text; admins edit the templates), then `notify.notify(...)`, `notify_seller(...)` or `notify_staff(permission, ...)` where it happens |
 

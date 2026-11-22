@@ -708,7 +708,7 @@ export interface ReviewSettingsPublic {
 
 export interface HomeSectionData {
   id: string;
-  kind: "hero" | "categories" | "products" | "banner" | "banner_grid" | "text" | "usp" | "recent" | "cards" | "deals" | "sponsored" | "countdown" | "signin" | "inspired" | "buy_again";
+  kind: "hero" | "categories" | "products" | "banner" | "banner_grid" | "media" | "text" | "usp" | "recent" | "cards" | "deals" | "sponsored" | "countdown" | "signin" | "inspired" | "buy_again";
   title: string;
   device: "all" | "mobile" | "desktop";
   config: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -14,6 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import utcnow
 from app.models import PlatformSetting
 
+# Admin panel layouts (frontend src/components/admin-shell): a left menu, drop-down menus across the top, a slim
+# icon rail, or the Apple-style "glass" layout. Each staff member picks one in My account; this is the default.
+ADMIN_LAYOUTS: tuple[str, ...] = ("sidebar", "topnav", "rail", "glass")
+
 DEFAULTS: dict[str, Any] = {
     "shipping_fee_paise": 4000,
     "free_shipping_threshold_paise": 49900,
@@ -106,6 +110,13 @@ DEFAULTS: dict[str, Any] = {
     "price_alert_min_drop_pct": 10,
     "feature_compare": True,           # compare up to 4 products side by side
     "feature_bought_together": True,   # "Frequently bought together" from real orders
+    # admin panel: the layout staff see until they choose their own (Admin → My account → Appearance)
+    "admin_layout_default": "sidebar",
+}
+
+# key -> the values a text setting may take
+CHOICES: dict[str, tuple[str, ...]] = {
+    "admin_layout_default": ADMIN_LAYOUTS,
 }
 
 # key -> (type, min, max)
@@ -227,6 +238,11 @@ async def get_settings(session: AsyncSession) -> dict[str, Any]:
 def validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
     clean: dict[str, Any] = {}
     for key, value in updates.items():
+        if key in CHOICES:
+            if not isinstance(value, str) or value not in CHOICES[key]:
+                raise ValueError(f"{key} must be one of: {', '.join(CHOICES[key])}")
+            clean[key] = value
+            continue
         if key not in LIMITS:
             raise ValueError(f"Unknown setting: {key}")
         typ, lo, hi = LIMITS[key]

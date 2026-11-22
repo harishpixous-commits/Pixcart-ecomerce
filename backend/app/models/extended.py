@@ -402,7 +402,7 @@ class HomeSection(IdMixin, TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('hero','categories','products','banner','banner_grid','text','usp','recent','cards','deals','sponsored','countdown','signin','inspired','buy_again')", name="kind"
+            "kind IN ('hero','categories','products','banner','banner_grid','text','usp','recent','cards','deals','sponsored','countdown','signin','inspired','buy_again','media')", name="kind"
         ),
         CheckConstraint("device IN ('all','mobile','desktop')", name="device"),
     )

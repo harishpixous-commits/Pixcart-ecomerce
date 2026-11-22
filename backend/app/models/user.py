@@ -14,7 +14,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, IdMixin, TimestampMixin
@@ -37,6 +37,9 @@ class User(IdMixin, TimestampMixin, Base):
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A staff member's own admin panel preferences (app/routers/admin_prefs.py): admin_layout, nav_collapsed,
+    # sidebar_collapsed. Validated on save; empty for everyone else.
+    ui_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
 
     __table_args__ = (CheckConstraint("phone IS NOT NULL OR email IS NOT NULL", name="has_identifier"),)
 

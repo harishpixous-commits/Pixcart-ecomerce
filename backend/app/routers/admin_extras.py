@@ -55,12 +55,13 @@ from app.services.cms import (
     SECTION_KINDS,
     ensure_default_sections,
     get_site,
+    is_video_url,
     save_site,
     section_out,
     validate_section,
 )
 from app.services.notify import EVENTS, notify
-from app.services.platform_settings import PRODUCT_REPORT_REASONS
+from app.services.platform_settings import PRODUCT_REPORT_REASONS, get_settings
 from app.services.reports import IST
 
 router = APIRouter(prefix="/api/admin", tags=["admin-extras"])
@@ -741,20 +742,39 @@ async def cms_page_delete(slug: str, admin: Perm("marketing"), session: SessionD
     return {"ok": True}
 
 
+def _media_out(m: MediaAsset) -> dict:
+    # the kind comes from the file type in the address (videos are stored as .mp4 or .webm, images as .webp)
+    return {"id": str(m.id), "url": m.url, "label": m.label, "at": m.created_at.isoformat(), "kind": "video" if is_video_url(m.url) else "image"}
+
+
 @router.get("/media")
-async def media(admin: Perm("marketing"), session: SessionDep) -> list[dict]:
-    rows = (await session.execute(select(MediaAsset).order_by(MediaAsset.created_at.desc()).limit(200))).scalars()
-    return [{"id": str(m.id), "url": m.url, "label": m.label, "at": m.created_at.isoformat()} for m in rows]
+async def media(admin: Perm("marketing"), session: SessionDep, kind: Literal["image", "video"] | None = None) -> list[dict]:
+    """The media library, newest first; `kind` lists only images or only videos."""
+    stmt = select(MediaAsset)
+    if kind:
+        video = MediaAsset.url.regexp_match(r"\.(mp4|webm)([?#].*)?$", flags="i")
+        stmt = stmt.where(video if kind == "video" else ~video)
+    rows = (await session.execute(stmt.order_by(MediaAsset.created_at.desc()).limit(200))).scalars()
+    return [_media_out(m) for m in rows]
 
 
 @router.post("/media", status_code=201)
 async def upload_media(admin: Perm("marketing"), session: SessionDep, file: UploadFile = File(...), label: str = "") -> dict:
-    data = await file.read(settings.max_image_bytes + 1)
-    url = await storage.save_image(data, "products")  # same validated pipeline as product photos
-    m = MediaAsset(url=url, label=(label or file.filename or "")[:120], created_at=utcnow())
+    """Adds an image or a video, told apart by the file's content (never its name). Images take the product photo
+    pipeline (checked, resized, saved as WebP); MP4 and WebM videos are stored as uploaded, up to the largest video
+    size set for product videos (Admin → Product page)."""
+    video_limit = (await get_settings(session))["max_video_mb"] * 1024 * 1024
+    data = await file.read(max(settings.max_image_bytes, video_limit) + 1)  # never buffer more than the larger limit
+    if storage.is_video(data):
+        url = await storage.save_video(data, video_limit)
+    else:
+        url = await storage.save_image(data, "products")  # same validated pipeline as product photos
+    m = MediaAsset(id=uuid.uuid4(), url=url, label=(label or file.filename or "")[:120], created_at=utcnow())
     session.add(m)
+    out = _media_out(m)
+    audit(session, admin, "storefront.media_upload", "media", m.id, out["kind"])
     await session.commit()
-    return {"id": str(m.id), "url": url}
+    return out
 
 
 # ----------------------------------------------------------------------------- go-live readiness
