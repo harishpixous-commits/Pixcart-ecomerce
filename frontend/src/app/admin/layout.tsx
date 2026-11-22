@@ -1,14 +1,9 @@
 "use client";
 
-import {
-  BarChart3, Bell, Bot, Cpu, LogIn, MessagesSquare, Rocket, FileDown, FileClock, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, MessageSquareText, Package, Palette, Plug, Settings,
-  ShieldCheck, ShoppingBag, Sparkles, Store, Tag, Undo2, Users, RotateCcw, Flag, PanelsTopLeft, Zap, Megaphone, MessageCircleQuestion,
-  Truck, Bike, MapPinned, SlidersHorizontal, Receipt, Radar, PackageCheck, Route, Wallet, ChartColumn, MessageSquareWarning,
-} from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AdminPrefsProvider, AdminShell, EMPTY_COUNTS, adminNav, type NavCounts } from "@/components/admin-shell";
 import { AssistantDock } from "@/components/assistant/dock";
-import { PortalShell } from "@/components/portal-shell";
 import { PageLoader } from "@/components/ui";
 import { AdminCtx, type AdminMe } from "@/lib/admin";
 import { api } from "@/lib/api";
@@ -20,7 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const isLogin = pathname === "/admin/login";
   const [me, setMe] = useState<AdminMe | null>(null);
-  const [counts, setCounts] = useState({ s: 0, p: 0, r: 0, rv: 0, pr: 0, dl: 0, ad: 0, qa: 0, dk: 0, dw: 0, dc: 0 });
+  const [counts, setCounts] = useState<NavCounts>(EMPTY_COUNTS);
 
   useEffect(() => {
     if (!ready || isLogin) return;
@@ -48,58 +43,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (isLogin) return <>{children}</>;
   if (!ready || !user?.is_admin || !me) return <PageLoader />;
-  const can = (p: string) => me.permissions.includes(p);
-  const nav = [
-    { section: "Overview", href: "/admin", label: "Overview", icon: LayoutDashboard, p: "dashboard" },
-    { section: "Overview", href: "/admin/go-live", label: "Go-live checklist", icon: Rocket, p: "dashboard" },
-    { section: "Orders and customers", href: "/admin/orders", label: "Orders", icon: ShoppingBag, p: "orders" },
-    { section: "Orders and customers", href: "/admin/returns", label: "Returns", icon: RotateCcw, p: "orders" },
-    { section: "Orders and customers", href: "/admin/refunds", label: "Refunds", icon: Undo2, badge: counts.r, p: "refunds" },
-    { section: "Orders and customers", href: "/admin/support", label: "Support desk", icon: LifeBuoy, p: "support" },
-    { section: "Orders and customers", href: "/admin/customers", label: "Customers and accounts", icon: Users, p: "customers" },
-    { section: "Delivery fleet", href: "/admin/delivery", label: "Delivery overview", icon: Truck, p: "delivery", exact: true },
-    { section: "Delivery fleet", href: "/admin/delivery/live", label: "Live partners", icon: Radar, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/queue", label: "Assign deliveries", icon: PackageCheck, badge: counts.dw, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/trips", label: "Delivery trips", icon: Route, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/partners", label: "Delivery partners", icon: Bike, badge: counts.dk, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/payouts", label: "Partner payouts and cash", icon: Wallet, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/reports", label: "Delivery reports", icon: ChartColumn, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/feedback", label: "Ratings and complaints", icon: MessageSquareWarning, badge: counts.dc, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/zones", label: "Delivery zones", icon: MapPinned, p: "delivery" },
-    { section: "Delivery fleet", href: "/admin/delivery/settings", label: "Delivery settings", icon: SlidersHorizontal, p: "delivery" },
-    { section: "Sellers and catalogue", href: "/admin/sellers", label: "Sellers", icon: Store, badge: counts.s, p: "sellers" },
-    { section: "Sellers and catalogue", href: "/admin/products", label: "Listings", icon: Package, badge: counts.p, p: "catalog" },
-    { section: "Sellers and catalogue", href: "/admin/categories", label: "Categories", icon: FolderTree, p: "catalog" },
-    { section: "Sellers and catalogue", href: "/admin/reviews", label: "Reviews", icon: MessageSquareText, badge: counts.rv, p: "catalog" },
-    { section: "Sellers and catalogue", href: "/admin/questions", label: "Questions", icon: MessageCircleQuestion, badge: counts.qa, p: "catalog" },
-    { section: "Sellers and catalogue", href: "/admin/product-reports", label: "Product reports", icon: Flag, badge: counts.pr, p: "catalog" },
-    { section: "Money and reports", href: "/admin/payouts", label: "Payouts", icon: IndianRupee, p: "payouts" },
-    { section: "Money and reports", href: "/admin/reports", label: "Reports", icon: BarChart3, p: "reports" },
-    { section: "Money and reports", href: "/admin/exports", label: "Exports", icon: FileDown, p: "dashboard" },
-    { section: "Store and marketing", href: "/admin/storefront", label: "Storefront", icon: Palette, p: "marketing" },
-    { section: "Store and marketing", href: "/admin/product-page", label: "Product page", icon: PanelsTopLeft, p: "settings" },
-    { section: "Store and marketing", href: "/admin/checkout", label: "Checkout and fees", icon: Receipt, p: "settings" },
-    { section: "Store and marketing", href: "/admin/coupons", label: "Coupons", icon: Tag, p: "marketing" },
-    { section: "Store and marketing", href: "/admin/deals", label: "Deals", icon: Zap, badge: counts.dl, p: "catalog" },
-    { section: "Store and marketing", href: "/admin/advertising", label: "Advertising", icon: Megaphone, badge: counts.ad, p: "marketing" },
-    { section: "Store and marketing", href: "/admin/notifications", label: "Messages", icon: Bell, p: "marketing" },
-    { section: "AI", href: "/admin/shop-assistant", label: "Shop assistant", icon: MessagesSquare, p: "shop_assistant", any: ["shop_assistant", "shop_assistant_kb", "shop_assistant_chats"] },
-    { section: "AI", href: "/admin/assistant", label: "AI assistant", icon: Bot, p: "settings" },
-    { section: "AI", href: "/admin/ai", label: "AI studio", icon: Sparkles, p: "settings" },
-    { section: "AI", href: "/admin/ai-providers", label: "AI providers", icon: Cpu, p: "ai_providers" },
-    { section: "Administration", href: "/admin/settings", label: "Marketplace settings", icon: Settings, p: "settings" },
-    { section: "Administration", href: "/admin/sign-in", label: "Sign-in and accounts", icon: LogIn, p: "settings" },
-    { section: "Administration", href: "/admin/integrations", label: "Integrations", icon: Plug, p: "integrations" },
-    { section: "Administration", href: "/admin/staff", label: "Staff and roles", icon: ShieldCheck, p: "staff" },
-    { section: "Administration", href: "/admin/audit", label: "Audit log", icon: FileClock, p: "audit" },
-    { section: "Administration", href: "/admin/account", label: "My account", icon: KeyRound, p: "dashboard" },
-  ].filter((n) => ("any" in n && Array.isArray(n.any) ? n.any.some(can) : can(n.p)));
   return (
     <AdminCtx.Provider value={me}>
-      <PortalShell title={`Admin, ${me.role_label}`} root="/admin" nav={nav}>
-        {children}
-      </PortalShell>
-      {can("assistant") && <AssistantDock />}
+      <AdminPrefsProvider>
+        <AdminShell title={`Admin, ${me.role_label}`} items={adminNav(me.permissions, counts)}>
+          {children}
+        </AdminShell>
+      </AdminPrefsProvider>
+      {me.permissions.includes("assistant") && <AssistantDock />}
     </AdminCtx.Provider>
   );
 }

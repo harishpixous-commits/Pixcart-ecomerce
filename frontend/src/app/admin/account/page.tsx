@@ -2,6 +2,7 @@
 
 import QRCode from "qrcode";
 import { useState } from "react";
+import { LayoutPicker } from "@/components/admin-shell";
 import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Pill, TextField, useToast } from "@/components/ui";
 import { useAdmin } from "@/lib/admin";
@@ -56,8 +57,13 @@ export default function AdminAccount() {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-4">
+    <div className="flex max-w-3xl flex-col gap-4">
       <PageHeader title="My account" sub={`${user?.name ?? ""}, ${user?.email ?? ""}, ${me?.role_label ?? ""}`} />
+      <section className="rounded-xl bg-white p-5" aria-labelledby="appearance-h" data-testid="appearance">
+        <h2 id="appearance-h" className="text-lg font-semibold">Appearance</h2>
+        <p className="mb-3 text-sm text-ink-soft">How the admin panel is laid out for you. Other staff keep their own choice.</p>
+        <LayoutPicker />
+      </section>
       <section className="rounded-xl bg-white p-5">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-lg font-semibold">Two-step sign-in</h2>

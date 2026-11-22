@@ -15,7 +15,10 @@ type S = {
   payout_weekday: number; payout_every_weeks: number;
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
   defect_return_days: number;
+  admin_layout_default: string;
 };
+
+const ADMIN_LAYOUT_NAMES: Record<string, string> = { sidebar: "Sidebar", topnav: "Top navigation", rail: "Compact rail", glass: "Glass" };
 
 const FLAGS: [keyof S, string, string][] = [
   ["feature_wishlist", "Wishlist", "Customers can save products for later"],
@@ -46,6 +49,7 @@ export default function AdminSettings() {
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
+        adminLayout: x.admin_layout_default ?? "sidebar",
       });
     }).catch(quietly);
   }, []);
@@ -63,6 +67,7 @@ export default function AdminSettings() {
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
         defect_return_days: Number(f.defectDays), payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
+        admin_layout_default: f.adminLayout || "sidebar",
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
       setS(await api<S>("/api/admin/settings", { method: "PUT", body }));
@@ -152,6 +157,14 @@ export default function AdminSettings() {
           Each category&apos;s return window, and the shortest window sellers may choose, are set in{" "}
           <Link href="/admin/categories" className="font-semibold text-peacock">Categories</Link>.
         </p>
+      </section>
+      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
+        <h2 className="text-lg font-semibold sm:col-span-2">Admin panel</h2>
+        <Field label="Default layout for staff" htmlFor="admin-layout" hint="Staff who have not chosen their own layout (My account → Appearance) see this one.">
+          <Select id="admin-layout" value={f.adminLayout ?? "sidebar"} onChange={(e) => setF({ ...f, adminLayout: e.target.value })}>
+            {Object.entries(ADMIN_LAYOUT_NAMES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select>
+        </Field>
       </section>
       <Button type="submit" loading={busy} className="self-start">Save settings</Button>
     </form>

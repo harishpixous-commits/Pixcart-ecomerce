@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, StrictBool, field_validator
 
+from app.config import settings
 from app.core.deps import AdminUser, SessionDep
 from app.models import User
 from app.services.platform_settings import ADMIN_LAYOUTS, get_settings
@@ -68,6 +69,8 @@ async def prefs_out(session, user: User) -> dict[str, Any]:
         "admin_layout": prefs["admin_layout"] or fallback,  # the layout this person sees
         "default_layout": fallback,  # the owner's default
         "layouts": list(ADMIN_LAYOUTS),
+        # shown as a badge in the admin header outside production, so nobody mistakes a test install for the live one
+        "environment": settings.environment,
     }
 
 

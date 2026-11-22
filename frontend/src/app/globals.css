@@ -167,3 +167,8 @@ body[data-compare-tray="1"] .shop-assistant-launcher { bottom: 4.75rem; }
 .prose-cms ol { @apply mb-3 list-decimal space-y-1 pl-6 text-ink-soft; }
 .prose-cms a { @apply font-semibold text-peacock underline-offset-2 hover:underline; }
 .prose-cms strong { @apply font-semibold text-ink; }
+
+/* Admin "glass" layout on phones and tablets: the AI assistant button sits above the bottom tab bar. */
+@media (max-width: 1023px) {
+  body[data-admin-tabbar="1"] .admin-assistant-launcher { bottom: calc(5rem + env(safe-area-inset-bottom)); }
+}

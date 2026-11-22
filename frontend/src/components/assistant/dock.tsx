@@ -232,7 +232,7 @@ export function AssistantDock() {
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} aria-label="Open the AI assistant (Ctrl+J)" title="AI assistant (Ctrl+J)"
-        className="group fixed bottom-5 right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-peacock text-white shadow-xl transition hover:scale-105 focus-visible:outline focus-visible:outline-4 focus-visible:outline-peacock/40">
+        className="admin-assistant-launcher group fixed bottom-5 right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-peacock text-white shadow-xl transition hover:scale-105 focus-visible:outline focus-visible:outline-4 focus-visible:outline-peacock/40">
         <span className="absolute inset-0 animate-ping rounded-full bg-peacock/30 motion-reduce:hidden" style={{ animationDuration: "3s" }} />
         <Sparkles className="relative h-6 w-6" />
       </button>
