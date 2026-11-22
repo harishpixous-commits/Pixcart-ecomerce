@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Award, BadgeCheck, Banknote, Clock, MapPin, Package } from "lucide-react";
+import { Award, BadgeCheck, Banknote, ChevronLeft, ChevronRight, Clock, MapPin, Package, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,11 +22,74 @@ import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
 import type { ProductPage, ProductVideo, PublicVariant } from "@/lib/types";
 import { rememberViewed, WishlistHeart } from "@/lib/wishlist";
+import { useLayout } from "@/themes/context";
+import type { ThemeLayout } from "@/themes/types";
+
+/** The product page's columns per theme layout: Classic's three columns, two columns, or a large gallery. */
+const PDP_GRID: Record<ThemeLayout["pdp"]["layout"], string> = {
+  three: "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]",
+  two: "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
+  gallery: "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]",
+};
 
 export function Gallery({ images, videos, title }: { images: string[]; videos?: ProductVideo[]; title: string }) {
   const site = useSite();
   return <ProductGallery images={images} videos={site.features.product_videos === false ? [] : videos ?? []} title={title}
     zoom={site.gallery?.zoom ?? true} zoomLevel={site.gallery?.zoom_level ?? 2.5} />;
+}
+
+/**
+ * The "Large gallery" product page (computers): every photo large in a two-column grid, the first across both
+ * columns, then the videos; a photo opens full screen (arrows, Escape to close).
+ */
+function GalleryGrid({ images, videos, title }: { images: string[]; videos?: ProductVideo[]; title: string }) {
+  const site = useSite();
+  const [open, setOpen] = useState<number | null>(null);
+  const shown = site.features.product_videos === false ? [] : videos ?? [];
+  useEffect(() => {
+    if (open === null) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(null);
+      if (e.key === "ArrowRight") setOpen((i) => (i === null ? i : (i + 1) % images.length));
+      if (e.key === "ArrowLeft") setOpen((i) => (i === null ? i : (i - 1 + images.length) % images.length));
+    };
+    document.addEventListener("keydown", key);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", key); document.body.style.overflow = prev; };
+  }, [open, images.length]);
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3" data-testid="pdp-gallery-grid">
+        {images.map((src, i) => (
+          <button key={src + i} type="button" onClick={() => setOpen(i)} aria-label={`View photo ${i + 1} of ${images.length} full screen`}
+            className={clsx("group overflow-hidden rounded-xl bg-white ring-1 ring-line", i === 0 ? "col-span-2 aspect-[4/3]" : "aspect-square")}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={i === 0 ? title : ""} loading={i < 3 ? "eager" : "lazy"} className="h-full w-full object-contain p-4 transition-transform duration-500 motion-safe:group-hover:scale-[1.03]" />
+          </button>
+        ))}
+        {shown.map((v) => (
+          <video key={v.url} src={v.url} poster={v.poster_url || undefined} controls playsInline preload="metadata" aria-label={v.title || `${title} video`}
+            className="col-span-2 aspect-video w-full rounded-xl bg-black object-contain" />
+        ))}
+      </div>
+      {open !== null && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label={`${title}: photo ${open + 1} of ${images.length}`}
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(null); }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={images[open]} alt={title} className="max-h-full max-w-full object-contain" />
+          <button type="button" onClick={() => setOpen(null)} aria-label="Close" autoFocus className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"><X className="h-6 w-6" /></button>
+          {images.length > 1 && (
+            <>
+              <button type="button" onClick={() => setOpen((open - 1 + images.length) % images.length)} aria-label="Previous photo" className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"><ChevronLeft className="h-7 w-7" /></button>
+              <button type="button" onClick={() => setOpen((open + 1) % images.length)} aria-label="Next photo" className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"><ChevronRight className="h-7 w-7" /></button>
+              <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-3 py-1 text-sm text-white">{open + 1} / {images.length}</p>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
 }
 
 type Estimate = {
@@ -114,6 +177,7 @@ function Delivery({ variant }: { variant?: PublicVariant }) {
 export function ProductMain({ p }: { p: ProductPage }) {
   const site = useSite();
   const pdp = site.pdp;
+  const layout = useLayout();
   useEffect(() => {
     rememberViewed({ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? "", price: p.price, mrp: p.mrp });
     api("/api/events", { method: "POST", body: { type: "view", product_id: p.id } }).catch(() => {});
@@ -181,17 +245,28 @@ export function ProductMain({ p }: { p: ProductPage }) {
     : <p className="text-lg font-semibold text-vermilion">Currently unavailable</p>)
     : <p className="font-semibold text-vermilion">This combination is not available</p>;
 
+  const pdpLayout = layout.pdp.layout;
+  const three = pdpLayout === "three";
+  const galleryLayout = pdpLayout === "gallery";
   return (
     <>
-      <div className="grid gap-6 rounded-xl bg-white p-4 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]">
+      <div className={clsx("grid gap-6", PDP_GRID[pdpLayout], galleryLayout ? "lg:items-start" : "rounded-xl bg-white p-4 sm:p-6")} data-pdp-layout={pdpLayout}>
         {/* z-10: the hover-zoom panel opens over the product details, under the site header (z-30). */}
-        <div className="relative z-10 lg:sticky lg:top-36 lg:row-span-2 lg:self-start xl:row-span-1">
-          <Gallery images={p.images} videos={p.videos} title={p.title} />
-          {pdp.customer_media && <CustomerMediaStrip slug={p.slug} />}
-        </div>
+        {galleryLayout ? (
+          <div className="relative z-10 min-w-0 lg:row-span-2">
+            <div className="rounded-xl bg-white p-3 lg:hidden"><Gallery images={p.images} videos={p.videos} title={p.title} /></div>
+            <div className="hidden lg:block"><GalleryGrid images={p.images} videos={p.videos} title={p.title} /></div>
+            {pdp.customer_media && <div className="mt-3"><CustomerMediaStrip slug={p.slug} /></div>}
+          </div>
+        ) : (
+          <div className={clsx("relative z-10 lg:sticky lg:top-36 lg:row-span-2 lg:self-start", three && "xl:row-span-1")}>
+            <Gallery images={p.images} videos={p.videos} title={p.title} />
+            {pdp.customer_media && <CustomerMediaStrip slug={p.slug} />}
+          </div>
+        )}
 
         {/* centre: what it is */}
-        <div className="flex min-w-0 flex-col gap-3">
+        <div className={clsx("flex min-w-0 flex-col gap-3", galleryLayout && "rounded-xl bg-white p-4 sm:p-6")}>
           {p.brand && (
             <Link href={`/search?brand=${encodeURIComponent(p.brand)}`} className="self-start text-sm font-semibold text-peacock hover:underline">
               Visit the {p.brand} store
@@ -272,12 +347,12 @@ export function ProductMain({ p }: { p: ProductPage }) {
 
           {pdp.key_specs && <KeySpecs rows={p.key_specs ?? []} extra={netRow} />}
           <AboutThisItem items={p.highlights} />
-          {pdp.seller_snapshot && p.seller_snapshot && <div className="xl:hidden"><SellerSnapshotCard seller={p.seller} snap={p.seller_snapshot} /></div>}
+          {pdp.seller_snapshot && p.seller_snapshot && <div className={three ? "xl:hidden" : undefined}><SellerSnapshotCard seller={p.seller} snap={p.seller_snapshot} /></div>}
         </div>
 
-        {/* right: buy */}
-        <aside className="flex flex-col gap-4 lg:col-start-2 xl:col-start-3" aria-label="Buy">
-          <div className="flex flex-col gap-3 rounded-xl border border-line p-4 shadow-sm">
+        {/* right: buy (the two-column and gallery layouts keep it in view while the page scrolls) */}
+        <aside className={clsx("flex flex-col gap-4 lg:col-start-2", three ? "xl:col-start-3" : "lg:sticky lg:top-28 lg:self-start")} aria-label="Buy">
+          <div className={clsx("flex flex-col gap-3 rounded-xl border p-4 shadow-sm", three ? "border-line" : "border-peacock/25 bg-white shadow-card")}>
             {shown && (
               <div>
                 <span className="font-display text-[28px] font-bold leading-none">{rupees(shown.price)}</span>{" "}
@@ -316,7 +391,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
             </div>
             <CompareToggle item={{ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? "" }} className="text-sm" />
           </div>
-          {pdp.seller_snapshot && p.seller_snapshot && <div className="hidden xl:block"><SellerSnapshotCard seller={p.seller} snap={p.seller_snapshot} /></div>}
+          {three && pdp.seller_snapshot && p.seller_snapshot && <div className="hidden xl:block"><SellerSnapshotCard seller={p.seller} snap={p.seller_snapshot} /></div>}
           <div className="flex flex-col gap-2 rounded-xl bg-mist p-4 text-[13px] text-ink-soft">
             <p className="flex items-center gap-1.5 font-semibold text-ink"><BadgeCheck className="h-4 w-4 text-leaf" /> {p.seller.legal_name || p.seller.name}</p>
             {p.seller.gstin && <p>GSTIN {p.seller.gstin}</p>}

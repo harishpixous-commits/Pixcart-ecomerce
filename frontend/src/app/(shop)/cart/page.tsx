@@ -13,6 +13,7 @@ import { rupees } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
 import type { CartGroup, CartLine, CartView } from "@/lib/types";
+import { useLayout } from "@/themes/context";
 
 const SURFACE = "rounded-2xl bg-white shadow-sm ring-1 ring-black/5";
 const CARD = `${SURFACE} p-4 sm:p-5`;
@@ -227,6 +228,32 @@ function CheckoutBar({ watch, total, disabled, onBuy }: { watch: React.RefObject
   );
 }
 
+/**
+ * The "bar at the bottom" cart layout: the total, the item count and Proceed to buy stay in reach on every screen size
+ * (above the phone tab bar).
+ */
+function StickyCartBar({ total, count, disabled, onBuy }: { total: number; count: number; disabled: boolean; onBuy: () => void }) {
+  useEffect(() => {
+    // the help button moves up and the compare tray steps aside, as for the product page's buy bar
+    document.body.dataset.buyBar = "1";
+    return () => { delete document.body.dataset.buyBar; };
+  }, []);
+  return (
+    <div className="fixed inset-x-0 bottom-[calc(3.6rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-white/95 px-3 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur sm:bottom-0" data-testid="cart-bar">
+      <div className="mx-auto flex max-w-3xl items-center gap-3">
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="font-display text-lg font-bold tabular-nums">{rupees(total)} <span className="font-sans text-sm font-normal text-ink-soft">· {count} item{count === 1 ? "" : "s"}</span></p>
+          <button type="button" className="text-xs font-semibold text-peacock hover:underline"
+            onClick={() => document.getElementById("cart-bill")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            View bill
+          </button>
+        </div>
+        <Button variant="buy" size="lg" disabled={disabled} onClick={onBuy} className="px-6">Proceed to buy</Button>
+      </div>
+    </div>
+  );
+}
+
 type Saved = { variant_id: string; product_id: string; slug: string; title: string; variant_label: string; image: string; price: number; mrp: number; in_stock: boolean; available: boolean };
 
 function SavedForLater({ items, busy, onMove, onDelete }: { items: Saved[]; busy: string | null; onMove: (id: string) => void; onDelete: (id: string) => void }) {
@@ -260,6 +287,7 @@ function SavedForLater({ items, busy, onMove, onDelete }: { items: Saved[]; busy
 }
 
 export default function CartPage() {
+  const stickyBar = useLayout().cart.summary === "sticky";
   const { user, ready, refreshCart } = useSession();
   const router = useRouter();
   const toast = useToast();
@@ -340,8 +368,8 @@ export default function CartPage() {
   const cannotBuy = s.has_problems || s.item_count === 0;
   const checkout = () => router.push("/checkout");
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+    <div className={clsx("flex flex-col gap-4", stickyBar && "mx-auto w-full max-w-3xl pb-24")} data-cart-layout={stickyBar ? "sticky" : "side"}>
+      <div className={clsx("grid gap-4", !stickyBar && "lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start")}>
         <div className="flex min-w-0 flex-col gap-3">
           <CartHead count={s.item_count} subtotal={s.items_total} />
           {cart.groups.map((g) => (
@@ -349,7 +377,7 @@ export default function CartPage() {
               onSave={(id) => move(`/api/cart/items/${id}/save-for-later`, id, "Saved for later")} />
           ))}
         </div>
-        <aside id="cart-bill" className={clsx(CARD, "flex scroll-mt-56 flex-col gap-4 sm:scroll-mt-44 lg:sticky lg:top-36")}>
+        <aside id="cart-bill" className={clsx(CARD, "flex scroll-mt-56 flex-col gap-4 sm:scroll-mt-44", !stickyBar && "lg:sticky lg:top-36")}>
           <BillDetails
             bill={{ mrp_total: s.mrp_total, items_total: s.items_total, item_count: s.item_count, shipping_total: s.shipping_total, fees: s.fees, fee_savings: s.fee_savings, grand_total: s.grand_total }}
             deliveryLabel={cart.checkout?.delivery_label}
@@ -368,7 +396,9 @@ export default function CartPage() {
       </div>
       {savedBlock}
       <RecentlyViewedRail currentId="" />
-      <CheckoutBar watch={buyRef} total={s.grand_total} disabled={cannotBuy} onBuy={checkout} />
+      {stickyBar
+        ? <StickyCartBar total={s.grand_total} count={s.item_count} disabled={cannotBuy} onBuy={checkout} />
+        : <CheckoutBar watch={buyRef} total={s.grand_total} disabled={cannotBuy} onBuy={checkout} />}
     </div>
   );
 }
