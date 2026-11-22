@@ -11,8 +11,10 @@ import { BrandEditor, NavEditor } from "./brand";
 import { BusinessEditor } from "./business";
 import { PagesEditor } from "./pages";
 import { SectionsEditor } from "./sections";
+import { ThemeEditor } from "./theme";
 
 const TABS = [
+  { value: "theme", label: "Theme and layout" },
   { value: "home", label: "Home page" },
   { value: "brand", label: "Brand and colours" },
   { value: "nav", label: "Navigation and footer" },
@@ -73,6 +75,7 @@ function Storefront() {
       />
       <Tabs value={tab} onChange={(v) => router.replace(`/admin/storefront?tab=${v}`)} items={TABS} />
       <ErrorNote message={error} />
+      {tab === "theme" && <ThemeEditor />}
       {tab === "home" && <SectionsEditor />}
       {siteTab && (!site ? <PageLoader /> : tab === "brand" ? <BrandEditor site={site} set={setSite} /> : tab === "business" ? <BusinessEditor site={site} set={setSite} /> : <NavEditor site={site} set={setSite} />)}
       {tab === "pages" && <PagesEditor />}
