@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Monitor, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
-import { ImageField } from "@/components/media-picker";
+import { ImageField, MediaField } from "@/components/media-picker";
 import { Button, ErrorNote, Field, Input, Modal, PageLoader, Pill, Select, Textarea, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
 import { date } from "@/lib/format";
@@ -14,7 +14,8 @@ type Section = { id: string; kind: string; kind_label: string; title: string; co
 
 const KIND_HELP: Record<string, string> = {
   hero: "Large sliding banners at the top of the page",
-  categories: "Tiles or chips linking to categories",
+  categories: "Category circles, cards, squares or chips (the theme's style unless you pick one)",
+  media: "A large picture or video with an optional heading, text and button, in the shape you choose",
   products: "A row or grid of products: deals, bestsellers, new, a category, or ones you pick",
   banner: "One wide banner with a link",
   banner_grid: "2 to 4 banners side by side",
@@ -32,7 +33,8 @@ const KIND_HELP: Record<string, string> = {
 
 const STARTER: Record<string, Record<string, any>> = {
   hero: { slides: [{ image: "", heading: "", text: "", cta: "Shop now", link: "/search", image_mobile: "", offer: "", note: "", theme: "light", align: "left" }], autoplay: true, interval: 5, style: "fade" },
-  categories: { slugs: [], style: "tiles" },
+  categories: { slugs: [], style: "auto" },
+  media: { image: "", video: "", link: "", heading: "", text: "", cta: "", align: "left", tone: "light", aspect: "16/9", width: "contained", controls: false },
   products: { source: "deals", limit: 12, layout: "row", show_add: false, ranked: false, see_all: "" },
   cards: { cards: [{ title: "Top picks for you", link: "/search", link_text: "See more", mode: "tiles", tiles: [{ image: "", label: "", link: "/search", badge: "" }] }] },
   deals: { limit: 12, kind: "" },
@@ -65,6 +67,8 @@ function Slide({ v, onChange, onRemove, hero }: { v: any; onChange: (v: any) => 
     <div className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2">
       <div className={hero ? "" : "sm:col-span-2"}><ImageField label={hero ? "Image (computers and tablets)" : "Image"} value={v.image} onChange={(u) => onChange({ ...v, image: u })} hint={hero ? "Wide, about 3000 × 1000 px. Keep words out of the image." : "Keep words out of the image; add them below so they stay sharp on phones"} /></div>
       {hero && <ImageField label="Phone image (optional)" value={v.image_mobile ?? ""} onChange={(u) => onChange({ ...v, image_mobile: u })} hint="Taller, about 1200 × 900 px. Empty: the wide image is used" />}
+      <div className="sm:col-span-2"><MediaField label="Video (optional)" accept="video" value={v.video ?? ""} poster={v.image} onChange={(u) => onChange({ ...v, video: u })}
+        hint="Plays muted on a loop in place of the image. The image shows until it loads, and for shoppers who turn off motion. MP4 or WebM." /></div>
       <TextField label="Heading" value={v.heading} maxLength={80} onChange={(e) => onChange({ ...v, heading: e.target.value })} />
       <TextField label="Short text" value={v.text} maxLength={160} onChange={(e) => onChange({ ...v, text: e.target.value })} />
       <TextField label="Button text" value={v.cta} maxLength={30} onChange={(e) => onChange({ ...v, cta: e.target.value })} />
@@ -116,6 +120,8 @@ function CardEditor({ card, onChange, onRemove, cats }: { card: any; onChange: (
           {tiles.map((t, i) => (
             <div key={i} className="flex flex-col gap-2 rounded-lg bg-mist p-2">
               <ImageField label={`Tile ${i + 1} image`} value={t.image} onChange={(u) => setTile(i, { ...t, image: u })} />
+              <MediaField label={`Tile ${i + 1} video (optional)`} accept="video" layout="compact" aspect="aspect-square" value={t.video ?? ""} poster={t.image}
+                onChange={(u) => setTile(i, { ...t, video: u })} hint="Plays while a shopper points at the tile" />
               <div className="grid grid-cols-2 gap-2">
                 <Input value={t.label} maxLength={30} placeholder="Label" aria-label={`Tile ${i + 1} label`} onChange={(e) => setTile(i, { ...t, label: e.target.value })} />
                 <Input value={t.badge ?? ""} maxLength={20} placeholder="Badge, e.g. 40% off" aria-label={`Tile ${i + 1} badge`} onChange={(e) => setTile(i, { ...t, badge: e.target.value })} />
@@ -277,7 +283,11 @@ function ConfigEditor({ kind, c, set, cats }: { kind: string; c: Record<string, 
   if (kind === "categories")
     return (
       <div className="flex flex-col gap-3">
-        <Field label="Style" htmlFor="cst" className="max-w-xs"><Select id="cst" value={c.style} onChange={(e) => set({ ...c, style: e.target.value })}><option value="tiles">Picture tiles</option><option value="chips">Small chips</option></Select></Field>
+        <Field label="Style" htmlFor="cst" className="max-w-xs" hint="The theme's own style unless you choose one">
+          <Select id="cst" value={["circles", "cards", "squares", "chips"].includes(c.style) ? c.style : "auto"} onChange={(e) => set({ ...c, style: e.target.value })}>
+            <option value="auto">The theme&apos;s style</option><option value="circles">Round icons</option><option value="cards">Cards</option><option value="squares">Small squares</option><option value="chips">Text chips</option>
+          </Select>
+        </Field>
         <p className="text-sm text-ink-soft">Tick the categories to show, in the order you tick them. Leave all unticked to show the main categories.</p>
         <div className="grid max-h-64 gap-1 overflow-auto rounded-lg border border-line p-2 sm:grid-cols-2">
           {cats.map((x) => {
@@ -290,6 +300,43 @@ function ConfigEditor({ kind, c, set, cats }: { kind: string; c: Record<string, 
             );
           })}
         </div>
+      </div>
+    );
+  if (kind === "media")
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ImageField label="Image" value={c.image ?? ""} onChange={(u) => set({ ...c, image: u })} hint="Shown on its own, or as the video's cover" />
+          <MediaField label="Video (optional)" accept="video" value={c.video ?? ""} poster={c.image} onChange={(u) => set({ ...c, video: u, controls: u ? c.controls : false })}
+            hint="Plays muted on a loop, or with its own controls (below). MP4 or WebM." />
+        </div>
+        {!c.image && !c.video && <p className="rounded-lg bg-marigold-light px-3 py-2 text-sm text-ink">Choose an image, a video, or both.</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextField label="Heading (optional)" value={c.heading ?? ""} maxLength={80} onChange={(e) => set({ ...c, heading: e.target.value })} />
+          <TextField label="Short text (optional)" value={c.text ?? ""} maxLength={160} onChange={(e) => set({ ...c, text: e.target.value })} />
+          <TextField label="Button text (optional)" value={c.cta ?? ""} maxLength={30} onChange={(e) => set({ ...c, cta: e.target.value })} />
+          <TextField label="Link (optional)" value={c.link ?? ""} placeholder="/c/fashion or /search?q=saree" onChange={(e) => set({ ...c, link: e.target.value })} />
+          <Field label="Shape">
+            <Select value={c.aspect ?? "16/9"} onChange={(e) => set({ ...c, aspect: e.target.value })}>
+              <option value="21/9">Wide strip (21:9)</option><option value="16/9">Widescreen (16:9)</option><option value="4/3">Classic (4:3)</option><option value="1/1">Square</option><option value="4/5">Tall (4:5)</option>
+            </Select>
+          </Field>
+          <Field label="Width">
+            <Select value={c.width ?? "contained"} onChange={(e) => set({ ...c, width: e.target.value })}><option value="contained">In line with the page</option><option value="full">Edge to edge</option></Select>
+          </Field>
+          <Field label="Words">
+            <Select value={c.tone ?? "light"} onChange={(e) => set({ ...c, tone: e.target.value })}><option value="light">White, on a dark shade over the picture</option><option value="dark">Dark, straight on a light picture</option></Select>
+          </Field>
+          <Field label="Position">
+            <Select value={c.align ?? "left"} onChange={(e) => set({ ...c, align: e.target.value })}><option value="left">Left</option><option value="center">Centre</option></Select>
+          </Field>
+        </div>
+        {c.video && (
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1 accent-peacock" checked={Boolean(c.controls)} onChange={(e) => set({ ...c, controls: e.target.checked })} />
+            <span>Show the video&apos;s own controls (shoppers press play and can turn the sound on; the words go below it and there is no link)</span>
+          </label>
+        )}
       </div>
     );
   if (kind === "text")
@@ -390,6 +437,7 @@ export function SectionsEditor() {
                   {s.kind === "products" && `: ${SOURCES.find(([v]) => v === s.config.source)?.[1] ?? ""}`}
                   {s.kind === "hero" && `: ${s.config.slides?.length ?? 0} slides${s.config.style === "fade" ? ", full width" : ""}`}
                   {s.kind === "cards" && `: ${s.config.cards?.length ?? 0} cards`}
+                  {s.kind === "media" && `: ${s.config.video ? "video" : "image"}${s.config.heading ? `, ${s.config.heading}` : ""}`}
                   {s.kind === "deals" && `: ${DEAL_KIND_LABEL.find(([v]) => v === (s.config.kind ?? ""))?.[1] ?? ""}`}
                   {s.kind === "countdown" && s.config.ends_at && `: ends ${date(s.config.ends_at)}`}
                 </p>
