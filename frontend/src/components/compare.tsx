@@ -10,7 +10,7 @@ import { Scale, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
-import { useSite } from "@/lib/site";
+import { useLists, useSite } from "@/lib/site";
 
 export type CompareItem = { id: string; slug: string; title: string; image: string };
 
@@ -27,9 +27,9 @@ function readRaw(): string {
   }
 }
 
-function write(items: CompareItem[]) {
+function write(items: CompareItem[], max = COMPARE_MAX) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(items.slice(0, COMPARE_MAX)));
+    localStorage.setItem(KEY, JSON.stringify(items.slice(0, max)));
   } catch {
     /* private mode */
   }
@@ -53,15 +53,17 @@ function parse(raw: string): CompareItem[] {
 }
 
 export function useCompare() {
+  const max = useLists().compare_max;
   const raw = useSyncExternalStore(subscribe, readRaw, () => EMPTY);
-  const items = parse(raw);
+  const items = parse(raw).slice(0, max);
   return {
     items,
     has: (id: string) => items.some((x) => x.id === id),
-    full: items.length >= COMPARE_MAX,
+    max,
+    full: items.length >= max,
     toggle: (item: CompareItem) => {
       const cur = parse(readRaw());
-      write(cur.some((x) => x.id === item.id) ? cur.filter((x) => x.id !== item.id) : [...cur, item].slice(-COMPARE_MAX));
+      write(cur.some((x) => x.id === item.id) ? cur.filter((x) => x.id !== item.id) : [...cur, item].slice(-max), max);
     },
     remove: (id: string) => write(parse(readRaw()).filter((x) => x.id !== id)),
     clear: () => write([]),
@@ -78,7 +80,7 @@ export function CompareToggle({ item, className }: { item: CompareItem; classNam
     <label className={clsx("inline-flex cursor-pointer select-none items-center gap-1.5 text-xs font-medium text-ink-soft", className)} data-testid="compare-toggle">
       <input type="checkbox" className="h-3.5 w-3.5 accent-peacock" checked={on} disabled={!on && c.full}
         onChange={() => c.toggle(item)} aria-label={`Compare ${item.title}`} />
-      {on ? "Added to compare" : c.full ? `Compare (max ${COMPARE_MAX})` : "Add to compare"}
+      {on ? "Added to compare" : c.full ? `Compare (max ${c.max})` : "Add to compare"}
     </label>
   );
 }

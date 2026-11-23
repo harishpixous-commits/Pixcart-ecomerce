@@ -110,9 +110,31 @@ DEFAULTS: dict[str, Any] = {
     "price_alert_min_drop_pct": 10,
     "feature_compare": True,           # compare up to 4 products side by side
     "feature_bought_together": True,   # "Frequently bought together" from real orders
+    # Lists and results (Admin → Marketplace settings): how many results each shopper-facing list shows
+    "search_page_size": 24,        # products per search or category page
+    "search_suggestions": 8,       # suggestions while typing in the search box
+    "recent_searches_max": 8,      # recent searches the browser remembers (0: off)
+    "brand_filter_max": 30,        # brands listed in the search filters
+    "similar_products": 12,        # "Customers also viewed" on a product page (0: hidden)
+    "sponsored_on_product": 10,    # sponsored products on a product page (0: hidden)
+    "highlights_shown": 5,         # bullet points before "See more"
+    "customer_photos_shown": 6,    # customer photos on a product page (0: hidden)
+    "reviews_page_size": 10,
+    "questions_page_size": 10,
+    "bestseller_badge_top": 10,    # "#N Best seller" badge for ranks up to this
+    "recently_viewed_max": 12,     # recently viewed products the browser remembers
+    "compare_max": 4,              # products compared side by side
+    "checkout_suggestions": 10,    # "you might also like" at checkout (0: hidden)
     # admin panel: the layout staff see until they choose their own (Admin → My account → Appearance)
     "admin_layout_default": "sidebar",
 }
+
+# the list sizes the storefront needs (sent with /api/site)
+LIST_KEYS: tuple[str, ...] = (
+    "search_page_size", "search_suggestions", "recent_searches_max", "brand_filter_max", "similar_products", "sponsored_on_product",
+    "highlights_shown", "customer_photos_shown", "reviews_page_size", "questions_page_size", "bestseller_badge_top", "recently_viewed_max",
+    "compare_max", "checkout_suggestions",
+)
 
 # key -> the values a text setting may take
 CHOICES: dict[str, tuple[str, ...]] = {
@@ -131,6 +153,20 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "commission_gst_bps": (int, 0, 2800),
     "max_qty_per_item": (int, 1, 10),
     "low_stock_threshold": (int, 1, 1000),
+    "search_page_size": (int, 8, 60),
+    "search_suggestions": (int, 1, 12),
+    "recent_searches_max": (int, 0, 20),
+    "brand_filter_max": (int, 5, 100),
+    "similar_products": (int, 0, 24),
+    "sponsored_on_product": (int, 0, 20),
+    "highlights_shown": (int, 1, 20),
+    "customer_photos_shown": (int, 0, 20),
+    "reviews_page_size": (int, 5, 50),
+    "questions_page_size": (int, 5, 50),
+    "bestseller_badge_top": (int, 1, 100),
+    "recently_viewed_max": (int, 4, 30),
+    "compare_max": (int, 2, 6),
+    "checkout_suggestions": (int, 0, 20),
     "feature_wishlist": (bool, 0, 1),
     "feature_reviews": (bool, 0, 1),
     "feature_returns": (bool, 0, 1),

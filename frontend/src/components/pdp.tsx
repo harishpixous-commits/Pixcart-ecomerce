@@ -18,7 +18,7 @@ import { Button, Modal, Textarea, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { date as fmtDate, rupees } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import { useSite } from "@/lib/site";
+import { useLists, useSite } from "@/lib/site";
 import { ProductRail } from "@/components/product";
 import type { ProductCard, ProductOffer, ProductPage, SellerSnapshot } from "@/lib/types";
 import { readViewed } from "@/lib/wishlist";
@@ -120,8 +120,9 @@ export function KeySpecs({ rows, extra }: { rows: { label: string; value: string
 
 export function AboutThisItem({ items }: { items: string[] }) {
   const [all, setAll] = useState(false);
+  const first = Math.max(1, useLists().highlights_shown);
   if (!items.length) return null;
-  const shown = all ? items : items.slice(0, 5);
+  const shown = all ? items : items.slice(0, first);
   return (
     <section aria-labelledby="about-h">
       <h2 id="about-h" className="mb-1.5 text-lg font-semibold">About this item</h2>
@@ -377,14 +378,16 @@ export function RecentlyViewedRail({ currentId }: { currentId: string }) {
 /* ---------------------------------------------------------------- sponsored rail and notify me */
 
 export function SponsoredRail({ slug }: { slug: string }) {
+  const limit = useLists().sponsored_on_product;
   const [items, setItems] = useState<ProductCard[]>([]);
   useEffect(() => {
+    if (limit <= 0) return;
     let live = true;
-    api<{ items: ProductCard[] }>("/api/ads/serve", { query: { placement: "product", product: slug, limit: 10 } })
+    api<{ items: ProductCard[] }>("/api/ads/serve", { query: { placement: "product", product: slug, limit } })
       .then((r) => { if (live) setItems(r.items); }).catch(() => {});
     return () => { live = false; };
-  }, [slug]);
-  if (!items.length) return null;
+  }, [slug, limit]);
+  if (limit <= 0 || !items.length) return null;
   return <ProductRail title="Sponsored products related to this item" items={items} note="Sponsored" />;
 }
 

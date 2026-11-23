@@ -668,10 +668,30 @@ export interface Site {
   shipping_fee_paise?: number;
   /** most units of one item per order (Admin → Marketplace settings) */
   max_qty_per_item?: number;
+  /** how many results each list shows (Admin → Marketplace settings → Lists and results) */
+  lists?: Partial<ListSettings>;
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
   nav: NavSettings;
   home_extras: { back_to_top: boolean; signin_prompt: boolean };
+}
+
+/** How many results each list shows; 0 hides the lists that can be hidden (see LIST_DEFAULTS in lib/site.tsx). */
+export interface ListSettings {
+  search_page_size: number;
+  search_suggestions: number;
+  similar_products: number;
+  sponsored_on_product: number;
+  reviews_page_size: number;
+  questions_page_size: number;
+  customer_photos_shown: number;
+  highlights_shown: number;
+  compare_max: number;
+  bestseller_badge_top: number;
+  recently_viewed_max: number;
+  recent_searches_max: number;
+  checkout_suggestions: number;
+  brand_filter_max: number;
 }
 
 export interface PdpSettings {

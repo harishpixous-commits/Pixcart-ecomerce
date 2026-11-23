@@ -218,7 +218,8 @@ async def product_reviews(
             conds.append(func.concat(Review.title, " ", Review.body).op("~*")(review_settings.topic_pattern(t["words"])))
     base = select(Review, User.name).join(User, User.id == Review.user_id).where(*conds)
     order = {"recent": Review.created_at.desc(), "helpful": Review.helpful_count.desc(), "high": Review.rating.desc(), "low": Review.rating.asc()}[sort]
-    rows = (await session.execute(base.order_by(order, Review.created_at.desc(), Review.id).offset((page - 1) * 10).limit(10))).all()
+    size = cfg["reviews_page_size"]
+    rows = (await session.execute(base.order_by(order, Review.created_at.desc(), Review.id).offset((page - 1) * size).limit(size))).all()
     total = (await session.execute(select(func.count()).select_from(Review).where(*conds))).scalar_one()
     dist = dict((await session.execute(select(Review.rating, func.count()).where(Review.product_id == p.id, Review.status == "published").group_by(Review.rating))).all())
     with_media = (await session.execute(select(func.count()).select_from(Review).where(
@@ -239,7 +240,7 @@ async def product_reviews(
         if ids:
             voted = set((await session.execute(select(ReviewVote.review_id).where(ReviewVote.user_id == user.id, ReviewVote.review_id.in_(ids)))).scalars())
             reported = set((await session.execute(select(ReviewReport.review_id).where(ReviewReport.user_id == user.id, ReviewReport.review_id.in_(ids)))).scalars())
-    gallery, media_total = (await product_page.customer_media(session, p.id, limit=12)) if show_media else ([], 0)
+    gallery, media_total = (await product_page.customer_media(session, p.id, limit=max(12, cfg["customer_photos_shown"]))) if show_media else ([], 0)
     return {
         "rating_avg": float(p.rating_avg or 0),
         "rating_count": p.rating_count,
@@ -258,7 +259,7 @@ async def product_reviews(
         "items": [review_out(r, name, show_media=show_media, voted=voted, reported=reported, user_id=user.id if user else None) for r, name in rows],
         "total": total,
         "page": page,
-        "has_more": page * 10 < total,
+        "has_more": page * size < total,
     }
 
 

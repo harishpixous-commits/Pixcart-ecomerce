@@ -16,7 +16,25 @@ type S = {
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
   defect_return_days: number;
   admin_layout_default: string;
-};
+} & Record<(typeof LIST_FIELDS)[number][0], number>;
+
+/** How many results each list shows: [setting, label, hint, the default]. 0 hides the lists whose hint says so. */
+const LIST_FIELDS = [
+  ["search_page_size", "Products per search or category page", "From 8 to 60", 24],
+  ["search_suggestions", "Search suggestions while typing", "From 1 to 12", 8],
+  ["recent_searches_max", "Recent searches remembered", "0 turns recent searches off", 8],
+  ["brand_filter_max", "Brands listed in the filters", "From 5 to 100", 30],
+  ["similar_products", "\"Customers also viewed\" on a product page", "0 hides the row", 12],
+  ["sponsored_on_product", "Sponsored products on a product page", "0 hides the row", 10],
+  ["highlights_shown", "Bullet points shown before \"See more\"", "From 1 to 20", 5],
+  ["customer_photos_shown", "Customer photos shown on a product page", "0 hides the strip", 6],
+  ["reviews_page_size", "Reviews per page", "From 5 to 50", 10],
+  ["questions_page_size", "Questions per page", "From 5 to 50", 10],
+  ["bestseller_badge_top", "Show the \"#N Best seller\" badge for the top", "From 1 to 100", 10],
+  ["recently_viewed_max", "Recently viewed products remembered", "From 4 to 30", 12],
+  ["compare_max", "Products compared at once", "From 2 to 6", 4],
+  ["checkout_suggestions", "Suggestions at checkout", "0 hides them", 10],
+] as const;
 
 const ADMIN_LAYOUT_NAMES: Record<string, string> = { sidebar: "Sidebar", topnav: "Top navigation", rail: "Compact rail", glass: "Glass" };
 
@@ -50,6 +68,7 @@ export default function AdminSettings() {
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
         adminLayout: x.admin_layout_default ?? "sidebar",
+        ...Object.fromEntries(LIST_FIELDS.map(([k, , , d]) => [k, String(x[k] ?? d)])),
       });
     }).catch(quietly);
   }, []);
@@ -68,6 +87,7 @@ export default function AdminSettings() {
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
         defect_return_days: Number(f.defectDays), payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
         admin_layout_default: f.adminLayout || "sidebar",
+        ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, Number(f[k])])),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
       setS(await api<S>("/api/admin/settings", { method: "PUT", body }));
@@ -157,6 +177,15 @@ export default function AdminSettings() {
           Each category&apos;s return window, and the shortest window sellers may choose, are set in{" "}
           <Link href="/admin/categories" className="font-semibold text-peacock">Categories</Link>.
         </p>
+      </section>
+      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2" data-testid="list-settings">
+        <div className="sm:col-span-2">
+          <h2 className="text-lg font-semibold">Lists and results</h2>
+          <p className="text-sm text-ink-soft">How many results each list shows to shoppers. The default is shown with each one.</p>
+        </div>
+        {LIST_FIELDS.map(([k, label, hint, d]) => (
+          <TextField key={k} label={label} inputMode="numeric" hint={`${hint}. Default ${d}.`} {...bind(k)} />
+        ))}
       </section>
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
         <h2 className="text-lg font-semibold sm:col-span-2">Admin panel</h2>

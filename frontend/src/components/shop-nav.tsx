@@ -12,7 +12,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { useSite } from "@/lib/site";
+import { useLists, useSite } from "@/lib/site";
 import { fillTokens } from "@/lib/tokens";
 import type { CategoryNode } from "@/lib/types";
 
@@ -26,9 +26,10 @@ function readRecent(): string[] {
   }
 }
 
-function saveRecent(q: string) {
+function saveRecent(q: string, max: number) {
+  if (max <= 0) return;
   try {
-    const list = [q, ...readRecent().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+    const list = [q, ...readRecent().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, max);
     localStorage.setItem(RECENT, JSON.stringify(list));
   } catch {
     /* private mode */
@@ -44,6 +45,7 @@ export function SearchBox({ categories, variant = "solid", shape = "rounded", bu
   categories: CategoryNode[]; variant?: "solid" | "soft" | "outline"; shape?: "rounded" | "pill"; button?: "accent" | "plain"; placeholder?: string;
 }) {
   const site = useSite();
+  const lists = useLists();
   const router = useRouter();
   const params = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
@@ -76,7 +78,7 @@ export function SearchBox({ categories, variant = "solid", shape = "rounded", bu
     const t = text.trim();
     setOpen(false);
     if (!t) return;
-    saveRecent(t);
+    saveRecent(t, lists.recent_searches_max);
     const target = `/search?q=${encodeURIComponent(t)}${cat ? `&category=${encodeURIComponent(cat)}` : ""}`;
     if (location.pathname + location.search !== target) window.dispatchEvent(new Event("route-progress:start"));
     router.push(target);
@@ -108,7 +110,7 @@ export function SearchBox({ categories, variant = "solid", shape = "rounded", bu
         id="site-search"
         value={q}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => { setRecent(readRecent()); setOpen(true); }}
+        onFocus={() => { setRecent(readRecent().slice(0, lists.recent_searches_max)); setOpen(true); }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={placeholder ?? `Search ${site.brand_name || "the store"}`}
         autoComplete="off"
@@ -154,7 +156,7 @@ export function SearchBox({ categories, variant = "solid", shape = "rounded", bu
                 <li key={c.slug}><Link href={`/c/${c.slug}`} className="flex items-center gap-2 px-4 py-2 hover:bg-mist"><LayoutGrid className="h-4 w-4 text-ink-faint" />{c.name}</Link></li>
               ))}
               {sugg.products.map((p) => (
-                <li key={p.slug}><Link href={`/p/${p.slug}`} onMouseDown={() => saveRecent(q.trim())} className="flex items-center gap-2 px-4 py-2 hover:bg-mist"><Search className="h-4 w-4 text-ink-faint" /><span className="truncate">{p.title}</span></Link></li>
+                <li key={p.slug}><Link href={`/p/${p.slug}`} onMouseDown={() => saveRecent(q.trim(), lists.recent_searches_max)} className="flex items-center gap-2 px-4 py-2 hover:bg-mist"><Search className="h-4 w-4 text-ink-faint" /><span className="truncate">{p.title}</span></Link></li>
               ))}
             </ul>
           )}

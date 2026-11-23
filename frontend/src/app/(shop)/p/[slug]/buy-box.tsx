@@ -19,7 +19,7 @@ import { api, ApiError } from "@/lib/api";
 import { date as fmtDate, rupees } from "@/lib/format";
 import { isPincode, setPincode, usePincode } from "@/lib/pincode";
 import { useSession } from "@/lib/session";
-import { useSite } from "@/lib/site";
+import { useLists, useSite } from "@/lib/site";
 import type { ProductPage, ProductVideo, PublicVariant } from "@/lib/types";
 import { rememberViewed, WishlistHeart } from "@/lib/wishlist";
 import { useLayout } from "@/themes/context";
@@ -178,10 +178,11 @@ export function ProductMain({ p }: { p: ProductPage }) {
   const site = useSite();
   const pdp = site.pdp;
   const layout = useLayout();
+  const lists = useLists();
   useEffect(() => {
-    rememberViewed({ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? "", price: p.price, mrp: p.mrp });
+    rememberViewed({ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? "", price: p.price, mrp: p.mrp }, lists.recently_viewed_max);
     api("/api/events", { method: "POST", body: { type: "view", product_id: p.id } }).catch(() => {});
-  }, [p.id, p.slug, p.title, p.images, p.price, p.mrp]);
+  }, [p.id, p.slug, p.title, p.images, p.price, p.mrp, lists.recently_viewed_max]);
   const router = useRouter();
   const toast = useToast();
   const { addToCart, user } = useSession();
@@ -283,9 +284,9 @@ export function ProductMain({ p }: { p: ProductPage }) {
             {pdp.ask_assistant && <><span className="text-line" aria-hidden>|</span><AskAboutProduct title={p.title} /></>}
           </div>
           {p.bought_last_month && <p className="text-sm font-semibold" data-testid="bought">{p.bought_last_month}</p>}
-          {(p.bestseller && p.bestseller.rank <= 10) || p.seller_snapshot?.top_seller ? (
+          {(p.bestseller && p.bestseller.rank <= lists.bestseller_badge_top) || p.seller_snapshot?.top_seller ? (
             <div className="flex flex-wrap gap-2">
-              {p.bestseller && p.bestseller.rank <= 10 && (
+              {p.bestseller && p.bestseller.rank <= lists.bestseller_badge_top && (
                 <Link href={`/c/${p.bestseller.slug}?sort=popular`} className="rounded bg-marigold px-2 py-0.5 text-xs font-bold text-ink hover:bg-marigold-dark" data-testid="bestseller">
                   #{p.bestseller.rank} Best seller <span className="font-normal">in {p.bestseller.category}</span>
                 </Link>

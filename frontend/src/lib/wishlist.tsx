@@ -79,11 +79,11 @@ export function WishlistHeart({ productId, className }: { productId: string; cla
 
 const RECENT_KEY = "pc_recent_v1";
 
-export function rememberViewed(p: { id: string; slug: string; title: string; image: string; price: number; mrp: number }) {
+export function rememberViewed(p: { id: string; slug: string; title: string; image: string; price: number; mrp: number }, max = 12) {
   try {
     const list = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x: { id: string }) => x.id !== p.id);
     list.unshift(p);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 12)));
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, Math.max(1, max))));
   } catch {
     /* storage unavailable */
   }

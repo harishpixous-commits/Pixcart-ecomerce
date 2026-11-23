@@ -26,7 +26,7 @@ import { api, ApiError, latestOnly } from "@/lib/api";
 import { rupees } from "@/lib/format";
 import { payWithRazorpay } from "@/lib/razorpay";
 import { useSession } from "@/lib/session";
-import { useSite } from "@/lib/site";
+import { useLists, useSite } from "@/lib/site";
 import type { Address, CartView, CheckoutPayload, OrderDetail, ProductCard } from "@/lib/types";
 
 type Quote = CartView & {
@@ -59,6 +59,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const toast = useToast();
   const site = useSite();
+  const lists = useLists();
   const { user, ready, cartCount, refreshCart } = useSession();
 
   const [addresses, setAddresses] = useState<Address[] | null>(null);
@@ -156,9 +157,9 @@ export default function CheckoutPage() {
     ? [...new Set(quote.groups.flatMap((g) => g.lines.map((l) => l.product_id ?? "")).filter(Boolean))].slice(0, 20).join(",")
     : "";
   useEffect(() => {
-    if (!relatedIds) return;
-    trackRelated(api<{ items: ProductCard[] }>("/api/catalog/related", { query: { ids: relatedIds, limit: 10 } }), (r) => setRelated(r.items)).catch(() => {});
-  }, [relatedIds, trackRelated]);
+    if (!relatedIds || lists.checkout_suggestions <= 0) return;
+    trackRelated(api<{ items: ProductCard[] }>("/api/catalog/related", { query: { ids: relatedIds, limit: lists.checkout_suggestions } }), (r) => setRelated(r.items)).catch(() => {});
+  }, [relatedIds, trackRelated, lists.checkout_suggestions]);
 
   const showBar = !!quote && quote.groups.length > 0;
   // Moves the help button above the pay bar and hides the compare tray on phones (see globals.css).

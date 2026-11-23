@@ -96,7 +96,7 @@ async def questions(slug: str, session: SessionDep, user: OptionalUser, q: str =
     order = [ProductQuestion.answer_count.desc(), ProductQuestion.created_at.desc()] if sort == "helpful" else [ProductQuestion.created_at.desc()]
     total = (await session.execute(select(func.count()).select_from(ProductQuestion).where(*conds))).scalar_one()
     rows = (await session.execute(select(ProductQuestion, User.name).outerjoin(User, User.id == ProductQuestion.user_id).where(*conds)
-                                  .order_by(*order, ProductQuestion.id).offset((page - 1) * 10).limit(10))).all()
+                                  .order_by(*order, ProductQuestion.id).offset((page - 1) * cfg["questions_page_size"]).limit(cfg["questions_page_size"]))).all()
     qids = [r[0].id for r in rows]
     answers: dict = {}
     voted: set = set()
@@ -119,7 +119,7 @@ async def questions(slug: str, session: SessionDep, user: OptionalUser, q: str =
                          "role_label": ROLE_LABEL[a.role], "helpful_count": a.helpful_count, "voted": a.id in voted, "created_at": a.created_at.isoformat()}
                         for a, n in lst],
         })
-    return {"enabled": True, "items": items, "total": total, "page": page, "has_more": page * 10 < total,
+    return {"enabled": True, "items": items, "total": total, "page": page, "has_more": page * cfg["questions_page_size"] < total,
             "can_ask": user is not None, "buyers_answer_only": cfg["qa_buyers_answer_only"]}
 
 
@@ -280,7 +280,7 @@ async def compare(session: SessionDep, ids: str = Query(max_length=200)) -> dict
     if not cfg["feature_compare"]:
         raise ApiError("Compare is switched off", "compare_off")
     want = []
-    for x in ids.split(",")[:4]:
+    for x in ids.split(",")[: cfg["compare_max"]]:
         try:
             want.append(uuid.UUID(x.strip()))
         except ValueError:

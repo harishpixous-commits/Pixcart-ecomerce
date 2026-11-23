@@ -18,7 +18,7 @@ import { Button, ErrorNote, Modal, Select, Textarea, TextField, useToast } from 
 import { api, ApiError, quietly, uploadWithProgress } from "@/lib/api";
 import { date } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import { useSite } from "@/lib/site";
+import { useLists, useSite } from "@/lib/site";
 import type { CustomerMediaItem, ReviewMedia, ReviewSettingsPublic } from "@/lib/types";
 
 type Topic = { name: string; count: number; positive: number; negative: number; positive_pct: number; tone: "positive" | "negative" | "mixed" };
@@ -132,6 +132,7 @@ export function CustomerMediaViewer({ items, start, total, loadMore, onClose }: 
 /** Customer photos under the product photos: a row of thumbnails that opens the viewer. */
 export function CustomerMediaStrip({ slug }: { slug: string }) {
   const pathname = usePathname();
+  const photosShown = useLists().customer_photos_shown;
   const [items, setItems] = useState<CustomerMediaItem[]>([]);
   const [total, setTotal] = useState(0);
   const [signIn, setSignIn] = useState(false);
@@ -155,8 +156,8 @@ export function CustomerMediaStrip({ slug }: { slug: string }) {
   if (signIn) {
     return <p className="mt-3 text-sm text-ink-soft"><Camera className="mr-1 inline h-4 w-4" /> Customers shared photos of this product. <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="font-semibold text-peacock">Sign in to see them</Link></p>;
   }
-  if (!items.length) return null;
-  const shown = items.slice(0, 6);
+  if (!items.length || photosShown <= 0) return null;
+  const shown = items.slice(0, photosShown);
   return (
     <section className="mt-4" aria-labelledby="cust-media-h" data-testid="customer-media">
       <h2 id="cust-media-h" className="mb-2 text-sm font-semibold">Customer photos and videos ({total})</h2>

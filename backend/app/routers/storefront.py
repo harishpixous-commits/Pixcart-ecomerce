@@ -19,7 +19,7 @@ from app.routers.catalog import _category_tree, product_cards
 from app.services import review_settings
 from app.services.catalog import category_descendant_ids, public_product_filter
 from app.services.cms import DEFAULT_PAGES, ensure_default_sections, get_site
-from app.services.platform_settings import get_settings
+from app.services.platform_settings import LIST_KEYS, get_settings
 
 router = APIRouter(prefix="/api", tags=["storefront"])
 
@@ -40,7 +40,8 @@ async def site(session: SessionDep) -> dict:
             "shipping_fee_paise": cfg["shipping_fee_paise"], "max_qty_per_item": cfg["max_qty_per_item"],
             "pdp": {k.removeprefix("pdp_"): v for k, v in cfg.items() if k.startswith("pdp_")}
                    | {"header_pincode": cfg["header_pincode"], "page_loading_bar": cfg["page_loading_bar"]},
-            "reviews": review_settings.public(await review_settings.get(session))}
+            "reviews": review_settings.public(await review_settings.get(session)),
+            "lists": {k: cfg[k] for k in LIST_KEYS}}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

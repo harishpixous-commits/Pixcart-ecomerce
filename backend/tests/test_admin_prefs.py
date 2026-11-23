@@ -26,6 +26,7 @@ async def test_defaults(admin):
         "admin_layout": "sidebar",
         "default_layout": "sidebar",
         "layouts": ["sidebar", "topnav", "rail", "glass"],
+        "environment": "test",  # shown as a badge in the admin header outside production
     }
     assert (await admin.get("/api/admin/settings")).json()["admin_layout_default"] == "sidebar"
 

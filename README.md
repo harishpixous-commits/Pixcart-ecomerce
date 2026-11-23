@@ -29,6 +29,10 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
   (inspired by Apple's design guidelines); the owner sets the default.
 - **Images or videos in any home block** (hero slides, banners, banner grids, card tiles, and an image or video block),
   from the media library; skeleton loaders on every screen so pages are never blank.
+- **Lists and results** (Admin → Marketplace settings): how many results every shopper-facing list shows, each with
+  its default: products per page, search suggestions, recent searches, brands in filters, "Customers also viewed",
+  sponsored products, highlights before "See more", customer photos, reviews and questions per page, the best-seller
+  badge, recently viewed, compare and checkout suggestions; 0 hides the lists that can be hidden.
 
 - **Own delivery fleet** (like Instamart or Flipkart's own delivery): partner app on the web and Android (sign-up with
   KYC, online switch, request pop-up with countdown, navigation, pickup code, customer OTP, cash collection, photo

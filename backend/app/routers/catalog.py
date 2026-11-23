@@ -189,13 +189,16 @@ async def search(
     in_stock: bool = False,
     sort: SORTS = "relevance",
     page: int = Query(default=1, ge=1, le=500),
-    page_size: int = Query(default=24, ge=1, le=60),
+    page_size: int | None = Query(default=None, ge=1, le=60),  # default: Admin → Marketplace settings
     pincode: str | None = Query(default=None, pattern=r"^[1-9][0-9]{5}$"),
     delivery: int | None = Query(default=None, ge=1, le=7),  # arrives within this many days at the PIN code
     deal: bool = False,
 ) -> dict:
     from app.models import Deal
     from app.services import ads as ads_svc
+
+    lists = await get_settings(session)
+    page_size = page_size or lists["search_page_size"]
 
     conds = list(public_product_filter())
     rank = literal(0.0)
@@ -265,7 +268,7 @@ async def search(
     facet_where = and_(*facet_conds)
     brands = (
         await session.execute(
-            select(Product.brand, func.count()).where(facet_where, Product.brand != "").group_by(Product.brand).order_by(func.count().desc()).limit(30)
+            select(Product.brand, func.count()).where(facet_where, Product.brand != "").group_by(Product.brand).order_by(func.count().desc()).limit(lists["brand_filter_max"])
         )
     ).all()
     price_range = (await session.execute(select(func.min(Product.price_from), func.max(Product.price_from)).where(facet_where))).one()
@@ -304,16 +307,17 @@ async def search(
 @router.get("/suggest")
 async def suggest(session: SessionDep, q: str = Query(min_length=1, max_length=60)) -> dict:
     text = q.strip()
+    lists = await get_settings(session)
     tsq = _prefix_tsquery(text)
     conds = [literal(text).op("<%")(Product.title)]
     if tsq:
         conds.insert(0, Product.search_vector.op("@@")(func.to_tsquery("simple", tsq)))
     titles = (
         await session.execute(
-            select(Product.title, Product.slug).where(*public_product_filter(), or_(*conds)).order_by(func.word_similarity(text, Product.title).desc()).limit(8)
+            select(Product.title, Product.slug).where(*public_product_filter(), or_(*conds)).order_by(func.word_similarity(text, Product.title).desc()).limit(lists["search_suggestions"])
         )
     ).all()
-    cats = (await session.execute(select(Category.name, Category.slug).where(Category.is_active.is_(True), Category.name.ilike(f"%{text}%")).limit(4))).all()
+    cats = (await session.execute(select(Category.name, Category.slug).where(Category.is_active.is_(True), Category.name.ilike(f"%{text}%")).limit(min(4, lists["search_suggestions"])))).all()
     return {
         "products": [{"title": t, "slug": s} for t, s in titles],
         "categories": [{"name": n, "slug": s} for n, s in cats],
@@ -354,10 +358,10 @@ async def product_page(slug: str, session: SessionDep) -> dict:
     similar = list(
         (
             await session.execute(
-                select(Product).where(*public_product_filter(), Product.category_id == p.category_id, Product.id != p.id, Product.in_stock.is_(True)).order_by(Product.sold_count.desc(), Product.rating_avg.desc()).limit(12)
+                select(Product).where(*public_product_filter(), Product.category_id == p.category_id, Product.id != p.id, Product.in_stock.is_(True)).order_by(Product.sold_count.desc(), Product.rating_avg.desc()).limit(max(1, cfg["similar_products"]))
             )
         ).scalars()
-    ) if cfg["pdp_similar"] else []
+    ) if cfg["pdp_similar"] and cfg["similar_products"] > 0 else []
     key_specs = []
     if cfg["pdp_key_specs"]:
         names = details.key_specs or list(p.specs)[:5]
