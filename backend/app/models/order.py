@@ -280,7 +280,10 @@ class Translation(IdMixin, TimestampMixin, Base):
     text: Mapped[str] = mapped_column(Text)
     origin: Mapped[str] = mapped_column(String(8), default="ai", server_default="ai")
 
-    __table_args__ = (UniqueConstraint("lang", "source_hash", name="uq_translations_lang_source"),)
+    __table_args__ = (
+        UniqueConstraint("lang", "source_hash", name="uq_translations_lang_source"),
+        Index("ix_translations_lang_origin", "lang", "origin"),
+    )
 
 
 class PlatformSetting(Base):
