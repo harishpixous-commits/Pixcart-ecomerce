@@ -6,6 +6,7 @@ using API.Configurations;
 var builder = WebApplication.CreateBuilder(args);
 var settings = builder.AddPixCart();
 var app = builder.Build();
+if (await CommandLine.TryRunAsync(args, app.Services)) return; // dotnet API.dll create-admin | migrate
 await app.UsePixCartAsync(settings);
 app.Run();
 

@@ -139,5 +139,34 @@ public static class ServiceConfiguration
         });
         app.UseCors();
         app.MapControllers();
+
+        // Windows hosting (one IIS site): the built Angular app is published into wwwroot and served from here, so the
+        // site and the API share one address (same-origin cookies, no proxy). Unknown non-API paths get index.html
+        // (Angular's router shows the page); unknown /api paths stay 404 JSON.
+        var web = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+        if (File.Exists(Path.Combine(web, "index.html")))
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = c =>
+                {
+                    var name = c.File.Name;
+                    // hashed bundles never change; index.html must always be fresh after a deploy
+                    c.Context.Response.Headers.CacheControl = name == "index.html" ? "no-cache" :
+                        System.Text.RegularExpressions.Regex.IsMatch(name, @"-[A-Z0-9]{8}\.(js|css)$") ? "public, max-age=31536000, immutable" : "public, max-age=3600";
+                },
+            });
+            app.MapFallback(async ctx =>
+            {
+                if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments(settings.MediaBaseUrl))
+                {
+                    await ExceptionMiddleware.Write(ctx, 404, "not_found", "Not found", null);
+                    return;
+                }
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                ctx.Response.Headers.CacheControl = "no-cache";
+                await ctx.Response.SendFileAsync(Path.Combine(web, "index.html"));
+            });
+        }
     }
 }
