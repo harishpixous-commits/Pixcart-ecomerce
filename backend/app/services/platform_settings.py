@@ -129,6 +129,9 @@ DEFAULTS: dict[str, Any] = {
     "admin_layout_default": "sidebar",
     # maintenance mode: shoppers see a "back soon" page and cannot place orders; staff keep using the shop and the
     # admin panel, sellers their hub and delivery partners their app
+    # orders (Admin → Marketplace settings → Orders and payouts)
+    "payment_window_minutes": 30,      # unpaid online orders are cancelled after this
+    "customer_cancel_until": "packed",  # customers cancel by themselves up to this step: placed | confirmed | packed
     "maintenance_mode": False,
     "maintenance_message": "We are making a few improvements and will be back shortly. Thank you for your patience.",
     # "page not found" and "something went wrong" pages, in the shop's theme (Admin → Marketplace settings)
@@ -162,6 +165,7 @@ LIST_KEYS: tuple[str, ...] = (
 # key -> the values a text setting may take
 CHOICES: dict[str, tuple[str, ...]] = {
     "admin_layout_default": ADMIN_LAYOUTS,
+    "customer_cancel_until": ("placed", "confirmed", "packed"),
 }
 
 # key -> (type, min, max)
@@ -170,6 +174,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "free_shipping_threshold_paise": (int, 0, 10_000_000),
     "cod_enabled": (bool, 0, 1),
     "maintenance_mode": (bool, 0, 1),
+    "payment_window_minutes": (int, 10, 120),
     "not_found_search": (bool, 0, 1),
     "not_found_suggestions": (bool, 0, 1),
     "cod_fee_paise": (int, 0, 10_000),

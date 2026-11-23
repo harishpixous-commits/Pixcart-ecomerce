@@ -37,7 +37,7 @@ from app.services import fleet, razorpay
 from app.services.cms import get_site
 from app.services.coupons import evaluate
 from app.services.orders import (
-    CUSTOMER_CANCELLABLE,
+    customer_cancellable,
     cancel_sub_order,
     cart_payload,
     checkout_payload,
@@ -122,9 +122,10 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
     prepaid = o.payment_method == "online" and o.payment_status in ("paid", "partially_refunded")
     fees_back = bool((await fees_svc.get(session))["fees_refund_on_cancel"]) if prepaid else False
     live = sum(1 for s in subs if s.status != "cancelled")
+    can_cancel_at = await customer_cancellable(session)
 
     def refund_if_cancelled(s: SubOrder) -> int:
-        if not prepaid or s.status not in CUSTOMER_CANCELLABLE:
+        if not prepaid or s.status not in can_cancel_at:
             return 0
         return refund_on_cancel(s, o, others_live=live - 1, fees_back=fees_back)
 
@@ -172,7 +173,7 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
                 "cancelled_at": s.cancelled_at.isoformat() if s.cancelled_at else None,
                 "cancel_reason": s.cancel_reason,
                 "cancelled_by": s.cancelled_by,
-                "can_cancel": s.status in CUSTOMER_CANCELLABLE,
+                "can_cancel": s.status in can_cancel_at,
                 "refund_if_cancelled": refund_if_cancelled(s),
                 "items": [
                     {
@@ -406,7 +407,8 @@ async def customer_cancel(session, o: Order, sub_order_id: uuid.UUID | None, rea
     targets = [s for s in subs if (sub_order_id is None or s.id == sub_order_id)]
     if sub_order_id and not targets:
         raise NotFound("Order part")
-    cancellable = [s for s in targets if s.status in CUSTOMER_CANCELLABLE or s.status == "pending_payment"]
+    allowed = await customer_cancellable(session)
+    cancellable = [s for s in targets if s.status in allowed or s.status == "pending_payment"]
     if not cancellable:
         raise ApiError("This order can no longer be cancelled. You can return it after delivery.", "not_cancellable")
     refund_ids = []

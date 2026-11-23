@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Order, OrderItem, Refund, ReturnRequest, Seller, SubOrder, SupportTicket, TicketMessage
 from app.services import returns as returns_svc
-from app.services.orders import CUSTOMER_CANCELLABLE
+from app.services.orders import customer_cancellable
 from app.services.platform_settings import RETURN_REASONS
 from app.services.support import CATEGORIES
 
@@ -78,6 +78,7 @@ async def order_view(session: AsyncSession, o: Order) -> dict[str, Any]:
     refunds = list((await session.execute(select(Refund).where(Refund.order_id == o.id).order_by(Refund.created_at))).scalars())
     rets = list((await session.execute(select(ReturnRequest).where(ReturnRequest.sub_order_id.in_([s.id for s in subs])).order_by(ReturnRequest.created_at))).scalars()) if subs else []
     packages = []
+    can_cancel_at = await customer_cancellable(session)
     for s in subs:
         returnable = await returns_svc.returnable_items(session, s)
         reached = STEPS.index(s.status) if s.status in STEPS else -1
@@ -90,7 +91,7 @@ async def order_view(session: AsyncSession, o: Order) -> dict[str, Any]:
             "expected_delivery_at": _d(s.expected_delivery_at), "shipped_at": _d(s.shipped_at), "delivered_at": _d(s.delivered_at),
             "cancelled_at": _d(s.cancelled_at), "cancel_reason": s.cancel_reason if s.status == "cancelled" else "",
             "courier": s.courier_name, "tracking_number": s.tracking_number, "tracking_url": s.tracking_url,
-            "can_cancel": s.status in CUSTOMER_CANCELLABLE,
+            "can_cancel": s.status in can_cancel_at,
             "can_return": any(r["eligible"] for r in returnable),
             "return_by": min((r["return_by"] for r in returnable if r["eligible"]), default=None),
             "invoice_ready": bool(s.invoice_number),

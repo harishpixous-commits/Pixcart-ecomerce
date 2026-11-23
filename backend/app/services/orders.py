@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings
+from app.config import Settings
 from app.core.errors import ApiError, Conflict
 from app.core.money import apply_bps, compute_settlement, split_inclusive_gst
 from app.core.validators import STATES, validate_gstin
@@ -66,7 +66,13 @@ TRANSITIONS: dict[str, tuple[str, ...]] = {
     "delivered": (),
     "cancelled": (),
 }
-CUSTOMER_CANCELLABLE = ("placed", "confirmed", "packed")
+CUSTOMER_CANCELLABLE = ("placed", "confirmed", "packed")  # the most a customer may ever cancel by themselves
+
+
+async def customer_cancellable(session: AsyncSession) -> tuple[str, ...]:
+    """The package steps a customer can still cancel at, up to the owner's choice (Admin → Marketplace settings)."""
+    until = (await get_settings(session))["customer_cancel_until"]
+    return CUSTOMER_CANCELLABLE[: CUSTOMER_CANCELLABLE.index(until) + 1] if until in CUSTOMER_CANCELLABLE else CUSTOMER_CANCELLABLE
 
 
 def can_transition(src: str, dst: str) -> bool:
@@ -382,7 +388,7 @@ async def place_order(
         buyer_business=business,
         grand_total=grand_total,
         idempotency_key=idempotency_key,
-        payment_expires_at=now + timedelta(minutes=settings.payment_window_minutes) if is_online else None,
+        payment_expires_at=now + timedelta(minutes=(await get_settings(session))["payment_window_minutes"]) if is_online else None,
         placed_at=None if is_online else now,
     )
     session.add(order)

@@ -29,7 +29,7 @@ from app.llm import adapters
 from app.llm import config as llm_config
 from app.llm import router as llm_router
 from app.models import AiRun, Order, ShopChatMessage, ShopChatSession, SubOrder, User
-from app.services.orders import CUSTOMER_CANCELLABLE
+from app.services.orders import customer_cancellable
 
 from . import intents, kb, prompts, replies, tools, views
 from . import settings as shop_settings
@@ -167,7 +167,7 @@ async def guided(ctx: tools.Ctx, it: intents.Intent, text: str, cfg: dict[str, A
             data = await call("prepare_cancellation", {"order_number": it.package_number or it.order_number})
             parts.append(data["error"] if data.get("error") else replies.t("cancel_ready", lang))
         else:
-            orders = await _orders_with(ctx, (*CUSTOMER_CANCELLABLE, "pending_payment"))
+            orders = await _orders_with(ctx, (*(await customer_cancellable(ctx.session)), "pending_payment"))
             if len(orders) == 1:
                 data = await call("prepare_cancellation", {"order_number": orders[0].number})
                 parts.append(data["error"] if data.get("error") else replies.t("cancel_ready", lang))

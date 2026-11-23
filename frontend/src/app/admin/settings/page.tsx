@@ -16,7 +16,7 @@ type S = {
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
   defect_return_days: number;
   admin_layout_default: string;
-  maintenance_mode: boolean; maintenance_message: string;
+  maintenance_mode: boolean; maintenance_message: string; payment_window_minutes: number; customer_cancel_until: "placed" | "confirmed" | "packed";
 } & Record<(typeof LIST_FIELDS)[number][0], number> & Record<(typeof PAGE_TEXTS)[number][0], string> & Record<(typeof PAGE_SWITCHES)[number][0], boolean>;
 
 /** Error pages: [setting, label, longest]. */
@@ -84,6 +84,7 @@ export default function AdminSettings() {
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
+        payWindow: String(x.payment_window_minutes ?? 30), cancelUntil: x.customer_cancel_until ?? "packed",
         adminLayout: x.admin_layout_default ?? "sidebar", maintenanceMessage: x.maintenance_message ?? "",
         ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, x[k] ?? ""])),
         ...Object.fromEntries(LIST_FIELDS.map(([k, , , d]) => [k, String(x[k] ?? d)])),
@@ -104,6 +105,7 @@ export default function AdminSettings() {
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
         defect_return_days: Number(f.defectDays), payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
+        payment_window_minutes: Number(f.payWindow), customer_cancel_until: f.cancelUntil || "packed",
         admin_layout_default: f.adminLayout || "sidebar",
         maintenance_mode: maintenance, maintenance_message: f.maintenanceMessage ?? "",
         ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), ...pageFlags,
@@ -194,6 +196,14 @@ export default function AdminSettings() {
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
         <h2 className="text-lg font-semibold sm:col-span-2">Orders and payouts</h2>
         <TextField label="Cancel orders sellers don't confirm within (hours)" {...bind("autoCancel")} hint="0 turns this off. Customers are refunded in full." />
+        <TextField label="Time to pay online (minutes)" inputMode="numeric" {...bind("payWindow")} hint="Unpaid online orders are cancelled after this and the stock is released. 10 to 120." />
+        <Field label="Customers can cancel by themselves" htmlFor="cancelUntil" hint="After this step they ask support, or return the item after delivery">
+          <Select id="cancelUntil" value={f.cancelUntil} onChange={(e) => setF({ ...f, cancelUntil: e.target.value })}>
+            <option value="placed">Until the seller confirms</option>
+            <option value="confirmed">Until the seller packs</option>
+            <option value="packed">Until it is shipped</option>
+          </Select>
+        </Field>
         <TextField label="Minimum payout (₹)" {...bind("payoutMin")} hint="Smaller balances wait for the next run" />
         <Field label="Payout day" htmlFor="payDay" hint="Automatic payouts start at 10:00 IST on this day">
           <Select id="payDay" value={f.payDay} onChange={(e) => setF({ ...f, payDay: e.target.value })}>
