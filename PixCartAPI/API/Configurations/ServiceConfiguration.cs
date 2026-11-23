@@ -42,6 +42,8 @@ public static class ServiceConfiguration
         // every *DAL class (scoped), and every *BAL class under its I*BAL interface when it has one
         RegisterByName(services, typeof(DAL.SettingsDAL).Assembly, "DAL");
         RegisterByName(services, typeof(BAL.AccessBAL).Assembly, "BAL");
+        // The storefront's optional deal-timer hook is the same DealsBAL instance as IDealsBAL.
+        services.AddScoped<BAL.Interface.IDealSync>(sp => sp.GetRequiredService<BAL.DealsBAL>());
 
         // background workers (BAL/BackgroundWorkerService): scheduled jobs, notifications, refunds ...
         if (settings.RunJobs && !settings.IsTest)

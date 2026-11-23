@@ -9,7 +9,7 @@ public interface ICartBAL
     Task<JsonObject> ViewAsync(Guid userId);
 
     /// <summary>The cart lines with availability problems and buy limits filled in (reference: load_cart).</summary>
-    Task<List<CartBAL.CartLine>> LoadCartAsync(Guid userId);
+    Task<List<CartBAL.CartLine>> LoadCartAsync(Guid userId, Utils.Interface.IUnitOfWork? uow = null, bool forUpdate = false);
 
     /// <summary>Puts the quantity in the cart, lowered to what can be bought; returns the note when it was lowered.</summary>
     Task<string> SetAsync(Guid userId, Guid variantId, int qty, bool add = false);

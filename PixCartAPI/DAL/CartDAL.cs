@@ -9,10 +9,10 @@ public class CartDAL(IMySqlDapperHelper db)
 {
     /// <summary>The cart lines with what they need (version, product, seller), in version order: the fixed order that
     /// prevents deadlocks between concurrent checkouts (the reference orders by variant id for the same reason).</summary>
-    public async Task<IReadOnlyList<(CartItemModel Item, VariantModel Variant, ProductModel Product, SellerModel Seller)>> LoadAsync(Guid userId)
+    public async Task<IReadOnlyList<(CartItemModel Item, VariantModel Variant, ProductModel Product, SellerModel Seller)>> LoadAsync(
+        Guid userId, IUnitOfWork? uow = null, bool forUpdate = false)
     {
-        var rows = await db.QueryAsync<CartItemModel, VariantModel, ProductModel, SellerModel, (CartItemModel, VariantModel, ProductModel, SellerModel)>(
-            """
+        const string sql = """
             SELECT c.*, v.id AS v_id, v.*, p.id AS p_id, p.*, s.id AS s_id, s.*
             FROM cart_items c
             JOIN variants v ON v.id = c.variant_id
@@ -20,8 +20,14 @@ public class CartDAL(IMySqlDapperHelper db)
             JOIN sellers s ON s.id = p.seller_id
             WHERE c.user_id = @userId
             ORDER BY v.id
-            """,
-            (c, v, p, s) => (c, v, p, s), new { userId }, splitOn: "v_id,p_id,s_id");
+            """;
+        // Locking the rows while an order is placed keeps a concurrent cart edit from slipping through.
+        var stmt = forUpdate ? sql + "\nFOR UPDATE" : sql;
+        var rows = uow is null
+            ? await db.QueryAsync<CartItemModel, VariantModel, ProductModel, SellerModel, (CartItemModel, VariantModel, ProductModel, SellerModel)>(
+                stmt, (c, v, p, s) => (c, v, p, s), new { userId }, splitOn: "v_id,p_id,s_id")
+            : await Dapper.SqlMapper.QueryAsync<CartItemModel, VariantModel, ProductModel, SellerModel, (CartItemModel, VariantModel, ProductModel, SellerModel)>(
+                uow.Connection, stmt, (c, v, p, s) => (c, v, p, s), new { userId }, transaction: uow.Transaction, splitOn: "v_id,p_id,s_id");
         return rows.ToList();
     }
 

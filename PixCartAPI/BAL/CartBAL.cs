@@ -3,6 +3,7 @@ using BAL.Interface;
 using DAL;
 using Model.DomainModel;
 using Utils;
+using Utils.Interface;
 
 namespace BAL;
 
@@ -33,9 +34,9 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     }
 
     /// <summary>The cart lines with availability problems and buy limits filled in (reference: load_cart).</summary>
-    public async Task<List<CartLine>> LoadCartAsync(Guid userId)
+    public async Task<List<CartLine>> LoadCartAsync(Guid userId, IUnitOfWork? uow = null, bool forUpdate = false)
     {
-        var rows = await cart.LoadAsync(userId);
+        var rows = await cart.LoadAsync(userId, uow, forUpdate);
         var imgs = await catalog.ImagesForAsync(rows.Select(r => r.Product.Id).Distinct());
         var cfg = await platform.GetAsync();
         var perItem = cfg.Int("max_qty_per_item");
