@@ -33,6 +33,7 @@ public class OrdersBAL(
     ICatalogNotifyBAL notify,
     IRateLimitBAL rateLimit,
     ISiteBAL site,
+    IRefundQueue refundQueue,
     SettingsDAL settings,
     Utils.AppSettings app,
     IMySqlDapperHelper db) : IOrdersBAL
@@ -811,8 +812,9 @@ public class OrdersBAL(
         await uow.CommitAsync();
         if (result == "refund")
         {
-            // Sending the duplicate-payment refunds to the gateway lands with the refunds runner; the rows are queued.
-            _ = await orders.PendingRefundIdsAsync(payment.Id);
+            // The duplicate-payment refunds go to the gateway from the background refund worker (reference:
+            // background.add_task(run_refunds, ...)).
+            refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
         }
         if (result == "not_captured")
             throw new AppException("The payment was not completed. You can try again.", "payment_not_captured");
@@ -848,7 +850,7 @@ public class OrdersBAL(
                     if (result is "paid" or "already" or "already_paid" or "refund")
                     {
                         outp["status"] = "paid";
-                        if (result == "refund") _ = await orders.PendingRefundIdsAsync(payment.Id);
+                        if (result == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
                     }
                     else if (res["waiting"]!.GetValue<bool>()) outp["status"] = "waiting";
                     else if (res["reason"]!.GetValue<string>() is { Length: > 0 } r)
@@ -933,9 +935,9 @@ public class OrdersBAL(
     }
 
     /// <summary>POST /api/orders/{order_id}/cancel (reference: cancel + customer_cancel). Cancels the customer's
-    /// cancellable packages (all, or one) in one transaction; the response is the order detail as it stood when the
-    /// cancel committed, then any refunds are sent to the gateway (reference: a background task; ours runs inline
-    /// right after the snapshot so a crash between commit and send is picked up by the refund retry job either way).</summary>
+    /// cancellable packages (all, or one) in one transaction and answers with the order detail; any refunds go to the
+    /// gateway from the background refund worker after the response (reference: a FastAPI background task), with the
+    /// retry job covering a crash in between.</summary>
     public async Task<JsonObject> CancelAsync(UserModel user, Guid orderId, string reason, Guid? subOrderId)
     {
         var own = await orders.GetOrderAsync(orderId);
@@ -947,7 +949,7 @@ public class OrdersBAL(
             await uow.CommitAsync();
         }
         var detail = await DetailAsync((await orders.GetOrderAsync(orderId))!);
-        await ProcessRefundsAsync(refundIds);
+        refundQueue.Enqueue(refundIds);
         return detail;
     }
 

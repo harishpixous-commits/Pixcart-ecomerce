@@ -28,6 +28,9 @@ public static class ServiceConfiguration
 
         // Utils (company helpers)
         services.AddSingleton<IMySqlDapperHelper, MySqlDapperHelper>();
+        services.AddSingleton<API.Infrastructure.RefundQueue>();
+        services.AddSingleton<BAL.Interface.IRefundQueue>(sp => sp.GetRequiredService<API.Infrastructure.RefundQueue>());
+        services.AddHostedService<API.Infrastructure.RefundWorker>();
         services.AddSingleton<IMySqlHelper, Utils.MySqlHelper>();
         services.AddSingleton<IMailHelper, MailHelper>();
         services.AddSingleton<ISMSHelper, SMSHelper>();
