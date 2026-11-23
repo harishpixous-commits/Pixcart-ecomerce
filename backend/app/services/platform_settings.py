@@ -141,7 +141,20 @@ DEFAULTS: dict[str, Any] = {
     "not_found_suggestions": True,  # bestsellers under it
     "error_title": "Something went wrong on our side",
     "error_message": "Please try again. If it keeps happening, contact us and quote the reference shown below.",
+    # the shop's mobile app (Admin -> Marketplace settings -> Mobile apps). Every phone can install the website as an
+    # app from /app (Android one tap, iPhone "Add to Home Screen"); these add store links and the Android APK
+    "shop_app_banner": True,          # a small "Get the app" bar on phones
+    "shop_android_apk_url": "",       # filled in by uploading the APK, or any https:// link
+    "shop_play_store_url": "",
+    "shop_app_store_url": "",
+    "shop_app_version": "",
 }
+
+# key -> longest; "" or an http(s) link
+URLS: dict[str, int] = {"shop_android_apk_url": 500, "shop_play_store_url": 500, "shop_app_store_url": 500}
+# key -> longest; any short text, may be empty
+SHORT_TEXTS: dict[str, int] = {"shop_app_version": 20}
+APP_KEYS: tuple[str, ...] = ("shop_app_banner", "shop_android_apk_url", "shop_play_store_url", "shop_app_store_url", "shop_app_version")
 
 # the error pages' settings the storefront needs (sent with /api/site as error_pages)
 ERROR_PAGE_KEYS: tuple[str, ...] = ("not_found_title", "not_found_message", "not_found_search", "not_found_suggestions", "error_title", "error_message")
@@ -174,6 +187,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "free_shipping_threshold_paise": (int, 0, 10_000_000),
     "cod_enabled": (bool, 0, 1),
     "maintenance_mode": (bool, 0, 1),
+    "shop_app_banner": (bool, 0, 1),
     "payment_window_minutes": (int, 10, 120),
     "not_found_search": (bool, 0, 1),
     "not_found_suggestions": (bool, 0, 1),
@@ -309,6 +323,16 @@ def validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(value, str) or value not in CHOICES[key]:
                 raise ValueError(f"{key} must be one of: {', '.join(CHOICES[key])}")
             clean[key] = value
+            continue
+        if key in URLS:
+            if not isinstance(value, str) or len(value) > URLS[key] or (value.strip() and not value.strip().lower().startswith(("https://", "http://", "/"))):
+                raise ValueError(f"{key} must be a link starting with https://")
+            clean[key] = value.strip()
+            continue
+        if key in SHORT_TEXTS:
+            if not isinstance(value, str) or len(value.strip()) > SHORT_TEXTS[key]:
+                raise ValueError(f"{key} must be at most {SHORT_TEXTS[key]} characters")
+            clean[key] = value.strip()
             continue
         if key in TEXTS:
             lo, hi = TEXTS[key]

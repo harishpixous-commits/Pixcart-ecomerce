@@ -33,7 +33,7 @@ export default function ImportListings() {
 
   return (
     <div className="flex max-w-5xl flex-col gap-4">
-      <PageHeader title="Bulk upload listings" sub="Add many products at once from a spreadsheet. Products are saved as drafts; add photos to each and submit them for review." />
+      <PageHeader back={{ href: "/seller/products", label: "Products" }} title="Bulk upload listings" sub="Add many products at once from a spreadsheet. Products are saved as drafts; add photos to each and submit them for review." />
       <section className="flex flex-col gap-3 rounded-xl bg-white p-5">
         <h2 className="text-lg font-semibold">1. Fill in the template</h2>
         <p className="text-sm text-ink-soft">One row per product option (size, colour). Rows with the same <code className="rounded bg-mist px-1">product_key</code> become one product; product details are read from its first row. Prices are in rupees, the category is a sub-category name exactly as shown in the listing form, GST rate is a percentage (leave empty for the category default). Up to 300 products and 2,000 rows per file.</p>

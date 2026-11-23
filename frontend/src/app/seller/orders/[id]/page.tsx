@@ -89,6 +89,7 @@ export default function SellerOrderDetail() {
     <div className="flex flex-col gap-4">
       <div className="print:hidden">
         <PageHeader
+          back={{ href: "/seller/orders", label: "Orders" }}
           title={`Order ${o.number}`}
           sub={`Placed ${dateTime(o.created_at)}, ${o.payment_method === "cod" ? "cash on delivery: collect " + rupees(o.cod_to_collect ?? o.total) : "prepaid"}`}
           actions={

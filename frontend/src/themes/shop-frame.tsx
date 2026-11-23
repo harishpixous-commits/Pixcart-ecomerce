@@ -9,6 +9,8 @@ import { Construction, Eye, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
+import { AppBanner } from "@/components/app-banner";
+import { ShopBackBar } from "@/components/back-button";
 import { BackToTop } from "@/components/back-to-top";
 import { CompareTray } from "@/components/compare";
 import { ShopAssistant } from "@/components/shop-assistant/widget";
@@ -111,8 +113,10 @@ function OpenShop({ maintenance, children }: { maintenance: boolean; children: R
   return (
     <div data-theme={t.data.id} data-sections={layout.home.sections} data-grid={layout.productGrid} className="flex min-h-screen flex-col">
       {maintenance && <MaintenanceBar />}
+      <AppBanner />
       {t.preview && <PreviewBar />}
       <Header />
+      <ShopBackBar />
       <main className="mx-auto w-full min-h-[60vh] max-w-shop flex-1 px-3 py-4 sm:px-4 sm:py-6">{children}</main>
       <BackToTop />
       <Footer />

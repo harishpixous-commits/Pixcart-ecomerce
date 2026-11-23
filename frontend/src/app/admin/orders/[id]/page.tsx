@@ -52,7 +52,7 @@ export default function AdminOrderDetail() {
   const a = o.ship_to;
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title={`Order ${o.number}`} sub={`${dateTime(o.created_at)}, ${o.payment_method === "cod" ? "cash on delivery" : "online"}: ${PAYMENT_STATUS_LABEL[o.payment_status]}`} />
+      <PageHeader back={{ href: "/admin/orders", label: "Orders" }} title={`Order ${o.number}`} sub={`${dateTime(o.created_at)}, ${o.payment_method === "cod" ? "cash on delivery" : "online"}: ${PAYMENT_STATUS_LABEL[o.payment_status]}`} />
       <ErrorNote message={error} />
       <div className="grid gap-4 lg:grid-cols-2">
         <RiskBrief path={`/api/admin/ai/briefs/order/${o.id}`} title="Order risk" />

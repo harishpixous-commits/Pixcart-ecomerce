@@ -140,6 +140,7 @@ export function AccountMenu({ tone = "dark", compact = false }: { tone?: HeaderT
           <Link href="/support" className="block px-4 py-2 hover:bg-mist">Help and support</Link>
           <Link href="/contact" className="block px-4 py-2 hover:bg-mist">Contact us</Link>
           <Link href="/account" className="block px-4 py-2 hover:bg-mist">Profile and addresses</Link>
+          <Link href="/app" className="block px-4 py-2 hover:bg-mist">Get the app</Link>
           {user.seller ? (
             <Link href="/seller" className="block px-4 py-2 hover:bg-mist">Seller dashboard</Link>
           ) : (

@@ -674,6 +674,8 @@ export interface Site {
   maintenance?: { on: boolean; message: string };
   /** "page not found" and "something went wrong" pages (Admin → Marketplace settings → Error pages) */
   error_pages?: Partial<ErrorPageSettings>;
+  /** the shop's mobile app (Admin → Marketplace settings → Mobile apps): the "Get the app" bar and store links */
+  app?: { banner: boolean; android_apk_url: string; play_store_url: string; app_store_url: string; version: string };
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
   nav: NavSettings;

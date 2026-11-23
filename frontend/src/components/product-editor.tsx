@@ -247,6 +247,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   return (
     <div className="flex flex-col gap-4 pb-24">
       <PageHeader
+        back={{ href: "/seller/products", label: "Products" }}
         title={product ? "Edit product" : "Add a product"}
         sub={product ? product.title : "Fill in the details customers need to decide."}
         actions={product && (

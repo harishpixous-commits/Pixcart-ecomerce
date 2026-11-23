@@ -3,6 +3,8 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { ImageField } from "@/components/media-picker";
 import { Button, Field, Input, Select, Textarea, TextField } from "@/components/ui";
+import { useSite } from "@/lib/site";
+import { fillTokens } from "@/lib/tokens";
 import type { LinkItem, Site } from "@/lib/types";
 
 const COLOR_FIELDS: [keyof Site["colors"], string, string][] = [
@@ -23,6 +25,7 @@ const PRESETS: { name: string; colors: Site["colors"] }[] = [
 ];
 
 export function BrandEditor({ site, set }: { site: Site; set: (s: Site) => void }) {
+  const live = useSite(); // the free-delivery amount comes from Marketplace settings, not from this draft
   const c = site.colors;
   const radius = site.radius === "square" ? "4px" : site.radius === "soft" ? "10px" : "16px";
   return (
@@ -90,7 +93,7 @@ export function BrandEditor({ site, set }: { site: Site; set: (s: Site) => void 
         <p className="mb-2 text-sm font-semibold text-ink-soft">Preview</p>
         <div className="overflow-hidden rounded-xl border border-line shadow-sm" style={{ background: c.page }}>
           {site.announcement.enabled && (
-            <div className="px-3 py-1.5 text-center text-xs font-semibold" style={{ background: site.announcement.tone === "accent" ? c.accent : site.announcement.tone === "primary" ? c.primary_dark : "#1f2933", color: site.announcement.tone === "accent" ? "#1f2933" : "#fff" }}>{site.announcement.text}</div>
+            <div className="px-3 py-1.5 text-center text-xs font-semibold" style={{ background: site.announcement.tone === "accent" ? c.accent : site.announcement.tone === "primary" ? c.primary_dark : "#1f2933", color: site.announcement.tone === "accent" ? "#1f2933" : "#fff" }}>{fillTokens(site.announcement.text, { brand_name: site.brand_name, free_shipping_threshold_paise: live.free_shipping_threshold_paise })}</div>
           )}
           <div className="flex items-center gap-2 px-3 py-3" style={{ background: c.primary }}>
             {site.logo_url ? (

@@ -1,0 +1,24 @@
+{
+  "name": "pixcart-shop-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PixCart shopping app for Android: the shop website in a native shell with push notifications and camera.",
+  "scripts": {
+    "add:android": "cap add android",
+    "sync": "cap sync android",
+    "patch": "node scripts/patch-android.mjs",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/push-notifications": "8.1.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

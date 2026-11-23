@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BackLink } from "@/components/back-button";
 import { Logo, NotificationBell } from "@/components/shop-chrome";
 import { useSession } from "@/lib/session";
 
@@ -75,10 +76,11 @@ export function PortalShell({ title, nav, children, root }: { title: string; nav
   );
 }
 
-export function PageHeader({ title, sub, actions }: { title: string; sub?: string; actions?: React.ReactNode }) {
+export function PageHeader({ title, sub, actions, back }: { title: string; sub?: string; actions?: React.ReactNode; back?: { href: string; label?: string } }) {
   return (
     <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
+        {back && <BackLink fallback={back.href} label={back.label} className="mb-1" />}
         <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
         {sub && <p className="text-ink-soft">{sub}</p>}
       </div>

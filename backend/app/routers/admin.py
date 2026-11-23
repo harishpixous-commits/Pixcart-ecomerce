@@ -2,6 +2,8 @@
 customers, settings, audit log and the monthly GST TCS (GSTR-8 basis) report."""
 from __future__ import annotations
 
+import re
+
 import uuid
 from datetime import datetime, time, timedelta
 from typing import Any, Literal
@@ -817,6 +819,23 @@ async def write_settings(body: dict[str, Any], admin: Perm("settings"), session:
     audit(session, admin, "settings.update", "settings", "marketplace", str(body)[:1000])
     await session.commit()
     return result
+
+
+@router.post("/shop-app")
+async def upload_shop_app(admin: Perm("settings"), session: SessionDep, file: UploadFile = File(...),
+                          version: str = Query(default="", max_length=20)) -> dict:
+    """Publishes the customer Android app: the APK is checked and stored with the public files, and the download on
+    /app and in the "Get the app" bar points to it."""
+    if not re.match(r"^[0-9A-Za-z.\-+ ]{0,20}$", version.strip()):
+        raise ApiError("Use a version like 1.0.3", "invalid_version")
+    max_bytes = 120 * 1024 * 1024
+    data = await file.read(max_bytes + 1)
+    name = "pixcart-shop" + (f"-{re.sub(r'[^0-9A-Za-z.]+', '-', version.strip())}" if version.strip() else "")
+    url = await storage.save_app_package(data, max_bytes, name)
+    result = await update_settings(session, {"shop_android_apk_url": url, **({"shop_app_version": version.strip()} if version.strip() else {})})
+    audit(session, admin, "settings.shop_app_upload", "settings", "marketplace", f"{version.strip() or 'no version'} {len(data) // 1024} KB")
+    await session.commit()
+    return {"settings": result, "size": len(data)}
 
 
 @router.get("/audit")

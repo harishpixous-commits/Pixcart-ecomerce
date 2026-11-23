@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { Button, ErrorNote, Field, PageLoader, Select, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
 import { paiseToInput, toPaise, WEEKDAYS } from "@/lib/format";
+import { MobileApps, type AppSettings } from "./mobile-apps";
 
 type S = {
   shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number;
@@ -16,7 +17,8 @@ type S = {
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
   defect_return_days: number;
   admin_layout_default: string;
-  maintenance_mode: boolean; maintenance_message: string; payment_window_minutes: number; customer_cancel_until: "placed" | "confirmed" | "packed";
+  maintenance_mode: boolean; maintenance_message: string;
+  shop_app_banner: boolean; shop_android_apk_url: string; shop_play_store_url: string; shop_app_store_url: string; shop_app_version: string; payment_window_minutes: number; customer_cancel_until: "placed" | "confirmed" | "packed";
 } & Record<(typeof LIST_FIELDS)[number][0], number> & Record<(typeof PAGE_TEXTS)[number][0], string> & Record<(typeof PAGE_SWITCHES)[number][0], boolean>;
 
 /** Error pages: [setting, label, longest]. */
@@ -68,6 +70,7 @@ export default function AdminSettings() {
   const [cod, setCod] = useState(true);
   const [maintenance, setMaintenance] = useState(false);
   const [pageFlags, setPageFlags] = useState<Record<string, boolean>>({});
+  const [apps, setApps] = useState<AppSettings>({ shop_app_banner: true, shop_android_apk_url: "", shop_play_store_url: "", shop_app_store_url: "", shop_app_version: "" });
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,6 +79,8 @@ export default function AdminSettings() {
       setS(x);
       setCod(x.cod_enabled);
       setMaintenance(Boolean(x.maintenance_mode));
+      setApps({ shop_app_banner: x.shop_app_banner !== false, shop_android_apk_url: x.shop_android_apk_url ?? "", shop_play_store_url: x.shop_play_store_url ?? "",
+        shop_app_store_url: x.shop_app_store_url ?? "", shop_app_version: x.shop_app_version ?? "" });
       setPageFlags(Object.fromEntries(PAGE_SWITCHES.map(([k]) => [k, x[k] !== false])));
       setFlags(Object.fromEntries(FLAGS.map(([k]) => [k, Boolean(x[k])])));
       setF({
@@ -108,7 +113,7 @@ export default function AdminSettings() {
         payment_window_minutes: Number(f.payWindow), customer_cancel_until: f.cancelUntil || "packed",
         admin_layout_default: f.adminLayout || "sidebar",
         maintenance_mode: maintenance, maintenance_message: f.maintenanceMessage ?? "",
-        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), ...pageFlags,
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), ...pageFlags, ...apps,
         ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, Number(f[k])])),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
@@ -256,6 +261,7 @@ export default function AdminSettings() {
           </label>
         ))}
       </section>
+      <MobileApps value={apps} onChange={setApps} />
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
         <h2 className="text-lg font-semibold sm:col-span-2">Admin panel</h2>
         <Field label="Default layout for staff" htmlFor="admin-layout" hint="Staff who have not chosen their own layout (My account → Appearance) see this one.">

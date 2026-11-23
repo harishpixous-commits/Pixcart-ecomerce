@@ -1,8 +1,9 @@
 /*
  * App icons for "install to home screen" (the shop and the delivery partner app), drawn in the store's own brand
  * colours and initial so they follow Admin → Storefront. Variants: 192, 512, maskable (full-bleed for Android's
- * shaped icons), each with a "partner-" form that carries a scooter badge.
- *   /app-icon/192  /app-icon/512  /app-icon/maskable  /app-icon/partner-192  /app-icon/partner-512  /app-icon/partner-maskable
+ * shaped icons) and apple (180 x 180, full-bleed with no transparency, for the iPhone home screen, which rounds the
+ * corners itself), each with a "partner-" form that carries a scooter badge.
+ *   /app-icon/192  /app-icon/512  /app-icon/maskable  /app-icon/apple  (and partner-192, partner-512, partner-maskable, partner-apple)
  */
 
 import { readFile } from "node:fs/promises";
@@ -12,7 +13,7 @@ import { loadSiteServer } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
-const VARIANTS = new Set(["192", "512", "maskable", "partner-192", "partner-512", "partner-maskable"]);
+const VARIANTS = new Set(["192", "512", "maskable", "apple", "partner-192", "partner-512", "partner-maskable", "partner-apple"]);
 
 // the brand's display face (Baloo 2, bold), read once
 let font: Promise<Buffer | null> | null = null;
@@ -26,8 +27,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ variant: strin
   if (!VARIANTS.has(variant)) return new Response("Not found", { status: 404 });
   const site = await loadSiteServer();
   const partner = variant.startsWith("partner-");
-  const maskable = variant.endsWith("maskable");
-  const size = variant.endsWith("192") ? 192 : 512;
+  // the iPhone icon is drawn like the maskable one (full-bleed, safe middle area), at Apple's 180 x 180
+  const maskable = variant.endsWith("maskable") || variant.endsWith("apple");
+  const size = variant.endsWith("192") ? 192 : variant.endsWith("apple") ? 180 : 512;
   const primary = site.colors.primary || "#0B5563";
   const accent = site.colors.accent || "#F5A524";
   const letter = (site.brand_name || "P").trim().charAt(0).toUpperCase() || "P";

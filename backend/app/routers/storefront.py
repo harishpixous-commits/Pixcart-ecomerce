@@ -43,7 +43,9 @@ async def site(session: SessionDep) -> dict:
             "reviews": review_settings.public(await review_settings.get(session)),
             "lists": {k: cfg[k] for k in LIST_KEYS},
             "maintenance": {"on": cfg["maintenance_mode"], "message": cfg["maintenance_message"]},
-            "error_pages": {k: cfg[k] for k in ERROR_PAGE_KEYS}}
+            "error_pages": {k: cfg[k] for k in ERROR_PAGE_KEYS},
+            "app": {"banner": cfg["shop_app_banner"], "android_apk_url": cfg["shop_android_apk_url"], "play_store_url": cfg["shop_play_store_url"],
+                    "app_store_url": cfg["shop_app_store_url"], "version": cfg["shop_app_version"]}}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

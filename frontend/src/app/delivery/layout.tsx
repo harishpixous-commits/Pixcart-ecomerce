@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   // installs as its own app, separate from the shop
   manifest: "/delivery/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Partner", statusBarStyle: "default" },
-  icons: { apple: "/app-icon/partner-192" },
+  icons: { apple: "/app-icon/partner-apple" },
 };
 
 export default function DeliveryLayout({ children }: { children: React.ReactNode }) {

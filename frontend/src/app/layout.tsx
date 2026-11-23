@@ -45,7 +45,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: site.seo.title || site.brand_name, template: `%s | ${site.brand_name}` },
     description: site.seo.description,
     metadataBase: new URL(process.env.PUBLIC_WEB_URL || "http://localhost:3000"),
-    icons: site.favicon_url ? { icon: site.favicon_url } : undefined,
+    // iPhone and iPad: the home-screen icon and a full-screen app when added from Safari (the shop's app; see /app)
+    icons: { ...(site.favicon_url ? { icon: site.favicon_url } : {}), apple: "/app-icon/apple" },
+    appleWebApp: { capable: true, title: site.brand_name, statusBarStyle: "default" },
     openGraph: { siteName: site.brand_name, locale: "en_IN", type: "website" },
   };
 }
