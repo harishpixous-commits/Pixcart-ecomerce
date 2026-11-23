@@ -528,7 +528,7 @@ public class IntegrationBAL(
                 msg.To.Add(MailboxAddress.Parse(to));
                 msg.Subject = $"{brand}: test email";
                 msg.Body = new TextPart("plain") { Text = "This is a test email from Admin → Integrations. Email is working." };
-                await smtp.SendAsync(msg, cts.Token);
+                await smtp.SendAsync(FormatOptions.Default, new MailKit.SendRequest(msg), cts.Token);
             }
             await smtp.DisconnectAsync(true, cts.Token);
         }
@@ -627,7 +627,7 @@ public class IntegrationBAL(
         try
         {
             FcmClient.Reset(); // always ask Google again
-            await FcmClient.AccessTokenAsync(http.CreateClient(PushBAL.HttpClientName), cfg);
+            await FcmClient.AccessTokenAsync(http.CreateClient(HttpClientName), cfg);
         }
         catch (FormatException ex)
         {
