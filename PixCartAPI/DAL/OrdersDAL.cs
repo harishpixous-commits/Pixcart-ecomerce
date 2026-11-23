@@ -548,4 +548,13 @@ public class OrdersDAL(IMySqlDapperHelper db)
             new { key, value = doc.ToJsonString() });
         return n;
     }
+    /// <summary>The fleet hand-off fields on a package (reference: fleet.ready_for_pickup / use_courier writes).</summary>
+    public Task<int> UpdateSubFleetAsync(SubOrderModel s, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE sub_orders SET shipping_provider = @ShippingProvider, ready_for_pickup_at = @ReadyForPickupAt,
+                pickup_code = @PickupCode, delivery_otp = @DeliveryOtp, delivery_zone_id = @DeliveryZoneId,
+                fleet_alerted_at = @FleetAlertedAt, updated_at = UTC_TIMESTAMP(6)
+            WHERE id = @Id
+            """, s);
 }

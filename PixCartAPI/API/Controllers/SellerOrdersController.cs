@@ -15,7 +15,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/seller")]
 [SignedIn]
-public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : ControllerBase
+public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, ICurrentUser current) : ControllerBase
 {
     /// <summary>The order queues (reference: GET /api/seller/orders).</summary>
     [HttpGet("orders")]
@@ -35,7 +35,26 @@ public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : C
     public async Task<JsonObject> Get(Guid subId)
     {
         var user = await current.RequireAsync();
-        return await orders.SellerGetAsync(await orders.RequireSellerAsync(user, approved: false), subId);
+        var seller = await orders.RequireSellerAsync(user, approved: false);
+        var data = await orders.SellerGetAsync(seller, subId);
+        data["fleet"] = await fleet.FleetInfoAsync(seller, subId);
+        return data;
+    }
+
+    /// <summary>Hand the packed order to the own delivery fleet (reference: POST /api/seller/orders/{sub_id}/ready-for-pickup).</summary>
+    [HttpPost("orders/{subId:guid}/ready-for-pickup")]
+    public async Task<JsonObject> ReadyForPickup(Guid subId)
+    {
+        var user = await current.RequireAsync();
+        return await fleet.ReadyForPickupAsync(user, await orders.RequireSellerAsync(user, approved: true), subId);
+    }
+
+    /// <summary>Take the order back from the fleet before pickup (reference: POST /api/seller/orders/{sub_id}/use-courier).</summary>
+    [HttpPost("orders/{subId:guid}/use-courier")]
+    public async Task<JsonObject> UseCourier(Guid subId)
+    {
+        var user = await current.RequireAsync();
+        return await fleet.UseCourierAsync(user, await orders.RequireSellerAsync(user, approved: true), subId);
     }
 
     /// <summary>Accept the order (reference: POST /api/seller/orders/{sub_id}/confirm).</summary>
@@ -93,8 +112,12 @@ public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : C
     private async Task<JsonObject> Act(Guid subId, string dst, string note = "", ShipIn? ship = null)
     {
         var user = await current.RequireAsync();
-        return await orders.SellerActAsync(user, await orders.RequireSellerAsync(user, approved: true), subId, dst, note,
+        var seller = await orders.RequireSellerAsync(user, approved: true);
+        await fleet.GuardSellerActAsync(seller, subId, dst); // the fleet owns ship/deliver on its packages
+        var data = await orders.SellerActAsync(user, seller, subId, dst, note,
             ship?.CourierName.Trim(), ship?.TrackingNumber.Trim(), ship is null ? null : ship.TrackingUrl ?? "");
+        data["fleet"] = await fleet.FleetInfoAsync(seller, subId);
+        return data;
     }
 
     public sealed record RejectIn(

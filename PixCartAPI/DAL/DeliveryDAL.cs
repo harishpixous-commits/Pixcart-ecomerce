@@ -9,6 +9,15 @@ public class DeliveryDAL(IMySqlDapperHelper db)
     public Task<DeliveryBoyModel?> PartnerForUserAsync(Guid userId) =>
         db.QueryFirstOrDefaultAsync<DeliveryBoyModel>("SELECT * FROM delivery_boys WHERE user_id = @userId", new { userId });
 
+    public Task<DeliveryBoyModel?> PartnerByIdAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<DeliveryBoyModel>("SELECT * FROM delivery_boys WHERE id = @id", new { id });
+
+    /// <summary>Approved, active partners (optionally only the online ones) — the fleet's candidate pool.</summary>
+    public Task<IEnumerable<DeliveryBoyModel>> ApprovedPartnersAsync(bool onlineOnly) =>
+        db.QueryAsync<DeliveryBoyModel>(
+            "SELECT * FROM delivery_boys WHERE kyc_status = 'approved' AND is_active = 1" +
+            (onlineOnly ? " AND is_online = 1" : ""));
+
     public Task<DeliveryZoneModel?> ZoneAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<DeliveryZoneModel>("SELECT * FROM delivery_zones WHERE id = @id", new { id });
 

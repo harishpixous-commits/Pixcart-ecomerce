@@ -1295,7 +1295,8 @@ public class OrdersBAL(
     /// <summary>The package's next step (reference: transition()). Shipped assigns the seller's invoice number and
     /// tells the customer; delivered opens the settlement window, posts the ledger and issues the marketplace's fee
     /// invoice. The fleet checks come with the delivery module.</summary>
-    public async Task TransitionAsync(SubOrderModel sub, string dst, string actor, string note, IUnitOfWork uow)
+    public async Task TransitionAsync(SubOrderModel sub, string dst, string actor, string note, IUnitOfWork uow,
+        bool announce = true)
     {
         if (!CanTransition(sub.Status, dst))
             throw new AppException($"Cannot move this order from '{sub.Status}' to '{dst}'", "illegal_transition", 409);
@@ -1310,6 +1311,8 @@ public class OrdersBAL(
             await AssignInvoiceAsync(sub, now, uow);
             var shippedOrder = await orders.GetOrderAsync(sub.OrderId, uow) ?? throw new NotFoundException("Order");
             var shipper = await catalog.GetSellerAsync(sub.SellerId);
+            // the fleet's pickup step announces with delivery_out_for_delivery instead (reference: transition announce=False)
+            if (announce)
             await notify.NotifyUserAsync(shippedOrder.UserId, "order_shipped",
                 new Dictionary<string, string>
                 {
@@ -1355,7 +1358,7 @@ public class OrdersBAL(
     /// <summary>What the customer pays when this package is handed over, 0 for prepaid (reference: collect_amount).
     /// The seller's part is the package total less the discount the marketplace funded; the marketplace's fees and
     /// the tip ride with the first live package (lowest number), so they are collected once.</summary>
-    private async Task<long> CollectAmountAsync(SubOrderModel sub, OrderModel order, IUnitOfWork uow)
+    public async Task<long> CollectAmountAsync(SubOrderModel sub, OrderModel order, IUnitOfWork uow)
     {
         if (order.PaymentMethod != "cod") return 0;
         var amount = sub.Total - sub.PlatformDiscount;

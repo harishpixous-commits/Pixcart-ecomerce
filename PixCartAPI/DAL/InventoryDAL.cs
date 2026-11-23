@@ -94,4 +94,14 @@ public class InventoryDAL(IMySqlDapperHelper db)
     public Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow) =>
         uow.ExecuteAsync("UPDATE variants SET stock = @stock, updated_at = UTC_TIMESTAMP() WHERE id = @variantId",
             new { variantId, stock });
+
+    public Task<WarehouseModel?> WarehouseByIdAsync(Guid id, IUnitOfWork? uow = null) =>
+        uow is not null
+            ? uow.QueryFirstOrDefaultAsync<WarehouseModel>("SELECT * FROM warehouses WHERE id = @id", new { id })
+            : db.QueryFirstOrDefaultAsync<WarehouseModel>("SELECT * FROM warehouses WHERE id = @id", new { id });
+
+    /// <summary>The fleet learns where a store is from the first partner who reaches it (reference: advance at_store).</summary>
+    public Task<int> SetWarehouseLocationAsync(Guid id, decimal lat, decimal lng, IUnitOfWork uow) =>
+        uow.ExecuteAsync("UPDATE warehouses SET lat = @lat, lng = @lng, updated_at = UTC_TIMESTAMP(6) WHERE id = @id AND lat IS NULL",
+            new { id, lat, lng });
 }

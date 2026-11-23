@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Model.DomainModel;
+using Utils.Interface;
 
 namespace BAL.Interface;
 
@@ -73,6 +74,13 @@ public interface IOrdersBAL
 
     /// <summary>One package as the seller sees it (reference: GET /api/seller/orders/{sub_id}).</summary>
     Task<JsonObject> SellerGetAsync(SellerModel seller, Guid subId);
+
+    /// <summary>The package state machine (reference: orders.transition); announce=false skips the customer notify
+    /// for steps that announce themselves (the fleet's pickup announces with delivery_out_for_delivery).</summary>
+    Task TransitionAsync(SubOrderModel sub, string dst, string actor, string note, IUnitOfWork uow, bool announce = true);
+
+    /// <summary>What cash the delivery collects at the door for this package (reference: collect_amount).</summary>
+    Task<long> CollectAmountAsync(SubOrderModel sub, OrderModel order, IUnitOfWork uow);
 
     /// <summary>confirm / pack (reference: _act). ship/deliver arrive with their invoice/payout companions.</summary>
     Task<JsonObject> SellerDashboardAsync(SellerModel seller);
