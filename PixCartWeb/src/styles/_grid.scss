@@ -1,0 +1,15 @@
+// Bootstrap 5.3, limited to the responsive grid (.row, .col, .col-md-6, .g-3 ...), as the company standard asks.
+// Its spacing and display utilities are not included: the site's own utility classes (p-4, m-3, flex ...) are used for
+// those, and Bootstrap's would give the same names different sizes.
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+
+:root {
+  --bs-gutter-x: 1rem;
+  --bs-gutter-y: 0;
+}
+
+@import "bootstrap/scss/grid";

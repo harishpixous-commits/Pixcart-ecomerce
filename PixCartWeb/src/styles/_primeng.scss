@@ -1,0 +1,30 @@
+// PrimeNG runs in unstyled mode: components get the site's classes through the pass-through preset
+// (src/app/core/primeng-pt.ts). Only behaviour that classes cannot express lives here.
+
+.p-hidden-accessible {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+// dialogs and overlays above the page, like the reference modals (z-50)
+.p-overlay-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.p-component-overlay-enter { animation: pc-fade-in 150ms ease-out both; }
+
+@keyframes pc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+// data tables: sortable headers show a pointer
+.p-datatable-sortable-column { cursor: pointer; user-select: none; }

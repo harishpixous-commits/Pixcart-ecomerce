@@ -1,0 +1,15 @@
+/*
+ * PixCart global styles (SCSS). Order matters:
+ *  1. fonts (the same families and weights as the reference site) and leaflet: listed in angular.json "styles"
+ *  2. styles/_site.scss: the design system (tokens as CSS variables, base styles, utility classes). Generated from the
+ *     reference site's style configuration so every page is pixel-identical; regenerate with tools/styles (README).
+ *  3. Bootstrap: the grid only (.row, .col-*, gutters), as the company standard asks, without its spacing utilities,
+ *     which would clash with the site's own (p-4, m-3 ...)
+ *  4. PrimeNG runs unstyled; its parts get the site's classes through the pass-through preset (app/core/primeng-pt.ts),
+ *     plus the few component rules in styles/_primeng.scss
+ */
+
+
+@use "styles/site";
+@use "styles/grid";
+@use "styles/primeng";

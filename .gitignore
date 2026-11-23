@@ -1,17 +1,29 @@
 .env
-backend/.venv/
-backend/var/
 **/__pycache__/
-.pytest_cache/
-.ruff_cache/
-frontend/node_modules/
-frontend/.next/
-frontend/tsconfig.tsbuildinfo
+.vercel/
+
+# .NET (PixCartAPI)
+**/bin/
+**/obj/
+PixCartAPI/API/var/
+PixCartAPI/**/TestResults/
+*.user
+.vs/
+
+# Angular (PixCartWeb)
+PixCartWeb/node_modules/
+PixCartWeb/dist/
+PixCartWeb/.angular/
+
+# Flutter (PixCartMobile)
+PixCartMobile/**/.dart_tool/
+PixCartMobile/**/build/
+PixCartMobile/**/.flutter-plugins*
+
+# browser tests
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
-infra/terraform/.terraform/
-infra/terraform/*.tfstate*
-infra/terraform/terraform.tfvars
-infra/terraform/backend.hcl
-.vercel/
+
+# publish output for Windows hosting
+publish/
