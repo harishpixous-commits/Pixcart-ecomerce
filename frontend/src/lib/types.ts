@@ -416,6 +416,8 @@ export interface OrderDetail {
   timeline: { sub_order_id: string | null; from: string; to: string; actor: string; note: string; at: string }[];
   refunds: { id?: string; amount: Paise; status: string; reason: string; created_at?: string; attempts?: number; last_error?: string }[];
   payment?: CheckoutPayload | null;
+  /** the online payment Razorpay confirmed: "Payment received ₹X via UPI, reference pay_…" */
+  paid?: { amount: Paise; method: string; reference: string; at: string | null } | null;
   customer?: { id: string; name: string; phone: string | null; email: string | null };
   /** Packages our own delivery partners carry, by sub-order id. */
   fleet?: Record<string, FleetTracking>;
@@ -676,6 +678,8 @@ export interface Site {
   error_pages?: Partial<ErrorPageSettings>;
   /** the shop's mobile app (Admin → Marketplace settings → Mobile apps): the "Get the app" bar and store links */
   app?: { banner: boolean; android_apk_url: string; play_store_url: string; app_store_url: string; version: string };
+  /** how phones and the app come back from a UPI app (Admin → Marketplace settings → Orders and payouts) */
+  payment_return?: "return" | "window";
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
   nav: NavSettings;

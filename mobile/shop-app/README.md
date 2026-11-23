@@ -7,6 +7,9 @@ returns, wishlist, help) and every website update reaches shoppers without a new
 - **Push notifications** through Firebase for order updates, even when the app is closed.
 - **Camera** for review photos and returns, and **location** for "Use my location" when adding an address.
 - An offline page with a "Try again" button.
+- **UPI payments**: Razorpay shows Google Pay, PhonePe, Paytm, BHIM and the other UPI apps on the phone. Tapping one opens
+  that app, and after paying Android returns to PixCart, where the order shows "Payment received" (or "Payment not
+  received" with Try again). `scripts/patch-android.mjs` sets this up (`mobile/shared/android-links.mjs`).
 
 iPhone and iPad: shoppers install the same app from Safari (**Share → Add to Home Screen**), guided on
 `https://<your site>/app`. A listing on the App Store needs an Apple Developer account and a Mac with Xcode

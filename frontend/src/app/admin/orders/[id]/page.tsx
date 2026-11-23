@@ -12,6 +12,7 @@ import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
 import type { FleetTracking, OrderDetail, ReturnableItem } from "@/lib/types";
 import { CustomerMessage } from "./message";
+import { PaymentCheck } from "./payment-check";
 import { RiskBrief } from "@/components/ai";
 import { openPdf } from "@/components/order-returns";
 
@@ -70,6 +71,7 @@ export default function AdminOrderDetail() {
           )}
         </section>
       </div>
+      {o.payment_method === "online" && <PaymentCheck order={o} onChecked={load} />}
       {o.sub_orders.map((s) => (
         <section key={s.id} className="rounded-xl bg-white p-4">
           <div className="mb-2 flex flex-wrap items-center gap-3">

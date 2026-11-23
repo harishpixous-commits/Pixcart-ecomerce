@@ -578,6 +578,31 @@ async def confirm_with_gateway(session: AsyncSession, payment: Payment, provider
     return await mark_paid(session, payment, provider_payment_id, data.get("method", ""), int(data.get("amount", 0)))
 
 
+async def check_with_gateway(session: AsyncSession, payment: Payment) -> dict:
+    """Asks Razorpay whether this order was paid, from Razorpay's own records (never the browser's word). Used when the
+    shopper comes back from a UPI app, by the order page while it waits, and by the admin "Check payment" button.
+
+    result: already_paid | paid | already | refund (a duplicate payment, refunded) | not_paid
+    waiting: a UPI request is still open (the shopper may not have approved it yet)
+    reason: why the last attempt failed, in Razorpay's words.  Raises razorpay.GatewayError when Razorpay is unreachable."""
+    if payment.status == "captured":
+        return {"result": "already_paid", "attempts": [], "payment": {"id": payment.provider_payment_id, "method": payment.method, "status": "captured"},
+                "waiting": False, "reason": ""}
+    attempts = await razorpay.order_payments(payment.provider_order_id)
+    attempts = sorted(attempts, key=lambda a: int(a.get("created_at") or 0), reverse=True)
+    seen = [{"id": a.get("id"), "status": a.get("status"), "method": a.get("method", ""), "error": a.get("error_description") or ""} for a in attempts]
+    done = next((a for a in attempts if a.get("status") in ("captured", "authorized")), None)
+    if done is None:
+        failed = next((a for a in attempts if a.get("status") == "failed"), None)
+        reason = (failed.get("error_description") or "The payment did not go through") if failed else ""
+        if failed and payment.status != "captured":
+            payment.error = reason[:500]
+        return {"result": "not_paid", "attempts": seen, "waiting": any(a.get("status") == "created" for a in attempts), "reason": reason}
+    result = await confirm_with_gateway(session, payment, done["id"])
+    return {"result": result, "attempts": seen, "payment": {"id": done["id"], "method": done.get("method", ""), "status": "captured"},
+            "waiting": False, "reason": ""}
+
+
 # ----------------------------------------------------------------------------- transitions / cancel
 
 

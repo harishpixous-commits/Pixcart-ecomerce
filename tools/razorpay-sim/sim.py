@@ -22,6 +22,7 @@ and point the backend at it (development only):
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -155,6 +156,13 @@ async def sim_pay(request: Request) -> dict:
     o = ORDERS.get(b.get("order_id", ""))
     if not o:
         raise HTTPException(404, "order not found")
+    if b.get("outcome") == "later":
+        # UPI: the request goes to the shopper's UPI app and is approved a little later (the shopper may have left the page)
+        pid = _id("pay")
+        PAYMENTS[pid] = {"id": pid, "entity": "payment", "amount": o["amount"], "currency": "INR", "status": "created", "order_id": o["id"], "method": "upi",
+                         "captured": False, "amount_refunded": 0, "refund_status": None, "created_at": int(time.time())}
+        asyncio.get_running_loop().create_task(_approve_later(pid, float(b.get("after", 8))))
+        return {"pending": True, "payment_id": pid}
     if b.get("outcome") == "fail":
         pid = _id("pay")
         PAYMENTS[pid] = {"id": pid, "entity": "payment", "amount": o["amount"], "currency": "INR", "status": "failed", "order_id": o["id"], "method": b.get("method", "upi"),
@@ -170,6 +178,17 @@ async def sim_pay(request: Request) -> dict:
     await _webhook("payment.captured", {"payment": {"entity": p}})
     await _webhook("order.paid", {"order": {"entity": o}, "payment": {"entity": p}})
     return {"razorpay_order_id": o["id"], "razorpay_payment_id": pid, "razorpay_signature": signature}
+
+
+async def _approve_later(pid: str, after: float) -> None:
+    await asyncio.sleep(after)
+    p = PAYMENTS.get(pid)
+    if not p or p["status"] != "created":
+        return
+    o = ORDERS[p["order_id"]]
+    p["status"], p["captured"] = "captured", True
+    o["status"], o["amount_paid"], o["amount_due"], o["attempts"] = "paid", o["amount"], 0, o["attempts"] + 1
+    await _webhook("payment.captured", {"payment": {"entity": p}})
 
 
 @app.get("/sim/events")
@@ -193,17 +212,31 @@ CHECKOUT_JS = """
       '<p style="margin:6px 0 2px;font-weight:700;font-size:18px">'+(o.name||'')+'</p>'+
       '<p style="margin:0 0 14px;color:#555">'+(o.description||'')+' · <b>'+amt+'</b></p>'+
       '<button data-x="ok" style="width:100%%;padding:12px;border:0;border-radius:10px;background:#0B5563;color:#fff;font-weight:700;font-size:15px;cursor:pointer">Pay '+amt+' (succeeds)</button>'+
+      '<button data-x="later" style="width:100%%;margin-top:8px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">Pay in UPI app (approved in a few seconds)</button>'+
       '<button data-x="fail" style="width:100%%;margin-top:8px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">Simulate a failed payment</button>'+
       '<button data-x="close" style="width:100%%;margin-top:8px;padding:8px;border:0;background:none;color:#666;cursor:pointer">Close</button></div>';
     document.body.appendChild(wrap);
     function done(){ wrap.remove(); }
+    function back(fields){
+      // Razorpay's callback_url: a form post from the payment page, then the site shows the result
+      var f = document.createElement('form'); f.method = 'POST'; f.action = o.callback_url;
+      Object.keys(fields).forEach(function(k){ var i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = fields[k]; f.appendChild(i); });
+      document.body.appendChild(f); f.submit();
+    }
     wrap.addEventListener('click', function(e){
       var x = e.target && e.target.getAttribute && e.target.getAttribute('data-x'); if(!x) return;
       if(x==='close'){ done(); o.modal && o.modal.ondismiss && o.modal.ondismiss(); return; }
-      fetch(BASE + '/sim/pay', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({order_id:o.order_id, outcome: x==='ok'?'success':'fail'})})
+      fetch(BASE + '/sim/pay', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({order_id:o.order_id, outcome: x==='ok'?'success':(x==='later'?'later':'fail')})})
         .then(function(r){return r.json();}).then(function(r){
-          if(r.error){ self.handlers['payment.failed'] && self.handlers['payment.failed']({error:r.error}); wrap.querySelector('p').textContent = 'PAYMENT FAILED (SIMULATED) · TRY AGAIN'; return; }
-          done(); o.handler && o.handler(r);
+          if(r.pending){ done(); o.modal && o.modal.ondismiss && o.modal.ondismiss(); return; }
+          if(r.error){
+            self.handlers['payment.failed'] && self.handlers['payment.failed']({error:r.error});
+            if(o.callback_url && o.redirect){ back({'error[code]':'BAD_REQUEST_ERROR','error[description]':r.error.description,'error[metadata]':JSON.stringify(r.error.metadata)}); return; }
+            wrap.querySelector('p').textContent = 'PAYMENT FAILED (SIMULATED) · TRY AGAIN'; return;
+          }
+          done();
+          if(o.callback_url){ back(r); return; }
+          o.handler && o.handler(r);
         });
     });
   };

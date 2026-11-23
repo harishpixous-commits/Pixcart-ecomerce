@@ -24,7 +24,6 @@ import { ProductRail } from "@/components/product";
 import { Button, ButtonLink, EmptyState, ErrorNote, PageLoader, useToast } from "@/components/ui";
 import { api, ApiError, latestOnly } from "@/lib/api";
 import { rupees } from "@/lib/format";
-import { payWithRazorpay } from "@/lib/razorpay";
 import { useSession } from "@/lib/session";
 import { useLists, useSite } from "@/lib/site";
 import type { Address, CartView, CheckoutPayload, OrderDetail, ProductCard } from "@/lib/types";
@@ -258,12 +257,9 @@ export default function CheckoutPage() {
       setDone(true);
       await refreshCart();
       if (r.payment) {
-        try {
-          const paid = await payWithRazorpay(r.payment);
-          router.replace(paid ? `/orders/${r.order.id}?placed=1` : `/orders/${r.order.id}`);
-        } catch (e) {
-          router.replace(`/orders/${r.order.id}?payment_error=${encodeURIComponent(e instanceof Error ? e.message : "Payment failed")}`);
-        }
+        // The order page opens the payment window. If a phone reloads the page while the shopper is in a UPI app, they
+        // come back to their order (not an empty checkout), which asks Razorpay whether the payment arrived.
+        router.replace(`/orders/${r.order.id}?pay=1`);
       } else {
         router.replace(`/orders/${r.order.id}?placed=1`);
       }

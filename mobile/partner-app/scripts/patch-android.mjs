@@ -6,6 +6,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withQueries, writeMainActivity } from "../../shared/android-links.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const web = (process.env.PIXCART_WEB_URL || "https://pixcart.in").replace(/\/+$/, "");
@@ -27,7 +28,7 @@ patch("android/app/src/main/AndroidManifest.xml", (xml) => {
     '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
     '<uses-feature android:name="android.hardware.location.gps" android:required="false" />',
   ].filter((line) => !xml.includes(line.match(/android:name="([^"]+)"/)[1]));
-  return wanted.length ? xml.replace("</manifest>", `    ${wanted.join("\n    ")}\n</manifest>`) : xml;
+  return withQueries(wanted.length ? xml.replace("</manifest>", `    ${wanted.join("\n    ")}\n</manifest>`) : xml);
 });
 
 patch("android/app/build.gradle", (gradle) =>
@@ -38,3 +39,6 @@ patch("android/app/build.gradle", (gradle) =>
 
 // the copy inside the app (sync copies www/ there), so the source file keeps its placeholder
 patch("android/app/src/main/assets/public/index.html", (html) => html.replace(/data-url="[^"]*"/, `data-url="${web}/delivery"`));
+
+// UPI apps (Google Pay, PhonePe, Paytm, BHIM...) and other app links open from the app and return to it
+writeMainActivity(root);

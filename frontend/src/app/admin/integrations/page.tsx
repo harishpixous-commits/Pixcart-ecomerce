@@ -15,7 +15,7 @@ type FieldInfo = {
 };
 type Item = {
   key: string; name: string; group: string; purpose: string; docs_url: string; setup_steps: string[]; needed_for_launch: boolean; testable: boolean;
-  webhook_url: string; webhook_events: string[]; enabled: boolean; switch_source: string; ready: boolean; missing: string[]; mode: string; warnings: string[];
+  webhook_url: string; webhook_events: string[]; last_webhook?: { at: string; count: number } | null; enabled: boolean; switch_source: string; ready: boolean; missing: string[]; mode: string; warnings: string[];
   fields: FieldInfo[]; last_test: { ok: boolean; message: string; at: string } | null; updated_at: string | null; updated_by: string;
 };
 type Infra = { key: string; name: string; ready: boolean; detail: string; how: string };
@@ -229,6 +229,16 @@ function Editor({ item, onClose, onSaved }: { item: Item; onClose: () => void; o
                 <button type="button" onClick={() => copy(item.webhook_url)} aria-label="Copy webhook address" className="shrink-0 text-peacock"><Copy className="h-3.5 w-3.5" /></button></p>
               <p className="mt-2 font-medium">Events</p>
               <p className="text-xs text-ink-soft">{item.webhook_events.join(", ")}</p>
+              <p className="mt-2 font-medium">Last received</p>
+              {item.last_webhook ? (
+                <p className="text-xs text-leaf" data-testid="last-webhook">
+                  {dateTime(item.last_webhook.at)} ({item.last_webhook.count} {item.last_webhook.count === 1 ? "message" : "messages"} so far): the webhook works
+                </p>
+              ) : (
+                <p className="text-xs text-ink-soft" data-testid="last-webhook">
+                  Nothing yet. After you add the webhook in the provider&apos;s dashboard, the first payment shows here.
+                </p>
+              )}
             </div>
           )}
           <div>

@@ -109,7 +109,7 @@ Every key is encrypted before it is saved and never shown again. Saving keys ask
 | 5.2 | **Storefront → Brand** | Brand name, logo, colours, Google Analytics / Meta Pixel IDs (optional) | Shop header changes at once |
 | 5.3 | **Storefront → Pages** | Paste the lawyer's Terms, Privacy notice, Returns policy | Pages open without "placeholder" text |
 | 5.4 | **Settings** | Fees, COD limits, the days damaged, faulty or wrong items can be returned, and the tax rates your CA confirmed. Each category's return window and minimum are in **Categories** | — |
-| 5.5 | **Integrations → Razorpay payments** | **Test** Key ID + Key secret; webhook secret. In Razorpay Dashboard → Webhooks add the webhook address shown on the page with the listed events | Test connection: "Connected to Razorpay in test mode" |
+| 5.5 | **Integrations → Razorpay payments** | **Test** Key ID + Key secret; webhook secret. In Razorpay Dashboard → Webhooks add the webhook address shown on the page with the listed events | Test connection: "Connected to Razorpay in test mode". After the first test payment, "Last received" under the webhook address shows the time: the webhook works |
 | 5.6 | **Integrations → MSG91 SMS** | Auth key, OTP template ID (DLT approved), sender ID; switch on | Test with your mobile → SMS arrives |
 | 5.7 | **Integrations → Email** | SES SMTP user/password, sender address on your verified domain | Test → email arrives |
 | 5.8 | **Integrations → WhatsApp / Shiprocket / Sentry** | Optional | Test connection |
@@ -126,7 +126,9 @@ Do each and tick it. Use Razorpay **test** cards: `4111 1111 1111 1111`, any fut
 
 - [ ] Sign up on the shop with your mobile (real OTP SMS arrives).
 - [ ] Register as a seller, upload KYC; approve in Admin → Sellers; add a product; approve it in Admin → Listings.
-- [ ] Buy it with **online payment**: the Razorpay window opens, pay, order shows "Paid".
+- [ ] Buy it with **online payment**: the Razorpay window opens, pay, order shows "Payment received" with the Razorpay reference.
+- [ ] On a **phone** (and in the Android app): pay by UPI (test UPI `success@razorpay`, or the UPI app list on a real phone). After paying you come back to the order and see "Payment received". Use `failure@razorpay`: you see "Payment not received", the reason, and **Try again**.
+- [ ] Admin → Orders → an online order → **Check payment with Razorpay** answers (for an order a shopper says they paid but that still waits for payment).
 - [ ] Razorpay Dashboard → Webhooks shows deliveries with status 200.
 - [ ] Seller confirms, packs, ships (Shiprocket or manual AWB), marks delivered; invoice PDF opens.
 - [ ] Return the item; seller approves and receives; refund appears in Razorpay → Refunds.
@@ -171,7 +173,9 @@ Do each and tick it. Use Razorpay **test** cards: `4111 1111 1111 1111`, any fut
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | "Online payment is not available" at checkout | Razorpay switched off or keys missing | Admin → Integrations → Razorpay: switch on, Test connection |
-| Orders stay "awaiting payment" after paying | Webhook not reaching the server, or wrong webhook secret | Razorpay Dashboard → Webhooks → deliveries; re-enter the secret in both places |
+| Orders stay "awaiting payment" after paying | Webhook not reaching the server, or wrong webhook secret | Razorpay Dashboard → Webhooks → deliveries; re-enter the secret in both places. Meanwhile Admin → the order → **Check payment with Razorpay** records it (the shopper's order page also checks by itself) |
+| On phones, shoppers land back on a blank or old page after paying in a UPI app | The phone's browser reloaded the page | Nothing to fix: the order page asks Razorpay and shows the result. To keep the payment window on the same page instead, Admin → Marketplace settings → Orders and payouts → "After paying in a UPI app" |
+| The Android app does not open Google Pay / PhonePe | App built before this change | Build the app again (Actions → Android shop app) and upload the new APK |
 | "Sign-in by OTP is not set up yet" | MSG91 not switched on (production never prints OTPs to logs) | Admin → Integrations → MSG91 |
 | Test connection says "cannot reach the provider" | No outbound internet from the tasks | Check the NAT gateway and security group egress (Terraform) |
 | RazorpayX payouts fail with an IP error | Server IP not allowlisted | Allowlist Terraform output `outbound_ip` in RazorpayX |

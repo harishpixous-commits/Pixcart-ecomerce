@@ -132,6 +132,10 @@ DEFAULTS: dict[str, Any] = {
     # orders (Admin → Marketplace settings → Orders and payouts)
     "payment_window_minutes": 30,      # unpaid online orders are cancelled after this
     "customer_cancel_until": "packed",  # customers cancel by themselves up to this step: placed | confirmed | packed
+    # how shoppers on phones and in the app come back after paying in Google Pay, PhonePe or another UPI app:
+    # "return" (Razorpay sends them back to the order page, which shows the result; best when the browser reloads the
+    # page on the way back) or "window" (the payment window reports back on the same page, as on computers)
+    "payment_return_mode": "return",
     "maintenance_mode": False,
     "maintenance_message": "We are making a few improvements and will be back shortly. Thank you for your patience.",
     # "page not found" and "something went wrong" pages, in the shop's theme (Admin → Marketplace settings)
@@ -179,6 +183,7 @@ LIST_KEYS: tuple[str, ...] = (
 CHOICES: dict[str, tuple[str, ...]] = {
     "admin_layout_default": ADMIN_LAYOUTS,
     "customer_cancel_until": ("placed", "confirmed", "packed"),
+    "payment_return_mode": ("return", "window"),
 }
 
 # key -> (type, min, max)

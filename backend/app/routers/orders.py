@@ -8,12 +8,12 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.core.deps import CurrentUser, SessionDep
+from app.core.deps import CurrentUser, SessionDep, rate_limit
 from app.core.errors import ApiError, NotFound
 from app.db import SessionLocal, utcnow
 from app.integrations import get as get_integrations
@@ -41,6 +41,7 @@ from app.services.orders import (
     cancel_sub_order,
     cart_payload,
     checkout_payload,
+    check_with_gateway,
     confirm_with_gateway,
     group_by_seller,
     load_cart,
@@ -129,12 +130,17 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
             return 0
         return refund_on_cancel(s, o, others_live=live - 1, fees_back=fees_back)
 
+    # the captured online payment (Razorpay), shown as "Payment received" with its reference
+    captured = (await session.execute(select(Payment).where(Payment.order_id == o.id, Payment.status == "captured")
+                                      .order_by(Payment.created_at.desc()))).scalars().first() if o.payment_method == "online" else None
     out = {
         "id": str(o.id),
         "number": o.number,
         "status": o.status,
         "payment_method": o.payment_method,
         "payment_status": o.payment_status,
+        "paid": {"amount": captured.amount_paise, "method": captured.method, "reference": captured.provider_payment_id or "",
+                 "at": captured.updated_at.isoformat() if captured.updated_at else None} if captured else None,
         "ship_to": o.ship_to,
         "items_total": o.items_total,
         "shipping_total": o.shipping_total,
@@ -315,6 +321,11 @@ async def my_orders(
 @router.get("/api/orders/{order_id}")
 async def get_order(order_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
     o = await _own_order(session, user, order_id)
+    return await _shopper_order(session, o, user)
+
+
+async def _shopper_order(session, o: Order, user) -> dict:
+    """The order as its shopper sees it, with what the payment window needs while it is unpaid."""
     data = await order_detail(session, o)
     payment = (await session.execute(select(Payment).where(Payment.order_id == o.id).order_by(Payment.created_at.desc()).limit(1))).scalar_one_or_none()
     data["payment"] = checkout_payload(o, payment, user, (await get_site(session))["brand_name"], await get_integrations(session))
@@ -443,6 +454,115 @@ async def verify_payment(body: VerifyIn, user: CurrentUser, session: SessionDep,
         raise ApiError("The payment was not completed. You can try again.", "payment_not_captured")
     await session.refresh(order)
     return {"result": result, "order": await order_detail(session, order)}
+
+
+async def _check_and_refund(session, payment: Payment, background: BackgroundTasks) -> dict:
+    """Asks Razorpay, saves what it says and starts any duplicate-payment refund."""
+    out = await check_with_gateway(session, payment)
+    await session.commit()
+    if out["result"] == "refund":
+        ids = list((await session.execute(select(Refund.id).where(Refund.payment_id == payment.id, Refund.status == "pending"))).scalars())
+        background.add_task(run_refunds, ids)
+    return out
+
+
+@router.post("/api/orders/{order_id}/payment-status")
+async def payment_status(order_id: uuid.UUID, user: CurrentUser, session: SessionDep, background: BackgroundTasks) -> dict:
+    """The shopper's "did my payment go through?": the order page asks this when they come back from a UPI app or the
+    payment window, and every few seconds while a payment may still be on its way. The answer comes from Razorpay.
+
+    status: paid | waiting (a UPI request is still open) | failed (with reason) | not_paid | unknown (Razorpay unreachable)"""
+    o = await _own_order(session, user, order_id)
+    payment = (await session.execute(select(Payment).where(Payment.order_id == o.id).order_by(Payment.created_at.desc()).limit(1)
+                                     .with_for_update())).scalar_one_or_none()
+    out: dict = {"status": "not_paid", "reason": ""}
+    if o.payment_status in ("paid", "partially_refunded", "refunded") or (payment and payment.status == "captured"):
+        out["status"] = "paid"
+    elif payment is None or o.status != "pending_payment":
+        out["status"] = "not_paid"
+    else:
+        await rate_limit(session, f"paycheck:{o.id}", limit=80, window_seconds=600)  # protects the Razorpay API quota
+        try:
+            res = await _check_and_refund(session, payment, background)
+        except razorpay.GatewayError:
+            out["status"] = "unknown"
+        except ApiError as exc:
+            log.warning("payment check for %s: %s", o.number, exc)
+            out["status"] = "unknown"
+        else:
+            if res["result"] in ("paid", "already", "already_paid", "refund"):
+                out["status"] = "paid"
+            elif res["waiting"]:
+                out["status"] = "waiting"
+            elif res["reason"]:
+                out["status"], out["reason"] = "failed", res["reason"]
+    await session.commit()
+    await session.refresh(o)
+    out["order"] = await _shopper_order(session, o, user)
+    return out
+
+
+def _back_to_order(order_id: uuid.UUID | None, outcome: str, reason: str = "") -> RedirectResponse:
+    """Sends the shopper's browser (or the app) to their order with the outcome. A relative address, so it lands on the
+    same site the payment started from (the website proxies /api)."""
+    from urllib.parse import urlencode
+
+    query = {"payment": outcome}
+    if reason:
+        query["reason"] = reason[:160]
+    return RedirectResponse(f"/orders/{order_id}?{urlencode(query)}" if order_id else f"/orders?{urlencode(query)}", status_code=303)
+
+
+@router.api_route("/api/payments/razorpay/callback", methods=["GET", "POST"])
+async def razorpay_callback(request: Request, session: SessionDep, background: BackgroundTasks) -> Response:
+    """Where Razorpay sends the shopper after paying (its callback_url), used on phones and in the app, where the shopper
+    leaves for Google Pay, PhonePe or another UPI app and the page may be reloaded on the way back. Razorpay posts the
+    payment ids and signature on success, or error[...] fields on failure. Nobody needs to be signed in here (the post
+    comes from Razorpay's page): nothing is trusted from the post itself. The signature is checked and the payment is
+    confirmed with Razorpay's API before the order is marked paid."""
+    data: dict[str, str] = dict(request.query_params)
+    if request.method == "POST":
+        try:
+            form = await request.form()
+            data.update({k: str(v) for k, v in form.items()})
+        except Exception:  # noqa: BLE001 - a malformed post is treated as "no details"
+            pass
+    rzp_order = (data.get("razorpay_order_id") or "")[:40]
+    rzp_payment = (data.get("razorpay_payment_id") or "")[:40]
+    signature = (data.get("razorpay_signature") or "")[:128]
+    reason = (data.get("error[description]") or "")[:300]
+    if not rzp_order and data.get("error[metadata]"):
+        try:
+            meta = json.loads(data["error[metadata]"])
+            rzp_order, rzp_payment = str(meta.get("order_id") or "")[:40], str(meta.get("payment_id") or "")[:40]
+        except (ValueError, AttributeError):
+            pass
+    payment = None
+    if rzp_order:
+        payment = (await session.execute(select(Payment).where(Payment.provider_order_id == rzp_order).with_for_update())).scalar_one_or_none()
+    if payment is None:
+        return _back_to_order(None, "unknown")
+    order_id = payment.order_id
+    try:
+        if rzp_payment and signature and await razorpay.verify_payment_signature(rzp_order, rzp_payment, signature):
+            result = await confirm_with_gateway(session, payment, rzp_payment)
+            await session.commit()
+            if result == "refund":
+                ids = list((await session.execute(select(Refund.id).where(Refund.payment_id == payment.id, Refund.status == "pending"))).scalars())
+                background.add_task(run_refunds, ids)
+            if result in ("paid", "already", "refund"):
+                return _back_to_order(order_id, "success")
+        # failure, a bad signature or a capture that did not complete: Razorpay's records decide
+        res = await _check_and_refund(session, payment, background)
+    except (razorpay.GatewayError, ApiError) as exc:
+        log.warning("payment return for %s could not be confirmed yet: %s", rzp_order, exc)
+        await session.rollback()
+        return _back_to_order(order_id, "checking")  # the order page keeps checking; the webhook also records it
+    if res["result"] in ("paid", "already", "already_paid", "refund"):
+        return _back_to_order(order_id, "success")
+    if res["waiting"] and not reason:
+        return _back_to_order(order_id, "checking")
+    return _back_to_order(order_id, "failed", reason or res["reason"] or "The payment did not go through")
 
 
 @router.post("/api/payments/razorpay/webhook")

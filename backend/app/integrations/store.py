@@ -157,8 +157,22 @@ def provider_status(p: Provider, raw: dict[str, Any]) -> dict[str, Any]:
 
 
 async def status(session: AsyncSession) -> list[dict[str, Any]]:
+    """Every provider's settings, plus when its webhook last reached us (proof the webhook is set up right)."""
+    from sqlalchemy import func
+
+    from app.models import WebhookEvent
+
     raw = await _raw(session)
-    return [provider_status(p, raw) for p in PROVIDERS]
+    last = {row.provider: row for row in (await session.execute(
+        select(WebhookEvent.provider, func.max(WebhookEvent.received_at).label("at"), func.count().label("n")).group_by(WebhookEvent.provider)
+    )).all()}
+    out = []
+    for p in PROVIDERS:
+        item = provider_status(p, raw)
+        hit = last.get(p.key)
+        item["last_webhook"] = {"at": hit.at.isoformat(), "count": int(hit.n)} if hit and p.webhook_path else None
+        out.append(item)
+    return out
 
 
 # ----------------------------------------------------------------------------- writes

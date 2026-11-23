@@ -29,6 +29,7 @@ from app.models import (
     DeliveryBoy,
     DeliveryComplaint,
     Order,
+    Payment,
     Product,
     ProductAnswer,
     ProductImage,
@@ -49,7 +50,7 @@ from app.routers.seller_products import MAX_IMAGES, VideoIn, check_videos, produ
 from app.services import fleet, storage
 from app.services.catalog import apply_videos, check_image_url, images_for
 from app.services.notify import notify_seller
-from app.services.orders import cancel_sub_order, notify_refund, transition
+from app.services.orders import cancel_sub_order, check_with_gateway, notify_refund, transition
 from app.services.platform_settings import get_settings, update_settings
 from app.services.reports import IST, tcs_report_data
 
@@ -585,6 +586,33 @@ async def list_orders(
         "page": page,
         "page_size": page_size,
     }
+
+
+@router.post("/orders/{order_id}/check-payment")
+async def check_payment(order_id: uuid.UUID, admin: Perm("orders"), session: SessionDep, background: BackgroundTasks) -> dict:
+    """Asks Razorpay whether an online order was paid, for when the shopper's confirmation and the webhook never arrived
+    (closed browser, webhook not set up). A captured payment is recorded exactly as the webhook would; an authorised one is
+    captured first. Nothing is recorded from the browser's word, only from Razorpay's."""
+    from app.routers.orders import run_refunds
+    from app.services import razorpay
+
+    payment = (await session.execute(select(Payment).where(Payment.order_id == order_id).order_by(Payment.created_at.desc())
+                                     .with_for_update())).scalars().first()
+    if payment is None:
+        raise ApiError("This order was not paid online", "no_online_payment")
+    try:
+        out = await check_with_gateway(session, payment)
+    except razorpay.GatewayError as exc:
+        raise ApiError(f"Could not reach Razorpay: {exc}", "gateway_error", 502) from exc
+    if out["result"] == "already_paid":
+        return out
+    detail = f"{out['result']} {out['payment']['id']}" if out.get("payment") else f"not paid ({len(out['attempts'])} attempts)"
+    audit(session, admin, "payment.check", "order", order_id, detail)
+    await session.commit()
+    if out["result"] == "refund":
+        ids = list((await session.execute(select(Refund.id).where(Refund.payment_id == payment.id, Refund.status == "pending"))).scalars())
+        background.add_task(run_refunds, ids)
+    return out
 
 
 @router.get("/orders/{order_id}")

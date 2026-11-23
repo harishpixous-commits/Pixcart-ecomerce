@@ -1,7 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, CheckCircle2, ChevronRight, FileText, Leaf, LifeBuoy, MapPin, RotateCcw, Star, Truck } from "lucide-react";
+import { Building2, ChevronRight, FileText, Leaf, LifeBuoy, MapPin, RotateCcw, Star, Truck } from "lucide-react";
+import { OrderPayment, type PaymentArrival } from "@/components/order-payment";
 import { openPdf, ReturnRequestModal, ReturnsList } from "@/components/order-returns";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -13,7 +14,6 @@ import { PushPrompt } from "@/components/push-prompt";
 import { Button, ErrorNote, Modal, PageLoader, Pill, ProductImage, StatusPill, Textarea, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { date, dateTime, PAYMENT_STATUS_LABEL, rupees, SUB_STATUS_LABEL } from "@/lib/format";
-import { payWithRazorpay } from "@/lib/razorpay";
 import { useSession } from "@/lib/session";
 import { useSite } from "@/lib/site";
 import type { OrderDetail, ReturnableItem, ReturnView, SubOrderView } from "@/lib/types";
@@ -73,6 +73,13 @@ function OrderView() {
   const site = useSite();
   const [returnable, setReturnable] = useState<Returnable | null>(null);
   const [returnSub, setReturnSub] = useState<string | null>(null);
+  // What the address said on arrival (from checkout, or back from Razorpay), read once: the address is then tidied so a
+  // reload does not open the payment window again.
+  const [arrival] = useState<PaymentArrival>(() => ({ outcome: sp.get("payment") ?? "", reason: sp.get("reason") ?? "", open: sp.get("pay") === "1" }));
+  const [placed] = useState(() => sp.get("placed") === "1");
+  useEffect(() => {
+    if (sp.get("pay") || sp.get("payment") || sp.get("reason") || sp.get("placed")) router.replace(`/orders/${id}`, { scroll: false });
+  }, [sp, id, router]);
 
   const load = useCallback(() => {
     api<OrderDetail>(`/api/orders/${id}`)
@@ -97,20 +104,6 @@ function OrderView() {
   }, [id]);
   usePolling(refreshOrder, 15_000, followFleet);
 
-  async function pay() {
-    if (!order?.payment) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const paid = await payWithRazorpay(order.payment);
-      if (paid) setOrder(paid);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Payment failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function cancel() {
     if (!cancelSub) return;
     setBusy(true);
@@ -133,24 +126,10 @@ function OrderView() {
   const a = shipTo(order.ship_to);
   return (
     <div className="flex flex-col gap-4">
-      {sp.get("placed") && order.status === "placed" && (
-        <div className="flex items-center gap-3 rounded-2xl bg-leaf-light p-4 text-leaf ring-1 ring-leaf/15">
-          <CheckCircle2 className="h-7 w-7 shrink-0" />
-          <div>
-            <p className="font-display text-xl font-semibold">Order placed</p>
-            <p className="text-ink-soft">We have sent your order to the seller{order.sub_orders.length > 1 ? "s" : ""}. You can track each package below.</p>
-          </div>
-        </div>
-      )}
+      <OrderPayment order={order} onOrder={setOrder} arrival={arrival} placed={placed} />
       <ErrorNote message={error} />
       {order.sub_orders.some((s) => ["placed", "confirmed", "packed", "shipped"].includes(s.status)) && (
         <PushPrompt app="shop" title="Get delivery updates as notifications" text="Know the moment your package is picked up, on the way, or at your door, with the OTP to share." />
-      )}
-      {order.status === "pending_payment" && order.payment && (
-        <div className="flex flex-col gap-3 rounded-2xl bg-marigold-light p-4 ring-1 ring-marigold/30 sm:flex-row sm:items-center">
-          <p className="flex-1">Your payment is not complete. Items are held for you until {dateTime(order.payment_expires_at)}.</p>
-          <Button variant="buy" onClick={pay} loading={busy}>Pay {rupees(order.grand_total)}</Button>
-        </div>
       )}
 
       <section className={CARD}>
