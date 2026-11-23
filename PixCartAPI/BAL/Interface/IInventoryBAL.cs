@@ -18,4 +18,8 @@ public interface IInventoryBAL
     /// <summary>One stock change with its movement record; refreshes variants.stock (reference: change).</summary>
     Task<int> ChangeAsync(VariantModel variant, Guid warehouseId, int delta, string kind,
         string reference = "", string note = "", Guid? actorId = null, IUnitOfWork? uow = null);
+
+    /// <summary>Direct variants.stock write for a package with no warehouse (reference: the variant.stock += qty in
+    /// _release_stock).</summary>
+    Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow);
 }

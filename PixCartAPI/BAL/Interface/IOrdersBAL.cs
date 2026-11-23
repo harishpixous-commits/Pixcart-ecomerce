@@ -48,4 +48,20 @@ public interface IOrdersBAL
     /// <summary>Idempotently records a captured payment (reference: mark_paid). Returns 'paid', 'already' or
     /// 'refund' (a duplicate or late payment, refunded in full).</summary>
     Task<string> MarkPaidAsync(PaymentModel payment, string providerPaymentId, string method, long amount, Utils.Interface.IUnitOfWork uow);
+
+    /// <summary>The shopper's orders page (reference: GET /api/orders my_orders + order_summary).</summary>
+    Task<JsonObject> MyOrdersAsync(UserModel user, int page, int pageSize);
+
+    /// <summary>The order as its shopper sees it (reference: GET /api/orders/{order_id} → _shopper_order).</summary>
+    Task<JsonObject> GetShopperOrderAsync(UserModel user, Guid orderId);
+
+    /// <summary>Cancels the customer's cancellable packages, all or one (reference: POST /api/orders/{order_id}/cancel
+    /// + customer_cancel). Returns the order detail snapshot; queued refunds are then sent to the gateway.</summary>
+    Task<JsonObject> CancelAsync(UserModel user, Guid orderId, string reason, Guid? subOrderId);
+
+    /// <summary>Sends queued refunds to the gateway (reference: run_refunds); the refund retry job calls this too.</summary>
+    Task ProcessRefundsAsync(IReadOnlyList<Guid> refundIds);
+
+    /// <summary>Sends one pending refund, repeatable (reference: process_refund; attempts ≥ 8 → failed).</summary>
+    Task ProcessRefundAsync(Guid refundId);
 }

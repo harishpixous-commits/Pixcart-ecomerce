@@ -132,4 +132,8 @@ public class InventoryBAL(InventoryDAL inventory, IMySqlDapperHelper db) : Inter
         variant.Stock = total;
         return newQty;
     }
+
+    /// <summary>Direct variants.stock write for a package with no warehouse.</summary>
+    public Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow) =>
+        inventory.SetVariantStockAsync(variantId, stock, uow);
 }

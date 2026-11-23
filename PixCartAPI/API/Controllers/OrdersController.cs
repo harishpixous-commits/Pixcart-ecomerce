@@ -61,6 +61,29 @@ public class OrdersController(IOrdersBAL orders, IPlatformSettingsBAL platform, 
         };
     }
 
+    /// <summary>The shopper's orders page (reference: GET /api/orders).</summary>
+    [HttpGet("")]
+    public async Task<JsonObject> MyOrders([FromQuery] int page = 1, [FromQuery(Name = "page_size")] int pageSize = 10)
+    {
+        if (page < 1 || pageSize < 1 || pageSize > 50)
+            throw new AppException("page must be at least 1 and page_size between 1 and 50", "validation", 422);
+        return await orders.MyOrdersAsync(await current.RequireAsync(), page, pageSize);
+    }
+
+    /// <summary>One order as its shopper sees it (reference: GET /api/orders/{order_id}).</summary>
+    [HttpGet("{orderId:guid}")]
+    public async Task<JsonObject> GetOrder(Guid orderId) =>
+        await orders.GetShopperOrderAsync(await current.RequireAsync(), orderId);
+
+    /// <summary>Cancel the order's cancellable packages, all or one (reference: POST /api/orders/{order_id}/cancel).</summary>
+    [HttpPost("{orderId:guid}/cancel")]
+    public async Task<JsonObject> Cancel(Guid orderId, CancelIn body) =>
+        await orders.CancelAsync(await current.RequireAsync(), orderId, body.Reason, body.SubOrderId);
+
+    public sealed record CancelIn(
+        [param: StringLength(300, MinimumLength = 3)] string Reason = "Changed my mind",
+        Guid? SubOrderId = null);
+
     /// <summary>Verify a Razorpay payment after the payment window returns (reference: POST
     /// /api/payments/razorpay/verify).</summary>
     [HttpPost("/api/payments/razorpay/verify")]

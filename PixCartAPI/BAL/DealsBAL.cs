@@ -98,4 +98,18 @@ public class DealsBAL(CatalogSupportDAL support, DealsDAL deals, CatalogDAL cata
         var p = await deals.GetProductAsync(d.ProductId, uow);
         if (p is not null) await catalog.RefreshAggregatesAsync(p.Id, uow);
     }
+
+    /// <summary>A version row locked inside the order's transaction.</summary>
+    public Task<VariantModel?> VariantForUpdateAsync(Guid variantId, IUnitOfWork uow) =>
+        deals.VariantForUpdateAsync(variantId, uow);
+
+    /// <summary>Units bought at a still-running deal's price came back (the order was cancelled or never paid):
+    /// they are on offer at the deal price again (reference: deals.release_sale).</summary>
+    public async Task ReleaseSaleAsync(Guid variantId, int qty, long unitPrice, IUnitOfWork uow)
+    {
+        var d = await deals.ActiveDealForUpdateAsync(variantId, uow);
+        if (d is null || unitPrice != d.DealPricePaise) return;
+        d.SoldQty = Math.Max(0, d.SoldQty - qty);
+        await deals.UpdateDealAsync(d, uow);
+    }
 }

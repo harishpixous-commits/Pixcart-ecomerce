@@ -870,4 +870,304 @@ public class OrdersBAL(
         outp["order"] = detail;
         return outp;
     }
+
+    // ------------------------------------------------------------------------- list / detail / cancel / refunds
+
+    /// <summary>Every legal package move (reference: TRANSITIONS). A move not listed here is refused in one place.</summary>
+    public static readonly IReadOnlyDictionary<string, string[]> Transitions = new Dictionary<string, string[]>
+    {
+        ["pending_payment"] = ["placed", "cancelled"],
+        ["placed"] = ["confirmed", "cancelled"],
+        ["confirmed"] = ["packed", "cancelled"],
+        ["packed"] = ["shipped", "cancelled"],
+        ["shipped"] = ["delivered", "cancelled"], // cancelled after shipping = returned to origin (RTO)
+        ["delivered"] = [],
+        ["cancelled"] = [],
+    };
+
+    public static bool CanTransition(string src, string dst) =>
+        Transitions.TryGetValue(src, out var dsts) && dsts.Contains(dst);
+
+    /// <summary>The shopper's orders page (reference: GET /api/orders my_orders + order_summary).</summary>
+    public async Task<JsonObject> MyOrdersAsync(UserModel user, int page, int pageSize)
+    {
+        var total = await orders.CountOrdersByUserAsync(user.Id);
+        var list = await orders.OrdersByUserAsync(user.Id, (page - 1) * pageSize, pageSize);
+        var subs = await orders.SubOrdersForOrdersAsync(list.Select(o => o.Id).ToList());
+        var items = await orders.ItemsAsync(subs.Select(s => s.Id).ToList());
+        var byOrder = subs.GroupBy(s => s.OrderId).ToDictionary(g => g.Key, g => g.ToList());
+        var bySub = items.GroupBy(i => i.SubOrderId).ToDictionary(g => g.Key, g => g.ToList());
+        var arr = new JsonArray();
+        foreach (var o in list)
+        {
+            var oSubs = byOrder.GetValueOrDefault(o.Id) ?? [];
+            var oItems = oSubs.SelectMany(s => bySub.GetValueOrDefault(s.Id) ?? []).ToList();
+            arr.Add(new JsonObject
+            {
+                ["id"] = o.Id.ToString(),
+                ["number"] = o.Number,
+                ["status"] = o.Status,
+                ["payment_method"] = o.PaymentMethod,
+                ["payment_status"] = o.PaymentStatus,
+                ["grand_total"] = o.GrandTotal,
+                ["created_at"] = o.CreatedAt.ToString("o"),
+                ["item_count"] = oItems.Sum(i => i.Qty),
+                ["items"] = new JsonArray(oItems.Take(4).Select(i => (JsonNode)new JsonObject
+                {
+                    ["title"] = i.Title, ["image"] = i.ImageUrl, ["qty"] = i.Qty,
+                }).ToArray()),
+                ["sub_statuses"] = new JsonArray(oSubs.Select(s => (JsonNode)JsonValue.Create(s.Status)!).ToArray()),
+            });
+        }
+        return new JsonObject { ["items"] = arr, ["total"] = total, ["page"] = page, ["page_size"] = pageSize };
+    }
+
+    /// <summary>The order as its shopper sees it (reference: GET /api/orders/{order_id} → _shopper_order).</summary>
+    public async Task<JsonObject> GetShopperOrderAsync(UserModel user, Guid orderId)
+    {
+        var o = await orders.GetOrderAsync(orderId);
+        if (o is null || o.UserId != user.Id) throw new NotFoundException("Order");
+        var data = await DetailAsync(o);
+        data["payment"] = await ShopperCheckoutAsync(o, await orders.LatestPaymentAsync(o.Id), user);
+        return data;
+    }
+
+    /// <summary>POST /api/orders/{order_id}/cancel (reference: cancel + customer_cancel). Cancels the customer's
+    /// cancellable packages (all, or one) in one transaction; the response is the order detail as it stood when the
+    /// cancel committed, then any refunds are sent to the gateway (reference: a background task; ours runs inline
+    /// right after the snapshot so a crash between commit and send is picked up by the refund retry job either way).</summary>
+    public async Task<JsonObject> CancelAsync(UserModel user, Guid orderId, string reason, Guid? subOrderId)
+    {
+        var own = await orders.GetOrderAsync(orderId);
+        if (own is null || own.UserId != user.Id) throw new NotFoundException("Order");
+        List<Guid> refundIds;
+        await using (var uow = await db.BeginAsync())
+        {
+            refundIds = await CustomerCancelAsync(orderId, subOrderId, reason, uow);
+            await uow.CommitAsync();
+        }
+        var detail = await DetailAsync((await orders.GetOrderAsync(orderId))!);
+        await ProcessRefundsAsync(refundIds);
+        return detail;
+    }
+
+    /// <summary>Reference: customer_cancel. Ownership is the caller's check. Returns the refund ids to send after commit.</summary>
+    private async Task<List<Guid>> CustomerCancelAsync(Guid orderId, Guid? subOrderId, string reason, IUnitOfWork uow)
+    {
+        var subs = await orders.SubOrdersForUpdateAsync(orderId, uow);
+        var targets = subs.Where(s => subOrderId is null || s.Id == subOrderId).ToList();
+        if (subOrderId is not null && targets.Count == 0) throw new NotFoundException("Order part");
+        var allowed = CustomerCancellableAt(await platform.GetAsync());
+        var cancellable = targets.Where(s => allowed.Contains(s.Status) || s.Status == "pending_payment").ToList();
+        if (cancellable.Count == 0)
+            throw new AppException("This order can no longer be cancelled. You can return it after delivery.", "not_cancellable", 409);
+        var refundIds = new List<Guid>();
+        foreach (var s in cancellable)
+        {
+            var refund = await CancelSubOrderAsync(s, "customer", reason, uow);
+            if (refund is not null) refundIds.Add(refund.Id);
+        }
+        return refundIds;
+    }
+
+    /// <summary>Reference: cancel_sub_order. Every cancellation of paid money creates a refund record; stock, deals
+    /// and sold counts go back; the last package standing takes the coupon back and closes the order.</summary>
+    private async Task<RefundModel?> CancelSubOrderAsync(SubOrderModel sub, string actor, string reason, IUnitOfWork uow)
+    {
+        if (!CanTransition(sub.Status, "cancelled"))
+            throw new AppException("This order can no longer be cancelled", "not_cancellable", 409);
+        var order = await orders.OrderForUpdateAsync(sub.OrderId, uow) ?? throw new NotFoundException("Order");
+        var src = sub.Status;
+        var now = DateTimeFunctions.UtcNow();
+        sub.Status = "cancelled";
+        sub.CancelledAt = now;
+        sub.CancelledBy = actor;
+        sub.CancelReason = reason.Length > 300 ? reason[..300] : reason;
+        await orders.UpdateSubCancelledAsync(sub, uow);
+        await orders.InsertEventAsync(new OrderEventModel
+        {
+            Id = Guid.NewGuid(), OrderId = order.Id, SubOrderId = sub.Id,
+            FromStatus = src, ToStatus = "cancelled", Actor = actor, Note = sub.CancelReason, CreatedAt = now,
+        }, uow);
+        await ReleaseStockAsync(sub, uow);
+        // reference: fleet.on_cancelled when the own fleet carries the package — the delivery module owns that hook.
+
+        var othersLive = await orders.CountLiveOtherSubsAsync(order.Id, sub.Id, uow);
+        var feesBack = (await fees.GetAsync()).Bool("fees_refund_on_cancel");
+        var paidShare = RefundOnCancel(sub, order, othersLive, feesBack);
+        if (othersLive == 0 && !feesBack && order.PaymentMethod == "online" && order.PaymentStatus is "paid" or "partially_refunded")
+            await IssueFeeInvoiceAsync(order, uow); // the marketplace keeps its fees: they are invoiced
+
+        RefundModel? refund = null;
+        if (order.PaymentMethod == "online" && order.PaymentStatus is "paid" or "partially_refunded")
+        {
+            var payment = await orders.CapturedPaymentAsync(order.Id);
+            if (payment is not null)
+            {
+                refund = new RefundModel
+                {
+                    Id = Guid.NewGuid(), OrderId = order.Id, PaymentId = payment.Id, SubOrderId = sub.Id,
+                    AmountPaise = paidShare, Status = "pending", Reason = sub.CancelReason,
+                    Attempts = 0, LastError = "", CreatedAt = now, UpdatedAt = now,
+                };
+                await orders.InsertRefundAsync(refund, uow);
+                order.RefundedTotal += paidShare;
+                order.PaymentStatus = order.RefundedTotal >= order.GrandTotal ? "refunded" : "partially_refunded";
+                await orders.UpdateOrderPaymentStateAsync(order, uow);
+            }
+        }
+
+        await SyncCodStatusAsync(order, uow);
+        if (othersLive == 0)
+        {
+            await orders.MarkOrderCancelledAsync(order.Id, uow);
+            var couponId = await orders.UnreleasedRedemptionCouponAsync(order.Id, uow);
+            if (couponId is Guid cid)
+            {
+                await orders.ReleaseRedemptionAsync(order.Id, uow);
+                await orders.DecrementCouponUsageAsync(cid, uow);
+            }
+        }
+
+        if (src != "pending_payment")
+        {
+            var item = await FirstTitleAsync(sub, uow);
+            var refundText = refund is not null ? $"A refund of {Money.Rupees(paidShare)} has been started."
+                : order.PaymentMethod == "cod" ? "Nothing was charged for it." : "";
+            await notify.NotifyUserAsync(order.UserId, "order_cancelled",
+                new Dictionary<string, string>
+                {
+                    ["order_number"] = order.Number, ["item"] = item, ["reason"] = sub.CancelReason, ["refund_text"] = refundText,
+                },
+                $"/orders/{order.Id}");
+            if (actor != "seller")
+                await notify.NotifySellerAsync(sub.SellerId, "seller_order_cancelled",
+                    new Dictionary<string, string> { ["order_number"] = sub.Number, ["reason"] = sub.CancelReason },
+                    $"/seller/orders/{sub.Id}");
+        }
+        return refund;
+    }
+
+    /// <summary>Reference: _release_stock(kind="release"): units back on the shelf, deal units back on offer,
+    /// sold_count floored at 0, aggregates refreshed.</summary>
+    private async Task ReleaseStockAsync(SubOrderModel sub, IUnitOfWork uow)
+    {
+        var items = await orders.ItemsAsync([sub.Id], uow);
+        foreach (var it in items.OrderBy(i => i.VariantId))
+        {
+            var qty = it.Qty - it.ReturnedQty;
+            if (qty <= 0) continue;
+            var variant = await deals.VariantForUpdateAsync(it.VariantId, uow);
+            if (variant is null) continue;
+            if (sub.WarehouseId is Guid wh)
+                await inventory.ChangeAsync(variant, wh, qty, "release", sub.Number, uow: uow);
+            else
+            {
+                variant.Stock += qty;
+                await inventory.SetVariantStockAsync(variant.Id, variant.Stock, uow);
+            }
+            await deals.ReleaseSaleAsync(it.VariantId, qty, it.UnitPrice, uow);
+            await orders.ReleaseSoldCountAsync(it.ProductId, qty, uow);
+        }
+        foreach (var pid in items.Select(i => i.ProductId).Distinct())
+            await catalog.RefreshAggregatesAsync(pid, uow);
+    }
+
+    /// <summary>A COD order counts as paid once every part that was not cancelled has been delivered (reference:
+    /// _sync_cod_status).</summary>
+    private async Task SyncCodStatusAsync(OrderModel order, IUnitOfWork uow)
+    {
+        if (order.PaymentMethod != "cod") return;
+        var statuses = (await orders.SubOrdersForUpdateAsync(order.Id, uow)).Select(s => s.Status).ToList();
+        var live = statuses.Where(st => st != "cancelled").ToList();
+        if (live.Count > 0 && live.All(st => st == "delivered"))
+        {
+            order.PaymentStatus = "paid";
+            await orders.UpdateOrderPaymentStateAsync(order, uow);
+        }
+    }
+
+    /// <summary>Reference: _first_title.</summary>
+    private async Task<string> FirstTitleAsync(SubOrderModel sub, IUnitOfWork uow)
+    {
+        var titles = (await orders.ItemsAsync([sub.Id], uow)).Select(i => i.Title).ToList();
+        return titles.Count > 0 ? titles[0] + (titles.Count > 1 ? $" and {titles.Count - 1} more" : "") : sub.Number;
+    }
+
+    /// <summary>Gives the order its marketplace fee invoice number, once (reference: fee_invoices.issue). No-op
+    /// without fees or without the operator's GSTIN.</summary>
+    private async Task IssueFeeInvoiceAsync(OrderModel order, IUnitOfWork uow)
+    {
+        if (order.FeeInvoiceNumber.Length > 0 || order.FeesTotal == 0 || order.Fees is "" or "[]" or "null") return;
+        var business = site.PublicBusiness(await site.GetSiteAsync());
+        if (CatalogText.AsString(business["gstin"]) is not { Length: > 0 }) return;
+        var now = DateTimeFunctions.UtcNow();
+        var fy = FiscalYear(now);
+        var prefix = (await fees.GetAsync()).Str("fee_invoice_prefix");
+        var n = await orders.NextInvoiceNumberAsync(fy, uow);
+        var number = $"{prefix}/{fy}/{n:000000}";
+        await orders.SetFeeInvoiceAsync(order.Id, number.Length > 16 ? number[..16] : number, now, uow);
+    }
+
+    /// <summary>Indian fiscal year "26-27" (reference: invoices.fiscal_year, in IST).</summary>
+    private static string FiscalYear(DateTime utc)
+    {
+        var d = utc.AddMinutes(330); // IST
+        var start = d.Month >= 4 ? d.Year : d.Year - 1;
+        return $"{start % 100:00}-{(start + 1) % 100:00}";
+    }
+
+    /// <summary>Sends queued refunds to the gateway, one by one (reference: run_refunds). A failure is recorded on
+    /// the row; the retry job picks it up.</summary>
+    public async Task ProcessRefundsAsync(IReadOnlyList<Guid> refundIds)
+    {
+        foreach (var id in refundIds)
+        {
+            try { await ProcessRefundAsync(id); }
+            catch (Exception) { /* the retry job picks it up */ }
+        }
+    }
+
+    /// <summary>Sends one pending refund to Razorpay. Safe to call repeatedly (receipt = our refund id)
+    /// (reference: process_refund; attempts ≥ 8 → failed, needs manual attention in the admin panel).</summary>
+    public async Task ProcessRefundAsync(Guid refundId)
+    {
+        await using var uow = await db.BeginAsync();
+        var refund = await orders.RefundForUpdateAsync(refundId, uow);
+        if (refund is null || refund.Status != "pending") return;
+        var payment = await orders.PaymentForUpdateAsync(refund.PaymentId, uow) ?? throw new NotFoundException("Payment");
+        refund.Attempts += 1;
+        try
+        {
+            var data = await razorpay.RefundPaymentAsync(
+                refund.ProviderPaymentId ?? payment.ProviderPaymentId ?? "",
+                RefundCharge(payment, refund.AmountPaise),
+                refund.Id.ToString(),
+                new Dictionary<string, string> { ["refund_id"] = refund.Id.ToString() });
+            refund.ProviderRefundId = data["id"]?.GetValue<string>();
+            refund.Status = data["status"]?.GetValue<string>() == "processed" ? "processed" : "pending";
+            if (refund.Status == "pending") refund.LastError = "";
+            await orders.UpdateRefundAsync(refund, uow);
+            await uow.CommitAsync();
+            if (refund.Status == "processed") await NotifyRefundAsync(refund);
+        }
+        catch (RazorpayBAL.GatewayException ex)
+        {
+            refund.LastError = ex.Message.Length > 500 ? ex.Message[..500] : ex.Message;
+            if (refund.Attempts >= 8) refund.Status = "failed";
+            await orders.UpdateRefundAsync(refund, uow);
+            await uow.CommitAsync();
+        }
+    }
+
+    /// <summary>Tells the customer a refund has gone through (reference: notify_refund; call once, when it becomes
+    /// processed).</summary>
+    private async Task NotifyRefundAsync(RefundModel refund)
+    {
+        var order = await orders.GetOrderAsync(refund.OrderId);
+        if (order is null) return;
+        await notify.NotifyUserAsync(order.UserId, "refund_processed",
+            new Dictionary<string, string> { ["amount"] = Money.Rupees(refund.AmountPaise), ["order_number"] = order.Number },
+            $"/orders/{order.Id}");
+    }
 }

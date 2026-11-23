@@ -24,6 +24,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["seller_new_order"] = ("New order {{order_number}}", "{{items}} — {{amount}}. Dispatch within {{dispatch_days}} days."),
         ["order_cancelled"] = ("Order {{order_number}} cancelled", "Your order was cancelled. {{refund_note}}"),
         ["seller_order_cancelled"] = ("Order {{order_number}} cancelled", "{{items}} — the customer cancelled {{reason}}."),
+        ["refund_processed"] = ("Refund of {{amount}} processed", "The refund for order {{order_number}} is on its way to your bank."),
     };
 
     [GeneratedRegex(@"\{\{\s*(\w+)\s*\}\}")]

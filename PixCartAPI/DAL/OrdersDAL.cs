@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Model.DomainModel;
 using Utils.Interface;
 
@@ -247,5 +249,120 @@ public class OrdersDAL(IMySqlDapperHelper db)
         var rows = await db.QueryAsync<Guid>(
             "SELECT id FROM refunds WHERE payment_id = @paymentId AND status = 'pending'", new { paymentId });
         return rows.ToList();
+    }
+
+    /// <summary>The shopper's orders, newest first (reference: my_orders).</summary>
+    public async Task<IReadOnlyList<OrderModel>> OrdersByUserAsync(Guid userId, int offset, int limit)
+    {
+        var rows = await db.QueryAsync<OrderModel>(
+            "SELECT * FROM orders WHERE user_id = @userId ORDER BY created_at DESC LIMIT @limit OFFSET @offset",
+            new { userId, offset, limit });
+        return rows.ToList();
+    }
+
+    public Task<long> CountOrdersByUserAsync(Guid userId) =>
+        db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM orders WHERE user_id = @userId", new { userId });
+
+    /// <summary>Packages of several orders at once (reference: the my_orders sub-order read).</summary>
+    public async Task<IReadOnlyList<SubOrderModel>> SubOrdersForOrdersAsync(IReadOnlyList<Guid> orderIds)
+    {
+        if (orderIds.Count == 0) return [];
+        var rows = await db.QueryAsync<SubOrderModel>(
+            "SELECT * FROM sub_orders WHERE order_id IN @orderIds ORDER BY number", new { orderIds });
+        return rows.ToList();
+    }
+
+    /// <summary>Items of the packages, inside the order's transaction (reference: the _release_stock read).</summary>
+    public async Task<IReadOnlyList<OrderItemModel>> ItemsAsync(IReadOnlyList<Guid> subOrderIds, IUnitOfWork uow)
+    {
+        if (subOrderIds.Count == 0) return [];
+        var rows = await uow.QueryAsync<OrderItemModel>(
+            "SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds", new { subOrderIds });
+        return rows.ToList();
+    }
+
+    /// <summary>The cancel write on the package (reference: the cancel_sub_order sub-order update).</summary>
+    public Task<int> UpdateSubCancelledAsync(SubOrderModel s, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE sub_orders SET status = 'cancelled', cancelled_at = @CancelledAt, cancelled_by = @CancelledBy,
+                cancel_reason = @CancelReason, settlement_status = 'void', updated_at = UTC_TIMESTAMP(6)
+            WHERE id = @Id
+            """, s);
+
+    /// <summary>Packages of the order still live, excluding one (reference: the others_live counts in cancel_sub_order).</summary>
+    public Task<long> CountLiveOtherSubsAsync(Guid orderId, Guid excludeSubId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM sub_orders WHERE order_id = @orderId AND status != 'cancelled' AND id != @excludeSubId",
+            new { orderId, excludeSubId });
+
+    /// <summary>The order is fully cancelled (reference: the order update in cancel_sub_order). An unpaid online
+    /// order's payment becomes 'failed' with it.</summary>
+    public Task<int> MarkOrderCancelledAsync(Guid orderId, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE orders SET status = 'cancelled', cancelled_at = UTC_TIMESTAMP(6),
+                payment_status = IF(payment_method = 'online' AND payment_status = 'pending', 'failed', payment_status),
+                updated_at = UTC_TIMESTAMP(6)
+            WHERE id = @orderId
+            """, new { orderId });
+
+    /// <summary>The order's unreleased coupon redemption, locked (reference: the redemption release in cancel_sub_order).</summary>
+    public Task<Guid?> UnreleasedRedemptionCouponAsync(Guid orderId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<Guid?>(
+            "SELECT coupon_id FROM coupon_redemptions WHERE order_id = @orderId AND released = 0 LIMIT 1 FOR UPDATE",
+            new { orderId });
+
+    public Task<int> ReleaseRedemptionAsync(Guid orderId, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE coupon_redemptions SET released = 1 WHERE order_id = @orderId AND released = 0", new { orderId });
+
+    /// <summary>used_count floor 0 (reference: the coupon update in cancel_sub_order).</summary>
+    public Task<int> DecrementCouponUsageAsync(Guid couponId, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE coupons SET used_count = GREATEST(used_count - 1, 0), updated_at = UTC_TIMESTAMP(6) WHERE id = @couponId",
+            new { couponId });
+
+    /// <summary>sold_count floor 0 on release (reference: the product update in _release_stock).</summary>
+    public Task<int> ReleaseSoldCountAsync(Guid productId, int qty, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE products SET sold_count = GREATEST(sold_count - @qty, 0), updated_at = UTC_TIMESTAMP(6) WHERE id = @productId",
+            new { productId, qty });
+
+    /// <summary>One refund, locked for the runner (reference: process_refund's select FOR UPDATE SKIP LOCKED; our
+    /// runner is single-process so a plain row lock is the same guarantee).</summary>
+    public Task<RefundModel?> RefundForUpdateAsync(Guid refundId, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<RefundModel>("SELECT * FROM refunds WHERE id = @refundId FOR UPDATE", new { refundId });
+
+    public Task<int> UpdateRefundAsync(RefundModel r, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE refunds SET status = @Status, provider_refund_id = @ProviderRefundId, attempts = @Attempts,
+                last_error = @LastError, updated_at = UTC_TIMESTAMP(6)
+            WHERE id = @Id
+            """, r);
+
+    /// <summary>The marketplace fee invoice number on the order, once (reference: fee_invoices.issue).</summary>
+    public Task<int> SetFeeInvoiceAsync(Guid orderId, string number, DateTime at, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE orders SET fee_invoice_number = @number, fee_invoice_date = @at, updated_at = UTC_TIMESTAMP(6) WHERE id = @orderId",
+            new { orderId, number, at });
+
+    /// <summary>Gap-free invoice counter under a row lock (reference: fee_invoices._next_number on the
+    /// 'operator_documents' platform_settings row; a rollback gives the number back).</summary>
+    public async Task<int> NextInvoiceNumberAsync(string fy, IUnitOfWork uow)
+    {
+        const string key = "operator_documents";
+        var json = await uow.ExecuteScalarAsync<string>(
+            "SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = @key FOR UPDATE", new { key });
+        var doc = json is not null ? (JsonNode.Parse(json) as JsonObject ?? new JsonObject()) : new JsonObject();
+        var counterKey = $"INV/{fy}";
+        var n = (doc[counterKey] is JsonValue v && v.GetValueKind() == JsonValueKind.Number ? v.GetValue<int>() : 0) + 1;
+        doc[counterKey] = n;
+        await uow.ExecuteAsync(
+            "INSERT INTO platform_settings (`key`, `value`, updated_at) VALUES (@key, CAST(@value AS JSON), UTC_TIMESTAMP(6)) " +
+            "ON DUPLICATE KEY UPDATE `value` = CAST(@value AS JSON), updated_at = UTC_TIMESTAMP(6)",
+            new { key, value = doc.ToJsonString() });
+        return n;
     }
 }
