@@ -14,7 +14,7 @@ test("customer pays online through Razorpay checkout (simulator) and the order i
   await page.getByText("Sign in to place order").click();
   const phone = randomPhone("93");
   await otpLogin(page, phone, "Online Buyer");
-  await page.waitForURL("**/checkout");
+  await page.waitForURL((u) => u.pathname === "/checkout");
   await page.getByLabel("Full name").fill("Online Buyer");
   await page.locator("input[autocomplete=tel-national]").fill(phone);
   await page.locator("input[autocomplete=address-line1]").fill("5 Lake View Road");

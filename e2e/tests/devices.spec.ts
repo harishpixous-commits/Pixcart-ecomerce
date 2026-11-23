@@ -13,13 +13,13 @@ test("a shopper signs out their other device from the Account page", async ({ br
     userAgent: "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36" })).newPage();
   await phone.goto("/login?next=/account");
   await otpLogin(phone, phoneNo, "Two Devices");
-  await phone.waitForURL("**/account");
+  await phone.waitForURL((u) => u.pathname === "/account");
 
   const computer = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
   const errors = collectErrors(computer);
   await computer.goto("/login?next=/account");
   await otpLogin(computer, phoneNo); // waits out the 30 s before a second code
-  await computer.waitForURL("**/account");
+  await computer.waitForURL((u) => u.pathname === "/account");
 
   const card = computer.getByTestId("signed-in-devices");
   await expect(card.getByRole("listitem")).toHaveCount(2);

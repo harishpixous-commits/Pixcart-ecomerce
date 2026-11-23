@@ -149,7 +149,7 @@ test("own delivery partner: request pops up, pickup code, OTP, cash, photo, deli
   await test.step("seller marks it ready for pickup", async () => {
     await seller.goto("/login?next=/seller");
     await otpLogin(seller, process.env.FLEET_SELLER_PHONE ?? "9000000002");
-    await seller.waitForURL("**/seller");
+    await seller.waitForURL((u) => u.pathname === "/seller");
     await seller.goto("/seller/orders");
     await seller.locator("a[href^='/seller/orders/']", { hasText: orderNo }).first().click();
     await seller.getByRole("button", { name: "Confirm order" }).click();

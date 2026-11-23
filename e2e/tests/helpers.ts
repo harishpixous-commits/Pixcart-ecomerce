@@ -47,10 +47,12 @@ export async function createAccount(page: Page, phone: string, name: string) {
   if (!page.url().includes("/signup")) await page.getByRole("link", { name: /Create (an account|your seller account)/ }).last().click();
   await page.waitForURL(/\/signup/);
   const nameBox = page.locator("input[autocomplete=name]");
+  // the create-account form itself: for a moment after the link the sign-in form can still be on the page
+  const form = page.locator("form", { has: nameBox });
   const code = page.locator("input[autocomplete=one-time-code]");
   for (let attempt = 0; attempt < 3; attempt++) {
     await nameBox.fill(name);
-    await page.locator("input[type=tel]").fill(phone);
+    await form.locator("input[type=tel]").fill(phone);
     await expect(nameBox).toHaveValue(name);
     const terms = page.getByRole("checkbox").first();
     if (!(await terms.isChecked())) await terms.check();
@@ -104,7 +106,7 @@ export const test = base.extend<object, { admin: Page; seller: Page }>({
     const page = await freshPage(browser);
     await page.goto("/login?next=/seller");
     await otpLogin(page, process.env.SELLER_PHONE ?? "9000000001");
-    await page.waitForURL("**/seller");
+    await page.waitForURL((u) => u.pathname === "/seller");
     await use(page);
     await page.context().close();
   }, { scope: "worker" }],

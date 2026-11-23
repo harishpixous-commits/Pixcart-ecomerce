@@ -31,7 +31,7 @@ test.describe.serial("order to refund, across customer, seller and admin", () =>
     await page.getByText("Sign in to place order").click();
     const phone = randomPhone("98");
     await otpLogin(page, phone, "Lakshmi");
-    await page.waitForURL("**/checkout");
+    await page.waitForURL((u) => u.pathname === "/checkout");
 
     await expect(page.getByText("Delivery address").first()).toBeVisible();
     await page.getByLabel("Full name").fill("Lakshmi R");

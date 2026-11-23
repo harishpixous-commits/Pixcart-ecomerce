@@ -67,7 +67,12 @@ export default function SellerDashboard() {
           <SalesBars days={d.daily_sales} />
         </section>
         <section className="flex flex-col gap-3">
-          <Stat label="Payout ready" value={rupees(d.earnings.ready_for_payout)} hint="Return window has closed" href="/seller/payouts" />
+          {d.earnings.ready_for_payout < 0 ? (
+            // refunds or ad charges are more than the released earnings: say what it means instead of showing a minus
+            <Stat label="To be recovered" value={rupees(-d.earnings.ready_for_payout)} hint="Taken from your next earnings (refunds, ad charges)" href="/seller/payouts" />
+          ) : (
+            <Stat label="Payout ready" value={rupees(d.earnings.ready_for_payout)} hint="Return window has closed" href="/seller/payouts" />
+          )}
           <Stat label="In return window" value={rupees(d.earnings.in_return_window)} hint="Released when the return window closes" href="/seller/payouts" />
         </section>
       </div>
