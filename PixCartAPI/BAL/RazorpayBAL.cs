@@ -82,8 +82,12 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
         return CryptographicEquals(expected, signature ?? "");
     }
 
+    /// <summary>Test hook (reference: razorpay.transport): when set, every gateway send goes through this handler,
+    /// so tests record each request and prove none leaves the box. Null keeps production transports.</summary>
+    public static Func<HttpMessageHandler>? TransportFactory { get; set; }
+
     /// <summary>Test safeguard client: never follows redirects, so a mock cannot bounce a request off-box.
-    /// Used only when ExternalProviderMode is "loopback".</summary>
+    /// Used while the egress policy is restricted.</summary>
     private static readonly HttpClient LoopbackClient =
         new(new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: true);
 
@@ -113,7 +117,7 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
         var cfg = await integrations.GetAsync();
         if (!cfg.RazorpayEnabled) throw new GatewayException("Online payments are not configured");
         var apiBase = app.RazorpayApiBase.TrimEnd('/');
-        var loopbackOnly = app.ExternalProviderMode == "loopback";
+        var loopbackOnly = app.ExternalProviderMode != "open"; // fail closed: unset means restricted
         if (loopbackOnly && !IsLoopbackLiteral(apiBase))
             // Fail closed: unparsable or non-loopback base means no request is ever attempted.
             throw new GatewayException("External provider calls are restricted to a local mock in this environment");
@@ -126,9 +130,11 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
                 "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.RazorpayKeyId}:{cfg.RazorpayKeySecret}")));
             if (body is not null)
                 req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-            using var resp = loopbackOnly
-                ? await LoopbackClient.SendAsync(req, HttpCompletionOption.ResponseContentRead)
-                : await http.CreateClient().SendAsync(req, HttpCompletionOption.ResponseContentRead);
+            using var resp = TransportFactory is { } factory
+                ? await new HttpClient(factory(), disposeHandler: true).SendAsync(req, HttpCompletionOption.ResponseContentRead)
+                : loopbackOnly
+                    ? await LoopbackClient.SendAsync(req, HttpCompletionOption.ResponseContentRead)
+                    : await http.CreateClient().SendAsync(req, HttpCompletionOption.ResponseContentRead);
             status = (int)resp.StatusCode;
             text = await resp.Content.ReadAsStringAsync();
         }

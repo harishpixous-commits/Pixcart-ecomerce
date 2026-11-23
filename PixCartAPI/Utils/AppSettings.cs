@@ -34,9 +34,9 @@ public class AppSettings
     public string RazorpayKeySecret { get; set; } = "";
     public string RazorpayWebhookSecret { get; set; } = "";
     public string RazorpayApiBase { get; set; } = "https://api.razorpay.com/v1";
-    /// <summary>Test safeguard: "loopback" makes every payment-gateway call fail before any network unless the
-    /// provider base URL points at a local mock (127.0.0.1/localhost). Empty means unrestricted (production).
-    /// Set App__ExternalProviderMode=loopback and App__RazorpayApiBase=http://127.0.0.1:&lt;port&gt;/v1 for offline tests.</summary>
+    /// <summary>Provider egress policy, FAIL CLOSED BY DEFAULT: anything but "open" (including unset) restricts every
+    /// payment-gateway call to a literal loopback base URL (a local mock). Production must set this to "open"
+    /// explicitly; a missing value can never silently restore real provider access.</summary>
     public string ExternalProviderMode { get; set; } = "";
     /// <summary>Admin → Integrations switch; off hides online payment at checkout (reference: config.py razorpay_checkout).</summary>
     public bool RazorpayCheckout { get; set; } = true;
