@@ -7,12 +7,15 @@
  */
 
 import clsx from "clsx";
-import { Check, ChevronDown, ChevronRight, CornerDownLeft, LayoutTemplate, LogOut, Search, X } from "lucide-react";
+import {
+  Bike, Check, ChevronDown, ChevronRight, CornerDownLeft, IndianRupee, LayoutTemplate, LifeBuoy, Loader2, LogOut, Package, Search, ShoppingBag, Store, Users, X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NotificationBell } from "@/components/shop-chrome";
 import { useAdmin } from "@/lib/admin";
+import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { ADMIN_LAYOUTS, LAYOUT_INFO, useAdminPrefs, type AdminLayout } from "./prefs";
 import { currentItem, isActiveItem, navSections, type AdminNavItem } from "./nav";
@@ -33,16 +36,49 @@ export function useQuickFindKey(open: () => void) {
   }, [open]);
 }
 
+/** A record found by the admin search (GET /api/admin/search): only what this staff member may open. */
+type FoundRecord = { kind: "order" | "customer" | "seller" | "product" | "partner" | "ticket" | "payout"; id: string; title: string; sub: string; href: string };
+const RECORD_ICON: Record<FoundRecord["kind"], typeof Search> = {
+  order: ShoppingBag, customer: Users, seller: Store, product: Package, partner: Bike, ticket: LifeBuoy, payout: IndianRupee,
+};
+const RECORD_NAME: Record<FoundRecord["kind"], string> = {
+  order: "Order", customer: "Customer", seller: "Seller", product: "Listing", partner: "Delivery partner", ticket: "Support ticket", payout: "Payout",
+};
+
+type Option = { key: string; href: string; icon: typeof Search; title: string; sub: string; badge?: number };
+
+/**
+ * Quick find: pages of the admin panel, and (from two letters) records anywhere: orders by number or phone, customers,
+ * sellers, listings by title or SKU, delivery partners, support tickets and payouts. One list; arrows and Enter.
+ */
 export function QuickFind({ items, onClose }: { items: AdminNavItem[]; onClose: () => void }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [at, setAt] = useState(0);
+  const [found, setFound] = useState<{ q: string; results: FoundRecord[] } | null>(null);
   const list = useRef<HTMLUListElement>(null);
-  const shown = useMemo(() => {
+  const pages = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return items.filter((i) => words.every((w) => `${i.label} ${i.section}`.toLowerCase().includes(w)));
   }, [items, q]);
-  const pick = (i: AdminNavItem | undefined) => { if (!i) return; onClose(); router.push(i.href); };
+  const term = q.trim();
+  useEffect(() => {
+    if (term.length < 2) return;
+    let live = true;
+    const t = setTimeout(() => {
+      api<{ results: FoundRecord[] }>("/api/admin/search", { query: { q: term } })
+        .then((r) => { if (live) setFound({ q: term, results: r.results }); })
+        .catch(() => { if (live) setFound({ q: term, results: [] }); });
+    }, 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [term]);
+  const records = term.length >= 2 && found?.q === term ? found.results : [];
+  const searching = term.length >= 2 && found?.q !== term;
+  const options: Option[] = [
+    ...pages.map((i) => ({ key: `page:${i.href}`, href: i.href, icon: i.icon, title: i.label, sub: i.section, badge: i.badge })),
+    ...records.map((r) => ({ key: `${r.kind}:${r.id}`, href: r.href, icon: RECORD_ICON[r.kind], title: r.title, sub: `${RECORD_NAME[r.kind]} · ${r.sub}` })),
+  ];
+  const pick = (o: Option | undefined) => { if (!o) return; onClose(); router.push(o.href); };
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", esc);
@@ -51,38 +87,42 @@ export function QuickFind({ items, onClose }: { items: AdminNavItem[]; onClose: 
   useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }, [at]);
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center bg-ink/50 p-4 pt-[12vh] backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label="Quick find">
-      <div className="w-full max-w-lg animate-rise-in overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-line">
+      <div className="w-full max-w-xl animate-rise-in overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-line">
         <div className="flex items-center gap-2 border-b border-line px-4">
           <Search className="h-5 w-5 shrink-0 text-ink-faint" aria-hidden />
-          <input autoFocus value={q} placeholder="Go to a page…" aria-label="Find a page" role="combobox" aria-expanded aria-controls="quick-find-list"
-            aria-activedescendant={shown[at] ? `qf-${shown[at].href}` : undefined}
+          <input autoFocus value={q} placeholder="Go to a page, or find an order, customer, seller, listing…" aria-label="Find a page" role="combobox" aria-expanded aria-controls="quick-find-list"
+            aria-activedescendant={options[at] ? `qf-${options[at].key}` : undefined}
             onChange={(e) => { setQ(e.target.value); setAt(0); }}
             onKeyDown={(e) => {
-              if (e.key === "ArrowDown") { e.preventDefault(); setAt((x) => Math.min(shown.length - 1, x + 1)); }
+              if (e.key === "ArrowDown") { e.preventDefault(); setAt((x) => Math.min(options.length - 1, x + 1)); }
               if (e.key === "ArrowUp") { e.preventDefault(); setAt((x) => Math.max(0, x - 1)); }
-              if (e.key === "Enter") { e.preventDefault(); pick(shown[at]); }
+              if (e.key === "Enter") { e.preventDefault(); pick(options[at]); }
             }}
             className="h-14 min-w-0 flex-1 bg-transparent text-[16px] focus:outline-none" />
+          {searching && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ink-faint" aria-label="Searching" />}
           <kbd className="hidden rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-faint sm:block">Esc</kbd>
         </div>
-        <ul id="quick-find-list" ref={list} role="listbox" className="max-h-[50vh] overflow-y-auto p-2">
-          {shown.length === 0 && <li className="px-3 py-6 text-center text-sm text-ink-soft">No page matches “{q}”.</li>}
-          {shown.map((i, n) => (
-            <li key={i.href} id={`qf-${i.href}`} role="option" aria-selected={n === at}>
-              <button type="button" onMouseEnter={() => setAt(n)} onClick={() => pick(i)}
+        <ul id="quick-find-list" ref={list} role="listbox" className="max-h-[55vh] overflow-y-auto p-2">
+          {options.length === 0 && !searching && <li className="px-3 py-6 text-center text-sm text-ink-soft">Nothing matches “{q}”.</li>}
+          {options.map((o, n) => [
+            n === pages.length && records.length > 0 && (
+              <li key="records-heading" role="presentation" className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-ink-faint">Records</li>
+            ),
+            <li key={o.key} id={`qf-${o.key}`} role="option" aria-selected={n === at}>
+              <button type="button" onMouseEnter={() => setAt(n)} onClick={() => pick(o)}
                 className={clsx("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left", n === at ? "bg-peacock text-white" : "text-ink hover:bg-mist")}>
-                <i.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                <o.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{i.label}</span>
-                  <span className={clsx("block truncate text-xs", n === at ? "text-white/75" : "text-ink-faint")}>{i.section}</span>
+                  <span className="block truncate font-medium">{o.title}</span>
+                  <span className={clsx("block truncate text-xs", n === at ? "text-white/75" : "text-ink-faint")}>{o.sub}</span>
                 </span>
-                {i.badge ? <span className={clsx("rounded-full px-1.5 text-xs font-bold leading-5", n === at ? "bg-white text-peacock" : "bg-vermilion text-white")}>{i.badge}</span> : null}
+                {o.badge ? <span className={clsx("rounded-full px-1.5 text-xs font-bold leading-5", n === at ? "bg-white text-peacock" : "bg-vermilion text-white")}>{o.badge}</span> : null}
                 {n === at && <CornerDownLeft className="h-4 w-4 shrink-0" aria-hidden />}
               </button>
-            </li>
-          ))}
+            </li>,
+          ])}
         </ul>
-        <p className="border-t border-line px-4 py-2 text-xs text-ink-faint">↑ ↓ to move · Enter to open · Ctrl+K anywhere</p>
+        <p className="border-t border-line px-4 py-2 text-xs text-ink-faint">↑ ↓ to move · Enter to open · Ctrl+K anywhere · type 2 letters to search records</p>
       </div>
     </div>
   );

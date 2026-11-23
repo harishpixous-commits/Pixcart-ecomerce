@@ -105,6 +105,8 @@ test.describe.serial("storefront themes", () => {
 
   test("the owner previews and applies a theme from the admin panel, then switches back", async ({ admin, browser }) => {
     const errors = collectErrors(admin);
+    // start from Bazaar's own defaults, so picking Crimson is a change even after an earlier run applied it
+    await setTheme(api, token, "classic", { bazaar: {} });
     await admin.goto("/admin/storefront?tab=theme");
     await admin.getByTestId("theme-editor").waitFor();
     await admin.getByTestId("theme-card-bazaar").click();

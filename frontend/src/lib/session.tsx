@@ -88,6 +88,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [guestLines, setGuestLines] = useState<GuestLine[]>([]);
   // Kept in sync wherever setUser is called, so callbacks read the latest user without re-creating.
   const userRef = useRef<User | null>(null);
+  // Settles once the saved sign-in has been restored (or found missing). Adding to the cart waits for it, so a tap
+  // during page load goes to the account's cart, not to a guest cart that a signed-in shopper never sees.
+  const [restored] = useState(() => {
+    let done = () => {};
+    const promise = new Promise<void>((r) => { done = r; });
+    return { promise, done: () => done() };
+  });
 
   const refreshCart = useCallback(async () => {
     if (!userRef.current) {
@@ -102,6 +109,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       return cart;
     } catch {
       return null;
+    }
+  }, []);
+
+  /** Moves lines added while signed out into the account's cart; keeps them if that fails, so nothing is lost. */
+  const mergeGuest = useCallback(async () => {
+    const g = readGuest();
+    if (!g.length) return;
+    try {
+      await api("/api/cart/merge", { method: "POST", body: { items: g.map((l) => ({ variant_id: l.variant_id, qty: l.qty })) } });
+      writeGuest([]);
+      setGuestLines([]);
+    } catch {
+      /* keep the guest cart */
     }
   }, []);
 
@@ -123,10 +143,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       } else {
         hint(false);
       }
+      if (userRef.current) await mergeGuest(); // e.g. added in another tab while signed out
       setReady(true);
+      restored.done();
       await refreshCart();
     })();
-  }, [loadUser, refreshCart]);
+  }, [loadUser, refreshCart, mergeGuest, restored]);
 
   // The session can change outside this page: it expires, the person signs out in another tab, or signs in
   // as someone else in another tab (one browser keeps one sign-in). Follow it instead of showing stale data.
@@ -154,19 +176,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       hint(true);
       setUser(u);
       userRef.current = u;
-      const g = readGuest();
-      if (g.length) {
-        try {
-          await api("/api/cart/merge", { method: "POST", body: { items: g.map((l) => ({ variant_id: l.variant_id, qty: l.qty })) } });
-          writeGuest([]);
-          setGuestLines([]);
-        } catch {
-          /* keep the guest cart so nothing is lost */
-        }
-      }
+      await mergeGuest();
       await refreshCart();
     },
-    [refreshCart],
+    [refreshCart, mergeGuest],
   );
 
   const signOut = useCallback(async () => {
@@ -187,6 +200,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const addToCart = useCallback(
     async (line: GuestLine): Promise<string | null> => {
       let note: string | null = null;
+      await restored.promise;
       if (userRef.current) {
         const r = await api<CartView>("/api/cart/items", { method: "POST", body: { variant_id: line.variant_id, qty: line.qty } });
         note = r.notice || null;
@@ -203,7 +217,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await refreshCart();
       return note;
     },
-    [refreshCart],
+    [refreshCart, restored],
   );
 
   const setGuestQty = useCallback((variantId: string, qty: number) => {

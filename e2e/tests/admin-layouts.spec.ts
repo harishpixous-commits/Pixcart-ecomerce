@@ -54,5 +54,13 @@ test.describe.serial("admin layouts", () => {
     await admin.keyboard.press("Enter");
     await expect(admin).toHaveURL(/\/admin\/coupons$/);
     await expect(dialog).toHaveCount(0);
+
+    // records too: a listing found by its title opens its admin page
+    await admin.keyboard.press("Control+k");
+    await dialog.getByRole("combobox", { name: "Find a page" }).fill("vitamin c serum");
+    const record = dialog.getByRole("option", { name: /Vitamin C Face Serum/ });
+    await expect(record).toBeVisible();
+    await record.click();
+    await expect(admin).toHaveURL(/\/admin\/products\/[0-9a-f-]{36}$/);
   });
 });
