@@ -68,7 +68,7 @@ export function closeOnNavigate(close: () => void) {
 @Component({
   selector: "a[pcLogo]",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  hostDirectives: [PcLink],
+  hostDirectives: [{ directive: PcLink, inputs: ["pcLink"] }],
   host: { "[class]": "cls()", "[attr.aria-label]": "site().brand_name + ' home'", "[attr.translate]": "site().logo_url ? null : 'no'" },
   template: `@if (site().logo_url) {<img [src]="site().logo_url" [alt]="site().brand_name" class="h-9 w-auto max-w-[160px] object-contain" />} @else {{{ parts()[0] }}@if (parts()[1]) {<span class="text-marigold">{{ parts()[1] }}</span>}}`,
 })
@@ -78,9 +78,6 @@ export class Logo {
   protected readonly parts = computed(() => splitBrand(this.site().brand_name));
   protected readonly cls = computed(() =>
     this.site().logo_url ? "flex items-center" : cx("flex items-baseline font-display text-2xl font-bold tracking-tight", this.light() ? "text-white" : "text-peacock"));
-  constructor() {
-    inject(PcLink).pcLink = (() => "/") as unknown as PcLink["pcLink"];
-  }
 }
 
 @Component({
