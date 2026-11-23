@@ -35,6 +35,9 @@ test.describe.serial("admin layouts", () => {
         await admin.getByRole("button", { name: /Orders and customers/ }).click();
         await admin.getByRole("menuitem", { name: "Orders" }).click();
       } else {
+        // a section the person folded away stays folded: open it first
+        const section = admin.getByRole("button", { name: "Orders and customers", exact: true });
+        if ((await section.count()) && (await section.first().getAttribute("aria-expanded")) === "false") await section.first().click();
         await admin.getByRole("link", { name: "Orders", exact: true }).first().click();
       }
       await expect(admin).toHaveURL(/\/admin\/orders$/);
