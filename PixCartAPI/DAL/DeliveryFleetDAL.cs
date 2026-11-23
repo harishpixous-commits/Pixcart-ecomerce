@@ -134,6 +134,11 @@ public class DeliveryFleetDAL(IMySqlDapperHelper db)
             "UPDATE delivery_boys SET lat = @lat, lng = @lng, location_at = @at, updated_at = UTC_TIMESTAMP(6) WHERE id = @boyId",
             new { boyId, lat, lng, at });
 
+    public Task<IEnumerable<DeliveryAssignmentModel>> ActiveForPartnerAsync(Guid boyId) =>
+        db.QueryAsync<DeliveryAssignmentModel>(
+            "SELECT * FROM delivery_assignments WHERE delivery_boy_id=@boyId " +
+            "AND status IN ('offered','accepted','at_store','picked','on_the_way','reached')", new { boyId });
+
     // ------------------------------------------------------------------ staff operations (reference: delivery_admin.py)
 
     public Task<DeliveryAssignmentModel?> AssignmentAsync(Guid id) =>

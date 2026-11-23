@@ -50,6 +50,7 @@ public interface IDeliveryFleetBAL
     Task GuardSellerActAsync(SellerModel seller, Guid subOrderId, string dst);
 
     Task SweepExpiredAsync();
+    Task ReleaseAsync(Guid subOrderId, string why);
     Task<JsonObject> PickupPlaceForAsync(SubOrderModel sub);
     Task<JsonObject> AssignByStaffAsync(UserModel admin, Guid subOrderId, Guid partnerId, bool direct, bool force);
     Task<JsonObject> AutoAssignByStaffAsync(UserModel admin, Guid subOrderId);

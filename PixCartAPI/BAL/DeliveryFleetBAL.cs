@@ -950,6 +950,19 @@ public class DeliveryFleetBAL(
             "VALUES (@actor, @action, 'sub_order', @eid, @detail, UTC_TIMESTAMP(6), @id)",
             new { actor = user.Id, action, eid = subId.ToString(), detail, id = Guid.NewGuid() });
 
+    /// <summary>Reference: fleet.release/_after_release - re-offer a freed package or tell staff.</summary>
+    public async Task ReleaseAsync(Guid subOrderId, string why)
+    {
+        await using var uow = await db.BeginAsync();
+        var sub = await orders.SubForUpdateAsync(subOrderId, uow);
+        if (sub is not null)
+        {
+            var cfg = await deliverySettings.GetAsync();
+            await AfterReleaseAsync(sub, why, cfg, uow);
+        }
+        await uow.CommitAsync();
+    }
+
     // ------------------------------------------------------------------ staff operations (reference: delivery_admin.py)
 
     /// <summary>Ends expired offers outside a partner poll (reference: sweep; admin screens call it first).</summary>

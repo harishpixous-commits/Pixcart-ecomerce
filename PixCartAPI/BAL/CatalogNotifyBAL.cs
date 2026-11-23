@@ -27,6 +27,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["refund_processed"] = ("Refund of {{amount}} processed", "The refund for order {{order_number}} is on its way to your bank."),
         ["order_shipped"] = ("Package shipped", "{{item}} has shipped with {{courier}}, tracking {{awb}}."),
         ["staff_delivery_kyc"] = ("Delivery partner to verify", "{{name}} ({{city}}) submitted documents. Check them in Delivery → Partners."),
+        ["delivery_kyc_update"] = ("Delivery partner account {{status}}", "{{message}}"),
         ["delivery_new_offer"] = ("New delivery request", "Pick up from {{store}} ({{pickup_area}}) and deliver to {{drop_area}}. {{fee}}{{cod}}. Accept within {{seconds}} seconds."),
         ["delivery_assigned"] = ("Delivery assigned to you", "{{order_number}}: pick up from {{store}} ({{pickup_area}}) and deliver to {{drop_area}}."),
         ["delivery_trip_cancelled"] = ("Delivery cancelled: {{order_number}}", "{{message}}"),

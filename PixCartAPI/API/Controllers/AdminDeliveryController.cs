@@ -96,6 +96,121 @@ public class AdminDeliveryController(
     public async Task<JsonObject> PutSettings([FromBody] JsonObject body) =>
         await admin.UpdateSettingsAsync(await current.RequireAsync(), body);
 
+    // ------------------------------------------------------------------ partners (reference: delivery_admin.py)
+
+    /// <summary>Partners, newest first, submitted KYC first (reference: GET .../partners).</summary>
+    [HttpGet("partners"), SignedIn]
+    public async Task<JsonObject> Partners([FromQuery, StringLength(12)] string status = "",
+        [FromQuery, StringLength(80)] string q = "", [FromQuery] Guid? zoneId = null, [FromQuery] bool? online = null,
+        [FromQuery, Range(1, 100000)] int page = 1) =>
+        await admin.PartnersAsync(await current.RequireAsync(), status, q, zoneId, online, page);
+
+    /// <summary>Staff add a partner by mobile number (reference: POST .../partners).</summary>
+    [HttpPost("partners"), SignedIn]
+    public async Task<JsonObject> AddPartner(NewPartnerIn body)
+    {
+        var result = await admin.PartnerCreateAsync(await current.RequireAsync(), body.Phone, body.Name, body.Profile());
+        Response.StatusCode = 201;
+        return result;
+    }
+
+    /// <summary>One partner with the decrypted ID number for verification (reference: GET .../partners/{id}).</summary>
+    [HttpGet("partners/{partnerId:guid}"), SignedIn]
+    public async Task<JsonObject> Partner(Guid partnerId) =>
+        await admin.PartnerDetailAsync(await current.RequireAsync(), partnerId);
+
+    /// <summary>Edit a partner's profile (reference: PUT .../partners/{id}).</summary>
+    [HttpPut("partners/{partnerId:guid}"), SignedIn]
+    public async Task<JsonObject> EditPartner(Guid partnerId, ProfileFieldsIn body) =>
+        await admin.PartnerUpdateAsync(await current.RequireAsync(), partnerId, body.Profile());
+
+    /// <summary>The full bank account, for paying the partner (reference: GET .../partners/{id}/bank; payouts permission).</summary>
+    [HttpGet("partners/{partnerId:guid}/bank"), SignedIn]
+    public async Task<JsonObject> PartnerBank(Guid partnerId) =>
+        await admin.PartnerBankAsync(await current.RequireAsync(), partnerId);
+
+    /// <summary>Approve or reject a registration (reference: POST .../partners/{id}/kyc).</summary>
+    [HttpPost("partners/{partnerId:guid}/kyc"), SignedIn]
+    public async Task<JsonObject> ReviewKyc(Guid partnerId, KycIn body) =>
+        await admin.KycReviewAsync(await current.RequireAsync(), partnerId, body.Action, body.Note, body.ZoneId);
+
+    /// <summary>Switch a partner on or off (reference: POST .../partners/{id}/active).</summary>
+    [HttpPost("partners/{partnerId:guid}/active"), SignedIn]
+    public async Task<JsonObject> SetActive(Guid partnerId, ActiveIn body) =>
+        await admin.SetActiveAsync(await current.RequireAsync(), partnerId, body.Active, body.Reason);
+
+    // ------------------------------------------------------------------ zones (reference: delivery_admin.py)
+
+    /// <summary>Zones with partner stats (reference: GET .../zones).</summary>
+    [HttpGet("zones"), SignedIn]
+    public async Task<JsonArray> Zones() => await admin.ZonesAsync(await current.RequireAsync());
+
+    /// <summary>Add a zone (reference: POST .../zones).</summary>
+    [HttpPost("zones"), SignedIn]
+    public async Task<JsonObject> CreateZone(ZoneIn body)
+    {
+        var result = await admin.ZoneCreateAsync(await current.RequireAsync(), body.Name, body.City, body.Pincodes,
+            body.IsActive, body.CenterLat, body.CenterLng);
+        Response.StatusCode = 201;
+        return result;
+    }
+
+    /// <summary>Edit a zone (reference: PUT .../zones/{id}).</summary>
+    [HttpPut("zones/{zoneId:guid}"), SignedIn]
+    public async Task<JsonObject> UpdateZone(Guid zoneId, ZoneIn body) =>
+        await admin.ZoneUpdateAsync(await current.RequireAsync(), zoneId, body.Name, body.City, body.Pincodes,
+            body.IsActive, body.CenterLat, body.CenterLng);
+
+    /// <summary>Remove an empty zone (reference: DELETE .../zones/{id}).</summary>
+    [HttpDelete("zones/{zoneId:guid}"), SignedIn]
+    public async Task<JsonObject> DeleteZone(Guid zoneId) =>
+        await admin.ZoneDeleteAsync(await current.RequireAsync(), zoneId);
+
+    /// <summary>Move partners into a zone (reference: POST .../zones/{id}/partners).</summary>
+    [HttpPost("zones/{zoneId:guid}/partners"), SignedIn]
+    public async Task<JsonObject> AssignZone(Guid zoneId, AssignZoneIn body) =>
+        await admin.ZoneAssignAsync(await current.RequireAsync(), zoneId, body.PartnerIds);
+
+    public sealed record ProfileFieldsIn(
+        [param: StringLength(120, MinimumLength = 2)] string? Name = null,
+        [param: StringLength(80, MinimumLength = 2)] string? City = null,
+        [param: StringLength(500)] string? Address = null,
+        Guid? ZoneId = null,
+        [param: RegularExpression("^(bike|scooter|ev|cycle|auto|van)$")] string? VehicleType = null,
+        [param: StringLength(15)] string? VehicleNo = null,
+        [param: StringLength(20)] string? LicenseNo = null,
+        [param: RegularExpression("^(aadhaar|pan|voter|passport)$")] string? IdProofType = null,
+        [param: StringLength(20)] string? IdProofNo = null)
+    {
+        public DeliveryProfile Profile() => new(Name, City, Address, ZoneId, VehicleType, VehicleNo, LicenseNo,
+            IdProofType, IdProofNo);
+    }
+
+    public sealed record NewPartnerIn(
+        [param: Required, StringLength(15, MinimumLength = 10)] string Phone = "",
+        [param: Required, StringLength(120, MinimumLength = 2)] string Name = "",
+        string? City = null, string? Address = null, Guid? ZoneId = null, string? VehicleType = null,
+        string? VehicleNo = null, string? LicenseNo = null, string? IdProofType = null, string? IdProofNo = null)
+    {
+        public DeliveryProfile Profile() => new(Name, City, Address, ZoneId, VehicleType, VehicleNo, LicenseNo,
+            IdProofType, IdProofNo);
+    }
+
+    public sealed record KycIn(
+        [param: Required, RegularExpression("^(approve|reject)$")] string Action = "",
+        [param: StringLength(500)] string Note = "",
+        Guid? ZoneId = null);
+
+    public sealed record ActiveIn([param: Required] bool Active, [param: StringLength(300)] string Reason = "");
+
+    public sealed record ZoneIn(
+        [param: Required, StringLength(80, MinimumLength = 2)] string Name = "",
+        [param: Required, StringLength(80, MinimumLength = 2)] string City = "",
+        JsonNode? Pincodes = null, bool IsActive = true,
+        [param: Range(-90, 90)] decimal? CenterLat = null, [param: Range(-180, 180)] decimal? CenterLng = null);
+
+    public sealed record AssignZoneIn([param: Required, MinLength(1), MaxLength(200)] Guid[] PartnerIds = null!);
+
     public sealed record AssignIn(Guid? SubOrderId, Guid? PartnerId, bool Direct = false, bool Force = false);
 
     public sealed record ReasonIn([param: Required, StringLength(300, MinimumLength = 3)] string Reason = "");

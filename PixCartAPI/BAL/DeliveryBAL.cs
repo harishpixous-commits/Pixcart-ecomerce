@@ -138,6 +138,9 @@ public partial class DeliveryBAL(
     }
 
     /// <summary>Reference: _apply. Null fields stay; the vehicle and licence numbers are normalised and checked.</summary>
+    /// <summary>Reference: routers/delivery._apply, shared with the staff partner screens.</summary>
+    public Task ApplyProfileAsync(DeliveryBoyModel b, DeliveryProfile p) => ApplyAsync(b, p);
+
     private async Task ApplyAsync(DeliveryBoyModel b, DeliveryProfile p)
     {
         if (p.Name is not null) b.Name = Tidy(p.Name);

@@ -18,6 +18,7 @@ public interface IDeliveryBAL
     Task<JsonObject> UploadDocAsync(UserModel user, string kind, byte[] data);
     Task<(byte[] Data, string Media, string FileName)> ReadDocAsync(UserModel user, string kind);
     JsonObject PartnerOut(DeliveryBoyModel b, DeliveryZoneModel? zone, JsonObject cfg);
+    Task ApplyProfileAsync(DeliveryBoyModel b, DeliveryProfile p);
 }
 
 /// <summary>The registration/profile form; null leaves a field unchanged (reference: ProfileIn).</summary>
