@@ -69,12 +69,13 @@ def _mobile(v: str) -> str:
 async def get_auth_settings(admin: Perm("settings"), session: SessionDep) -> dict:
     return {"settings": await auth_settings.get(session), "dev_otp": await auth_settings.dev_otp_status(session),
             "environment": env.environment, "sms_provider": (await get_integrations(session)).sms_provider,
-            "otp": {"length": env.otp_length, "valid_seconds": env.otp_ttl_seconds, "resend_seconds": env.otp_resend_cooldown_seconds,
-                    "max_attempts": env.otp_max_attempts, "max_per_hour": env.otp_max_per_hour}}
+            "limits": {k: list(v) for k, v in auth_settings.INTS.items()}}
 
 
 @router.put("/auth-settings")
 async def put_auth_settings(body: dict[str, Any], admin: Perm("settings"), session: SessionDep) -> dict:
+    if body.get("staff_require_two_step") is True and not admin.totp_enabled:
+        raise ApiError("Turn on two-step sign-in for your own account first (My account), so you are not locked out.", "two_step_self")
     try:
         cfg = await auth_settings.update(session, body)
     except auth_settings.AuthSettingsError as exc:

@@ -1,16 +1,18 @@
 "use client";
 
+import { usePasswordPolicy } from "@/lib/password-policy";
 import QRCode from "qrcode";
 import { useState } from "react";
 import { LayoutPicker } from "@/components/admin-shell";
 import { PageHeader } from "@/components/portal-shell";
 import { SignedInDevices } from "@/components/signed-in-devices";
 import { Button, ErrorNote, Pill, TextField, useToast } from "@/components/ui";
-import { useAdmin } from "@/lib/admin";
+import { ADMIN_ME_REFRESH, useAdmin } from "@/lib/admin";
 import { api, ApiError } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 export default function AdminAccount() {
+  const policy = usePasswordPolicy();
   const toast = useToast();
   const me = useAdmin();
   const { user, signOut } = useSession();
@@ -48,6 +50,7 @@ export default function AdminAccount() {
     try {
       await api(`/api/auth/totp/${enable ? "enable" : "disable"}`, { method: "POST", body: enable ? { code } : { code, password: offPassword } });
       setTotpOn(enable);
+      window.dispatchEvent(new Event(ADMIN_ME_REFRESH)); // opens the panel if two-step was required
       setSetup(null);
       setCode("");
       setOffPassword("");
@@ -100,7 +103,7 @@ export default function AdminAccount() {
         <form onSubmit={changePassword} className="flex flex-col gap-3">
           <ErrorNote message={pwError} />
           <TextField label="Current password" type="password" autoComplete="current-password" value={pw.current_password} onChange={(e) => setPw({ ...pw, current_password: e.target.value })} required />
-          <TextField label="New password" type="password" autoComplete="new-password" minLength={12} value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} required hint="At least 12 characters with upper and lower case letters and a number. You are signed out of every device, including this one." />
+          <TextField label="New password" type="password" autoComplete="new-password" minLength={policy.min} value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} required hint={`${policy.hint}. You are signed out of every device, including this one.`} />
           <Button type="submit" className="self-start">Change password</Button>
         </form>
       </section>

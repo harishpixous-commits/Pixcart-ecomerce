@@ -62,7 +62,7 @@ async def test_admin_switches_dev_otp_and_signups(client, admin, categories):
     opts = (await client.get("/api/auth/options")).json()
     assert opts["dev_otp"] is True and opts["customer_signup"] and opts["seller_signup"]
     s = (await admin.get("/api/admin/auth-settings")).json()
-    assert s["dev_otp"]["active"] and s["sms_provider"] == "console" and s["otp"]["length"] == 6
+    assert s["dev_otp"]["active"] and s["sms_provider"] == "console" and s["settings"]["otp_length"] == 6
 
     r = await admin.put("/api/admin/auth-settings", {"show_dev_otp": False})
     assert r.status_code == 200 and r.json()["dev_otp"]["active"] is False

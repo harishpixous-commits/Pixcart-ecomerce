@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import timedelta
 from typing import Literal
 
@@ -64,7 +63,7 @@ class PasswordLogin(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
-    new_password: str = Field(min_length=12, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)  # the owner's policy (Admin → Sign-in) is checked on top
 
 
 class TotpCode(BaseModel):
@@ -95,11 +94,11 @@ async def user_payload(session, user: User) -> dict:
     }
 
 
-def _set_refresh_cookie(response: Response, token: str) -> None:
+def _set_refresh_cookie(response: Response, token: str, days: int) -> None:
     response.set_cookie(
         settings.refresh_cookie_name,
         token,
-        max_age=settings.refresh_token_days * 86400,
+        max_age=days * 86400,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
@@ -107,22 +106,45 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
     )
 
 
-async def _issue_session(session, request: Request, response: Response, user: User) -> dict:
+async def _issue_session(session, request: Request, response: Response, user: User, *, new_sign_in: bool = True) -> dict:
+    """Starts (or, for a refresh, renews) a session. Staff and customers stay signed in for the owner's chosen days."""
+    cfg = await auth_settings.get(session)
+    days = auth_settings.session_days(cfg, user.is_admin)
     token = new_opaque_token()
     now = utcnow()
+    agent = (request.headers.get("user-agent") or "")[:300]
+    if new_sign_in:
+        await _alert_new_device(session, cfg, user, agent)
     session.add(
         RefreshSession(
             user_id=user.id,
             token_hash=sha256(token),
             created_at=now,
-            expires_at=now + timedelta(days=settings.refresh_token_days),
-            user_agent=(request.headers.get("user-agent") or "")[:300],
+            expires_at=now + timedelta(days=days),
+            user_agent=agent,
         )
     )
     user.last_login_at = now
     await session.commit()
-    _set_refresh_cookie(response, token)
+    _set_refresh_cookie(response, token, days)
     return {"access_token": create_access_token(user.id, is_admin=user.is_admin), "user": await user_payload(session, user)}
+
+
+async def _alert_new_device(session, cfg: dict, user: User, agent: str) -> None:
+    """Sign-in alert (Admin → Sign-in → Sign-in alerts) when the browser and system match none of the account's
+    signed-in devices. The first sign-in of a new account is not an alert."""
+    mode = cfg["login_alerts"]
+    if mode == "off" or (mode == "staff" and not user.is_admin) or user.last_login_at is None:
+        return
+    known = (await session.execute(
+        select(RefreshSession.user_agent).where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None), RefreshSession.expires_at > utcnow())
+    )).scalars().all()
+    device = _device(agent)
+    if any(_device(a) == device for a in known):
+        return
+    await notify(session, "security_notice", user, {"what": f"new sign-in on {device}",
+                 "message": f"Your account was just signed in on {device}. If this was you, there is nothing to do."},
+                 channels=("inapp", "email"))
 
 
 def _require_csrf_header(request: Request) -> None:
@@ -150,8 +172,9 @@ async def _check_purpose(session, body: OtpRequest) -> User | None:
 
 @router.post("/otp/request")
 async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -> dict:
+    cfg = await auth_settings.get(session)
     # Count the attempt before telling anyone whether a number has an account (limits number probing).
-    await rate_limit(session, f"otp:ip:{client_ip(request)}", limit=30, window_seconds=3600)
+    await rate_limit(session, f"otp:ip:{client_ip(request)}", limit=cfg["otp_max_per_ip_hour"], window_seconds=3600)
     await session.commit()
     await _check_purpose(session, body)
     now = utcnow()
@@ -160,12 +183,12 @@ async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -
             select(OtpChallenge).where(OtpChallenge.phone == body.phone).order_by(OtpChallenge.created_at.desc()).limit(1)
         )
     ).scalar_one_or_none()
-    if latest and (now - latest.created_at).total_seconds() < settings.otp_resend_cooldown_seconds:
-        wait = settings.otp_resend_cooldown_seconds - int((now - latest.created_at).total_seconds())
+    if latest and (now - latest.created_at).total_seconds() < cfg["otp_resend_cooldown_seconds"]:
+        wait = cfg["otp_resend_cooldown_seconds"] - int((now - latest.created_at).total_seconds())
         raise TooManyRequests(f"Please wait {wait} seconds before requesting another OTP")
-    await rate_limit(session, f"otp:phone:{body.phone}", limit=settings.otp_max_per_hour, window_seconds=3600)
+    await rate_limit(session, f"otp:phone:{body.phone}", limit=cfg["otp_max_per_hour"], window_seconds=3600)
 
-    code = generate_otp()
+    code = generate_otp(cfg["otp_length"])
     # Only the newest challenge for a phone is valid.
     await session.execute(
         update(OtpChallenge).where(OtpChallenge.phone == body.phone, OtpChallenge.consumed_at.is_(None)).values(consumed_at=now)
@@ -174,7 +197,7 @@ async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -
         OtpChallenge(
             phone=body.phone,
             code_hash=hash_otp(body.phone, code),
-            expires_at=now + timedelta(seconds=settings.otp_ttl_seconds),
+            expires_at=now + timedelta(seconds=cfg["otp_ttl_seconds"]),
             created_at=now,
             ip=client_ip(request),
         )
@@ -184,7 +207,7 @@ async def request_otp(body: OtpRequest, request: Request, session: SessionDep) -
         await sms.send_otp(body.phone, code)
     except sms.SmsError as exc:
         raise ApiError(str(exc), "sms_failed", 503) from exc
-    out = {"sent": True, "expires_in": settings.otp_ttl_seconds, "resend_in": settings.otp_resend_cooldown_seconds, "length": settings.otp_length}
+    out = {"sent": True, "expires_in": cfg["otp_ttl_seconds"], "resend_in": cfg["otp_resend_cooldown_seconds"], "length": cfg["otp_length"]}
     if (await auth_settings.dev_otp_status(session))["active"]:
         out["dev_otp"] = code  # test installs only: never in production or with real SMS (see auth_settings)
     return out
@@ -195,7 +218,8 @@ async def auth_options(session: SessionDep) -> dict:
     """What the sign-in and create-account screens should offer."""
     cfg = await auth_settings.get(session)
     return {"customer_signup": cfg["customer_signup"], "seller_signup": cfg["seller_signup"], "signup_email": cfg["signup_email"],
-            "otp_length": settings.otp_length, "dev_otp": (await auth_settings.dev_otp_status(session))["active"]}
+            "otp_length": cfg["otp_length"], "dev_otp": (await auth_settings.dev_otp_status(session))["active"],
+            "password_min_length": cfg["password_min_length"], "password_require_mixed": cfg["password_require_mixed"]}
 
 
 @router.post("/otp/verify")
@@ -227,12 +251,13 @@ async def verify_otp(body: OtpVerify, request: Request, response: Response, sess
     ).scalar_one_or_none()
     if challenge is None or challenge.expires_at < now:
         raise ApiError("This OTP has expired. Please request a new one.", "otp_expired")
-    if challenge.attempts >= settings.otp_max_attempts:
+    max_attempts = (await auth_settings.get(session))["otp_max_attempts"]
+    if challenge.attempts >= max_attempts:
         raise TooManyRequests("Too many wrong attempts. Please request a new OTP.")
     if hash_otp(body.phone, body.code.strip()) != challenge.code_hash:
         challenge.attempts += 1
         await session.commit()
-        left = settings.otp_max_attempts - challenge.attempts
+        left = max_attempts - challenge.attempts
         raise ApiError(f"Incorrect OTP. {left} attempt(s) left." if left else "Incorrect OTP.", "otp_invalid")
     challenge.consumed_at = now
 
@@ -259,8 +284,10 @@ async def verify_otp(body: OtpVerify, request: Request, response: Response, sess
 @router.post("/login")
 async def password_login(body: PasswordLogin, request: Request, response: Response, session: SessionDep) -> dict:
     email = body.email.lower()
-    await rate_limit(session, f"login:{email}", limit=10, window_seconds=900)
-    await rate_limit(session, f"login-ip:{client_ip(request)}", limit=50, window_seconds=900)
+    cfg = await auth_settings.get(session)
+    window = cfg["login_lockout_minutes"] * 60
+    await rate_limit(session, f"login:{email}", limit=cfg["login_max_attempts"], window_seconds=window)
+    await rate_limit(session, f"login-ip:{client_ip(request)}", limit=max(50, cfg["login_max_attempts"] * 5), window_seconds=window)
     await session.commit()
     user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
@@ -279,8 +306,9 @@ async def password_login(body: PasswordLogin, request: Request, response: Respon
 async def change_password(body: PasswordChange, user: CurrentUser, session: SessionDep) -> dict:
     if not verify_password(body.current_password, user.password_hash):
         raise ApiError("Your current password is not correct", "wrong_password", fields={"current_password": "Incorrect"})
-    if not (re.search(r"[a-z]", body.new_password) and re.search(r"[A-Z]", body.new_password) and re.search(r"\d", body.new_password)):
-        raise ApiError("Use upper and lower case letters and a number", "weak_password", fields={"new_password": "Too weak"})
+    problem = auth_settings.password_problem(await auth_settings.get(session), body.new_password)
+    if problem:
+        raise ApiError(problem, "weak_password", fields={"new_password": problem})
     user.password_hash = hash_password(body.new_password)
     await session.execute(update(RefreshSession).where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None)).values(revoked_at=utcnow()))
     await session.commit()
@@ -363,7 +391,7 @@ async def refresh(request: Request, response: Response, session: SessionDep) -> 
     if user is None or not user.is_active:
         raise Unauthorized()
     row.revoked_at = now
-    return await _issue_session(session, request, response, user)
+    return await _issue_session(session, request, response, user, new_sign_in=False)
 
 
 @router.post("/logout")

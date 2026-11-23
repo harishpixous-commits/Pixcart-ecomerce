@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import SessionDep, admin_user
-from app.core.errors import Forbidden
+from app.core.errors import ApiError, Forbidden
 from app.models import User
 
 
@@ -147,9 +147,23 @@ def require(permission: str):
         await load_roles(session)
         if permission not in permissions_for(user):
             raise Forbidden(f"Your role does not allow this ({permission})")
+        await require_two_step(session, user)
         return user
 
     return _dep
+
+
+async def two_step_missing(session: AsyncSession, user: User) -> bool:
+    """The owner requires two-step sign-in for staff (Admin → Sign-in and accounts) and this person has not set it up."""
+    from app.services import auth_settings  # here, not at the top: the settings service imports models that import this
+
+    return not user.totp_enabled and bool((await auth_settings.get(session))["staff_require_two_step"])
+
+
+async def require_two_step(session: AsyncSession, user: User) -> None:
+    if await two_step_missing(session, user):
+        raise ApiError("Turn on two-step sign-in in My account to use the admin panel. The owner requires it for all staff.",
+                       "two_step_required", 403)
 
 
 def Perm(permission: str):  # noqa: N802 — reads like a type in signatures

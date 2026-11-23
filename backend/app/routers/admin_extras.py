@@ -14,9 +14,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select, update
 
 from app.config import settings
-from app.core.deps import CurrentUser, SessionDep, audit
-from app.core.errors import ApiError, Conflict, NotFound
-from app.core.permissions import OWNER, Perm, permissions_for, role_code, role_name
+from app.core.deps import AdminUser, CurrentUser, SessionDep, audit
+from app.core.errors import ApiError, Conflict, Forbidden, NotFound
+from app.core.permissions import OWNER, Perm, load_roles, permissions_for, role_code, role_name, two_step_missing
 from app.core.validators import slugify
 from app.db import utcnow
 from app.integrations import get as get_integrations
@@ -71,10 +71,15 @@ router = APIRouter(prefix="/api/admin", tags=["admin-extras"])
 
 
 @router.get("/me")
-async def admin_me(user: Perm("dashboard")) -> dict:
+async def admin_me(user: AdminUser, session: SessionDep) -> dict:
+    """Who is signed in to the admin panel. Answers even when two-step sign-in is still missing, so the panel can send
+    the person to set it up instead of failing on every page."""
+    await load_roles(session)
+    if "dashboard" not in permissions_for(user):
+        raise Forbidden("Your role does not allow this (dashboard)")
     code = role_code(user)
     return {"role": code, "role_label": role_name(code), "permissions": sorted(permissions_for(user)), "totp_enabled": user.totp_enabled,
-            "name": user.name, "is_owner": code == OWNER}
+            "name": user.name, "is_owner": code == OWNER, "two_step_required": await two_step_missing(session, user)}
 
 
 # ----------------------------------------------------------------------------- KPIs

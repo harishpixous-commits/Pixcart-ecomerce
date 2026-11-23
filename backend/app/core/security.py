@@ -65,8 +65,8 @@ def hash_otp(phone: str, code: str) -> str:
     return hmac.new(settings.jwt_secret.encode(), f"{phone}:{code}".encode(), hashlib.sha256).hexdigest()
 
 
-def generate_otp() -> str:
-    return "".join(secrets.choice("0123456789") for _ in range(settings.otp_length))
+def generate_otp(length: int | None = None) -> str:
+    return "".join(secrets.choice("0123456789") for _ in range(length or settings.otp_length))
 
 
 def encrypt_field(value: str) -> str:

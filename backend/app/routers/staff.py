@@ -21,13 +21,16 @@ from app.core.permissions import CATALOG, OWNER, PERMISSIONS, Perm, invalidate, 
 from app.core.security import hash_password
 from app.db import utcnow
 from app.models import AdminRole, RefreshSession, User
+from app.services import auth_settings
 
 router = APIRouter(prefix="/api/admin", tags=["staff"])
 
 
-def _strong(pw: str) -> None:
-    if not (re.search(r"[a-z]", pw) and re.search(r"[A-Z]", pw) and re.search(r"\d", pw)):
-        raise ApiError("Use upper and lower case letters and a number, at least 12 characters", "weak_password", fields={"password": "Too weak"})
+async def _strong(session, pw: str) -> None:
+    """The owner's password policy (Admin → Sign-in and accounts)."""
+    problem = auth_settings.password_problem(await auth_settings.get(session), pw)
+    if problem:
+        raise ApiError(problem, "weak_password", fields={"password": problem})
 
 
 async def _role(session, code: str) -> AdminRole:
@@ -177,7 +180,7 @@ class StaffIn(BaseModel):
     email: EmailStr
     name: str = Field(min_length=2, max_length=120)
     role: str = Field(min_length=2, max_length=40)
-    password: str = Field(min_length=12, max_length=200)
+    password: str = Field(min_length=8, max_length=200)  # plus the owner's policy
 
 
 class StaffPatch(BaseModel):
@@ -200,7 +203,7 @@ async def _check_assignable(admin: User, session, code: str) -> None:
 
 @router.post("/staff", status_code=201)
 async def add_staff(body: StaffIn, admin: Perm("staff"), session: SessionDep) -> dict:
-    _strong(body.password)
+    await _strong(session, body.password)
     await _check_assignable(admin, session, body.role)
     email = body.email.lower()
     if (await session.execute(select(User.id).where(User.email == email))).first():

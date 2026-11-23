@@ -1,5 +1,6 @@
 "use client";
 
+import { usePasswordPolicy } from "@/lib/password-policy";
 import { ShieldAlert } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Table } from "@/components/portal-shell";
@@ -18,6 +19,7 @@ type Perm = { code: string; label: string; group: string; description: string; s
 type Draft = { code: string | null; name: string; description: string; permissions: string[] };
 
 export default function StaffPage() {
+  const policy = usePasswordPolicy();
   const toast = useToast();
   const me = useAdmin();
   const [tab, setTab] = useState<"people" | "roles">("people");
@@ -172,7 +174,7 @@ export default function StaffPage() {
           <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
           <TextField label="Work email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
           <Field label="Role" htmlFor="sr"><Select id="sr" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{staff.roles.map((r) => <option key={r.code} value={r.code} disabled={r.code === "owner" && !staff.can_manage_owners}>{r.name}</option>)}</Select></Field>
-          <TextField label="Temporary password" type="text" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={12} hint="At least 12 characters with upper and lower case letters and a number" />
+          <TextField label="Temporary password" type="text" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={policy.min} hint={policy.hint} />
           <Button type="submit">Create account</Button>
         </form>
       </Modal>
