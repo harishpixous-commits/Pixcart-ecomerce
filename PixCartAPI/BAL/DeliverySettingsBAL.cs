@@ -14,6 +14,14 @@ public partial class DeliverySettingsBAL(SettingsDAL settings, CatalogSupportDAL
 {
     public const string RowKey = "delivery";
 
+    /// <summary>Reference: delivery_settings.COMPLAINTS.</summary>
+    public static readonly IReadOnlyDictionary<string, string> Complaints = new Dictionary<string, string>
+    {
+        ["late"] = "Delivered late", ["rude"] = "Rude or unprofessional", ["damaged"] = "Package damaged",
+        ["not_received"] = "Marked delivered but not received", ["extra_money"] = "Asked for extra money",
+        ["other"] = "Something else",
+    };
+
     public static readonly string[] FleetModes = ["off", "zones", "all", "seller_choice"];
     public static readonly string[] FeeModes = ["fixed", "distance"];
 

@@ -96,6 +96,62 @@ public class AdminDeliveryController(
     public async Task<JsonObject> PutSettings([FromBody] JsonObject body) =>
         await admin.UpdateSettingsAsync(await current.RequireAsync(), body);
 
+    // ------------------------------------------------------------------ cash, payouts, reports, feedback
+
+    /// <summary>Cash in hand per partner and recent deposits (reference: GET .../cash).</summary>
+    [HttpGet("cash"), SignedIn]
+    public async Task<JsonObject> Cash() => await admin.CashAsync(await current.RequireAsync());
+
+    /// <summary>Record a cash deposit (reference: POST .../partners/{id}/deposits).</summary>
+    [HttpPost("partners/{partnerId:guid}/deposits"), SignedIn]
+    public async Task<JsonObject> AddDeposit(Guid partnerId, DepositIn body) =>
+        await admin.AddDepositAsync(await current.RequireAsync(), partnerId, body.AmountPaise, body.Method,
+            body.Reference, body.Note);
+
+    /// <summary>Weekly payouts (reference: GET .../payouts).</summary>
+    [HttpGet("payouts"), SignedIn]
+    public async Task<JsonObject> Payouts([FromQuery, RegularExpression("^(|pending|paid)$")] string status = "",
+        [FromQuery, Range(1, 100000)] int page = 1) =>
+        await admin.PayoutsAsync(await current.RequireAsync(), status, page);
+
+    /// <summary>Create this week's payouts (reference: POST .../payouts/generate; payouts permission).</summary>
+    [HttpPost("payouts/generate"), SignedIn]
+    public async Task<JsonObject> GeneratePayouts(GenerateIn body) =>
+        await admin.GeneratePayoutsAsync(await current.RequireAsync(), body.WeekStart);
+
+    /// <summary>Mark a payout paid (reference: POST .../payouts/{id}/paid; payouts permission).</summary>
+    [HttpPost("payouts/{payoutId:guid}/paid"), SignedIn]
+    public async Task<JsonObject> MarkPaid(Guid payoutId, PaidIn body) =>
+        await admin.MarkPayoutPaidAsync(await current.RequireAsync(), payoutId, body.Reference);
+
+    /// <summary>Per-day and per-partner numbers (reference: GET .../reports).</summary>
+    [HttpGet("reports"), SignedIn]
+    public async Task<JsonObject> Reports([FromQuery, Range(7, 180)] int days = 30) =>
+        await admin.ReportsAsync(await current.RequireAsync(), days);
+
+    /// <summary>Ratings and complaints (reference: GET .../feedback).</summary>
+    [HttpGet("feedback"), SignedIn]
+    public async Task<JsonObject> Feedback([FromQuery, RegularExpression("^(ratings|complaints)$")] string kind = "complaints",
+        [FromQuery, RegularExpression("^(|open|resolved)$")] string status = "open",
+        [FromQuery, Range(1, 100000)] int page = 1) =>
+        await admin.FeedbackAsync(await current.RequireAsync(), kind, status, page);
+
+    /// <summary>Resolve a complaint (reference: POST .../complaints/{id}/resolve).</summary>
+    [HttpPost("complaints/{complaintId:guid}/resolve"), SignedIn]
+    public async Task<JsonObject> ResolveComplaint(Guid complaintId, ResolveComplaintIn body) =>
+        await admin.ResolveComplaintAsync(await current.RequireAsync(), complaintId, body.Note);
+
+    public sealed record DepositIn(
+        [param: Range(1, 100000000)] long AmountPaise,
+        [param: RegularExpression("^(cash|upi|bank)$")] string Method = "cash",
+        [param: StringLength(60)] string Reference = "", [param: StringLength(300)] string Note = "");
+
+    public sealed record GenerateIn(DateOnly? WeekStart = null);
+
+    public sealed record PaidIn([param: Required, StringLength(60, MinimumLength = 3)] string Reference = "");
+
+    public sealed record ResolveComplaintIn([param: Required, StringLength(500, MinimumLength = 3)] string Note = "");
+
     // ------------------------------------------------------------------ partners (reference: delivery_admin.py)
 
     /// <summary>Partners, newest first, submitted KYC first (reference: GET .../partners).</summary>

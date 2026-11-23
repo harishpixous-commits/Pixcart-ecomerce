@@ -609,4 +609,279 @@ public class DeliveryAdminBAL(
             new { actor = user.Id, action, etype = entityType, eid = entityId.ToString(), detail, id = Guid.NewGuid() });
         await uow.CommitAsync();
     }
+
+    // ------------------------------------------------------------------ cash and payouts (reference: delivery_admin.py)
+
+    private async Task<long> CashInHandAsync(Guid boyId)
+    {
+        await using var uow = await db.BeginAsync();
+        var cash = await fleet.CashByPartnerAsync([boyId], uow);
+        await uow.CommitAsync();
+        return cash.GetValueOrDefault(boyId);
+    }
+
+    /// <summary>Reference: GET /api/admin/delivery/cash.</summary>
+    public async Task<JsonObject> CashAsync(UserModel user)
+    {
+        await StaffAsync(user);
+        var boys = (await delivery.ApprovedPartnersAsync(false)).ToList();
+        await using var uow = await db.BeginAsync();
+        var held = await fleet.CashByPartnerAsync(boys.Select(b => b.Id).ToList(), uow);
+        await uow.CommitAsync();
+        var cfg = await deliverySettings.GetAsync();
+        var rows = boys.Where(b => held.GetValueOrDefault(b.Id) > 0)
+            .Select(b => new JsonObject
+            {
+                ["id"] = b.Id.ToString(), ["name"] = b.Name, ["phone"] = b.Phone, ["photo"] = b.Photo,
+                ["cash_in_hand"] = held[b.Id], ["over_limit"] = held[b.Id] > cfg.Long("cod_limit_paise"),
+            })
+            .OrderByDescending(r => r["cash_in_hand"]!.GetValue<long>()).ToList();
+        var recent = await fleet.DepositsRecentAsync();
+        return new JsonObject
+        {
+            ["partners"] = new JsonArray(rows.Select(r => (JsonNode?)r).ToArray()),
+            ["total"] = rows.Sum(r => r["cash_in_hand"]!.GetValue<long>()),
+            ["limit"] = cfg.Long("cod_limit_paise"),
+            ["recent"] = new JsonArray(recent.Select(d => (JsonNode?)new JsonObject
+            {
+                ["partner"] = d.Partner, ["amount"] = d.Amount, ["method"] = d.Method,
+                ["reference"] = d.Reference, ["note"] = d.Note, ["at"] = d.CreatedAt.ToString("o"),
+            }).ToArray()),
+        };
+    }
+
+    /// <summary>Reference: POST /api/admin/delivery/partners/{partner_id}/deposits.</summary>
+    public async Task<JsonObject> AddDepositAsync(UserModel user, Guid partnerId, long amountPaise, string method,
+        string reference, string note)
+    {
+        await StaffAsync(user);
+        var b = await RequireBoyAsync(partnerId);
+        var held = await CashInHandAsync(b.Id);
+        if (amountPaise > held)
+            throw new AppException($"{b.Name} holds {Money.Rupees(held)}; the deposit cannot be more", "deposit_too_big");
+        await fleet.InsertDepositAsync(new DeliveryCashDepositModel
+        {
+            Id = Guid.NewGuid(), DeliveryBoyId = b.Id, Amount = amountPaise, Method = method,
+            Reference = reference.Trim(), Note = note.Trim(), RecordedBy = user.Id,
+            CreatedAt = DateTimeFunctions.UtcNow(),
+        });
+        await AuditSimpleAsync(user, "delivery.cash_deposit", "delivery_boy", b.Id, $"{amountPaise} {method}");
+        return new JsonObject { ["cash_in_hand"] = await CashInHandAsync(b.Id) };
+    }
+
+    /// <summary>Reference: GET /api/admin/delivery/payouts.</summary>
+    public async Task<JsonObject> PayoutsAsync(UserModel user, string status, int page)
+    {
+        await StaffAsync(user);
+        var rows = (await fleet.PayoutsPageAsync(status, (page - 1) * 50)).ToList();
+        var total = await fleet.PayoutsCountAsync(status);
+        var pending = await fleet.PendingPayoutTotalAsync();
+        var unbilled = await fleet.UnbilledTotalAsync();
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(rows.Select(p =>
+            {
+                var bank = JsonNode.Parse(p.PartnerBank)?.AsObject() ?? new JsonObject();
+                bank.Remove("account_enc");
+                return (JsonNode?)new JsonObject
+                {
+                    ["id"] = p.Id.ToString(),
+                    ["partner"] = new JsonObject
+                    {
+                        ["id"] = p.DeliveryBoyId.ToString(), ["name"] = p.PartnerName, ["phone"] = p.PartnerPhone,
+                        ["bank"] = bank,
+                    },
+                    ["period_start"] = p.PeriodStart.ToString("o"), ["period_end"] = p.PeriodEnd.ToString("o"),
+                    ["deliveries"] = p.Deliveries, ["amount"] = p.Amount, ["cod_deducted"] = p.CodDeducted,
+                    ["net_amount"] = p.NetAmount, ["status"] = p.Status, ["paid_at"] = p.PaidAt?.ToString("o"),
+                    ["reference"] = p.Reference,
+                };
+            }).ToArray()),
+            ["total"] = total, ["page"] = page, ["page_size"] = 50,
+            ["pending_total"] = pending, ["not_in_payout"] = unbilled,
+        };
+    }
+
+    /// <summary>Reference: fleet.week_of (Monday to Sunday).</summary>
+    private static (DateOnly Start, DateOnly End) WeekOfIst(DateTime dayIst)
+    {
+        var d = DateOnly.FromDateTime(dayIst);
+        var start = d.AddDays(-(((int)d.DayOfWeek + 6) % 7));
+        return (start, start.AddDays(6));
+    }
+
+    /// <summary>Reference: POST /api/admin/delivery/payouts/generate + fleet.generate_payouts (payouts permission).</summary>
+    public async Task<JsonObject> GeneratePayoutsAsync(UserModel user, DateOnly? weekStart)
+    {
+        await access.RequireAsync(user, "payouts");
+        var day = weekStart ?? DateOnly.FromDateTime(DateTimeFunctions.UtcNow() + Ist - TimeSpan.FromDays(7));
+        var (start, end) = WeekOfIst(day.ToDateTime(TimeOnly.MinValue));
+        var until = (end.ToDateTime(TimeOnly.MinValue) + TimeSpan.FromDays(1)) - Ist; // IST day start of day after end, in UTC
+        var cfg = await deliverySettings.GetAsync();
+        var made = 0;
+        await using var uow = await db.BeginAsync();
+        var rows = (await fleet.UnbilledByPartnerAsync(until, uow)).ToList();
+        foreach (var r in rows)
+        {
+            var amount = r.Amount;
+            var p = await fleet.PayoutForPeriodAsync(r.BoyId, start, uow);
+            if (p is not null && p.Status == "paid") continue; // late trips go into the next week's payout
+            var deduct = 0L;
+            if (cfg.Bool("cod_deduct_from_payout"))
+            {
+                var cash = await fleet.CashByPartnerAsync([r.BoyId], uow);
+                deduct = Math.Max(0, Math.Min(cash.GetValueOrDefault(r.BoyId), amount));
+            }
+            var now = DateTimeFunctions.UtcNow();
+            if (p is null)
+            {
+                p = new DeliveryPayoutModel
+                {
+                    Id = Guid.NewGuid(), DeliveryBoyId = r.BoyId, PeriodStart = start, PeriodEnd = end,
+                    Deliveries = 0, Amount = 0, CodDeducted = 0, NetAmount = 0, Status = "pending",
+                    Reference = "", CreatedAt = now,
+                };
+                await fleet.InsertPayoutAsync(p, uow);
+                made++;
+            }
+            p.Deliveries += (int)r.Deliveries;
+            p.Amount += amount;
+            p.CodDeducted += deduct;
+            p.NetAmount = p.Amount - p.CodDeducted;
+            await fleet.UpdatePayoutAsync(p, uow);
+            if (deduct > 0)
+            {
+                await fleet.InsertDepositAsync(new DeliveryCashDepositModel
+                {
+                    Id = Guid.NewGuid(), DeliveryBoyId = r.BoyId, Amount = deduct, Method = "payout",
+                    Reference = $"Payout {start:yyyy-MM-dd}", Note = "Cash in hand taken from the weekly payout",
+                    CreatedAt = now,
+                }, uow);
+            }
+            await fleet.AssignPayoutAsync(r.BoyId, until, p.Id, uow);
+        }
+        await AuditSimpleAsync(user, "delivery.payouts_generate", "delivery_payout",
+            Guid.Empty, $"{start:yyyy-MM-dd} {made}");
+        await uow.CommitAsync();
+        return new JsonObject { ["created"] = made, ["week_start"] = start.ToString("o") };
+    }
+
+    /// <summary>Reference: POST /api/admin/delivery/payouts/{payout_id}/paid (payouts permission).</summary>
+    public async Task<JsonObject> MarkPayoutPaidAsync(UserModel user, Guid payoutId, string reference)
+    {
+        await access.RequireAsync(user, "payouts");
+        await using var uow = await db.BeginAsync();
+        var p = await fleet.PayoutForUpdateAsync(payoutId, uow) ?? throw new NotFoundException("Payout");
+        if (p.Status == "paid") throw new AppException("Already marked paid", "already_paid", 409);
+        p.Status = "paid";
+        p.PaidAt = DateTimeFunctions.UtcNow();
+        p.PaidBy = user.Id;
+        p.Reference = reference.Trim();
+        await fleet.UpdatePayoutAsync(p, uow);
+        await uow.CommitAsync();
+        var b = await delivery.PartnerByIdAsync(p.DeliveryBoyId);
+        await AuditSimpleAsync(user, "delivery.payout_paid", "delivery_payout", p.Id, reference[..Math.Min(60, reference.Length)]);
+        if (b is not null)
+        {
+            await notify.NotifyUserAsync(b.UserId, "delivery_payout_paid", new Dictionary<string, string>
+            {
+                ["amount"] = Money.Rupees(p.NetAmount),
+                ["period"] = $"{p.PeriodStart:dd MMM} to {p.PeriodEnd:dd MMM}", ["reference"] = p.Reference,
+            }, "/delivery/earnings");
+        }
+        return new JsonObject { ["ok"] = true, ["status"] = p.Status };
+    }
+
+    // ------------------------------------------------------------------ reports and feedback (reference: delivery_admin.py)
+
+    /// <summary>Reference: GET /api/admin/delivery/reports.</summary>
+    public async Task<JsonObject> ReportsAsync(UserModel user, int days)
+    {
+        await StaffAsync(user);
+        var istToday = (DateTimeFunctions.UtcNow() + Ist).Date;
+        var sinceDay = istToday.AddDays(-(days - 1));
+        var since = sinceDay - Ist;
+        var dayRows = (await fleet.ReportDaysAsync(since)).ToList();
+        var perDay = new Dictionary<string, JsonObject>();
+        for (var k = 0; k < days; k++)
+        {
+            var d = DateOnly.FromDateTime(sinceDay.AddDays(k)).ToString("yyyy-MM-dd");
+            perDay[d] = new JsonObject { ["date"] = d, ["delivered"] = 0L, ["failed"] = 0L, ["cod"] = 0L };
+        }
+        foreach (var r in dayRows)
+        {
+            var d = DateOnly.FromDateTime(r.Day).ToString("yyyy-MM-dd");
+            if (!perDay.TryGetValue(d, out var rec)) continue;
+            rec[r.Status] = r.Count;
+            rec["cod"] = rec["cod"]!.GetValue<long>() + r.Cod;
+        }
+        long delivered = perDay.Values.Sum(r => r["delivered"]!.GetValue<long>());
+        long failed = perDay.Values.Sum(r => r["failed"]!.GetValue<long>());
+        var perf = (await fleet.ReportPartnersAsync(since)).ToList();
+        return new JsonObject
+        {
+            ["days"] = new JsonArray(perDay.Values.Select(v => (JsonNode?)v).ToArray()),
+            ["delivered"] = delivered, ["failed"] = failed,
+            ["success_rate"] = delivered + failed > 0
+                ? Math.Round(100.0 * delivered / (delivered + failed), 1)
+                : null,
+            ["cod_collected"] = perDay.Values.Sum(r => r["cod"]!.GetValue<long>()),
+            ["partners"] = new JsonArray(perf.Select(i => (JsonNode?)new JsonObject
+            {
+                ["id"] = i.BoyId.ToString(), ["name"] = i.Name, ["rating_avg"] = Math.Round(i.RatingAvg, 1),
+                ["rating_count"] = i.RatingCount, ["delivered"] = i.Delivered, ["failed"] = i.Failed,
+                ["declined"] = i.Declined, ["earned"] = i.Earned, ["cod"] = i.Cod,
+                ["avg_minutes"] = i.AvgMinutes is not null ? Math.Round(i.AvgMinutes.Value, 1) : null,
+                ["success_rate"] = i.Delivered + i.Failed > 0
+                    ? Math.Round(100.0 * i.Delivered / (i.Delivered + i.Failed), 1)
+                    : null,
+            }).OrderByDescending(x => x!["delivered"]!.GetValue<long>()).ToArray()),
+        };
+    }
+
+    /// <summary>Reference: GET /api/admin/delivery/feedback.</summary>
+    public async Task<JsonObject> FeedbackAsync(UserModel user, string kind, string status, int page)
+    {
+        await StaffAsync(user);
+        if (kind == "ratings")
+        {
+            var rows = (await fleet.RatingsPageAsync((page - 1) * 30)).ToList();
+            var total = await fleet.RatingsCountAsync();
+            return new JsonObject
+            {
+                ["items"] = new JsonArray(rows.Select(a => (JsonNode?)new JsonObject
+                {
+                    ["assignment_id"] = a.AssignmentId.ToString(), ["partner"] = a.Partner,
+                    ["order_number"] = a.OrderNumber, ["rating"] = a.Rating, ["comment"] = a.Comment,
+                    ["at"] = a.At?.ToString("o"),
+                }).ToArray()),
+                ["total"] = total, ["page"] = page, ["page_size"] = 30,
+            };
+        }
+        var crows = (await fleet.ComplaintsPageAsync(status, (page - 1) * 30)).ToList();
+        var ctotal = await fleet.ComplaintsCountAsync(status);
+        var open = await fleet.OpenComplaintsCountAsync();
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(crows.Select(c => (JsonNode?)new JsonObject
+            {
+                ["id"] = c.Id.ToString(), ["assignment_id"] = c.AssignmentId.ToString(), ["partner"] = c.Partner,
+                ["order_number"] = c.OrderNumber, ["category"] = c.Category,
+                ["category_label"] = DeliverySettingsBAL.Complaints.GetValueOrDefault(c.Category, c.Category),
+                ["text"] = c.Text, ["status"] = c.Status, ["admin_note"] = c.AdminNote, ["at"] = c.At.ToString("o"),
+            }).ToArray()),
+            ["total"] = ctotal, ["page"] = page, ["page_size"] = 30, ["open"] = open,
+        };
+    }
+
+    /// <summary>Reference: POST /api/admin/delivery/complaints/{complaint_id}/resolve.</summary>
+    public async Task<JsonObject> ResolveComplaintAsync(UserModel user, Guid complaintId, string note)
+    {
+        await StaffAsync(user);
+        var c = await fleet.ComplaintAsync(complaintId) ?? throw new NotFoundException("Complaint");
+        await fleet.ResolveComplaintAsync(c.Id, note.Trim(), DateTimeFunctions.UtcNow());
+        await AuditSimpleAsync(user, "delivery.complaint_resolve", "delivery_complaint", c.Id,
+            note[..Math.Min(200, note.Length)]);
+        return new JsonObject { ["ok"] = true };
+    }
 }
