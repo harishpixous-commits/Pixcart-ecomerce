@@ -13,7 +13,7 @@ public class CartDAL(IMySqlDapperHelper db)
     {
         var rows = await db.QueryAsync<CartItemModel, VariantModel, ProductModel, SellerModel, (CartItemModel, VariantModel, ProductModel, SellerModel)>(
             """
-            SELECT c.*, v.*, p.*, s.*
+            SELECT c.*, v.id AS v_id, v.*, p.id AS p_id, p.*, s.id AS s_id, s.*
             FROM cart_items c
             JOIN variants v ON v.id = c.variant_id
             JOIN products p ON p.id = v.product_id
@@ -21,7 +21,7 @@ public class CartDAL(IMySqlDapperHelper db)
             WHERE c.user_id = @userId
             ORDER BY v.id
             """,
-            (c, v, p, s) => (c, v, p, s), new { userId }, splitOn: "id,id,id");
+            (c, v, p, s) => (c, v, p, s), new { userId }, splitOn: "v_id,p_id,s_id");
         return rows.ToList();
     }
 
@@ -61,14 +61,14 @@ public class CartDAL(IMySqlDapperHelper db)
     {
         var rows = await db.QueryAsync<SavedItemModel, VariantModel, ProductModel, (SavedItemModel, VariantModel, ProductModel)>(
             """
-            SELECT si.*, v.*, p.*
+            SELECT si.*, v.id AS v_id, v.*, p.id AS p_id, p.*
             FROM saved_items si
             JOIN variants v ON v.id = si.variant_id
             JOIN products p ON p.id = v.product_id
             WHERE si.user_id = @userId
             ORDER BY si.created_at DESC
             """,
-            (si, v, p) => (si, v, p), new { userId }, splitOn: "id,id");
+            (si, v, p) => (si, v, p), new { userId }, splitOn: "v_id,p_id");
         return rows.ToList();
     }
 

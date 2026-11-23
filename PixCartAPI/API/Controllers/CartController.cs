@@ -17,11 +17,11 @@ public class CartController(ICartBAL cart, ICurrentUser current) : ControllerBas
 {
     /// <summary>One cart line change: qty 1..10; 0 on PUT removes the line.</summary>
     public sealed record SetQty(
-        [property: Required] Guid VariantId,
-        [property: Range(0, CartBALQty.Max, ErrorMessage = "Quantity must be between 0 and 10")] int Qty);
+        [param: Required] Guid VariantId,
+        [param: Range(0, 10, ErrorMessage = "Quantity must be between 0 and 10")] int Qty);
 
     /// <summary>The browser cart merging into the account at sign-in.</summary>
-    public sealed record MergeIn([property: MaxLength(50)] List<SetQty> Items);
+    public sealed record MergeIn([param: MaxLength(50)] List<SetQty> Items);
 
     [HttpGet("")]
     public async Task<JsonObject> Get() => await cart.ViewAsync(await UserId());
@@ -62,10 +62,4 @@ public class CartController(ICartBAL cart, ICurrentUser current) : ControllerBas
     public async Task<JsonObject> DeleteSaved(Guid variantId) => await cart.DeleteSavedAsync(await UserId(), variantId);
 
     private async Task<Guid> UserId() => (await current.RequireAsync()).Id;
-}
-
-/// <summary>The request quantity cap (reference: SetQty qty ≤ 10).</summary>
-file static class CartBALQty
-{
-    public const int Max = 10;
 }
