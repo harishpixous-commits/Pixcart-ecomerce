@@ -672,10 +672,21 @@ export interface Site {
   lists?: Partial<ListSettings>;
   /** maintenance mode (Admin → Marketplace settings): shoppers see a "back soon" page; staff see the shop with a banner */
   maintenance?: { on: boolean; message: string };
+  /** "page not found" and "something went wrong" pages (Admin → Marketplace settings → Error pages) */
+  error_pages?: Partial<ErrorPageSettings>;
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
   nav: NavSettings;
   home_extras: { back_to_top: boolean; signin_prompt: boolean };
+}
+
+export interface ErrorPageSettings {
+  not_found_title: string;
+  not_found_message: string;
+  not_found_search: boolean;
+  not_found_suggestions: boolean;
+  error_title: string;
+  error_message: string;
 }
 
 /** How many results each list shows; 0 hides the lists that can be hidden (see LIST_DEFAULTS in lib/site.tsx). */

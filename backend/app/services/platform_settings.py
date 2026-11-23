@@ -131,11 +131,25 @@ DEFAULTS: dict[str, Any] = {
     # admin panel, sellers their hub and delivery partners their app
     "maintenance_mode": False,
     "maintenance_message": "We are making a few improvements and will be back shortly. Thank you for your patience.",
+    # "page not found" and "something went wrong" pages, in the shop's theme (Admin → Marketplace settings)
+    "not_found_title": "We couldn't find that page",
+    "not_found_message": "The link may be old, or the product is no longer sold. Try a search, or pick from what other shoppers are buying.",
+    "not_found_search": True,       # a search box on the page
+    "not_found_suggestions": True,  # bestsellers under it
+    "error_title": "Something went wrong on our side",
+    "error_message": "Please try again. If it keeps happening, contact us and quote the reference shown below.",
 }
+
+# the error pages' settings the storefront needs (sent with /api/site as error_pages)
+ERROR_PAGE_KEYS: tuple[str, ...] = ("not_found_title", "not_found_message", "not_found_search", "not_found_suggestions", "error_title", "error_message")
 
 # key -> (shortest, longest) for free-text settings (spaces at the ends are removed)
 TEXTS: dict[str, tuple[int, int]] = {
     "maintenance_message": (10, 300),
+    "not_found_title": (3, 80),
+    "not_found_message": (10, 300),
+    "error_title": (3, 80),
+    "error_message": (10, 300),
 }
 
 # the list sizes the storefront needs (sent with /api/site)
@@ -156,6 +170,8 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "free_shipping_threshold_paise": (int, 0, 10_000_000),
     "cod_enabled": (bool, 0, 1),
     "maintenance_mode": (bool, 0, 1),
+    "not_found_search": (bool, 0, 1),
+    "not_found_suggestions": (bool, 0, 1),
     "cod_fee_paise": (int, 0, 10_000),
     "cod_max_order_paise": (int, 0, 100_000_000),
     "tcs_bps": (int, 0, 100),

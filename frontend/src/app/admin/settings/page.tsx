@@ -17,7 +17,19 @@ type S = {
   defect_return_days: number;
   admin_layout_default: string;
   maintenance_mode: boolean; maintenance_message: string;
-} & Record<(typeof LIST_FIELDS)[number][0], number>;
+} & Record<(typeof LIST_FIELDS)[number][0], number> & Record<(typeof PAGE_TEXTS)[number][0], string> & Record<(typeof PAGE_SWITCHES)[number][0], boolean>;
+
+/** Error pages: [setting, label, longest]. */
+const PAGE_TEXTS = [
+  ["not_found_title", "\"Page not found\" title", 80],
+  ["not_found_message", "\"Page not found\" message", 300],
+  ["error_title", "\"Something went wrong\" title", 80],
+  ["error_message", "\"Something went wrong\" message", 300],
+] as const;
+const PAGE_SWITCHES = [
+  ["not_found_search", "Search box on the \"Page not found\" page", "Shoppers can search straight away"],
+  ["not_found_suggestions", "Bestsellers on the \"Page not found\" page", "A row of popular products under the message"],
+] as const;
 
 /** How many results each list shows: [setting, label, hint, the default]. 0 hides the lists whose hint says so. */
 const LIST_FIELDS = [
@@ -55,6 +67,7 @@ export default function AdminSettings() {
   const [f, setF] = useState<Record<string, string>>({});
   const [cod, setCod] = useState(true);
   const [maintenance, setMaintenance] = useState(false);
+  const [pageFlags, setPageFlags] = useState<Record<string, boolean>>({});
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,6 +76,7 @@ export default function AdminSettings() {
       setS(x);
       setCod(x.cod_enabled);
       setMaintenance(Boolean(x.maintenance_mode));
+      setPageFlags(Object.fromEntries(PAGE_SWITCHES.map(([k]) => [k, x[k] !== false])));
       setFlags(Object.fromEntries(FLAGS.map(([k]) => [k, Boolean(x[k])])));
       setF({
         shipping: paiseToInput(x.shipping_fee_paise), free: paiseToInput(x.free_shipping_threshold_paise), codFee: paiseToInput(x.cod_fee_paise),
@@ -71,6 +85,7 @@ export default function AdminSettings() {
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
         adminLayout: x.admin_layout_default ?? "sidebar", maintenanceMessage: x.maintenance_message ?? "",
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, x[k] ?? ""])),
         ...Object.fromEntries(LIST_FIELDS.map(([k, , , d]) => [k, String(x[k] ?? d)])),
       });
     }).catch(quietly);
@@ -91,6 +106,7 @@ export default function AdminSettings() {
         defect_return_days: Number(f.defectDays), payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
         admin_layout_default: f.adminLayout || "sidebar",
         maintenance_mode: maintenance, maintenance_message: f.maintenanceMessage ?? "",
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), ...pageFlags,
         ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, Number(f[k])])),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
@@ -207,6 +223,27 @@ export default function AdminSettings() {
         </div>
         {LIST_FIELDS.map(([k, label, hint, d]) => (
           <TextField key={k} label={label} inputMode="numeric" hint={`${hint}. Default ${d}.`} {...bind(k)} />
+        ))}
+      </section>
+      <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2" data-testid="error-page-settings">
+        <div className="sm:col-span-2">
+          <h2 className="text-lg font-semibold">Error pages</h2>
+          <p className="text-sm text-ink-soft">
+            What shoppers see when a link is broken or a page fails to load. They show in the shop&apos;s theme, with its header and footer.
+            Try them: <a href="/this-page-does-not-exist" target="_blank" rel="noreferrer" className="font-semibold text-peacock">open a missing page</a>.
+          </p>
+        </div>
+        {PAGE_TEXTS.map(([k, label, max]) => (
+          <Field key={k} label={label} htmlFor={`pg-${k}`} hint={`${(f[k] ?? "").length}/${max}`}>
+            <textarea id={`pg-${k}`} rows={max > 100 ? 3 : 1} maxLength={max} value={f[k] ?? ""} onChange={(e) => setF({ ...f, [k]: e.target.value })}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[15px] focus:border-peacock focus:outline-none focus:ring-2 focus:ring-peacock/20" />
+          </Field>
+        ))}
+        {PAGE_SWITCHES.map(([k, label, hint]) => (
+          <label key={k} className="flex items-start gap-3 rounded-lg border border-line p-3">
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={pageFlags[k] ?? true} onChange={(e) => setPageFlags({ ...pageFlags, [k]: e.target.checked })} />
+            <span><span className="font-semibold">{label}</span><br /><span className="text-sm text-ink-soft">{hint}</span></span>
+          </label>
         ))}
       </section>
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">

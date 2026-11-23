@@ -19,7 +19,7 @@ from app.routers.catalog import _category_tree, product_cards
 from app.services import review_settings
 from app.services.catalog import category_descendant_ids, public_product_filter
 from app.services.cms import DEFAULT_PAGES, ensure_default_sections, get_site
-from app.services.platform_settings import LIST_KEYS, get_settings
+from app.services.platform_settings import ERROR_PAGE_KEYS, LIST_KEYS, get_settings
 
 router = APIRouter(prefix="/api", tags=["storefront"])
 
@@ -42,7 +42,8 @@ async def site(session: SessionDep) -> dict:
                    | {"header_pincode": cfg["header_pincode"], "page_loading_bar": cfg["page_loading_bar"]},
             "reviews": review_settings.public(await review_settings.get(session)),
             "lists": {k: cfg[k] for k in LIST_KEYS},
-            "maintenance": {"on": cfg["maintenance_mode"], "message": cfg["maintenance_message"]}}
+            "maintenance": {"on": cfg["maintenance_mode"], "message": cfg["maintenance_message"]},
+            "error_pages": {k: cfg[k] for k in ERROR_PAGE_KEYS}}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

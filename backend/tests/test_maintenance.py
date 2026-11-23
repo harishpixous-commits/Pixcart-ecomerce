@@ -65,3 +65,17 @@ async def test_staff_order_during_maintenance(client, admin, categories):
     assert (await admin.post("/api/cart/items", {"variant_id": p["variants"][0]["id"], "qty": 1})).status_code == 200
     r = await admin.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})
     assert r.status_code == 201, r.text  # a test order by staff while shoppers wait
+
+
+async def test_error_pages_are_editable(client, admin):
+    pages = (await client.get("/api/site")).json()["error_pages"]
+    assert pages["not_found_search"] is True and pages["not_found_suggestions"] is True
+    assert pages["not_found_title"] == "We couldn't find that page" and pages["error_title"] == "Something went wrong on our side"
+    r = await admin.put("/api/admin/settings", {"not_found_title": "Lost?", "not_found_suggestions": False,
+                                                "error_message": "Our team has been told. Please try again in a minute."})
+    assert r.status_code == 200, r.text
+    pages = (await client.get("/api/site")).json()["error_pages"]
+    assert (pages["not_found_title"], pages["not_found_suggestions"]) == ("Lost?", False)
+    assert pages["error_message"] == "Our team has been told. Please try again in a minute."
+    for body in ({"not_found_title": "ab"}, {"error_title": "x" * 81}, {"not_found_search": "no"}, {"error_message": ""}):
+        assert (await admin.put("/api/admin/settings", body)).status_code == 400, body
