@@ -75,6 +75,11 @@ public interface IOrdersBAL
     Task<JsonObject> SellerGetAsync(SellerModel seller, Guid subId);
 
     /// <summary>confirm / pack (reference: _act). ship/deliver arrive with their invoice/payout companions.</summary>
+    Task<JsonObject> SellerRejectAsync(UserModel user, SellerModel seller, Guid subId,
+        string reasonKey, string note, IReadOnlyList<Guid> outOfStockItems);
+
+    Task<JsonObject> SellerRtoAsync(UserModel user, SellerModel seller, Guid subId, string note);
+
     Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "",
         string? courierName = null, string? trackingNumber = null, string? trackingUrl = null);
 }

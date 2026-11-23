@@ -1421,6 +1421,82 @@ public class OrdersBAL(
                 $"Cash collected by your courier {sub.Number}", due, uow);
     }
 
+    private static readonly IReadOnlyDictionary<string, string> SellerCancelReasons = new Dictionary<string, string>
+    {
+        ["out_of_stock"] = "Seller is out of stock",
+        ["cannot_ship_to_pincode"] = "Seller cannot deliver to this PIN code",
+        ["pricing_error"] = "Listing had a pricing error",
+        ["other"] = "Cancelled by seller",
+    };
+
+    private const string RtoReasonText = "Returned to the seller by the courier (RTO)";
+
+    /// <summary>The seller cancels a package not yet shipped (reference: reject). Out of stock zeroes the lines' stock
+    /// in this package's warehouse through recorded movements, so they stop selling and do not come back.</summary>
+    public async Task<JsonObject> SellerRejectAsync(UserModel user, SellerModel seller, Guid subId,
+        string reasonKey, string note, IReadOnlyList<Guid> outOfStockItems)
+    {
+        await using var uow = await db.BeginAsync();
+        var (s, o) = await OwnSubAsync(seller.Id, subId, uow);
+        if (s.Status is not ("placed" or "confirmed" or "packed"))
+            throw new AppException("Only orders that are not yet shipped can be cancelled", "not_cancellable", 400);
+        var items = await orders.ItemsAsync([s.Id], uow);
+        var gone = reasonKey == "out_of_stock"
+            ? items.Where(i => outOfStockItems.Count == 0 || outOfStockItems.Contains(i.Id)).Select(i => i.VariantId).ToHashSet()
+            : [];
+        if (reasonKey == "out_of_stock" && outOfStockItems.Count > 0 && gone.Count == 0)
+            throw new AppException("Choose the items that are out of stock in this order", "invalid_items", 400);
+        var reason = SellerCancelReasons[reasonKey] + (note.Trim().Length > 0 ? $": {note.Trim()}" : "");
+        var refund = await CancelSubOrderAsync(s, "seller", reason, uow);
+        if (gone.Count > 0)
+        {
+            foreach (var vid in gone.OrderBy(x => x))
+            {
+                var v = await deals.VariantForUpdateAsync(vid, uow);
+                if (v is null) continue;
+                if (s.WarehouseId is Guid wh)
+                    await inventory.SetQuantityAsync(v, wh, 0, user.Id, $"Out of stock: seller cancelled {s.Number}", uow);
+                else
+                    await inventory.SetVariantStockAsync(v.Id, 0, uow);
+            }
+            foreach (var pid in items.Where(i => gone.Contains(i.VariantId)).Select(i => i.ProductId).Distinct())
+                await catalog.RefreshAggregatesAsync(pid, uow);
+        }
+        await audit.InsertAsync(new AuditLogModel
+        {
+            Id = Guid.NewGuid(), ActorUserId = user.Id, Action = "suborder.seller_cancel",
+            EntityType = "sub_order", EntityId = s.Id.ToString(),
+            Detail = reason + (gone.Count > 0 ? $" ({gone.Count} item(s) set to 0 in stock)" : ""), CreatedAt = DateTimeFunctions.UtcNow(),
+        }, uow.Transaction);
+        var data = SellerSubJson(s, o, await orders.ItemsAsync([s.Id], uow), full: true);
+        await uow.CommitAsync();
+        if (refund is not null) refundQueue.Enqueue([refund.Id]);
+        return data;
+    }
+
+    /// <summary>The seller's own courier brought a shipped package back (reference: returned_to_origin): cancelled,
+    /// stock back, a prepaid customer refunded; no sale is ever posted.</summary>
+    public async Task<JsonObject> SellerRtoAsync(UserModel user, SellerModel seller, Guid subId, string note)
+    {
+        await using var uow = await db.BeginAsync();
+        var (s, o) = await OwnSubAsync(seller.Id, subId, uow);
+        if (s.Status != "shipped")
+            throw new AppException("Only a package that has shipped and not been delivered can come back to you", "not_shipped", 400);
+        if (s.ShippingProvider != "manual")
+            throw new AppException($"This package travels with {(s.ShippingProvider == "fleet" ? "our delivery partners" : "Shiprocket")}; it comes back to you through them", "not_own_courier", 400);
+        var reason = RtoReasonText + (note.Trim().Length > 0 ? $": {note.Trim()}" : "");
+        var refund = await CancelSubOrderAsync(s, "seller", reason, uow);
+        await audit.InsertAsync(new AuditLogModel
+        {
+            Id = Guid.NewGuid(), ActorUserId = user.Id, Action = "suborder.rto",
+            EntityType = "sub_order", EntityId = s.Id.ToString(), Detail = reason, CreatedAt = DateTimeFunctions.UtcNow(),
+        }, uow.Transaction);
+        var data = SellerSubJson(s, o, await orders.ItemsAsync([s.Id], uow), full: true);
+        await uow.CommitAsync();
+        if (refund is not null) refundQueue.Enqueue([refund.Id]);
+        return data;
+    }
+
     /// <summary>confirm / pack / ship / deliver (reference: _act). Ship first records the courier on the package.</summary>
     public async Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "",
         string? courierName = null, string? trackingNumber = null, string? trackingUrl = null)

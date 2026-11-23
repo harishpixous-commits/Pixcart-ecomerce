@@ -51,6 +51,23 @@ public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : C
     public Task<JsonObject> Ship(Guid subId, ShipIn body) =>
         Act(subId, "shipped", $"{body.CourierName.Trim()} {body.TrackingNumber.Trim()}", body);
 
+    /// <summary>Cancel a package not yet shipped (reference: POST /api/seller/orders/{sub_id}/reject).</summary>
+    [HttpPost("orders/{subId:guid}/reject")]
+    public async Task<JsonObject> Reject(Guid subId, RejectIn body)
+    {
+        var user = await current.RequireAsync();
+        return await orders.SellerRejectAsync(user, await orders.RequireSellerAsync(user, approved: false), subId,
+            body.Reason, body.Note, body.OutOfStockItems ?? []);
+    }
+
+    /// <summary>The seller's own courier brought a shipped package back (reference: POST /api/seller/orders/{sub_id}/rto).</summary>
+    [HttpPost("orders/{subId:guid}/rto")]
+    public async Task<JsonObject> Rto(Guid subId, RtoIn body)
+    {
+        var user = await current.RequireAsync();
+        return await orders.SellerRtoAsync(user, await orders.RequireSellerAsync(user, approved: true), subId, body.Note);
+    }
+
     /// <summary>Mark it delivered (reference: POST /api/seller/orders/{sub_id}/deliver).</summary>
     [HttpPost("orders/{subId:guid}/deliver")]
     public Task<JsonObject> Deliver(Guid subId) => Act(subId, "delivered", "Marked delivered by seller");
@@ -61,6 +78,14 @@ public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : C
         return await orders.SellerActAsync(user, await orders.RequireSellerAsync(user, approved: true), subId, dst, note,
             ship?.CourierName.Trim(), ship?.TrackingNumber.Trim(), ship is null ? null : ship.TrackingUrl ?? "");
     }
+
+    public sealed record RejectIn(
+        [param: Required, RegularExpression("^(out_of_stock|cannot_ship_to_pincode|pricing_error|other)$")] string Reason = "",
+        [param: StringLength(200)] string Note = "",
+        [param: MaxLength(100)] List<Guid>? OutOfStockItems = null);
+
+    public sealed record RtoIn(
+        [param: StringLength(200)] string Note = "");
 
     public sealed record ShipIn(
         [param: Required, StringLength(60, MinimumLength = 2)] string CourierName = "",

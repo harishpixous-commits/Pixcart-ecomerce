@@ -98,6 +98,15 @@ public class InventoryBAL(InventoryDAL inventory, IMySqlDapperHelper db) : Inter
         return outp;
     }
 
+    /// <summary>Sets one warehouse's level with a recorded movement (reference: inventory.set_quantity).</summary>
+    public async Task<int> SetQuantityAsync(VariantModel variant, Guid warehouseId, int qty, Guid? actorId, string note, IUnitOfWork uow)
+    {
+        var lvl = await inventory.LevelForUpdateAsync(variant.Id, warehouseId, uow);
+        var delta = qty - lvl.Quantity;
+        if (delta == 0) return qty;
+        return await ChangeAsync(variant, warehouseId, delta, "set", "", note, actorId, uow);
+    }
+
     public async Task<int> ChangeAsync(VariantModel variant, Guid warehouseId, int delta, string kind,
         string reference = "", string note = "", Guid? actorId = null, IUnitOfWork? uow = null)
     {

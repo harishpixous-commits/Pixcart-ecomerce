@@ -16,6 +16,9 @@ public interface IInventoryBAL
         SellerModel seller, IReadOnlyList<(VariantModel Variant, int Qty)> lines, string shipState, IUnitOfWork uow);
 
     /// <summary>One stock change with its movement record; refreshes variants.stock (reference: change).</summary>
+    /// <summary>Reference: inventory.set_quantity.</summary>
+    Task<int> SetQuantityAsync(VariantModel variant, Guid warehouseId, int qty, Guid? actorId, string note, IUnitOfWork uow);
+
     Task<int> ChangeAsync(VariantModel variant, Guid warehouseId, int delta, string kind,
         string reference = "", string note = "", Guid? actorId = null, IUnitOfWork? uow = null);
 
