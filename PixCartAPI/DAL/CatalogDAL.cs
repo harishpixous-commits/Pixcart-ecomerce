@@ -193,6 +193,22 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
     public Task<IEnumerable<SellerModel>> SellersAsync(IEnumerable<Guid> ids) =>
         db.QueryAsync<SellerModel>("SELECT * FROM sellers WHERE id IN @ids", new { ids = ids.Distinct().ToList() });
 
+    /// <summary>Product counts by status (reference: dashboard product_counts).</summary>
+    public async Task<IReadOnlyDictionary<string, long>> ProductStatusCountsAsync(Guid sellerId)
+    {
+        var rows = await db.QueryAsync<(string Status, long N)>(
+            "SELECT status AS Status, COUNT(*) AS N FROM products WHERE seller_id = @sellerId GROUP BY status",
+            new { sellerId });
+        return rows.ToDictionary(r => r.Status, r => r.N);
+    }
+
+    /// <summary>Active variants of approved products at or under the low-stock threshold (reference: dashboard).</summary>
+    public Task<long> LowStockCountAsync(Guid sellerId, int threshold) =>
+        db.ExecuteScalarAsync<long>(
+            @"SELECT COUNT(*) FROM variants v JOIN products p ON p.id = v.product_id
+              WHERE v.seller_id = @sellerId AND v.is_active = 1 AND v.stock <= @threshold AND p.status = 'approved'",
+            new { sellerId, threshold });
+
     public Task<SellerModel?> GetSellerAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE id = @id", new { id });
 

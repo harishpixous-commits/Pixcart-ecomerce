@@ -1421,6 +1421,70 @@ public class OrdersBAL(
                 $"Cash collected by your courier {sub.Number}", due, uow);
     }
 
+    /// <summary>The seller's dashboard numbers (reference: dashboard). Earnings come from the ledger, like the
+    /// Payouts page: returns, ad spend and cash the courier holds are already netted.</summary>
+    public async Task<JsonObject> SellerDashboardAsync(SellerModel seller)
+    {
+        var since = DateTimeFunctions.UtcNow().AddDays(-30);
+        var counts = await orders.SellerStatusCountsAsync(seller.Id);
+        var sales = await orders.SalesSinceAsync(seller.Id, since);
+        var daily = await orders.DailySalesSinceAsync(seller.Id, since);
+        var bal = await orders.LedgerBalancesAsync(seller.Id);
+        var products = await catalog.ProductStatusCountsAsync(seller.Id);
+        var threshold = (await platform.GetAsync()).Int("low_stock_threshold");
+        var lowStock = await catalog.LowStockCountAsync(seller.Id, threshold);
+        long Count(string s) => counts.TryGetValue(s, out var n) ? n : 0;
+        return new JsonObject
+        {
+            ["seller_status"] = seller.Status,
+            ["orders"] = new JsonObject
+            {
+                ["to_confirm"] = Count("placed"), ["to_pack"] = Count("confirmed"), ["to_ship"] = Count("packed"),
+                ["in_transit"] = Count("shipped"), ["delivered"] = Count("delivered"), ["cancelled"] = Count("cancelled"),
+            },
+            ["sales_30d"] = new JsonObject { ["amount"] = sales.Amount, ["orders"] = sales.Orders },
+            ["daily_sales"] = new JsonArray(daily.Select(d => (JsonNode)new JsonObject
+            {
+                ["date"] = d.Date, ["amount"] = d.Amount, ["orders"] = d.Orders,
+            }).ToArray()),
+            ["earnings"] = new JsonObject { ["in_return_window"] = bal.Upcoming, ["ready_for_payout"] = bal.Available },
+            ["products"] = new JsonObject(products.Select(
+                kv => new KeyValuePair<string, JsonNode?>(kv.Key, JsonValue.Create(kv.Value))).ToArray()),
+            ["low_stock_variants"] = lowStock,
+            ["low_stock_threshold"] = threshold,
+        };
+    }
+
+    /// <summary>Delivered packages and their settlement, page by page (reference: earnings).</summary>
+    public async Task<JsonObject> SellerEarningsAsync(SellerModel seller, int page, int pageSize)
+    {
+        var now = DateTimeFunctions.UtcNow();
+        var total = await orders.CountDeliveredSubsAsync(seller.Id);
+        var rows = await orders.DeliveredSubsAsync(seller.Id, (page - 1) * pageSize, pageSize);
+        var sums = await orders.DeliveredSumsAsync(seller.Id);
+        return new JsonObject
+        {
+            ["totals"] = new JsonObject
+            {
+                ["gross"] = sums.Gross, ["commission"] = sums.Commission, ["commission_gst"] = sums.CommissionGst,
+                ["tcs"] = sums.Tcs, ["tds"] = sums.Tds, ["payout"] = sums.Payout,
+            },
+            ["items"] = new JsonArray(rows.Select(s => (JsonNode)new JsonObject
+            {
+                ["sub_order_id"] = s.Id.ToString(), ["number"] = s.Number,
+                ["delivered_at"] = s.DeliveredAt?.ToString("o"),
+                ["gross"] = s.Total, ["commission"] = s.CommissionPaise, ["commission_gst"] = s.CommissionGstPaise,
+                ["tcs"] = s.TcsPaise, ["tds"] = s.TdsPaise, ["payout"] = s.SellerPayoutPaise,
+                ["settlement_status"] = s.SettlementStatus,
+                ["eligible"] = s.SettlementStatus == "pending" && s.SettlementDueAt is not null && s.SettlementDueAt <= now,
+                ["settlement_due_at"] = s.SettlementDueAt?.ToString("o"),
+            }).ToArray()),
+            ["total"] = total,
+            ["page"] = page,
+            ["page_size"] = pageSize,
+        };
+    }
+
     private static readonly IReadOnlyDictionary<string, string> SellerCancelReasons = new Dictionary<string, string>
     {
         ["out_of_stock"] = "Seller is out of stock",

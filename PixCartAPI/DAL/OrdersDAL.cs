@@ -388,6 +388,64 @@ public class OrdersDAL(IMySqlDapperHelper db)
         return rows.ToDictionary(r => r.Status, r => r.N);
     }
 
+    /// <summary>Last-30-days sales rollup (reference: dashboard sales query; pending/unpaid and cancelled excluded).</summary>
+    public async Task<(long Amount, long Orders)> SalesSinceAsync(Guid sellerId, DateTime since)
+    {
+        var row = (await db.QueryAsync<(long Amount, long Orders)>(
+            @"SELECT COALESCE(SUM(total), 0) AS Amount, COUNT(*) AS Orders FROM sub_orders
+              WHERE seller_id = @sellerId AND created_at >= @since AND status NOT IN ('pending_payment', 'cancelled')",
+            new { sellerId, since })).First();
+        return row;
+    }
+
+    public async Task<IReadOnlyList<(string Date, long Amount, long Orders)>> DailySalesSinceAsync(Guid sellerId, DateTime since)
+    {
+        var rows = await db.QueryAsync<(DateTime Date, long Amount, long Orders)>(
+            @"SELECT DATE(created_at) AS Date, COALESCE(SUM(total), 0) AS Amount, COUNT(*) AS Orders
+              FROM sub_orders
+              WHERE seller_id = @sellerId AND created_at >= @since AND status NOT IN ('pending_payment', 'cancelled')
+              GROUP BY DATE(created_at) ORDER BY DATE(created_at)",
+            new { sellerId, since });
+        return rows.Select(r => (r.Date.ToString("yyyy-MM-dd"), r.Amount, r.Orders)).ToList();
+    }
+
+    /// <summary>Available / in-return-window / paid-out from the ledger (reference: ledger.balances).</summary>
+    public async Task<(long Available, long Upcoming, long PaidOut)> LedgerBalancesAsync(Guid sellerId)
+    {
+        var row = (await db.QueryAsync<(long Available, long Upcoming, long PaidOut)>(
+            @"SELECT COALESCE(SUM(CASE WHEN payout_id IS NULL AND available_at <= UTC_TIMESTAMP(6) THEN amount ELSE 0 END), 0) AS Available,
+                     COALESCE(SUM(CASE WHEN payout_id IS NULL AND available_at > UTC_TIMESTAMP(6) THEN amount ELSE 0 END), 0) AS Upcoming,
+                     COALESCE(SUM(CASE WHEN payout_id IS NOT NULL THEN amount ELSE 0 END), 0) AS PaidOut
+              FROM seller_ledger WHERE seller_id = @sellerId",
+            new { sellerId })).First();
+        return row;
+    }
+
+    public Task<long> CountDeliveredSubsAsync(Guid sellerId) =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM sub_orders WHERE seller_id = @sellerId AND status = 'delivered'", new { sellerId });
+
+    /// <summary>One earnings page (reference: earnings; newest deliveries first).</summary>
+    public async Task<IReadOnlyList<SubOrderModel>> DeliveredSubsAsync(Guid sellerId, int offset, int limit)
+    {
+        var rows = await db.QueryAsync<SubOrderModel>(
+            @"SELECT * FROM sub_orders WHERE seller_id = @sellerId AND status = 'delivered'
+              ORDER BY delivered_at DESC LIMIT @limit OFFSET @offset",
+            new { sellerId, offset, limit });
+        return rows.ToList();
+    }
+
+    public async Task<(long Gross, long Commission, long CommissionGst, long Tcs, long Tds, long Payout)> DeliveredSumsAsync(Guid sellerId)
+    {
+        var row = (await db.QueryAsync<(long Gross, long Commission, long CommissionGst, long Tcs, long Tds, long Payout)>(
+            @"SELECT COALESCE(SUM(total), 0) AS Gross, COALESCE(SUM(commission_paise), 0) AS Commission,
+                     COALESCE(SUM(commission_gst_paise), 0) AS CommissionGst, COALESCE(SUM(tcs_paise), 0) AS Tcs,
+                     COALESCE(SUM(tds_paise), 0) AS Tds, COALESCE(SUM(seller_payout_paise), 0) AS Payout
+              FROM sub_orders WHERE seller_id = @sellerId AND status = 'delivered'",
+            new { sellerId })).First();
+        return row;
+    }
+
     /// <summary>Packages of several orders at once (reference: the my_orders sub-order read).</summary>
     public async Task<IReadOnlyList<SubOrderModel>> SubOrdersForOrdersAsync(IReadOnlyList<Guid> orderIds)
     {

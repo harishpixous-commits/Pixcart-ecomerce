@@ -51,6 +51,24 @@ public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : C
     public Task<JsonObject> Ship(Guid subId, ShipIn body) =>
         Act(subId, "shipped", $"{body.CourierName.Trim()} {body.TrackingNumber.Trim()}", body);
 
+    /// <summary>The seller's dashboard numbers (reference: GET /api/seller/dashboard).</summary>
+    [HttpGet("dashboard")]
+    public async Task<JsonObject> Dashboard()
+    {
+        var user = await current.RequireAsync();
+        return await orders.SellerDashboardAsync(await orders.RequireSellerAsync(user, approved: false));
+    }
+
+    /// <summary>Delivered packages and their settlement (reference: GET /api/seller/earnings).</summary>
+    [HttpGet("earnings")]
+    public async Task<JsonObject> Earnings([FromQuery] int page = 1, [FromQuery(Name = "page_size")] int pageSize = 25)
+    {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+            throw new AppException("page must be at least 1 and page_size between 1 and 100", "validation", 422);
+        var user = await current.RequireAsync();
+        return await orders.SellerEarningsAsync(await orders.RequireSellerAsync(user, approved: false), page, pageSize);
+    }
+
     /// <summary>Cancel a package not yet shipped (reference: POST /api/seller/orders/{sub_id}/reject).</summary>
     [HttpPost("orders/{subId:guid}/reject")]
     public async Task<JsonObject> Reject(Guid subId, RejectIn body)
