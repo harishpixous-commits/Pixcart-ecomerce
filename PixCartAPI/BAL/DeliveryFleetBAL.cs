@@ -949,4 +949,153 @@ public class DeliveryFleetBAL(
             "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
             "VALUES (@actor, @action, 'sub_order', @eid, @detail, UTC_TIMESTAMP(6), @id)",
             new { actor = user.Id, action, eid = subId.ToString(), detail, id = Guid.NewGuid() });
+
+    // ------------------------------------------------------------------ staff operations (reference: delivery_admin.py)
+
+    /// <summary>Ends expired offers outside a partner poll (reference: sweep; admin screens call it first).</summary>
+    public async Task SweepExpiredAsync()
+    {
+        await using var uow = await db.BeginAsync();
+        await SweepAsync(uow);
+        await uow.CommitAsync();
+    }
+
+    /// <summary>Reference: fleet.pickup_place, shared with the staff queue view.</summary>
+    public Task<JsonObject> PickupPlaceForAsync(SubOrderModel sub) => PickupPlaceAsync(sub);
+
+    public static JsonObject ShipToOf(OrderModel order) => ShipTo(order);
+
+    public static string AreaOf(JsonObject st) => Area(st);
+
+    public static JsonObject BriefOf(DeliveryAssignmentModel a) => AssignmentBrief(a);
+
+    /// <summary>Reference: delivery_admin.assign.</summary>
+    public async Task<JsonObject> AssignByStaffAsync(UserModel admin, Guid subOrderId, Guid partnerId, bool direct, bool force)
+    {
+        await using var uow = await db.BeginAsync();
+        var sub = await orders.SubForUpdateAsync(subOrderId, uow);
+        if (sub is null || sub.ShippingProvider != "fleet" || sub.Status != "packed")
+            throw new AppException("Only packages ready for pickup can be assigned", "not_ready", 409);
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var boy = await delivery.PartnerByIdAsync(partnerId) ?? throw new NotFoundException("Delivery partner");
+        if (boy.KycStatus != "approved" || !boy.IsActive)
+            throw new AppException("This partner is not approved or is switched off", "partner_unavailable");
+        var cfg = await deliverySettings.GetAsync();
+        var match = (await CandidatesAsync(sub, order, cfg, uow, onlineOnly: false))
+            .FirstOrDefault(c => c["boy_id"]!.GetValue<string>() == boy.Id.ToString());
+        var reasons = match is null
+            ? new List<string>()
+            : match["reasons"]!.AsArray().Select(r => r!.GetValue<string>()).Where(r => r != "already asked").ToList();
+        if (reasons.Count > 0 && !force)
+            throw new AppException($"{boy.Name}: {string.Join(", ", reasons)}. Assign anyway to override.",
+                "partner_not_free", 409);
+        var a = await OfferAsync(sub, order, boy, "manual", cfg, uow, by: admin, direct: direct);
+        await AuditAsync(uow, admin, "delivery.assign", sub.Id, $"{boy.Name}{(direct ? " (direct)" : "")}");
+        await uow.CommitAsync();
+        return AssignmentBrief(a);
+    }
+
+    /// <summary>Reference: delivery_admin.run_auto.</summary>
+    public async Task<JsonObject> AutoAssignByStaffAsync(UserModel admin, Guid subOrderId)
+    {
+        await using var uow = await db.BeginAsync();
+        var sub = await orders.SubForUpdateAsync(subOrderId, uow);
+        if (sub is null || sub.ShippingProvider != "fleet") throw new NotFoundException("Package");
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var cfg = (JsonObject)(await deliverySettings.GetAsync()).DeepClone();
+        cfg["auto_assign"] = true;
+        sub.FleetAlertedAt = null;
+        await orders.UpdateSubFleetAsync(sub, uow);
+        var a = await AutoAssignAsync(sub, order, cfg, uow);
+        await AuditAsync(uow, admin, "delivery.auto_assign", sub.Id);
+        await uow.CommitAsync();
+        if (a is null) throw new AppException("No free partner can take it right now", "no_partner", 409);
+        return AssignmentBrief(a);
+    }
+
+    /// <summary>Reference: delivery_admin.cancel_assignment + fleet.cancel_by_staff.</summary>
+    public async Task CancelByStaffAsync(UserModel admin, Guid assignmentId, string reason)
+    {
+        await using var uow = await db.BeginAsync();
+        var a = await fleet.AssignmentForUpdateAsync(assignmentId, uow) ?? throw new NotFoundException("Delivery");
+        if (a.Status is not ("offered" or "accepted" or "at_store"))
+            throw new AppException("The partner already has the package; mark the delivery failed or return it instead",
+                "already_picked", 409);
+        await EndAsync(a, "cancelled", $"Taken off by the delivery team: {reason}", uow,
+            userId: admin.Id, actor: "admin", tellPartner: true);
+        var sub = await orders.GetSubAsync(a.SubOrderId) ?? throw new NotFoundException("Order");
+        sub.FleetAlertedAt = null;
+        await orders.UpdateSubFleetAsync(sub, uow);
+        await AuditAsync(uow, admin, "delivery.unassign", sub.Id, reason[..Math.Min(200, reason.Length)]);
+        await uow.CommitAsync();
+    }
+
+    /// <summary>Reference: delivery_admin.resolve + fleet.resolve_failed.</summary>
+    public async Task<JsonObject> ResolveFailedAsync(UserModel admin, Guid assignmentId, string action)
+    {
+        await using var uow = await db.BeginAsync();
+        var failed = await fleet.AssignmentForUpdateAsync(assignmentId, uow) ?? throw new NotFoundException("Delivery");
+        if (failed.Status != "failed")
+            throw new AppException("Only a failed delivery can be resolved", "invalid_status", 409);
+        var sub = await orders.GetSubAsync(failed.SubOrderId) ?? throw new NotFoundException("Order");
+        if (await fleet.ActiveForSubAsync(sub.Id, uow) is not null)
+            throw new AppException("This package already has a trip in progress", "already_assigned", 409);
+        if (sub.Status != "shipped")
+            throw new AppException("This package is no longer with the delivery partner", "invalid_status", 409);
+        var boy = await delivery.PartnerByIdAsync(failed.DeliveryBoyId) ?? throw new NotFoundException("Delivery partner");
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var now = DateTimeFunctions.UtcNow();
+        var kind = action == "return" ? "return" : "delivery";
+        var a = new DeliveryAssignmentModel
+        {
+            Id = Guid.NewGuid(), OrderId = order.Id, SubOrderId = sub.Id, DeliveryBoyId = boy.Id, AssignedBy = admin.Id,
+            Mode = "manual", Kind = kind, Status = "picked", AssignedAt = now, AcceptedAt = now, PickedAt = now,
+            StatusAt = now, PickedLat = failed.PickedLat, PickedLng = failed.PickedLng,
+            CodAmount = kind == "delivery" ? await ordersBal.CollectAmountAsync(sub, order, uow) : 0, CreatedAt = now,
+        };
+        await fleet.InsertAsync(a, uow);
+        await LogStatusAsync(uow, order.Id, sub.Id, a.Id, $"{kind}_trip", "admin", admin.Id,
+            kind == "delivery" ? "Try the delivery again" : "Bring the package back to the store");
+        var vars = await OfferVarsAsync(a, sub, order, await deliverySettings.GetAsync(), uow);
+        vars["drop_area"] = kind == "return" ? "the store" : Area(ShipTo(order));
+        await notify.NotifyUserAsync(boy.UserId, "delivery_assigned", vars, $"/delivery/trips/{a.Id}");
+        await AuditAsync(uow, admin, $"delivery.{action}", sub.Id);
+        await uow.CommitAsync();
+        return AssignmentBrief(a);
+    }
+
+    /// <summary>Reference: delivery_admin.to_courier.</summary>
+    public async Task ToCourierByStaffAsync(UserModel admin, Guid subOrderId)
+    {
+        await using var uow = await db.BeginAsync();
+        var sub = await orders.SubForUpdateAsync(subOrderId, uow);
+        if (sub is null || sub.ShippingProvider != "fleet") throw new NotFoundException("Package");
+        await UseCourierCoreAsync(sub, admin.Id, "admin", uow);
+        await AuditAsync(uow, admin, "delivery.to_courier", sub.Id);
+        await uow.CommitAsync();
+    }
+
+    /// <summary>The full trip view with customer details, for staff (reference: delivery_admin trips detail).</summary>
+    public async Task<JsonObject> TripViewStaffAsync(Guid assignmentId)
+    {
+        var a = await fleet.AssignmentAsync(assignmentId) ?? throw new NotFoundException("Delivery");
+        await using var uow = await db.BeginAsync();
+        var view = await TripViewCoreAsync(a, uow, forPartner: false);
+        await uow.CommitAsync();
+        return view;
+    }
+
+    /// <summary>Reference: delivery_admin.trip_proof (no ownership check - staff).</summary>
+    public async Task<(byte[] Data, string Media)> ProofStaffAsync(Guid assignmentId)
+    {
+        var a = await fleet.AssignmentAsync(assignmentId) ?? throw new NotFoundException("Delivery");
+        if (a.ProofPhoto.Length == 0) throw new NotFoundException("Delivery photo");
+        var data = await images.ReadPrivateAsync(a.ProofPhoto);
+        var ext = a.ProofPhoto.Split('.').Last();
+        var media = ext switch
+        {
+            "png" => "image/png", "webp" => "image/webp", "pdf" => "application/pdf", _ => "image/jpeg",
+        };
+        return (data, media);
+    }
 }

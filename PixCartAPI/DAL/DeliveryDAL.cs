@@ -55,4 +55,26 @@ public class DeliveryDAL(IMySqlDapperHelper db)
                 online_since = @OnlineSince, bank_details = @BankDetails, updated_at = UTC_TIMESTAMP(6)
             WHERE id = @Id
             """, b);
+
+    public Task<IEnumerable<DeliveryZoneModel>> AllZonesAsync() =>
+        db.QueryAsync<DeliveryZoneModel>("SELECT * FROM delivery_zones ORDER BY city, name");
+
+    public Task<IEnumerable<KycCountRow>> KycCountsAsync() =>
+        db.QueryAsync<KycCountRow>("SELECT kyc_status AS KycStatus, COUNT(*) AS Count FROM delivery_boys GROUP BY kyc_status");
+
+    public Task<long> OnlineApprovedCountAsync() =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_boys WHERE is_online=1 AND is_active=1 AND kyc_status='approved'");
+
+    public Task<long> ActiveZoneCountAsync() =>
+        db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM delivery_zones WHERE is_active=1");
+
+    public Task<long> InactivePartnerCountAsync() =>
+        db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM delivery_boys WHERE is_active=0");
+}
+
+public class KycCountRow
+{
+    public string KycStatus { get; set; } = "";
+    public long Count { get; set; }
 }

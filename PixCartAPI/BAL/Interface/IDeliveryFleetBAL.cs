@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Utils.Interface;
 using Model.DomainModel;
 
 namespace BAL.Interface;
@@ -47,4 +48,16 @@ public interface IDeliveryFleetBAL
 
     /// <summary>Blocks courier ship/deliver steps the fleet owns (reference: seller_orders._act fleet guards).</summary>
     Task GuardSellerActAsync(SellerModel seller, Guid subOrderId, string dst);
+
+    Task SweepExpiredAsync();
+    Task<JsonObject> PickupPlaceForAsync(SubOrderModel sub);
+    Task<JsonObject> AssignByStaffAsync(UserModel admin, Guid subOrderId, Guid partnerId, bool direct, bool force);
+    Task<JsonObject> AutoAssignByStaffAsync(UserModel admin, Guid subOrderId);
+    Task CancelByStaffAsync(UserModel admin, Guid assignmentId, string reason);
+    Task<JsonObject> ResolveFailedAsync(UserModel admin, Guid assignmentId, string action);
+    Task ToCourierByStaffAsync(UserModel admin, Guid subOrderId);
+    Task<JsonObject> TripViewStaffAsync(Guid assignmentId);
+    Task<(byte[] Data, string Media)> ProofStaffAsync(Guid assignmentId);
+    Task<List<JsonObject>> CandidatesAsync(SubOrderModel sub, OrderModel order, JsonObject cfg,
+        IUnitOfWork uow, bool onlineOnly = true);
 }

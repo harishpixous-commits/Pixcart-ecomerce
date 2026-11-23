@@ -133,4 +133,94 @@ public class DeliveryFleetDAL(IMySqlDapperHelper db)
         db.ExecuteAsync(
             "UPDATE delivery_boys SET lat = @lat, lng = @lng, location_at = @at, updated_at = UTC_TIMESTAMP(6) WHERE id = @boyId",
             new { boyId, lat, lng, at });
+
+    // ------------------------------------------------------------------ staff operations (reference: delivery_admin.py)
+
+    public Task<DeliveryAssignmentModel?> AssignmentAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<DeliveryAssignmentModel>(
+            "SELECT * FROM delivery_assignments WHERE id=@id", new { id });
+
+    /// <summary>Packages ready for pickup with no live request or trip (reference: _waiting).</summary>
+    public Task<IEnumerable<SubOrderModel>> WaitingSubsAsync() =>
+        db.QueryAsync<SubOrderModel>(
+            "SELECT * FROM sub_orders WHERE shipping_provider='fleet' AND status='packed' " +
+            "AND ready_for_pickup_at IS NOT NULL AND id NOT IN (SELECT sub_order_id FROM delivery_assignments " +
+            "WHERE status IN ('offered','accepted','at_store','picked','on_the_way','reached')) ORDER BY ready_for_pickup_at");
+
+    public Task<IEnumerable<DeliveryAssignmentModel>> OfferedAsync() =>
+        db.QueryAsync<DeliveryAssignmentModel>(
+            "SELECT * FROM delivery_assignments WHERE status='offered' ORDER BY expires_at");
+
+    /// <summary>Failed attempts whose package is still out, newest first (reference: _failed; dedupe in the BAL).</summary>
+    public Task<IEnumerable<DeliveryAssignmentModel>> FailedListAsync() =>
+        db.QueryAsync<DeliveryAssignmentModel>(
+            "SELECT a.* FROM delivery_assignments a JOIN sub_orders s ON s.id=a.sub_order_id " +
+            "WHERE a.status='failed' AND s.status='shipped' AND a.sub_order_id NOT IN " +
+            "(SELECT sub_order_id FROM delivery_assignments WHERE status IN ('offered','accepted','at_store','picked','on_the_way','reached')) " +
+            "ORDER BY a.ended_at DESC");
+
+    /// <summary>Every attempt on a package, oldest first, with the partner name (reference: _package tries).</summary>
+    public Task<IEnumerable<TryRow>> TriesForSubAsync(Guid subOrderId) =>
+        db.QueryAsync<TryRow>(
+            "SELECT a.status AS Status, a.reject_reason AS RejectReason, a.fail_reason AS FailReason, b.name AS Partner " +
+            "FROM delivery_assignments a JOIN delivery_boys b ON b.id=a.delivery_boy_id " +
+            "WHERE a.sub_order_id=@subOrderId ORDER BY a.created_at", new { subOrderId });
+
+    public Task<IEnumerable<DeliveryAssignmentModel>> TripsPageAsync(string status, string like, Guid? partnerId, int offset) =>
+        db.QueryAsync<DeliveryAssignmentModel>(
+            "SELECT a.* FROM delivery_assignments a JOIN sub_orders s ON s.id=a.sub_order_id " +
+            "JOIN delivery_boys b ON b.id=a.delivery_boy_id " +
+            "WHERE (@status='' OR (@status='active' AND a.status IN ('offered','accepted','at_store','picked','on_the_way','reached')) " +
+            "  OR (@status<>'active' AND a.status=@status)) " +
+            "AND (@pid IS NULL OR a.delivery_boy_id=@pid) " +
+            "AND (@like='' OR s.number LIKE @like OR b.name LIKE @like OR b.phone LIKE @like) " +
+            "ORDER BY a.assigned_at DESC LIMIT 30 OFFSET @offset",
+            new { status, like, pid = partnerId, offset });
+
+    public Task<long> TripsCountAsync(string status, string like, Guid? partnerId) =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_assignments a JOIN sub_orders s ON s.id=a.sub_order_id " +
+            "JOIN delivery_boys b ON b.id=a.delivery_boy_id " +
+            "WHERE (@status='' OR (@status='active' AND a.status IN ('offered','accepted','at_store','picked','on_the_way','reached')) " +
+            "  OR (@status<>'active' AND a.status=@status)) " +
+            "AND (@pid IS NULL OR a.delivery_boy_id=@pid) " +
+            "AND (@like='' OR s.number LIKE @like OR b.name LIKE @like OR b.phone LIKE @like)",
+            new { status, like, pid = partnerId });
+
+    public Task<IEnumerable<StatusCountRow>> ActiveStatusCountsAsync() =>
+        db.QueryAsync<StatusCountRow>(
+            "SELECT status AS Status, COUNT(*) AS Count FROM delivery_assignments " +
+            "WHERE status IN ('offered','accepted','at_store','picked','on_the_way','reached') GROUP BY status");
+
+    public Task<long> DeliveredSinceAsync(DateTime dayStart) =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_assignments WHERE status='delivered' AND kind='delivery' AND delivered_at>=@dayStart",
+            new { dayStart });
+
+    public Task<long> FailedSinceAsync(DateTime dayStart) =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_assignments WHERE status='failed' AND ended_at>=@dayStart", new { dayStart });
+
+    public Task<long> StuckCountAsync(DateTime limit) =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_assignments " +
+            "WHERE status IN ('accepted','at_store','picked','on_the_way','reached') AND status_at<@limit", new { limit });
+
+    public Task<IEnumerable<OrderStatusLogModel>> StatusLogsAsync(Guid subOrderId) =>
+        db.QueryAsync<OrderStatusLogModel>(
+            "SELECT * FROM order_status_logs WHERE sub_order_id=@subOrderId ORDER BY created_at", new { subOrderId });
+}
+
+public class TryRow
+{
+    public string Status { get; set; } = "";
+    public string RejectReason { get; set; } = "";
+    public string FailReason { get; set; } = "";
+    public string Partner { get; set; } = "";
+}
+
+public class StatusCountRow
+{
+    public string Status { get; set; } = "";
+    public long Count { get; set; }
 }
