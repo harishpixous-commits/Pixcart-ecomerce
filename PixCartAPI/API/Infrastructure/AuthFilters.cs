@@ -59,7 +59,14 @@ public class RequireCsrfHeaderAttribute : Attribute, IAuthorizationFilter
 {
     public void OnAuthorization(AuthorizationFilterContext context)
     {
-        if (string.IsNullOrEmpty(context.HttpContext.Request.Headers["X-Requested-With"]))
-            throw new AppException("Missing X-Requested-With header", "csrf", 403);
+        Check(context.HttpContext);
+    }
+
+    /// <summary>The same check, for endpoints that must first resolve the signed-in user (401 before 403).</summary>
+    public static void Check(HttpContext ctx)
+    {
+        // same rule and error as the reference version: the header must be "pixcart"
+        if (ctx.Request.Headers["X-Requested-With"].ToString() != "pixcart")
+            throw new ForbiddenException("Missing request header");
     }
 }

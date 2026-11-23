@@ -34,8 +34,42 @@ public class AppSettings
     public string RazorpayKeySecret { get; set; } = "";
     public string RazorpayWebhookSecret { get; set; } = "";
     public string RazorpayApiBase { get; set; } = "https://api.razorpay.com/v1";
+    /// <summary>Admin → Integrations switch; off hides online payment at checkout (reference: config.py razorpay_checkout).</summary>
+    public bool RazorpayCheckout { get; set; } = true;
     public string RazorpayCheckoutUrl { get; set; } = "https://checkout.razorpay.com/v1/checkout.js";
     public int PaymentWindowMinutes { get; set; } = 30;
+
+    // Further provider settings (Admin → Integrations overrides each one; see IIntegrationBAL)
+    public bool RazorpayCheckout { get; set; } = true;
+    /// <summary>"manual" or "razorpayx".</summary>
+    public string PayoutMode { get; set; } = "manual";
+    public string RazorpayxAccountNumber { get; set; } = "";
+    public string RazorpayxWebhookSecret { get; set; } = "";
+    public string Msg91DltEntityId { get; set; } = "";
+    public string Msg91ApiBase { get; set; } = "https://control.msg91.com";
+    public string WhatsappPhoneNumberId { get; set; } = "";
+    public string WhatsappToken { get; set; } = "";
+    public string WhatsappLanguage { get; set; } = "en";
+    public string WhatsappApiVersion { get; set; } = "v21.0";
+    public string WhatsappApiBase { get; set; } = "https://graph.facebook.com";
+    public string FirebaseProjectId { get; set; } = "";
+    public string FirebaseClientEmail { get; set; } = "";
+    public string FirebasePrivateKey { get; set; } = "";
+    public string FirebaseApiKey { get; set; } = "";
+    public string FirebaseSenderId { get; set; } = "";
+    public string FirebaseAppId { get; set; } = "";
+    public string FirebaseVapidKey { get; set; } = "";
+    public string FirebaseOauthUrl { get; set; } = "https://oauth2.googleapis.com/token";
+    public string FirebaseFcmBase { get; set; } = "https://fcm.googleapis.com";
+    /// <summary>"manual" or "shiprocket".</summary>
+    public string ShippingProvider { get; set; } = "manual";
+    public string ShiprocketEmail { get; set; } = "";
+    public string ShiprocketPassword { get; set; } = "";
+    public string ShiprocketWebhookToken { get; set; } = "";
+    public string ShiprocketApiBase { get; set; } = "https://apiv2.shiprocket.in/v1/external";
+    public string AiProvider { get; set; } = "anthropic";
+    public string SentryDsn { get; set; } = "";
+    public double SentryTracesSampleRate { get; set; } = 0.05;
 
     public string SmtpHost { get; set; } = "";
     public int SmtpPort { get; set; } = 587;

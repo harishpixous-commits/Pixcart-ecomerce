@@ -8,10 +8,17 @@ namespace Utils;
 /// <summary>SMS through MSG91 (DLT-registered templates), or the log in development.</summary>
 public class SMSHelper(IHttpClientFactory http, ILogger<SMSHelper> log) : ISMSHelper
 {
+    /// <summary>
+    /// Development and test outbox: the last code sent to each number with the "console" provider, so local runs and
+    /// automated tests can read it (the reference version's sms.DEV_OUTBOX). Never filled with the msg91 provider.
+    /// </summary>
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> DevOutbox = new();
+
     public async Task SendOtpAsync(SMSModel sms, SmsConfig config, CancellationToken ct = default)
     {
         if (config.Provider != "msg91")
         {
+            DevOutbox[sms.Phone] = sms.OtpCode ?? "";
             log.LogWarning("DEV OTP for {Phone}: {Code}", sms.Phone, sms.OtpCode);
             return;
         }
