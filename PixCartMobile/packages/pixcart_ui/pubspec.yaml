@@ -1,0 +1,41 @@
+name: pixcart_ui
+description: The PixCart website's UI kit as Flutter widgets (buttons, fields, pills, prices, skeletons, sheets, toasts).
+publish_to: none
+version: 1.0.0
+resolution: workspace
+
+environment:
+  sdk: ^3.14.0
+  flutter: ">=3.50.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.5.0
+  lucide_icons: ^0.257.0
+  pixcart_core: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  # The website's fonts (tools/build_fonts.py makes them from @fontsource): Baloo 2 for headings, Mukta for text.
+  fonts:
+    - family: Mukta
+      fonts:
+        - asset: fonts/Mukta-400.ttf
+          weight: 400
+        - asset: fonts/Mukta-500.ttf
+          weight: 500
+        - asset: fonts/Mukta-600.ttf
+          weight: 600
+    - family: Baloo2
+      fonts:
+        - asset: fonts/Baloo2-500.ttf
+          weight: 500
+        - asset: fonts/Baloo2-600.ttf
+          weight: 600
+        - asset: fonts/Baloo2-700.ttf
+          weight: 700

@@ -1,0 +1,16 @@
+name: pixcart_mobile
+description: PixCart native apps (customer, delivery partner, seller) and their shared packages.
+publish_to: none
+
+environment:
+  sdk: ^3.14.0
+
+workspace:
+  - packages/pixcart_core
+  - packages/pixcart_ui
+  - apps/customer_app
+  - apps/partner_app
+  - apps/seller_app
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
