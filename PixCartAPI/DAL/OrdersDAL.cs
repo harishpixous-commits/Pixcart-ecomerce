@@ -271,6 +271,69 @@ public class OrdersDAL(IMySqlDapperHelper db)
         db.QueryFirstOrDefaultAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE id = @subId", new { subId });
 
     /// <summary>The status move with its timestamp (reference: the sub-order update in transition()).</summary>
+    /// <summary>The seller's document counter row, locked (reference: invoices.next_number).</summary>
+    public Task<int?> DocCounterForUpdateAsync(Guid sellerId, string docType, string fy, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<int?>(
+            "SELECT last_number FROM document_counters WHERE seller_id = @sellerId AND doc_type = @docType AND fiscal_year = @fy FOR UPDATE",
+            new { sellerId, docType, fy });
+
+    public Task<int> InsertDocCounterAsync(Guid sellerId, string docType, string fy, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "INSERT INTO document_counters (seller_id, doc_type, fiscal_year, last_number) VALUES (@sellerId, @docType, @fy, 1)",
+            new { sellerId, docType, fy });
+
+    public Task<int> BumpDocCounterAsync(Guid sellerId, string docType, string fy, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE document_counters SET last_number = last_number + 1 WHERE seller_id = @sellerId AND doc_type = @docType AND fiscal_year = @fy",
+            new { sellerId, docType, fy });
+
+    public Task<int> SetSubInvoiceAsync(Guid subId, string number, DateTime at, IUnitOfWork uow) =>
+        uow.ExecuteAsync("UPDATE sub_orders SET invoice_number = @number, invoice_date = @at WHERE id = @subId",
+            new { subId, number, at });
+
+    /// <summary>The order's first package still alive, by number (reference: collect_amount).</summary>
+    public Task<Guid?> FirstLiveSubIdAsync(Guid orderId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<Guid?>(
+            "SELECT id FROM sub_orders WHERE order_id = @orderId AND status <> 'cancelled' ORDER BY number LIMIT 1",
+            new { orderId });
+
+    public async Task<Guid?> FirstLiveSubIdAsync(Guid orderId)
+    {
+        var rows = await db.QueryAsync<Guid>(
+            "SELECT id FROM sub_orders WHERE order_id = @orderId AND status <> 'cancelled' ORDER BY number LIMIT 1",
+            new { orderId });
+        return rows.Cast<Guid?>().FirstOrDefault();
+    }
+
+    /// <summary>The longest return window saved on the package's lines (reference: transition delivered).</summary>
+    public Task<int> MaxReturnWindowAsync(Guid subId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<int>(
+            "SELECT COALESCE(MAX(return_window_days), 0) FROM order_items WHERE sub_order_id = @subId", new { subId });
+
+    public Task<bool> LedgerHasAsync(Guid subId, string kind, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS(SELECT 1 FROM seller_ledger WHERE sub_order_id = @subId AND kind = @kind)", new { subId, kind });
+
+    /// <summary>One seller_ledger row (reference: ledger._entry).</summary>
+    public Task<int> InsertLedgerAsync(Guid sellerId, Guid subId, string kind, long amount, string description, DateTime availableAt, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            INSERT INTO seller_ledger (id, seller_id, sub_order_id, return_id, kind, amount, description, available_at, payout_id, created_at)
+            VALUES (@id, @sellerId, @subId, NULL, @kind, @amount, @description, @availableAt, NULL, UTC_TIMESTAMP(6))
+            """,
+            new
+            {
+                id = Guid.NewGuid().ToString(), sellerId, subId, kind, amount,
+                description = description.Length > 200 ? description[..200] : description, availableAt,
+            });
+
+    public async Task<IReadOnlyList<OrderEventModel>> EventsForSubAsync(Guid subId)
+    {
+        var rows = await db.QueryAsync<OrderEventModel>(
+            "SELECT * FROM order_events WHERE sub_order_id = @subId ORDER BY created_at", new { subId });
+        return rows.ToList();
+    }
+
     public Task<int> UpdateSubTransitionAsync(SubOrderModel s, IUnitOfWork uow) =>
         uow.ExecuteAsync(
             """

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
 using API.Infrastructure;
 using BAL.Interface;
@@ -45,9 +46,24 @@ public class SellerOrdersController(IOrdersBAL orders, ICurrentUser current) : C
     [HttpPost("orders/{subId:guid}/pack")]
     public Task<JsonObject> Pack(Guid subId) => Act(subId, "packed");
 
-    private async Task<JsonObject> Act(Guid subId, string dst)
+    /// <summary>Hand it to a courier (reference: POST /api/seller/orders/{sub_id}/ship).</summary>
+    [HttpPost("orders/{subId:guid}/ship")]
+    public Task<JsonObject> Ship(Guid subId, ShipIn body) =>
+        Act(subId, "shipped", $"{body.CourierName.Trim()} {body.TrackingNumber.Trim()}", body);
+
+    /// <summary>Mark it delivered (reference: POST /api/seller/orders/{sub_id}/deliver).</summary>
+    [HttpPost("orders/{subId:guid}/deliver")]
+    public Task<JsonObject> Deliver(Guid subId) => Act(subId, "delivered", "Marked delivered by seller");
+
+    private async Task<JsonObject> Act(Guid subId, string dst, string note = "", ShipIn? ship = null)
     {
         var user = await current.RequireAsync();
-        return await orders.SellerActAsync(user, await orders.RequireSellerAsync(user, approved: true), subId, dst);
+        return await orders.SellerActAsync(user, await orders.RequireSellerAsync(user, approved: true), subId, dst, note,
+            ship?.CourierName.Trim(), ship?.TrackingNumber.Trim(), ship is null ? null : ship.TrackingUrl ?? "");
     }
+
+    public sealed record ShipIn(
+        [param: Required, StringLength(60, MinimumLength = 2)] string CourierName = "",
+        [param: Required, StringLength(60, MinimumLength = 4), RegularExpression(@"^[A-Za-z0-9\-]+$")] string TrackingNumber = "",
+        [param: Url, StringLength(300)] string? TrackingUrl = null);
 }

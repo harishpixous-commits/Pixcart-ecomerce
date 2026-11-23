@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using BAL.Interface;
@@ -1281,22 +1282,68 @@ public class OrdersBAL(
     public async Task<JsonObject> SellerGetAsync(SellerModel seller, Guid subId)
     {
         var (s, o) = await OwnSubAsync(seller.Id, subId, null);
-        return SellerSubJson(s, o, await orders.ItemsAsync([s.Id]), full: true);
+        var data = SellerSubJson(s, o, await orders.ItemsAsync([s.Id]), full: true);
+        data["timeline"] = new JsonArray((await orders.EventsForSubAsync(s.Id)).Select(e => (JsonNode)new JsonObject
+        {
+            ["from"] = e.FromStatus, ["to"] = e.ToStatus, ["actor"] = e.Actor, ["note"] = e.Note,
+            ["at"] = e.CreatedAt.ToString("o"),
+        }).ToArray());
+        data["cod_to_collect"] = await CodToCollectAsync(s, o);
+        return data;
     }
 
-    /// <summary>The package's next step (reference: transition()). confirm/pack only in this slice; ship and deliver
-    /// arrive with their invoice/payout companions. The fleet checks come with the delivery module.</summary>
+    /// <summary>The package's next step (reference: transition()). Shipped assigns the seller's invoice number and
+    /// tells the customer; delivered opens the settlement window, posts the ledger and issues the marketplace's fee
+    /// invoice. The fleet checks come with the delivery module.</summary>
     public async Task TransitionAsync(SubOrderModel sub, string dst, string actor, string note, IUnitOfWork uow)
     {
         if (!CanTransition(sub.Status, dst))
             throw new AppException($"Cannot move this order from '{sub.Status}' to '{dst}'", "illegal_transition", 409);
-        if (dst is not ("confirmed" or "packed"))
-            throw new AppException($"Moving this order to '{dst}' is not available yet", "illegal_transition", 409);
         var src = sub.Status;
         var now = DateTimeFunctions.UtcNow();
         sub.Status = dst;
         if (dst == "confirmed") sub.ConfirmedAt = now;
         else if (dst == "packed") sub.PackedAt = now;
+        else if (dst == "shipped")
+        {
+            sub.ShippedAt = now;
+            await AssignInvoiceAsync(sub, now, uow);
+            var shippedOrder = await orders.GetOrderAsync(sub.OrderId, uow) ?? throw new NotFoundException("Order");
+            var shipper = await catalog.GetSellerAsync(sub.SellerId);
+            await notify.NotifyUserAsync(shippedOrder.UserId, "order_shipped",
+                new Dictionary<string, string>
+                {
+                    ["order_number"] = shippedOrder.Number, ["item"] = await FirstTitleAsync(sub, uow),
+                    ["courier"] = sub.CourierName.Length > 0 ? sub.CourierName : "courier",
+                    ["awb"] = sub.TrackingNumber, ["seller"] = shipper?.DisplayName ?? "",
+                },
+                $"/orders/{shippedOrder.Id}");
+        }
+        else if (dst == "delivered")
+        {
+            sub.DeliveredAt = now;
+            // the return windows saved on the items when the order was placed (a later edit to the listing changes
+            // nothing), and the period in which damaged, defective or wrong items are taken back whatever it says
+            var window = Math.Max(await orders.MaxReturnWindowAsync(sub.Id, uow),
+                (await platform.GetAsync()).Int("defect_return_days"));
+            sub.SettlementDueAt = now.AddDays(window);
+            sub.SettlementStatus = "pending";
+            await orders.UpdateSubTransitionAsync(sub, uow);
+            var deliveredOrder = await orders.GetOrderAsync(sub.OrderId, uow) ?? throw new NotFoundException("Order");
+            await SyncCodStatusAsync(deliveredOrder, uow);
+            // cash on delivery taken by the seller's own courier is already with the seller: it comes off the payout
+            var held = deliveredOrder.PaymentMethod == "cod" && sub.ShippingProvider == "manual"
+                ? await CollectAmountAsync(sub, deliveredOrder, uow) : 0;
+            await PostDeliveryAsync(sub, held, uow);
+            await IssueFeeInvoiceAsync(deliveredOrder, uow);
+            await notify.NotifyUserAsync(deliveredOrder.UserId, "order_delivered",
+                new Dictionary<string, string>
+                {
+                    ["order_number"] = deliveredOrder.Number, ["item"] = await FirstTitleAsync(sub, uow),
+                    ["return_by"] = sub.SettlementDueAt.Value.AddMinutes(330).ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
+                },
+                $"/orders/{deliveredOrder.Id}");
+        }
         await orders.UpdateSubTransitionAsync(sub, uow);
         await orders.InsertEventAsync(new OrderEventModel
         {
@@ -1305,11 +1352,87 @@ public class OrdersBAL(
         }, uow);
     }
 
-    /// <summary>confirm / pack (reference: _act with dst confirmed|packed).</summary>
-    public async Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "")
+    /// <summary>What the customer pays when this package is handed over, 0 for prepaid (reference: collect_amount).
+    /// The seller's part is the package total less the discount the marketplace funded; the marketplace's fees and
+    /// the tip ride with the first live package (lowest number), so they are collected once.</summary>
+    private async Task<long> CollectAmountAsync(SubOrderModel sub, OrderModel order, IUnitOfWork uow)
+    {
+        if (order.PaymentMethod != "cod") return 0;
+        var amount = sub.Total - sub.PlatformDiscount;
+        if (order.FeesTotal != 0 || order.TipPaise != 0)
+        {
+            var first = await orders.FirstLiveSubIdAsync(order.Id, uow);
+            if (first == sub.Id) amount += order.FeesTotal + order.TipPaise;
+        }
+        return amount;
+    }
+
+    /// <summary>The courier-facing collection figure for the detail payload (reference: get_order cod_to_collect).</summary>
+    private async Task<long> CodToCollectAsync(SubOrderModel s, OrderModel o)
+    {
+        if (s.Status is "cancelled" or "pending_payment") return 0;
+        if (o.PaymentMethod != "cod") return 0;
+        var amount = s.Total - s.PlatformDiscount;
+        if ((o.FeesTotal != 0 || o.TipPaise != 0) && await orders.FirstLiveSubIdAsync(o.Id) == s.Id)
+            amount += o.FeesTotal + o.TipPaise;
+        return amount;
+    }
+
+    /// <summary>Gives the package its seller invoice number, once (reference: invoices.assign_invoice).</summary>
+    private async Task AssignInvoiceAsync(SubOrderModel sub, DateTime now, IUnitOfWork uow)
+    {
+        if (sub.InvoiceNumber.Length > 0) return;
+        var fy = FiscalYear(now);
+        var n = await orders.DocCounterForUpdateAsync(sub.SellerId, "INV", fy, uow);
+        if (n is null) { await orders.InsertDocCounterAsync(sub.SellerId, "INV", fy, uow); n = 1; }
+        else { await orders.BumpDocCounterAsync(sub.SellerId, "INV", fy, uow); n += 1; }
+        var seller = await catalog.GetSellerAsync(sub.SellerId);
+        var prefix = seller is not null && seller.InvoicePrefix.Length > 0 ? seller.InvoicePrefix : DefaultPrefix(seller?.DisplayName ?? "");
+        if (prefix.Length > 4) prefix = prefix[..4];
+        sub.InvoiceNumber = $"{prefix}/{fy}/{n.Value:D6}";
+        if (sub.InvoiceNumber.Length > 16) sub.InvoiceNumber = sub.InvoiceNumber[..16];
+        sub.InvoiceDate = now;
+        await orders.SetSubInvoiceAsync(sub.Id, sub.InvoiceNumber, now, uow);
+    }
+
+    private static string DefaultPrefix(string displayName)
+    {
+        var letters = new string(displayName.ToUpperInvariant().Where(c => c is >= 'A' and <= 'Z').ToArray());
+        var p = letters.Length >= 3 ? letters[..3] : letters.Length > 0 ? letters.PadRight(3, 'X') : "INV";
+        return p;
+    }
+
+    /// <summary>Posts the sale and its deductions, available after the return window; a no-op when already posted
+    /// (reference: ledger.post_delivery). cod_held_by_seller: cash the seller's own courier collected.</summary>
+    private async Task PostDeliveryAsync(SubOrderModel sub, long codHeldBySeller, IUnitOfWork uow)
+    {
+        if (await orders.LedgerHasAsync(sub.Id, "sale", uow)) return;
+        var due = sub.SettlementDueAt ?? DateTimeFunctions.UtcNow();
+        foreach (var (kind, amount) in new (string Kind, long Amount)[]
+        {
+            ("sale", sub.Total), ("commission", -sub.CommissionPaise), ("commission_gst", -sub.CommissionGstPaise),
+            ("tcs", -sub.TcsPaise), ("tds", -sub.TdsPaise),
+        })
+            if (amount != 0)
+                await orders.InsertLedgerAsync(sub.SellerId, sub.Id, kind, amount,
+                    string.Join(' ', kind.Split('_').Select(w => char.ToUpperInvariant(w[0]) + w[1..])) + " " + sub.Number, due, uow);
+        if (codHeldBySeller > 0)
+            await orders.InsertLedgerAsync(sub.SellerId, sub.Id, "cod_collected", -codHeldBySeller,
+                $"Cash collected by your courier {sub.Number}", due, uow);
+    }
+
+    /// <summary>confirm / pack / ship / deliver (reference: _act). Ship first records the courier on the package.</summary>
+    public async Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "",
+        string? courierName = null, string? trackingNumber = null, string? trackingUrl = null)
     {
         await using var uow = await db.BeginAsync();
         var (s, o) = await OwnSubAsync(seller.Id, subId, uow);
+        if (dst == "shipped")
+        {
+            s.CourierName = courierName ?? "";
+            s.TrackingNumber = trackingNumber ?? "";
+            s.TrackingUrl = trackingUrl ?? "";
+        }
         await TransitionAsync(s, dst, "seller", note, uow);
         await audit.InsertAsync(new AuditLogModel
         {

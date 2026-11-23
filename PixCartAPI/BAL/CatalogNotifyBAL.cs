@@ -25,6 +25,8 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["order_cancelled"] = ("Order {{order_number}} cancelled", "Your order was cancelled. {{refund_note}}"),
         ["seller_order_cancelled"] = ("Order {{order_number}} cancelled", "{{items}} — the customer cancelled {{reason}}."),
         ["refund_processed"] = ("Refund of {{amount}} processed", "The refund for order {{order_number}} is on its way to your bank."),
+        ["order_shipped"] = ("Package shipped", "{{item}} has shipped with {{courier}}, tracking {{awb}}."),
+        ["order_delivered"] = ("Delivered", "{{item}} was delivered. Tell others what you think by writing a review."),
     };
 
     [GeneratedRegex(@"\{\{\s*(\w+)\s*\}\}")]
