@@ -177,4 +177,75 @@ public class OrdersDAL(IMySqlDapperHelper db)
                 new { userId, customerId })
             : uow.ExecuteAsync("UPDATE users SET razorpay_customer_id = @customerId, updated_at = UTC_TIMESTAMP() WHERE id = @userId",
                 new { userId, customerId });
+
+    // ------------------------------------------------------------------ payments
+
+    /// <summary>A payment row by its Razorpay order id, locked (reference: verify_payment).</summary>
+    public Task<PaymentModel?> PaymentByProviderOrderForUpdateAsync(string providerOrderId, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<PaymentModel>(
+            "SELECT * FROM payments WHERE provider_order_id = @providerOrderId FOR UPDATE", new { providerOrderId });
+
+    /// <summary>The order's latest payment, locked (reference: payment_status).</summary>
+    public Task<PaymentModel?> LatestPaymentForUpdateAsync(Guid orderId, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<PaymentModel>(
+            "SELECT * FROM payments WHERE order_id = @orderId ORDER BY created_at DESC LIMIT 1 FOR UPDATE", new { orderId });
+
+    /// <summary>The order row, locked (reference: mark_paid's order lock).</summary>
+    public Task<OrderModel?> OrderForUpdateAsync(Guid id, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<OrderModel>("SELECT * FROM orders WHERE id = @id FOR UPDATE", new { id });
+
+    public Task<PaymentModel?> PaymentForUpdateAsync(Guid id, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<PaymentModel>("SELECT * FROM payments WHERE id = @id FOR UPDATE", new { id });
+
+    /// <summary>A refund already recorded for this gateway payment (reference: the duplicate check in mark_paid).</summary>
+    public Task<bool> RefundExistsForProviderPaymentAsync(string providerPaymentId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<int>(
+            "SELECT COUNT(1) FROM refunds WHERE provider_payment_id = @providerPaymentId", new { providerPaymentId })
+        .ContinueWith(t => t.Result > 0);
+
+    public Task<int> UpdatePaymentAsync(PaymentModel p, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE payments SET status = @Status, provider_payment_id = @ProviderPaymentId, method = @Method,
+                error = @Error, updated_at = UTC_TIMESTAMP()
+            WHERE id = @Id
+            """, p);
+
+    /// <summary>The payment-state fields of the order (reference: the order updates in mark_paid).</summary>
+    public Task<int> UpdateOrderPaymentStateAsync(OrderModel o, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE orders SET status = @Status, payment_status = @PaymentStatus, placed_at = @PlacedAt,
+                refunded_total = @RefundedTotal, updated_at = UTC_TIMESTAMP()
+            WHERE id = @Id
+            """, o);
+
+    /// <summary>All packages of the order (reference: the sub-order update in mark_paid).</summary>
+    public async Task<IReadOnlyList<SubOrderModel>> SubOrdersForUpdateAsync(Guid orderId, IUnitOfWork uow)
+    {
+        var rows = await uow.QueryAsync<SubOrderModel>(
+            "SELECT * FROM sub_orders WHERE order_id = @orderId ORDER BY number FOR UPDATE", new { orderId });
+        return rows.ToList();
+    }
+
+    public Task<int> SetSubStatusAsync(Guid subId, string status, IUnitOfWork uow) =>
+        uow.ExecuteAsync("UPDATE sub_orders SET status = @status, updated_at = UTC_TIMESTAMP() WHERE id = @subId",
+            new { subId, status });
+
+    public Task<int> InsertRefundAsync(RefundModel r, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            INSERT INTO refunds (id, order_id, payment_id, provider_payment_id, sub_order_id, amount_paise, status,
+                reason, attempts, last_error, created_at, updated_at)
+            VALUES (@Id, @OrderId, @PaymentId, @ProviderPaymentId, @SubOrderId, @AmountPaise, @Status,
+                @Reason, @Attempts, @LastError, @CreatedAt, @UpdatedAt)
+            """, r);
+
+    /// <summary>Refunds waiting to go to the gateway (reference: the run_refunds lookup).</summary>
+    public async Task<IReadOnlyList<Guid>> PendingRefundIdsAsync(Guid paymentId)
+    {
+        var rows = await db.QueryAsync<Guid>(
+            "SELECT id FROM refunds WHERE payment_id = @paymentId AND status = 'pending'", new { paymentId });
+        return rows.ToList();
+    }
 }

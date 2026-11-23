@@ -31,6 +31,7 @@ public class OrdersBAL(
     IRazorpayBAL razorpay,
     IIntegrationBAL integrations,
     ICatalogNotifyBAL notify,
+    IRateLimitBAL rateLimit,
     ISiteBAL site,
     SettingsDAL settings,
     Utils.AppSettings app,
@@ -652,5 +653,221 @@ public class OrdersBAL(
             data["customer_id"] = user.RazorpayCustomerId ?? "";
         }
         return data;
+    }
+
+    // ------------------------------------------------------------------ payment
+
+    public long RefundCharge(PaymentModel payment, long paise)
+    {
+        if (payment.ChargeAmount is null || payment.Currency is "" or "INR" || payment.AmountPaise == 0) return paise;
+        if (paise >= payment.AmountPaise) return payment.ChargeAmount.Value;
+        return Math.Max(1, (paise * payment.ChargeAmount.Value + payment.AmountPaise / 2) / payment.AmountPaise);
+    }
+
+    public async Task<string> MarkPaidAsync(PaymentModel payment, string providerPaymentId, string method, long amount, IUnitOfWork uow)
+    {
+        var order = await orders.OrderForUpdateAsync(payment.OrderId, uow)
+            ?? throw new NotFoundException("Order");
+        payment = await orders.PaymentForUpdateAsync(payment.Id, uow) ?? payment;
+        if (payment.Status == "captured" && payment.ProviderPaymentId == providerPaymentId) return "already";
+        if (await orders.RefundExistsForProviderPaymentAsync(providerPaymentId, uow))
+            return "already"; // a duplicate payment already being refunded
+        if (amount != (payment.ChargeAmount ?? payment.AmountPaise))
+            throw new AppException("Payment amount does not match the order", "amount_mismatch");
+        var now = DateTime.UtcNow;
+        if (payment.Status == "captured")
+        {
+            // A second successful payment for the same order (two tabs, a retried UPI request): refund it in full.
+            await orders.InsertRefundAsync(new RefundModel
+            {
+                Id = Guid.NewGuid(), OrderId = order.Id, PaymentId = payment.Id, ProviderPaymentId = providerPaymentId,
+                AmountPaise = payment.AmountPaise, Status = "pending", Reason = "Duplicate payment",
+                CreatedAt = now, UpdatedAt = now,
+            }, uow);
+            return "refund";
+        }
+        payment.Status = "captured";
+        payment.ProviderPaymentId = providerPaymentId;
+        payment.Method = method.Length > 20 ? method[..20] : method;
+        await orders.UpdatePaymentAsync(payment, uow);
+        if (order.Status == "pending_payment")
+        {
+            order.Status = "placed";
+            order.PaymentStatus = "paid";
+            order.PlacedAt = now;
+            await orders.UpdateOrderPaymentStateAsync(order, uow);
+            foreach (var sub in await orders.SubOrdersForUpdateAsync(order.Id, uow))
+            {
+                if (sub.Status != "pending_payment") continue;
+                await orders.SetSubStatusAsync(sub.Id, "placed", uow);
+                await AddEventAsync(order.Id, sub.Id, "pending_payment", "placed", "payment", $"paid via {method}", uow);
+            }
+            return "paid";
+        }
+        // Paid after the order was cancelled (payment window expired): refund in full.
+        order.PaymentStatus = "refunded";
+        order.RefundedTotal += payment.AmountPaise;
+        await orders.UpdateOrderPaymentStateAsync(order, uow);
+        await orders.InsertRefundAsync(new RefundModel
+        {
+            Id = Guid.NewGuid(), OrderId = order.Id, PaymentId = payment.Id, ProviderPaymentId = providerPaymentId,
+            AmountPaise = payment.AmountPaise, Status = "pending", Reason = "Payment received after order was cancelled",
+            CreatedAt = now, UpdatedAt = now,
+        }, uow);
+        return "refund";
+    }
+
+    /// <summary>Asks Razorpay for the payment's real state (never trust the browser) and records it (reference:
+    /// confirm_with_gateway).</summary>
+    public async Task<string> ConfirmWithGatewayAsync(PaymentModel payment, string providerPaymentId, IUnitOfWork uow)
+    {
+        var data = await razorpay.FetchPaymentAsync(providerPaymentId);
+        if (data["order_id"]?.GetValue<string>() != payment.ProviderOrderId)
+            throw new AppException("Payment does not belong to this order", "payment_mismatch");
+        var status = data["status"]?.GetValue<string>();
+        if (status == "authorized")
+        {
+            data = await razorpay.CapturePaymentAsync(providerPaymentId, payment.ChargeAmount ?? payment.AmountPaise,
+                payment.Currency.Length > 0 ? payment.Currency : "INR");
+            status = data["status"]?.GetValue<string>();
+        }
+        if (status != "captured")
+        {
+            if (status == "failed") payment.Status = "failed";
+            var errText = data["error_description"]?.GetValue<string>() ?? status ?? "";
+            payment.Error = errText.Length > 500 ? errText[..500] : errText;
+            await orders.UpdatePaymentAsync(payment, uow);
+            return "not_captured";
+        }
+        return await MarkPaidAsync(payment, providerPaymentId, data["method"]?.GetValue<string>() ?? "",
+            data["amount"]?.GetValue<long>() ?? 0, uow);
+    }
+
+    /// <summary>Asks Razorpay whether this order was paid, from Razorpay's own records (reference:
+    /// check_with_gateway).</summary>
+    public async Task<JsonObject> CheckWithGatewayAsync(PaymentModel payment, IUnitOfWork uow)
+    {
+        if (payment.Status == "captured")
+            return new JsonObject
+            {
+                ["result"] = "already_paid", ["attempts"] = new JsonArray(),
+                ["payment"] = new JsonObject { ["id"] = payment.ProviderPaymentId, ["method"] = payment.Method, ["status"] = "captured" },
+                ["waiting"] = false, ["reason"] = "",
+            };
+        var attempts = (await razorpay.OrderPaymentsAsync(payment.ProviderOrderId))
+            .OrderByDescending(a => a["created_at"]?.GetValue<long>() ?? 0).ToList();
+        var seen = new JsonArray(attempts.Select(a => (JsonNode?)new JsonObject
+        {
+            ["id"] = a["id"]?.GetValue<string>(), ["status"] = a["status"]?.GetValue<string>(),
+            ["method"] = a["method"]?.GetValue<string>() ?? "", ["error"] = a["error_description"]?.GetValue<string>() ?? "",
+        }).ToArray());
+        var done = attempts.FirstOrDefault(a => a["status"]?.GetValue<string>() is "captured" or "authorized");
+        if (done is null)
+        {
+            var failed = attempts.FirstOrDefault(a => a["status"]?.GetValue<string>() == "failed");
+            var reason = failed is not null
+                ? (failed["error_description"]?.GetValue<string>() is { } f && f.Length > 0 ? f : "The payment did not go through")
+                : "";
+            if (failed is not null && payment.Status != "captured")
+            {
+                payment.Error = reason.Length > 500 ? reason[..500] : reason;
+                await orders.UpdatePaymentAsync(payment, uow);
+            }
+            return new JsonObject
+            {
+                ["result"] = "not_paid", ["attempts"] = seen,
+                ["waiting"] = attempts.Any(a => a["status"]?.GetValue<string>() == "created"), ["reason"] = reason,
+            };
+        }
+        var result = await ConfirmWithGatewayAsync(payment, done["id"]!.GetValue<string>(), uow);
+        return new JsonObject
+        {
+            ["result"] = result, ["attempts"] = seen,
+            ["payment"] = new JsonObject { ["id"] = done["id"]?.GetValue<string>(), ["method"] = done["method"]?.GetValue<string>() ?? "", ["status"] = "captured" },
+            ["waiting"] = false, ["reason"] = "",
+        };
+    }
+
+    public async Task<(string Result, OrderModel Order)> VerifyPaymentAsync(
+        UserModel user, string razorpayOrderId, string razorpayPaymentId, string razorpaySignature)
+    {
+        await using var uow = await db.BeginAsync();
+        var payment = await orders.PaymentByProviderOrderForUpdateAsync(razorpayOrderId, uow)
+            ?? throw new NotFoundException("Payment");
+        var order = await orders.GetOrderAsync(payment.OrderId, uow) ?? throw new NotFoundException("Order");
+        if (order.UserId != user.Id) throw new NotFoundException("Order");
+        if (!await razorpay.VerifyPaymentSignatureAsync(razorpayOrderId, razorpayPaymentId, razorpaySignature))
+            throw new AppException("Payment verification failed", "bad_signature");
+        string result;
+        try
+        {
+            result = await ConfirmWithGatewayAsync(payment, razorpayPaymentId, uow);
+        }
+        catch (RazorpayBAL.GatewayException exc)
+        {
+            // The webhook (or the expiry job's gateway check) will still record the payment.
+            throw new AppException($"We could not confirm the payment yet: {exc.Message}", "gateway_error", 502);
+        }
+        await uow.CommitAsync();
+        if (result == "refund")
+        {
+            // Sending the duplicate-payment refunds to the gateway lands with the refunds runner; the rows are queued.
+            _ = await orders.PendingRefundIdsAsync(payment.Id);
+        }
+        if (result == "not_captured")
+            throw new AppException("The payment was not completed. You can try again.", "payment_not_captured");
+        if (result == "paid")
+            await AnnouncePlacedAsync(order, user, await orders.SubOrdersAsync(order.Id));
+        return (result, (await orders.GetOrderAsync(order.Id))!);
+    }
+
+    public async Task<JsonObject> PaymentStatusAsync(UserModel user, Guid orderId)
+    {
+        var outp = new JsonObject { ["status"] = "not_paid", ["reason"] = "" };
+        var committed = false;
+        await using (var uow = await db.BeginAsync())
+        {
+            var o = await orders.GetOrderAsync(orderId, uow) ?? throw new NotFoundException("Order");
+            if (o.UserId != user.Id) throw new NotFoundException("Order");
+            var payment = await orders.LatestPaymentForUpdateAsync(o.Id, uow);
+            if (o.PaymentStatus is "paid" or "partially_refunded" or "refunded" || payment?.Status == "captured")
+            {
+                outp["status"] = "paid";
+            }
+            else if (payment is null || o.Status != "pending_payment")
+            {
+                outp["status"] = "not_paid";
+            }
+            else
+            {
+                await rateLimit.RateLimitAsync($"paycheck:{o.Id}", 80, 600, uow); // protects the Razorpay API quota
+                try
+                {
+                    var res = await CheckWithGatewayAsync(payment, uow);
+                    var result = res["result"]!.GetValue<string>();
+                    if (result is "paid" or "already" or "already_paid" or "refund")
+                    {
+                        outp["status"] = "paid";
+                        if (result == "refund") _ = await orders.PendingRefundIdsAsync(payment.Id);
+                    }
+                    else if (res["waiting"]!.GetValue<bool>()) outp["status"] = "waiting";
+                    else if (res["reason"]!.GetValue<string>() is { Length: > 0 } r)
+                    {
+                        outp["status"] = "failed";
+                        outp["reason"] = r;
+                    }
+                }
+                catch (RazorpayBAL.GatewayException) { outp["status"] = "unknown"; }
+                catch (AppException) { outp["status"] = "unknown"; }
+            }
+            await uow.CommitAsync();
+            committed = true;
+        }
+        _ = committed;
+        var fresh = (await orders.GetOrderAsync(orderId))!;
+        var detail = await DetailAsync(fresh);
+        detail["payment"] = await ShopperCheckoutAsync(fresh, await orders.LatestPaymentAsync(fresh.Id), user);
+        outp["order"] = detail;
+        return outp;
     }
 }

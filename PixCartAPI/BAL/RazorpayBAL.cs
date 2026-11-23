@@ -34,19 +34,67 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
 
     public Task<JsonObject> CreateCustomerAsync(string name, string contact, string email)
     {
+        var n = name.Length > 0 ? name : "Customer";
         var body = new JsonObject
         {
-            ["name"] = name.Length > 100 ? name[..100] : name,
-            ["contact"] = contact.Length > 15 ? contact[..15] : contact,
-            ["email"] = email.Length > 100 ? email[..100] : email,
+            ["name"] = n.Length > 50 ? n[..50] : n,
             ["fail_existing"] = "0",
         };
+        if (contact.Length > 0) body["contact"] = contact;
+        if (email.Length > 0) body["email"] = email;
         return CallAsync(HttpMethod.Post, "/customers", body);
     }
 
+    public Task<JsonObject> FetchPaymentAsync(string paymentId) =>
+        CallAsync(HttpMethod.Get, $"/payments/{paymentId}", null);
+
+    public async Task<IReadOnlyList<JsonObject>> OrderPaymentsAsync(string orderId)
+    {
+        var data = await CallAsync(HttpMethod.Get, $"/orders/{orderId}/payments", null);
+        return data["items"] is JsonArray items ? items.OfType<JsonObject>().ToList() : [];
+    }
+
+    public Task<JsonObject> CapturePaymentAsync(string paymentId, long amount, string currency = "INR") =>
+        CallAsync(HttpMethod.Post, $"/payments/{paymentId}/capture", new JsonObject { ["amount"] = amount, ["currency"] = currency });
+
+    public Task<JsonObject> RefundPaymentAsync(string paymentId, long amount, string receipt, IReadOnlyDictionary<string, string> notes) =>
+        CallAsync(HttpMethod.Post, $"/payments/{paymentId}/refund", new JsonObject
+        {
+            ["amount"] = amount,
+            ["speed"] = "normal",
+            ["receipt"] = receipt.Length > 40 ? receipt[..40] : receipt,
+            ["notes"] = new JsonObject(notes.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, kv.Value)).ToArray()),
+        });
+
+    public async Task<bool> VerifyPaymentSignatureAsync(string orderId, string paymentId, string signature)
+    {
+        var secret = (await integrations.GetAsync()).RazorpayKeySecret;
+        if (secret.Length == 0) return false;
+        var expected = HmacHex(secret, Encoding.UTF8.GetBytes($"{orderId}|{paymentId}"));
+        return CryptographicEquals(expected, signature ?? "");
+    }
+
+    public async Task<bool> VerifyWebhookSignatureAsync(byte[] body, string signature)
+    {
+        var secret = (await integrations.GetAsync()).RazorpayWebhookSecret;
+        if (secret.Length == 0) return false;
+        var expected = HmacHex(secret, body);
+        return CryptographicEquals(expected, signature ?? "");
+    }
+
+    private static string HmacHex(string secret, byte[] data)
+    {
+        using var h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(secret));
+        return Convert.ToHexString(h.ComputeHash(data)).ToLowerInvariant();
+    }
+
+    private static bool CryptographicEquals(string a, string b) =>
+        a.Length == b.Length && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(a), Encoding.ASCII.GetBytes(b));
+
     /// <summary>Reference: razorpay._call. Offline keys fail before any network; a 4xx/5xx carries the gateway's own
     /// description; a network failure reads as the gateway being unreachable.</summary>
-    private async Task<JsonObject> CallAsync(HttpMethod method, string path, JsonObject body)
+    private async Task<JsonObject> CallAsync(HttpMethod method, string path, JsonObject? body)
     {
         var cfg = await integrations.GetAsync();
         if (!cfg.RazorpayEnabled) throw new GatewayException("Online payments are not configured");
@@ -57,7 +105,8 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
             using var req = new HttpRequestMessage(method, app.RazorpayApiBase.TrimEnd('/') + path);
             req.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.RazorpayKeyId}:{cfg.RazorpayKeySecret}")));
-            req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            if (body is not null)
+                req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
             using var resp = await http.CreateClient().SendAsync(req, HttpCompletionOption.ResponseContentRead);
             status = (int)resp.StatusCode;
             text = await resp.Content.ReadAsStringAsync();

@@ -60,4 +60,25 @@ public class OrdersController(IOrdersBAL orders, IPlatformSettingsBAL platform, 
             ["payment"] = await orders.ShopperCheckoutAsync(order, payment, user),
         };
     }
+
+    /// <summary>Verify a Razorpay payment after the payment window returns (reference: POST
+    /// /api/payments/razorpay/verify).</summary>
+    [HttpPost("/api/payments/razorpay/verify")]
+    public async Task<JsonObject> VerifyPayment(VerifyIn body)
+    {
+        var user = await current.RequireAsync();
+        var (result, order) = await orders.VerifyPaymentAsync(
+            user, body.RazorpayOrderId, body.RazorpayPaymentId, body.RazorpaySignature);
+        return new JsonObject { ["result"] = result, ["order"] = await orders.DetailAsync(order) };
+    }
+
+    public sealed record VerifyIn(
+        [param: Required, MaxLength(40)] string RazorpayOrderId = "",
+        [param: Required, MaxLength(40)] string RazorpayPaymentId = "",
+        [param: Required, MaxLength(128)] string RazorpaySignature = "");
+
+    /// <summary>The shopper's "did my payment go through?" (reference: POST /api/orders/{order_id}/payment-status).</summary>
+    [HttpPost("{orderId:guid}/payment-status")]
+    public async Task<JsonObject> PaymentStatus(Guid orderId) =>
+        await orders.PaymentStatusAsync(await current.RequireAsync(), orderId);
 }
