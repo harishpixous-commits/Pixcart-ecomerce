@@ -82,6 +82,20 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
         return CryptographicEquals(expected, signature ?? "");
     }
 
+    /// <summary>Test safeguard client: never follows redirects, so a mock cannot bounce a request off-box.
+    /// Used only when ExternalProviderMode is "loopback".</summary>
+    private static readonly HttpClient LoopbackClient =
+        new(new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: true);
+
+    /// <summary>Only literal loopback IPs pass: no hostnames to resolve, nothing to trick with DNS or /etc/hosts.</summary>
+    private static bool IsLoopbackLiteral(string apiBase)
+    {
+        if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var uri)) return false;
+        if (uri.Host == "::1" || uri.Host == "[::1]") return true;
+        var parts = uri.Host.Split('.');
+        return parts.Length == 4 && parts[0] == "127" && parts.All(p => byte.TryParse(p, out _));
+    }
+
     private static string HmacHex(string secret, byte[] data)
     {
         using var h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(secret));
@@ -98,16 +112,23 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
     {
         var cfg = await integrations.GetAsync();
         if (!cfg.RazorpayEnabled) throw new GatewayException("Online payments are not configured");
+        var apiBase = app.RazorpayApiBase.TrimEnd('/');
+        var loopbackOnly = app.ExternalProviderMode == "loopback";
+        if (loopbackOnly && !IsLoopbackLiteral(apiBase))
+            // Fail closed: unparsable or non-loopback base means no request is ever attempted.
+            throw new GatewayException("External provider calls are restricted to a local mock in this environment");
         string text;
         int status;
         try
         {
-            using var req = new HttpRequestMessage(method, app.RazorpayApiBase.TrimEnd('/') + path);
+            using var req = new HttpRequestMessage(method, apiBase + path);
             req.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.RazorpayKeyId}:{cfg.RazorpayKeySecret}")));
             if (body is not null)
                 req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-            using var resp = await http.CreateClient().SendAsync(req, HttpCompletionOption.ResponseContentRead);
+            using var resp = loopbackOnly
+                ? await LoopbackClient.SendAsync(req, HttpCompletionOption.ResponseContentRead)
+                : await http.CreateClient().SendAsync(req, HttpCompletionOption.ResponseContentRead);
             status = (int)resp.StatusCode;
             text = await resp.Content.ReadAsStringAsync();
         }

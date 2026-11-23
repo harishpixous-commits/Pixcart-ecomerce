@@ -34,6 +34,10 @@ public class AppSettings
     public string RazorpayKeySecret { get; set; } = "";
     public string RazorpayWebhookSecret { get; set; } = "";
     public string RazorpayApiBase { get; set; } = "https://api.razorpay.com/v1";
+    /// <summary>Test safeguard: "loopback" makes every payment-gateway call fail before any network unless the
+    /// provider base URL points at a local mock (127.0.0.1/localhost). Empty means unrestricted (production).
+    /// Set App__ExternalProviderMode=loopback and App__RazorpayApiBase=http://127.0.0.1:&lt;port&gt;/v1 for offline tests.</summary>
+    public string ExternalProviderMode { get; set; } = "";
     /// <summary>Admin → Integrations switch; off hides online payment at checkout (reference: config.py razorpay_checkout).</summary>
     public bool RazorpayCheckout { get; set; } = true;
     public string RazorpayCheckoutUrl { get; set; } = "https://checkout.razorpay.com/v1/checkout.js";
