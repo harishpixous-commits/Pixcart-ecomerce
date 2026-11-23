@@ -36,6 +36,20 @@ public class MySqlDapperHelper : IMySqlDapperHelper
         return await c.QueryAsync<T>(sql, param);
     }
 
+    public async Task<IEnumerable<TReturn>> QueryAsync<T1, T2, T3, TReturn>(string sql, Func<T1, T2, T3, TReturn> map, object? param = null, string splitOn = "id", IDbTransaction? tx = null)
+    {
+        if (tx != null) return await tx.Connection!.QueryAsync(sql, map, param, tx, splitOn: splitOn);
+        await using var c = Open();
+        return await c.QueryAsync(sql, map, param, splitOn: splitOn);
+    }
+
+    public async Task<IEnumerable<TReturn>> QueryAsync<T1, T2, T3, T4, TReturn>(string sql, Func<T1, T2, T3, T4, TReturn> map, object? param = null, string splitOn = "id", IDbTransaction? tx = null)
+    {
+        if (tx != null) return await tx.Connection!.QueryAsync(sql, map, param, tx, splitOn: splitOn);
+        await using var c = Open();
+        return await c.QueryAsync(sql, map, param, splitOn: splitOn);
+    }
+
     public async Task<T?> QueryFirstOrDefaultAsync<T>(string sql, object? param = null, IDbTransaction? tx = null)
     {
         if (tx != null) return await tx.Connection!.QueryFirstOrDefaultAsync<T>(sql, param, tx);

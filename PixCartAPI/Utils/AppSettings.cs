@@ -40,7 +40,6 @@ public class AppSettings
     public int PaymentWindowMinutes { get; set; } = 30;
 
     // Further provider settings (Admin → Integrations overrides each one; see IIntegrationBAL)
-    public bool RazorpayCheckout { get; set; } = true;
     /// <summary>"manual" or "razorpayx".</summary>
     public string PayoutMode { get; set; } = "manual";
     public string RazorpayxAccountNumber { get; set; } = "";

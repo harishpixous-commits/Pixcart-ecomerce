@@ -50,6 +50,12 @@ public class CatalogSupportDAL(IMySqlDapperHelper db)
         await uow.CommitAsync();
     }
 
+    /// <summary>Running deals with a quantity limit: (variant, limit, sold) per version (reference: deals.units_left).</summary>
+    public Task<IEnumerable<(Guid VariantId, int? QtyLimit, int SoldQty)>> DealQuantitiesAsync(IEnumerable<Guid> variantIds) =>
+        db.QueryAsync<(Guid, int?, int)>(
+            "SELECT variant_id, qty_limit, sold_qty FROM deals WHERE variant_id IN @variantIds AND status = 'active' AND qty_limit IS NOT NULL",
+            new { variantIds });
+
     public Task<UserModel?> GetUserAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<UserModel>("SELECT * FROM users WHERE id = @id", new { id });
 
