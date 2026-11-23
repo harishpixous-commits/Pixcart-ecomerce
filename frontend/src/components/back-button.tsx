@@ -9,8 +9,31 @@
 import clsx from "clsx";
 import { ChevronLeft } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+// How many pages deep the visitor is inside this site in this tab (sessionStorage, so it survives full page loads).
+const DEPTH = "pc_nav_depth";
+let poppedBack = false;
+if (typeof window !== "undefined") window.addEventListener("popstate", () => { poppedBack = true; });
+function readDepth(): number {
+  try { return Number(sessionStorage.getItem(DEPTH) || 0); } catch { return 0; }
+}
+function writeDepth(n: number) {
+  try { sessionStorage.setItem(DEPTH, String(Math.max(0, n))); } catch { /* storage blocked */ }
+}
+
+/** Mounted once in the root layout: counts page changes inside the site (back steps count down). */
+export function NavTracker() {
+  const pathname = usePathname();
+  useEffect(() => {
+    writeDepth(poppedBack ? readDepth() - 1 : readDepth() + 1);
+    poppedBack = false;
+  }, [pathname]);
+  return null;
+}
 
 function cameFromHere(): boolean {
+  if (readDepth() > 1) return true;
   try {
     return window.history.length > 1 && !!document.referrer && new URL(document.referrer).origin === window.location.origin;
   } catch {

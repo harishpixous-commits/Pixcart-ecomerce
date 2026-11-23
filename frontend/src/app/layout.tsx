@@ -24,6 +24,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Suspense } from "react";
+import { NavTracker } from "@/components/back-button";
 import { RouteProgress } from "@/components/route-progress";
 import { ToastProvider } from "@/components/ui";
 import { loadSiteServer } from "@/lib/server-api";
@@ -90,6 +91,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <SiteProvider site={site}>
+          <NavTracker />
           <Suspense>
             <RouteProgress />
           </Suspense>
