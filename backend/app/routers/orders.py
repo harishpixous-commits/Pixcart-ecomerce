@@ -37,12 +37,12 @@ from app.services import fleet, razorpay, regional
 from app.services.cms import get_site
 from app.services.coupons import evaluate
 from app.services.orders import (
-    customer_cancellable,
     cancel_sub_order,
     cart_payload,
-    checkout_payload,
     check_with_gateway,
+    checkout_payload,
     confirm_with_gateway,
+    customer_cancellable,
     group_by_seller,
     load_cart,
     mark_paid,

@@ -3,7 +3,6 @@ customers, settings, audit log and the monthly GST TCS (GSTR-8 basis) report."""
 from __future__ import annotations
 
 import re
-
 import uuid
 from datetime import datetime, time, timedelta
 from typing import Any, Literal

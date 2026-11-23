@@ -11,9 +11,9 @@ own page, behind the same permission. Searching changes nothing, so it is not wr
 from __future__ import annotations
 
 import re
-from inspect import isfunction
 import uuid
 from collections.abc import Awaitable, Callable
+from inspect import isfunction
 from typing import Literal
 
 from fastapi import APIRouter, Query

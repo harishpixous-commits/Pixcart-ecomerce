@@ -93,8 +93,8 @@ resource "aws_iam_role_policy" "deploy" {
     Statement = [
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       {
-        Effect = "Allow"
-        Action = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage", "ecr:DescribeImages"]
+        Effect   = "Allow"
+        Action   = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage", "ecr:DescribeImages"]
         Resource = [for r in aws_ecr_repository.repo : r.arn]
       },
       {

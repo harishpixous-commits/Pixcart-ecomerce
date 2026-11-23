@@ -5,7 +5,6 @@ import asyncio
 from datetime import timedelta
 
 import httpx
-
 from sqlalchemy import update
 
 from app.db import SessionLocal, utcnow
