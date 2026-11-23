@@ -11,6 +11,32 @@ Why the API cannot go on Vercel: it is a long-running service. It runs scheduled
 offers, expiring unpaid orders, notifications, refunds, weekly payouts), keeps a PostgreSQL database, and stores
 uploaded images. Vercel functions stop between requests and cannot run those jobs.
 
+## Live demo (everything on Vercel)
+
+A demo runs fully on Vercel: the website at **https://pixcart-shop.vercel.app** and the API at
+**https://pixcart-api.vercel.app**, with a Neon Postgres database (free plan, Singapore) created from Vercel →
+Storage and connected to the API project. Both projects are in Singapore (`sin1`), close to Indian shoppers.
+
+How the API runs on Vercel (demo only):
+
+- A folder with `app/` (copied from `backend/app`), the sample images in `media/`, a slim `requirements.txt`
+  (no test tools, no boto3), `api/index.py` (imports `app.main:app`, sets `MEDIA_ROOT` to the bundled images and
+  `RUN_JOBS=false`) and a `vercel.json` that sends every path to that function. Deployed with
+  `vercel deploy --prod` into the `pixcart-api` project.
+- Settings on `pixcart-api`: `DATABASE_URL` (Neon, `postgresql+asyncpg://…?ssl=require`, the unpooled host),
+  `JWT_SECRET`, `FIELD_ENCRYPTION_KEY`, `ENVIRONMENT=development` (shows the one-time code on screen, since no SMS
+  is connected), `RUN_JOBS=false`, `COOKIE_SECURE=true`, `PUBLIC_WEB_URL` and `CORS_ORIGINS` = the website address.
+- The database was filled once from a computer: `alembic upgrade head`, `python -m scripts.seed --demo` (with
+  `MEDIA_ROOT` pointing at the folder's `media/`), `python -m scripts.create_admin`.
+
+Demo limits: no background jobs (delivery requests do not time out by themselves, queued messages are not sent,
+unpaid online orders are not cancelled automatically), new image uploads are not kept, and the first request after a
+quiet period is slower. For real use, move the API to a server (section 1) and keep the website on Vercel.
+
+**Automatic updates:** connect the `pixcart-shop` project to this GitHub repository (Vercel → project → Settings →
+Git, Root Directory `frontend`). Every push to `main` then rebuilds the website; `frontend/vercel.json` tells Vercel
+it is a Next.js site in Singapore.
+
 ## 1. Deploy the API first
 
 Pick one:
