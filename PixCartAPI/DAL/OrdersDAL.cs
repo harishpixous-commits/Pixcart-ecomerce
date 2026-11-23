@@ -263,6 +263,68 @@ public class OrdersDAL(IMySqlDapperHelper db)
     public Task<long> CountOrdersByUserAsync(Guid userId) =>
         db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM orders WHERE user_id = @userId", new { userId });
 
+    /// <summary>One package, locked (reference: _own_sub FOR UPDATE).</summary>
+    public Task<SubOrderModel?> SubForUpdateAsync(Guid subId, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE id = @subId FOR UPDATE", new { subId });
+
+    public Task<SubOrderModel?> GetSubAsync(Guid subId) =>
+        db.QueryFirstOrDefaultAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE id = @subId", new { subId });
+
+    /// <summary>The status move with its timestamp (reference: the sub-order update in transition()).</summary>
+    public Task<int> UpdateSubTransitionAsync(SubOrderModel s, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            """
+            UPDATE sub_orders SET status = @Status, confirmed_at = @ConfirmedAt, packed_at = @PackedAt,
+                shipped_at = @ShippedAt, delivered_at = @DeliveredAt, settlement_status = @SettlementStatus,
+                settlement_due_at = @SettlementDueAt, courier_name = @CourierName, tracking_number = @TrackingNumber,
+                tracking_url = @TrackingUrl, updated_at = UTC_TIMESTAMP(6)
+            WHERE id = @Id
+            """, s);
+
+    /// <summary>The seller's work queues (reference: seller list_orders). Oldest first for open steps, newest first
+    /// for history.</summary>
+    public async Task<IReadOnlyList<SubOrderModel>> SellerSubsAsync(
+        Guid sellerId, string? status, string q, int offset, int limit)
+    {
+        var where = "s.seller_id = @sellerId AND s.status != 'pending_payment'";
+        if (status is { Length: > 0 }) where += " AND s.status = @status";
+        if (q.Trim().Length > 0) where += " AND (s.number LIKE @like OR o.number LIKE @like)";
+        var asc = status is "placed" or "confirmed" or "packed";
+        var rows = await db.QueryAsync<SubOrderModel>(
+            $"""
+            SELECT s.* FROM sub_orders s JOIN orders o ON o.id = s.order_id
+            WHERE {where} ORDER BY s.created_at {(asc ? "ASC" : "DESC")} LIMIT @limit OFFSET @offset
+            """,
+            new { sellerId, status, like = $"%{q.Trim()}%", offset, limit });
+        return rows.ToList();
+    }
+
+    public async Task<IReadOnlyList<OrderModel>> OrdersByIdsAsync(IReadOnlyList<Guid> ids)
+    {
+        if (ids.Count == 0) return [];
+        var rows = await db.QueryAsync<OrderModel>("SELECT * FROM orders WHERE id IN @ids", new { ids });
+        return rows.ToList();
+    }
+
+    public Task<long> CountSellerSubsAsync(Guid sellerId, string? status, string q)
+    {
+        var where = "s.seller_id = @sellerId AND s.status != 'pending_payment'";
+        if (status is { Length: > 0 }) where += " AND s.status = @status";
+        if (q.Trim().Length > 0) where += " AND (s.number LIKE @like OR o.number LIKE @like)";
+        return db.ExecuteScalarAsync<long>(
+            $"SELECT COUNT(*) FROM sub_orders s JOIN orders o ON o.id = s.order_id WHERE {where}",
+            new { sellerId, status, like = $"%{q.Trim()}%" });
+    }
+
+    /// <summary>Packages per step, for the queue tabs (reference: the status_counts group-by).</summary>
+    public async Task<IReadOnlyDictionary<string, long>> SellerStatusCountsAsync(Guid sellerId)
+    {
+        var rows = await db.QueryAsync<(string Status, long N)>(
+            "SELECT status AS Status, COUNT(*) AS N FROM sub_orders WHERE seller_id = @sellerId AND status != 'pending_payment' GROUP BY status",
+            new { sellerId });
+        return rows.ToDictionary(r => r.Status, r => r.N);
+    }
+
     /// <summary>Packages of several orders at once (reference: the my_orders sub-order read).</summary>
     public async Task<IReadOnlyList<SubOrderModel>> SubOrdersForOrdersAsync(IReadOnlyList<Guid> orderIds)
     {

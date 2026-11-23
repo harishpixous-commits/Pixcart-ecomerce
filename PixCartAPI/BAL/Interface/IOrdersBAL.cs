@@ -64,4 +64,16 @@ public interface IOrdersBAL
 
     /// <summary>Sends one pending refund, repeatable (reference: process_refund; attempts ≥ 8 → failed).</summary>
     Task ProcessRefundAsync(Guid refundId);
+
+    /// <summary>The caller's seller account (reference: deps.seller_account / approved_seller).</summary>
+    Task<SellerModel> RequireSellerAsync(UserModel user, bool approved);
+
+    /// <summary>The seller's order queues (reference: GET /api/seller/orders).</summary>
+    Task<JsonObject> SellerListAsync(SellerModel seller, string? status, string q, int page, int pageSize);
+
+    /// <summary>One package as the seller sees it (reference: GET /api/seller/orders/{sub_id}).</summary>
+    Task<JsonObject> SellerGetAsync(SellerModel seller, Guid subId);
+
+    /// <summary>confirm / pack (reference: _act). ship/deliver arrive with their invoice/payout companions.</summary>
+    Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "");
 }

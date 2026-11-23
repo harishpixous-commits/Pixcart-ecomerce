@@ -196,6 +196,10 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
     public Task<SellerModel?> GetSellerAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE id = @id", new { id });
 
+    /// <summary>The caller's seller account (reference: deps.seller_account).</summary>
+    public Task<SellerModel?> GetSellerByUserAsync(Guid userId) =>
+        db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE user_id = @userId", new { userId });
+
     public Task<SellerModel?> ApprovedSellerBySlugAsync(string slug) =>
         db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE slug = @slug AND status = 'approved'", new { slug });
 

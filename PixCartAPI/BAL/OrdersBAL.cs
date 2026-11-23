@@ -34,6 +34,7 @@ public class OrdersBAL(
     IRateLimitBAL rateLimit,
     ISiteBAL site,
     IRefundQueue refundQueue,
+    AuditDAL audit,
     SettingsDAL settings,
     Utils.AppSettings app,
     IMySqlDapperHelper db) : IOrdersBAL
@@ -1171,5 +1172,151 @@ public class OrdersBAL(
         await notify.NotifyUserAsync(order.UserId, "refund_processed",
             new Dictionary<string, string> { ["amount"] = Money.Rupees(refund.AmountPaise), ["order_number"] = order.Number },
             $"/orders/{order.Id}");
+    }
+
+    // ------------------------------------------------------------------------- seller
+
+    /// <summary>The caller's seller account (reference: deps.seller_account / approved_seller).</summary>
+    public async Task<SellerModel> RequireSellerAsync(UserModel user, bool approved)
+    {
+        var seller = await catalog.GetSellerByUserAsync(user.Id)
+            ?? throw new ForbiddenException("Register as a seller first");
+        if (approved && seller.Status != "approved")
+            throw new ForbiddenException("Your seller account is not approved yet");
+        return seller;
+    }
+
+    /// <summary>One package as the seller sees it (reference: sub_out).</summary>
+    public JsonObject SellerSubJson(SubOrderModel s, OrderModel o, IReadOnlyList<OrderItemModel> items, bool full)
+    {
+        var data = new JsonObject
+        {
+            ["id"] = s.Id.ToString(),
+            ["number"] = s.Number,
+            ["order_number"] = o.Number,
+            ["status"] = s.Status,
+            ["payment_method"] = o.PaymentMethod,
+            ["created_at"] = s.CreatedAt.ToString("o"),
+            ["items_total"] = s.ItemsTotal,
+            ["shipping_fee"] = s.ShippingFee,
+            ["total"] = s.Total,
+            ["shipping_provider"] = s.ShippingProvider, // manual (the seller's own courier), shiprocket or fleet
+            ["seller_payout"] = s.SellerPayoutPaise,
+            ["item_count"] = items.Sum(i => i.Qty),
+            ["items"] = new JsonArray(items.Select(i => (JsonNode)new JsonObject
+            {
+                ["id"] = i.Id.ToString(), ["title"] = i.Title, ["variant_label"] = i.VariantLabel, ["sku"] = i.Sku,
+                ["image"] = i.ImageUrl, ["qty"] = i.Qty, ["unit_price"] = i.UnitPrice, ["line_total"] = i.LineTotal,
+            }).ToArray()),
+            ["ship_to_city"] = JsonNode.Parse(o.ShipTo)?["city"]?.GetValue<string>(),
+            ["ship_to_pincode"] = JsonNode.Parse(o.ShipTo)?["pincode"]?.GetValue<string>(),
+            ["courier_name"] = s.CourierName,
+            ["tracking_number"] = s.TrackingNumber,
+            ["tracking_url"] = s.TrackingUrl,
+            ["invoice_number"] = s.InvoiceNumber,
+            ["label_url"] = s.LabelUrl,
+            ["expected_delivery_at"] = s.ExpectedDeliveryAt?.ToString("o"),
+        };
+        if (full)
+        {
+            // Full address only once the order is the seller's to fulfil (not while unpaid).
+            data["ship_to"] = s.Status != "pending_payment" ? JsonNode.Parse(o.ShipTo) : null;
+            data["breakdown"] = new JsonObject
+            {
+                ["gross"] = s.Total,
+                ["commission"] = s.CommissionPaise,
+                ["commission_gst"] = s.CommissionGstPaise,
+                ["tcs"] = s.TcsPaise,
+                ["tds"] = s.TdsPaise,
+                ["payout"] = s.SellerPayoutPaise,
+                ["taxable_total"] = s.TaxableTotal,
+                ["is_interstate"] = s.IsInterstate,
+            };
+            data["items_tax"] = new JsonArray(items.Select(i => (JsonNode)new JsonObject
+            {
+                ["title"] = i.Title, ["hsn_code"] = i.HsnCode, ["gst_bps"] = i.GstBps,
+                ["taxable_value"] = i.TaxableValue, ["cgst"] = i.Cgst, ["sgst"] = i.Sgst, ["igst"] = i.Igst,
+            }).ToArray());
+            data["confirmed_at"] = s.ConfirmedAt?.ToString("o");
+            data["packed_at"] = s.PackedAt?.ToString("o");
+            data["shipped_at"] = s.ShippedAt?.ToString("o");
+            data["delivered_at"] = s.DeliveredAt?.ToString("o");
+            data["cancel_reason"] = s.CancelReason;
+            data["settlement_status"] = s.SettlementStatus;
+            data["settlement_due_at"] = s.SettlementDueAt?.ToString("o");
+        }
+        return data;
+    }
+
+    /// <summary>The seller's order queues (reference: GET /api/seller/orders list_orders).</summary>
+    public async Task<JsonObject> SellerListAsync(SellerModel seller, string? status, string q, int page, int pageSize)
+    {
+        var total = await orders.CountSellerSubsAsync(seller.Id, status, q);
+        var subs = await orders.SellerSubsAsync(seller.Id, status, q, (page - 1) * pageSize, pageSize);
+        var byId = (await orders.OrdersByIdsAsync(subs.Select(s => s.OrderId).Distinct().ToList())).ToDictionary(o => o.Id);
+        var items = await orders.ItemsAsync(subs.Select(s => s.Id).ToList());
+        var bySub = items.GroupBy(i => i.SubOrderId).ToDictionary(g => g.Key, g => (IReadOnlyList<OrderItemModel>)g.ToList());
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(subs.Select(s => (JsonNode)SellerSubJson(
+                s, byId[s.OrderId], bySub.GetValueOrDefault(s.Id) ?? [], full: false)).ToArray()),
+            ["total"] = total,
+            ["page"] = page,
+            ["page_size"] = pageSize,
+            ["status_counts"] = new JsonObject((await orders.SellerStatusCountsAsync(seller.Id)).Select(
+                kv => new KeyValuePair<string, JsonNode?>(kv.Key, JsonValue.Create(kv.Value))).ToArray()),
+        };
+    }
+
+    /// <summary>One package, owned by the seller and never the unpaid kind (reference: _own_sub).</summary>
+    private async Task<(SubOrderModel Sub, OrderModel Order)> OwnSubAsync(Guid sellerId, Guid subId, IUnitOfWork? uow)
+    {
+        var s = uow is not null ? await orders.SubForUpdateAsync(subId, uow) : await orders.GetSubAsync(subId);
+        if (s is null || s.SellerId != sellerId || s.Status == "pending_payment") throw new NotFoundException("Order");
+        var o = await orders.GetOrderAsync(s.OrderId) ?? throw new NotFoundException("Order");
+        return (s, o);
+    }
+
+    /// <summary>One package as the seller sees it (reference: GET /api/seller/orders/{sub_id}).</summary>
+    public async Task<JsonObject> SellerGetAsync(SellerModel seller, Guid subId)
+    {
+        var (s, o) = await OwnSubAsync(seller.Id, subId, null);
+        return SellerSubJson(s, o, await orders.ItemsAsync([s.Id]), full: true);
+    }
+
+    /// <summary>The package's next step (reference: transition()). confirm/pack only in this slice; ship and deliver
+    /// arrive with their invoice/payout companions. The fleet checks come with the delivery module.</summary>
+    public async Task TransitionAsync(SubOrderModel sub, string dst, string actor, string note, IUnitOfWork uow)
+    {
+        if (!CanTransition(sub.Status, dst))
+            throw new AppException($"Cannot move this order from '{sub.Status}' to '{dst}'", "illegal_transition", 409);
+        if (dst is not ("confirmed" or "packed"))
+            throw new AppException($"Moving this order to '{dst}' is not available yet", "illegal_transition", 409);
+        var src = sub.Status;
+        var now = DateTimeFunctions.UtcNow();
+        sub.Status = dst;
+        if (dst == "confirmed") sub.ConfirmedAt = now;
+        else if (dst == "packed") sub.PackedAt = now;
+        await orders.UpdateSubTransitionAsync(sub, uow);
+        await orders.InsertEventAsync(new OrderEventModel
+        {
+            Id = Guid.NewGuid(), OrderId = sub.OrderId, SubOrderId = sub.Id,
+            FromStatus = src, ToStatus = dst, Actor = actor, Note = note, CreatedAt = now,
+        }, uow);
+    }
+
+    /// <summary>confirm / pack (reference: _act with dst confirmed|packed).</summary>
+    public async Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "")
+    {
+        await using var uow = await db.BeginAsync();
+        var (s, o) = await OwnSubAsync(seller.Id, subId, uow);
+        await TransitionAsync(s, dst, "seller", note, uow);
+        await audit.InsertAsync(new AuditLogModel
+        {
+            Id = Guid.NewGuid(), ActorUserId = user.Id, Action = $"suborder.{dst}",
+            EntityType = "sub_order", EntityId = s.Id.ToString(), Detail = note, CreatedAt = DateTimeFunctions.UtcNow(),
+        }, uow.Transaction);
+        await uow.CommitAsync();
+        return SellerSubJson(s, o, await orders.ItemsAsync([s.Id]), full: true);
     }
 }
