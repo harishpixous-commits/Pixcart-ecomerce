@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect } from "@playwright/test";
-import { collectErrors, test } from "./helpers";
+import { collectErrors, placeCodOrder, test } from "./helpers";
 
 test("AI studio: status, switches, voice and activity log", async ({ admin }) => {
   const errors = collectErrors(admin);
@@ -53,9 +53,10 @@ test("support desk drafts a reply with AI and sends the edited text", async ({ a
   await expect(buyer.getByText(/We will call the courier today/)).toBeVisible();
 });
 
-test("order page shows the risk brief and sends an AI-drafted customer message", async ({ admin }) => {
+test("order page shows the risk brief and sends an AI-drafted customer message", async ({ admin, baseURL }) => {
+  const number = await placeCodOrder(baseURL!);
   await admin.goto("/admin/orders");
-  await admin.locator("table a").first().click();
+  await admin.locator("table a", { hasText: number }).first().click();
   await expect(admin.getByRole("region", { name: "Order risk" })).toBeVisible();
   await admin.getByRole("button", { name: "Write message with AI" }).click();
   await admin.getByLabel("What should the message tell them?").fill("Tell them the seller ships tomorrow");

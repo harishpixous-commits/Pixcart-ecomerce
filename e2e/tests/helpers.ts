@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, type Page } from "@playwright/test";
+import { expect, request as apiRequest, type Page } from "@playwright/test";
 
 const API_LOG = process.env.API_LOG ?? "/tmp/api.log";
 
@@ -18,12 +18,35 @@ export async function otpFor(phone: string): Promise<string> {
 }
 
 /**
+ * Places a cash-on-delivery order through the API for a new shopper, so a test that opens an order does not depend
+ * on other tests having placed one first (on a fresh database the files run in name order).
+ */
+export async function placeCodOrder(baseURL: string, slug = "vitamin-c-face-serum-30ml"): Promise<string> {
+  const api = await apiRequest.newContext({ baseURL });
+  const phone = randomPhone("95");
+  expect((await api.post("/api/auth/otp/request", { data: { phone } })).ok()).toBeTruthy();
+  const verify = await api.post("/api/auth/otp/verify", { data: { phone, code: await otpFor(phone), name: "Order Tester" } });
+  expect(verify.ok()).toBeTruthy();
+  const headers = { Authorization: `Bearer ${(await verify.json()).access_token}` };
+  const addr = await api.post("/api/addresses", { headers, data: { full_name: "Order Tester", phone, line1: "4 Lake View St", city: "Chennai", state_code: "33", pincode: "600028" } });
+  expect(addr.ok()).toBeTruthy();
+  const product = await (await api.get(`/api/catalog/products/${slug}`)).json();
+  expect((await api.post("/api/cart/items", { headers, data: { variant_id: product.variants[0].id, qty: 1 } })).ok()).toBeTruthy();
+  const order = await api.post("/api/orders", { headers, data: { address_id: (await addr.json()).id, payment_method: "cod", idempotency_key: `e2e${Date.now()}` } });
+  expect(order.ok(), await order.text()).toBeTruthy();
+  const number = (await order.json()).order.number as string;
+  await api.dispose();
+  return number;
+}
+
+/**
  * Signs in on the sign-in page the test is on. With a name, the number is new: it goes from the sign-in page
  * to Create account (the same "next" is kept), fills the form and verifies the code.
  */
 export async function otpLogin(page: Page, phone: string, name?: string) {
   if (name) return createAccount(page, phone, name);
-  const input = page.locator("input[type=tel]");
+  // the sign-in form's phone box (other parts of the page, like the delivery PIN box, may also take numbers)
+  const input = page.locator("form").filter({ has: page.getByRole("button", { name: "Send code" }) }).locator("input[type=tel]").first();
   const code = page.locator("input[autocomplete=one-time-code]");
   for (let attempt = 0; attempt < 3; attempt++) {
     // Fill again on every attempt: a fill that lands before the page hydrates is cleared by React.
