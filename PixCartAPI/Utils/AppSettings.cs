@@ -34,6 +34,8 @@ public class AppSettings
     public string RazorpayKeySecret { get; set; } = "";
     public string RazorpayWebhookSecret { get; set; } = "";
     public string RazorpayApiBase { get; set; } = "https://api.razorpay.com/v1";
+    /// <summary>Admin → Integrations switch; off hides online payment at checkout (reference: config.py razorpay_checkout).</summary>
+    public bool RazorpayCheckout { get; set; } = true;
     public string RazorpayCheckoutUrl { get; set; } = "https://checkout.razorpay.com/v1/checkout.js";
     public int PaymentWindowMinutes { get; set; } = 30;
 

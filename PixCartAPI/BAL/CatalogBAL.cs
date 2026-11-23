@@ -17,7 +17,7 @@ public class CatalogBAL(
     CatalogDAL catalog,
     IPlatformSettingsBAL platform,
     ISiteBAL site,
-    IRazorpayClient razorpay,
+    IRazorpayBAL razorpay,
     IEnumerable<IDealSync> dealSync,
     IEnumerable<ISponsoredProducts> ads) : ICatalogBAL
 {
