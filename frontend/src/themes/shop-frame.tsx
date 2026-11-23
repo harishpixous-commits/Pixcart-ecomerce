@@ -5,13 +5,17 @@
  * (back to top, help assistant, compare tray) and, while an admin previews a theme, the preview bar.
  */
 
-import { Eye, X } from "lucide-react";
+import { Construction, Eye, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { BackToTop } from "@/components/back-to-top";
 import { CompareTray } from "@/components/compare";
 import { ShopAssistant } from "@/components/shop-assistant/widget";
+import { Logo } from "@/components/shop-chrome";
+import { ShopRouteSkeleton } from "@/components/skeletons";
+import { useSession } from "@/lib/session";
+import { useSite } from "@/lib/site";
 import { BRAND_PRESET, findPreset } from "@/themes/manifest";
 import { useTheme } from "@/themes/context";
 import { useSlots } from "@/themes/slots";
@@ -49,12 +53,64 @@ function PreviewBar() {
   );
 }
 
+/** Pages that stay open during maintenance: signing in (so staff can get in), and the legal and contact pages. */
+const OPEN_DURING_MAINTENANCE = ["/login", "/signup", "/pages", "/contact"];
+
+/** What shoppers see while the owner has switched on maintenance mode (Admin → Marketplace settings). */
+function MaintenancePage({ message }: { message: string }) {
+  const site = useSite();
+  return (
+    <div className="flex min-h-screen flex-col bg-mist" data-testid="maintenance-page">
+      <header className="bg-peacock px-4 py-4"><div className="mx-auto max-w-shop"><Logo /></div></header>
+      <main className="flex flex-1 items-center justify-center px-4 py-12">
+        <div className="w-full max-w-lg rounded-2xl bg-white p-8 text-center shadow-card">
+          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-marigold-light text-ink">
+            <Construction className="h-7 w-7" aria-hidden />
+          </span>
+          <h1 className="font-display text-2xl font-bold text-ink">We&apos;ll be back soon</h1>
+          <p className="mt-3 text-ink-soft">{message}</p>
+          <p className="mt-6 text-sm text-ink-soft">
+            Need help with an order? <Link href="/contact" className="font-semibold text-peacock">Contact {site.brand_name}</Link>
+          </p>
+        </div>
+      </main>
+      <footer className="px-4 pb-6 text-center text-xs text-ink-faint">
+        <Link href="/login" className="hover:underline">Staff sign in</Link>
+      </footer>
+    </div>
+  );
+}
+
+/** Staff still use the shop during maintenance; this bar reminds them shoppers cannot. */
+function MaintenanceBar() {
+  return (
+    <div className="relative z-[35] bg-marigold text-ink" role="status" data-testid="maintenance-bar">
+      <div className="mx-auto flex max-w-shop flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-[13px] sm:px-4 sm:text-sm">
+        <Construction className="h-4 w-4 shrink-0" aria-hidden />
+        <p className="min-w-0 flex-1"><b>Maintenance mode is on.</b> Shoppers see the &ldquo;back soon&rdquo; page and cannot order; you see the shop as staff.</p>
+        <Link href="/admin/settings#maintenance" className="rounded-md bg-ink/10 px-2.5 py-1 font-semibold hover:bg-ink/20">Turn it off</Link>
+      </div>
+    </div>
+  );
+}
+
 export function ShopFrame({ children }: { children: React.ReactNode }) {
+  const site = useSite();
+  const { user, ready } = useSession();
+  const pathname = usePathname();
+  const closed = Boolean(site.maintenance?.on) && !OPEN_DURING_MAINTENANCE.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (closed && !ready) return <div className="mx-auto w-full max-w-shop px-3 py-6"><ShopRouteSkeleton /></div>;
+  if (closed && !user?.is_admin) return <MaintenancePage message={site.maintenance?.message ?? ""} />;
+  return <OpenShop maintenance={Boolean(site.maintenance?.on && user?.is_admin)}>{children}</OpenShop>;
+}
+
+function OpenShop({ maintenance, children }: { maintenance: boolean; children: React.ReactNode }) {
   const t = useTheme();
   const { Header, Footer, MobileNav } = useSlots();
   const layout = t.data.layout;
   return (
     <div data-theme={t.data.id} data-sections={layout.home.sections} data-grid={layout.productGrid} className="flex min-h-screen flex-col">
+      {maintenance && <MaintenanceBar />}
       {t.preview && <PreviewBar />}
       <Header />
       <main className="mx-auto w-full min-h-[60vh] max-w-shop flex-1 px-3 py-4 sm:px-4 sm:py-6">{children}</main>

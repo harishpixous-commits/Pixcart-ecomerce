@@ -4,6 +4,7 @@ import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddressForm } from "@/components/address-form";
+import { SignedInDevices } from "@/components/signed-in-devices";
 import { Button, ErrorNote, Modal, PageLoader, Pill, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -114,6 +115,7 @@ export default function AccountPage() {
           </div>
         </form>
       </section>
+      <SignedInDevices />
       <PrivacySection marketing={user.marketing_opt_in ?? false} onChanged={reloadUser} onDeleted={() => signOut().then(() => router.push("/"))} />
       <section className="rounded-xl bg-white p-5">
         <div className="mb-3 flex items-center justify-between">

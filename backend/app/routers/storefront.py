@@ -41,7 +41,8 @@ async def site(session: SessionDep) -> dict:
             "pdp": {k.removeprefix("pdp_"): v for k, v in cfg.items() if k.startswith("pdp_")}
                    | {"header_pincode": cfg["header_pincode"], "page_loading_bar": cfg["page_loading_bar"]},
             "reviews": review_settings.public(await review_settings.get(session)),
-            "lists": {k: cfg[k] for k in LIST_KEYS}}
+            "lists": {k: cfg[k] for k in LIST_KEYS},
+            "maintenance": {"on": cfg["maintenance_mode"], "message": cfg["maintenance_message"]}}
 
 
 async def _products_for(session, cfg: dict) -> list[dict]:

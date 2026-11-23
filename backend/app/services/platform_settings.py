@@ -127,6 +127,15 @@ DEFAULTS: dict[str, Any] = {
     "checkout_suggestions": 10,    # "you might also like" at checkout (0: hidden)
     # admin panel: the layout staff see until they choose their own (Admin → My account → Appearance)
     "admin_layout_default": "sidebar",
+    # maintenance mode: shoppers see a "back soon" page and cannot place orders; staff keep using the shop and the
+    # admin panel, sellers their hub and delivery partners their app
+    "maintenance_mode": False,
+    "maintenance_message": "We are making a few improvements and will be back shortly. Thank you for your patience.",
+}
+
+# key -> (shortest, longest) for free-text settings (spaces at the ends are removed)
+TEXTS: dict[str, tuple[int, int]] = {
+    "maintenance_message": (10, 300),
 }
 
 # the list sizes the storefront needs (sent with /api/site)
@@ -146,6 +155,7 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "shipping_fee_paise": (int, 0, 100_000),
     "free_shipping_threshold_paise": (int, 0, 10_000_000),
     "cod_enabled": (bool, 0, 1),
+    "maintenance_mode": (bool, 0, 1),
     "cod_fee_paise": (int, 0, 10_000),
     "cod_max_order_paise": (int, 0, 100_000_000),
     "tcs_bps": (int, 0, 100),
@@ -278,6 +288,12 @@ def validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(value, str) or value not in CHOICES[key]:
                 raise ValueError(f"{key} must be one of: {', '.join(CHOICES[key])}")
             clean[key] = value
+            continue
+        if key in TEXTS:
+            lo, hi = TEXTS[key]
+            if not isinstance(value, str) or not lo <= len(" ".join(value.split())) <= hi:
+                raise ValueError(f"{key} must be text of {lo} to {hi} characters")
+            clean[key] = " ".join(value.split())
             continue
         if key not in LIMITS:
             raise ValueError(f"Unknown setting: {key}")

@@ -345,6 +345,11 @@ async def refresh(request: Request, response: Response, session: SessionDep) -> 
     if row is None:
         raise Unauthorized()
     if row.revoked_at is not None:
+        owner = await session.get(User, row.user_id)
+        if owner is not None and owner.sessions_valid_after is not None and row.revoked_at == owner.sessions_valid_after:
+            # this device was signed out from another one ("Sign out of other devices"): refuse it, nothing more
+            response.delete_cookie(settings.refresh_cookie_name, path="/api/auth")
+            raise Unauthorized("You were signed out on this device. Please sign in again.")
         # A rotated token was replayed: assume theft and end every session of this user.
         await session.execute(
             update(RefreshSession).where(RefreshSession.user_id == row.user_id, RefreshSession.revoked_at.is_(None)).values(revoked_at=now)
@@ -372,6 +377,51 @@ async def logout(request: Request, response: Response, session: SessionDep) -> d
         await session.commit()
     response.delete_cookie(settings.refresh_cookie_name, path="/api/auth")
     return {"ok": True}
+
+
+def _device(user_agent: str | None) -> str:
+    """A short, readable name for the browser and system ("Chrome on Android"); never the raw header."""
+    ua = user_agent or ""
+    browser = next((name for key, name in (("Edg/", "Edge"), ("OPR/", "Opera"), ("SamsungBrowser", "Samsung Internet"), ("Firefox/", "Firefox"),
+                                          ("Chrome/", "Chrome"), ("Safari/", "Safari")) if key in ua), "")
+    system = next((name for key, name in (("Android", "Android"), ("iPhone", "iPhone"), ("iPad", "iPad"), ("Windows", "Windows"),
+                                         ("Mac OS X", "Mac"), ("Linux", "Linux")) if key in ua), "")
+    if "PixCartPartner" in ua:
+        browser = "Partner app"
+    return " on ".join(x for x in (browser, system) if x) or "Unknown device"
+
+
+@router.get("/sessions")
+async def list_sessions(request: Request, user: CurrentUser, session: SessionDep) -> dict:
+    """Devices signed in to this account: each keeps one active refresh session (renewed while in use)."""
+    now = utcnow()
+    current = sha256(request.cookies.get(settings.refresh_cookie_name) or "")
+    rows = (await session.execute(
+        select(RefreshSession).where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None), RefreshSession.expires_at > now)
+        .order_by(RefreshSession.created_at.desc()).limit(50)
+    )).scalars().all()
+    return {"sessions": [{"id": str(r.id), "device": _device(r.user_agent), "last_active": r.created_at.isoformat(),
+                          "expires_at": r.expires_at.isoformat(), "current": r.token_hash == current} for r in rows]}
+
+
+@router.post("/sessions/sign-out-others")
+async def sign_out_others(request: Request, user: CurrentUser, session: SessionDep) -> dict:
+    """Signs every other device out at once (a lost phone, a shared computer). This device stays signed in: its next
+    request renews its access with its own refresh session, which is kept."""
+    _require_csrf_header(request)
+    now = utcnow()
+    current = sha256(request.cookies.get(settings.refresh_cookie_name) or "")
+    result = await session.execute(
+        update(RefreshSession).where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None), RefreshSession.token_hash != current)
+        .values(revoked_at=now)
+    )
+    user.sessions_valid_after = now
+    audit(session, user, "account.sign_out_others", "user", user.id, f"sessions={result.rowcount}")
+    await notify(session, "security_notice", user, {"what": "other devices signed out",
+                 "message": "All other devices were signed out of your account. If this was not you, change your password now."},
+                 channels=("inapp",))
+    await session.commit()
+    return {"signed_out": result.rowcount}
 
 
 @router.get("/me")

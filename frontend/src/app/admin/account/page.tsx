@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { useState } from "react";
 import { LayoutPicker } from "@/components/admin-shell";
 import { PageHeader } from "@/components/portal-shell";
+import { SignedInDevices } from "@/components/signed-in-devices";
 import { Button, ErrorNote, Pill, TextField, useToast } from "@/components/ui";
 import { useAdmin } from "@/lib/admin";
 import { api, ApiError } from "@/lib/api";
@@ -99,10 +100,11 @@ export default function AdminAccount() {
         <form onSubmit={changePassword} className="flex flex-col gap-3">
           <ErrorNote message={pwError} />
           <TextField label="Current password" type="password" autoComplete="current-password" value={pw.current_password} onChange={(e) => setPw({ ...pw, current_password: e.target.value })} required />
-          <TextField label="New password" type="password" autoComplete="new-password" minLength={12} value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} required hint="At least 12 characters with upper and lower case letters and a number. You are signed out of every device." />
+          <TextField label="New password" type="password" autoComplete="new-password" minLength={12} value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} required hint="At least 12 characters with upper and lower case letters and a number. You are signed out of every device, including this one." />
           <Button type="submit" className="self-start">Change password</Button>
         </form>
       </section>
+      <SignedInDevices />
     </div>
   );
 }

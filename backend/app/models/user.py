@@ -40,6 +40,8 @@ class User(IdMixin, TimestampMixin, Base):
     # A staff member's own admin panel preferences (app/routers/admin_prefs.py): admin_layout, nav_collapsed,
     # sidebar_collapsed. Validated on save; empty for everyone else.
     ui_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    # "Sign out of other devices": access tokens issued before this moment are refused (refresh sessions are revoked)
+    sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (CheckConstraint("phone IS NOT NULL OR email IS NOT NULL", name="has_identifier"),)
 

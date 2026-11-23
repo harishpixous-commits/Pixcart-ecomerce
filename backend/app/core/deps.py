@@ -31,6 +31,9 @@ async def _user_from_request(request: Request, session: AsyncSession) -> User | 
     user = await session.get(User, user_id)
     if user is None or not user.is_active:
         raise Unauthorized("This account is not active")
+    # signed out of other devices after this token was issued: the device must sign in again
+    if user.sessions_valid_after and int(payload.get("iat", 0)) < int(user.sessions_valid_after.timestamp()):
+        raise Unauthorized("Your session has expired. Please sign in again.")
     return user
 
 

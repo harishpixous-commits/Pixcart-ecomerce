@@ -670,6 +670,8 @@ export interface Site {
   max_qty_per_item?: number;
   /** how many results each list shows (Admin → Marketplace settings → Lists and results) */
   lists?: Partial<ListSettings>;
+  /** maintenance mode (Admin → Marketplace settings): shoppers see a "back soon" page; staff see the shop with a banner */
+  maintenance?: { on: boolean; message: string };
   pdp: PdpSettings;
   reviews: ReviewSettingsPublic;
   nav: NavSettings;

@@ -261,6 +261,10 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
 
 @router.post("/api/orders", status_code=201)
 async def create_order(body: PlaceIn, user: CurrentUser, session: SessionDep) -> dict:
+    # maintenance mode (Admin → Marketplace settings): no new orders; staff may still place test orders
+    if not user.is_admin and (await get_settings(session))["maintenance_mode"]:
+        raise ApiError("The shop is closed for maintenance right now, so orders cannot be placed. Your cart is saved; please try again soon.",
+                       code="maintenance", status_code=503)
     try:
         order, payment = await place_order(
             session,

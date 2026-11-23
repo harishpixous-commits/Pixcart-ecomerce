@@ -16,6 +16,7 @@ type S = {
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
   defect_return_days: number;
   admin_layout_default: string;
+  maintenance_mode: boolean; maintenance_message: string;
 } & Record<(typeof LIST_FIELDS)[number][0], number>;
 
 /** How many results each list shows: [setting, label, hint, the default]. 0 hides the lists whose hint says so. */
@@ -53,6 +54,7 @@ export default function AdminSettings() {
   const [s, setS] = useState<S | null>(null);
   const [f, setF] = useState<Record<string, string>>({});
   const [cod, setCod] = useState(true);
+  const [maintenance, setMaintenance] = useState(false);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,6 +62,7 @@ export default function AdminSettings() {
     api<S>("/api/admin/settings").then((x) => {
       setS(x);
       setCod(x.cod_enabled);
+      setMaintenance(Boolean(x.maintenance_mode));
       setFlags(Object.fromEntries(FLAGS.map(([k]) => [k, Boolean(x[k])])));
       setF({
         shipping: paiseToInput(x.shipping_fee_paise), free: paiseToInput(x.free_shipping_threshold_paise), codFee: paiseToInput(x.cod_fee_paise),
@@ -67,7 +70,7 @@ export default function AdminSettings() {
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
-        adminLayout: x.admin_layout_default ?? "sidebar",
+        adminLayout: x.admin_layout_default ?? "sidebar", maintenanceMessage: x.maintenance_message ?? "",
         ...Object.fromEntries(LIST_FIELDS.map(([k, , , d]) => [k, String(x[k] ?? d)])),
       });
     }).catch(quietly);
@@ -87,6 +90,7 @@ export default function AdminSettings() {
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
         defect_return_days: Number(f.defectDays), payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
         admin_layout_default: f.adminLayout || "sidebar",
+        maintenance_mode: maintenance, maintenance_message: f.maintenanceMessage ?? "",
         ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, Number(f[k])])),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
@@ -104,6 +108,24 @@ export default function AdminSettings() {
     <form onSubmit={save} className="flex max-w-3xl flex-col gap-4">
       <PageHeader title="Marketplace settings" />
       <ErrorNote message={error} />
+      <section id="maintenance" className={`grid scroll-mt-24 gap-3 rounded-xl p-5 ${s.maintenance_mode ? "bg-marigold-light ring-2 ring-marigold" : "bg-white"}`} data-testid="maintenance-settings">
+        <div>
+          <h2 className="text-lg font-semibold">Maintenance mode {s.maintenance_mode && <span className="ml-1 rounded-full bg-marigold px-2 align-middle text-xs font-bold">On now</span>}</h2>
+          <p className="text-sm text-ink-soft">
+            Close the shop for a while, for example during a big catalogue update. Shoppers see your message instead of the shop and
+            cannot place orders; their carts are kept. Staff still see the shop with a reminder bar. Sellers, delivery partners and
+            the admin panel keep working.
+          </p>
+        </div>
+        <label className="flex items-start gap-3 rounded-lg border border-line bg-white p-3">
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={maintenance} onChange={(e) => setMaintenance(e.target.checked)} data-testid="maintenance-toggle" />
+          <span><span className="font-semibold">Close the shop for maintenance</span><br /><span className="text-sm text-ink-soft">Takes effect when you save</span></span>
+        </label>
+        <Field label="Message shoppers see" htmlFor="maintenance-message" hint={`10 to 300 characters · ${(f.maintenanceMessage ?? "").length}/300`}>
+          <textarea id="maintenance-message" rows={2} maxLength={300} value={f.maintenanceMessage ?? ""} onChange={(e) => setF({ ...f, maintenanceMessage: e.target.value })}
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[15px] focus:border-peacock focus:outline-none focus:ring-2 focus:ring-peacock/20" />
+        </Field>
+      </section>
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2">
         <h2 className="text-lg font-semibold sm:col-span-2">Delivery</h2>
         <p className="text-sm text-ink-soft sm:col-span-2">
