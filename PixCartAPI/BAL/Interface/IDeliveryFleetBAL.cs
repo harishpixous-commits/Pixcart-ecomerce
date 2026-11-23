@@ -49,6 +49,18 @@ public interface IDeliveryFleetBAL
     /// <summary>Blocks courier ship/deliver steps the fleet owns (reference: seller_orders._act fleet guards).</summary>
     Task GuardSellerActAsync(SellerModel seller, Guid subOrderId, string dst);
 
+    /// <summary>Ask a partner to collect an approved fleet-delivered return (reference: request_return_pickup).</summary>
+    Task RequestReturnPickupAsync(ReturnRequestModel ret, IUnitOfWork uow);
+
+    /// <summary>Stop a return pickup (return cancelled or switched to courier) (reference: cancel_return_pickup).</summary>
+    Task CancelReturnPickupAsync(ReturnRequestModel ret, string why, IUnitOfWork uow, UserModel? user = null);
+
+    /// <summary>Close an open pickup trip when the seller marks the return received (reference: close_pickup_on_receive).</summary>
+    Task ClosePickupOnReceiveAsync(ReturnRequestModel ret, IUnitOfWork uow, UserModel? user = null);
+
+    /// <summary>A return pickup as one viewer sees it (reference: pickup_tracking).</summary>
+    Task<JsonObject?> PickupTrackingAsync(ReturnRequestModel ret, string viewer, IUnitOfWork? uow = null);
+
     Task SweepExpiredAsync();
     Task ReleaseAsync(Guid subOrderId, string why);
     Task<JsonObject> PickupPlaceForAsync(SubOrderModel sub);
@@ -60,5 +72,5 @@ public interface IDeliveryFleetBAL
     Task<JsonObject> TripViewStaffAsync(Guid assignmentId);
     Task<(byte[] Data, string Media)> ProofStaffAsync(Guid assignmentId);
     Task<List<JsonObject>> CandidatesAsync(SubOrderModel sub, OrderModel order, JsonObject cfg,
-        IUnitOfWork uow, bool onlineOnly = true);
+        IUnitOfWork uow, bool onlineOnly = true, ReturnRequestModel? ret = null);
 }

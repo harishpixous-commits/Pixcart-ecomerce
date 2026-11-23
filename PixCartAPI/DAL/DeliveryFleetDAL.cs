@@ -76,6 +76,29 @@ public class DeliveryFleetDAL(IMySqlDapperHelper db)
             "SELECT COUNT(*) FROM delivery_assignments WHERE sub_order_id = @subOrderId AND mode = 'auto'",
             new { subOrderId })!;
 
+    /// <summary>The open pickup trip for a return (reference: cancel_return_pickup / close_pickup_on_receive).</summary>
+    public async Task<DeliveryAssignmentModel?> ActiveForReturnAsync(Guid returnId, IUnitOfWork uow) =>
+        (await uow.QueryAsync<DeliveryAssignmentModel>(
+            "SELECT * FROM delivery_assignments WHERE return_id = @returnId AND status IN ('offered','accepted','at_store','picked','on_the_way','reached') ORDER BY created_at DESC LIMIT 1",
+            new { returnId })).FirstOrDefault();
+
+    /// <summary>The latest pickup trip of any state for a return (reference: pickup_tracking).</summary>
+    public async Task<DeliveryAssignmentModel?> LatestForReturnAsync(Guid returnId, IUnitOfWork uow) =>
+        (await uow.QueryAsync<DeliveryAssignmentModel>(
+            "SELECT * FROM delivery_assignments WHERE return_id = @returnId ORDER BY created_at DESC LIMIT 1",
+            new { returnId })).FirstOrDefault();
+
+    /// <summary>Partners already asked to collect this return (reference: candidates with ret).</summary>
+    public async Task<HashSet<Guid>> TriedForReturnAsync(Guid returnId, IUnitOfWork uow) =>
+        (await uow.QueryAsync<Guid>(
+            "SELECT DISTINCT delivery_boy_id FROM delivery_assignments WHERE return_id = @returnId",
+            new { returnId })).ToHashSet();
+
+    public Task<int> AutoOffersForReturnAsync(Guid returnId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM delivery_assignments WHERE return_id = @returnId AND mode = 'auto'",
+            new { returnId })!;
+
     /// <summary>Live load per partner: open offers plus trips in hand (reference: loads).</summary>
     public async Task<Dictionary<Guid, int>> LoadsAsync(IReadOnlyCollection<Guid> ids, IUnitOfWork uow)
     {

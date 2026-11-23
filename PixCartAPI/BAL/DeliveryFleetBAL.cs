@@ -16,6 +16,7 @@ namespace BAL;
 /// </summary>
 public class DeliveryFleetBAL(
     DeliveryFleetDAL fleet,
+    ReturnsDAL returnsDal,
     DeliveryDAL delivery,
     OrdersDAL orders,
     InventoryDAL inventory,
@@ -332,10 +333,10 @@ public class DeliveryFleetBAL(
         }
     }
 
-    /// <summary>Offers the package to a partner, or assigns it outright (reference: offer; the return-pickup branch
-    /// comes with the returns slice).</summary>
+    /// <summary>Offers the package to a partner, or assigns it outright (reference: offer). With ``ret`` it is a
+    /// return pickup: collect the item from the customer and bring it to the store.</summary>
     private async Task<DeliveryAssignmentModel> OfferAsync(SubOrderModel sub, OrderModel order, DeliveryBoyModel boy,
-        string mode, JsonObject cfg, IUnitOfWork uow, UserModel? by = null, bool direct = false)
+        string mode, JsonObject cfg, IUnitOfWork uow, UserModel? by = null, bool direct = false, ReturnRequestModel? ret = null)
     {
         if (await fleet.ActiveForSubAsync(sub.Id, uow) is not null)
             throw new AppException("This package already has a delivery partner", "already_assigned", 409);
@@ -343,20 +344,22 @@ public class DeliveryFleetBAL(
         var a = new DeliveryAssignmentModel
         {
             Id = Guid.NewGuid(), OrderId = order.Id, SubOrderId = sub.Id, DeliveryBoyId = boy.Id,
-            AssignedBy = by?.Id, Mode = mode, Kind = "delivery",
+            AssignedBy = by?.Id, Mode = mode, Kind = ret is not null ? "pickup" : "delivery", ReturnId = ret?.Id,
             Status = direct ? "accepted" : "offered", AssignedAt = now,
             ExpiresAt = direct ? null : now.AddSeconds(cfg.Int("offer_seconds")),
             AcceptedAt = direct ? now : null, StatusAt = now,
-            CodAmount = await ordersBal.CollectAmountAsync(sub, order, uow), CreatedAt = now,
+            CodAmount = ret is not null ? 0 : await ordersBal.CollectAmountAsync(sub, order, uow), CreatedAt = now,
         };
         await fleet.InsertAsync(a, uow);
         await LogStatusAsync(uow, order.Id, sub.Id, a.Id, a.Status, by is not null ? "admin" : "system", by?.Id,
-            $"{(direct ? "Assigned to" : "Offered to")} {boy.Name}");
+            $"{(direct ? "Assigned to" : "Offered to")} {boy.Name}" + (ret is not null ? $" (return {ret.Number} pickup)" : ""));
         var vars = await OfferVarsAsync(a, sub, order, cfg, uow);
-        await notify.NotifyUserAsync(boy.UserId, direct ? "delivery_assigned" : "delivery_new_offer", vars,
-            direct ? $"/delivery/trips/{a.Id}" : "/delivery");
+        var ev = ret is not null
+            ? (direct ? "delivery_return_pickup_assigned" : "delivery_new_return_pickup")
+            : (direct ? "delivery_assigned" : "delivery_new_offer");
+        await notify.NotifyUserAsync(boy.UserId, ev, vars, direct ? $"/delivery/trips/{a.Id}" : "/delivery");
         if (direct)
-            await AnnounceAcceptedAsync(a, sub, order, boy, uow);
+            await AnnounceAcceptedAsync(a, sub, order, boy, uow, ret);
         return a;
     }
 
@@ -377,10 +380,21 @@ public class DeliveryFleetBAL(
         };
     }
 
-    /// <summary>Reference: _announce_accepted (delivery branch; the return-pickup branch comes with returns).</summary>
+    /// <summary>Reference: _announce_accepted. A return pickup tells only the customer (the seller hears when the
+    /// partner collects).</summary>
     private async Task AnnounceAcceptedAsync(DeliveryAssignmentModel a, SubOrderModel sub, OrderModel order,
-        DeliveryBoyModel boy, IUnitOfWork uow)
+        DeliveryBoyModel boy, IUnitOfWork uow, ReturnRequestModel? ret = null)
     {
+        if (a.Kind == "pickup")
+        {
+            ret ??= a.ReturnId is not null ? await returnsDal.ReturnAsync(a.ReturnId.Value) : null;
+            if (ret is not null)
+                await notify.NotifyUserAsync(ret.UserId, "return_pickup_scheduled", new Dictionary<string, string>
+                {
+                    ["partner"] = boy.Name, ["return_number"] = ret.Number, ["code"] = ret.PickupOtp,
+                }, $"/orders/{order.Id}");
+            return;
+        }
         var item = await FirstTitleAsync(sub, uow) is { Length: > 0 } t ? t : "Your package";
         await notify.NotifyUserAsync(order.UserId, "delivery_partner_assigned",
             new Dictionary<string, string> { ["partner"] = boy.Name, ["item"] = item }, $"/orders/{order.Id}");
@@ -398,16 +412,32 @@ public class DeliveryFleetBAL(
     /// <summary>Partners who could take this package, best first, each with why they can or cannot
     /// (reference: candidates; the return-pickup branch comes with returns).</summary>
     public async Task<List<JsonObject>> CandidatesAsync(SubOrderModel sub, OrderModel order, JsonObject cfg,
-        IUnitOfWork uow, bool onlineOnly = true)
+        IUnitOfWork uow, bool onlineOnly = true, ReturnRequestModel? ret = null)
     {
-        var place = await PickupPlaceAsync(sub);
-        var zoneId = sub.DeliveryZoneId;
+        // With a return the partner collects at the customer's door: distance and zone are the customer's.
+        JsonObject place;
+        Guid? zoneId;
+        HashSet<Guid> tried;
+        long cod;
+        if (ret is not null)
+        {
+            var st = ShipTo(order);
+            place = new JsonObject { ["lat"] = st["lat"]?.DeepClone(), ["lng"] = st["lng"]?.DeepClone() };
+            zoneId = (await ZoneForPinAsync(st["pincode"]?.GetValue<string>() ?? ""))?.Id;
+            tried = await fleet.TriedForReturnAsync(ret.Id, uow);
+            cod = 0;
+        }
+        else
+        {
+            place = await PickupPlaceAsync(sub);
+            zoneId = sub.DeliveryZoneId;
+            tried = await fleet.TriedForSubAsync(sub.Id, uow);
+            cod = await ordersBal.CollectAmountAsync(sub, order, uow);
+        }
         var boys = (await delivery.ApprovedPartnersAsync(onlineOnly)).ToList();
         var ids = boys.Select(b => b.Id).ToList();
         var load = await fleet.LoadsAsync(ids, uow);
         var cash = await fleet.CashByPartnerAsync(ids, uow);
-        var tried = await fleet.TriedForSubAsync(sub.Id, uow);
-        var cod = await ordersBal.CollectAmountAsync(sub, order, uow);
         var now = DateTimeFunctions.UtcNow();
         var outList = new List<(DeliveryBoyModel Boy, double? Dist, int Load, long Cash, bool Fresh, List<string> Reasons)>();
         foreach (var b in boys)
@@ -477,6 +507,168 @@ public class DeliveryFleetBAL(
         return await OfferAsync(sub, order, boy, "auto", cfg, uow);
     }
 
+    // ------------------------------------------------------------------ return pickups (reference: fleet.py return internals)
+
+    /// <summary>An approved return of a package the fleet delivered: ask a partner to collect it (auto-assign, or
+    /// staff assign it). No-op when the fleet or return pickups are off, or the package went by courier
+    /// (reference: request_return_pickup). Persists the return's fleet fields it sets.</summary>
+    public async Task RequestReturnPickupAsync(ReturnRequestModel ret, IUnitOfWork uow)
+    {
+        var cfg = await deliverySettings.GetAsync();
+        var sub = await orders.GetSubAsync(ret.SubOrderId);
+        if (!(cfg.Bool("enabled") && cfg.Bool("return_pickups")) || cfg.Str("fleet_mode") == "off"
+            || sub is null || sub.ShippingProvider != "fleet")
+            return;
+        if (ret.Status != "approved" || ret.FleetRequestedAt is not null) return;
+        ret.FleetRequestedAt = DateTimeFunctions.UtcNow();
+        ret.FleetAlertedAt = null;
+        if (ret.PickupOtp.Length == 0) ret.PickupOtp = Code();
+        if (sub.PickupCode.Length == 0)
+        {
+            sub.PickupCode = Code();
+            await orders.UpdateSubFleetAsync(sub, uow);
+        }
+        await returnsDal.UpdateReturnAsync(ret, uow);
+        await LogStatusAsync(uow, sub.OrderId, sub.Id, null, "pickup_requested", "system", null, $"Return {ret.Number}");
+        if (cfg.Bool("auto_assign") && await AutoAssignPickupAsync(ret, sub, cfg, uow) is not null)
+            return;
+        await AlertPickupUnassignedAsync(ret, "A return is waiting for a partner to collect it.", uow);
+    }
+
+    /// <summary>Offers a return pickup to the nearest free partner of the customer's zone, or tells staff once
+    /// (reference: auto_assign_pickup).</summary>
+    private async Task<DeliveryAssignmentModel?> AutoAssignPickupAsync(ReturnRequestModel ret, SubOrderModel sub,
+        JsonObject cfg, IUnitOfWork uow)
+    {
+        if (!(cfg.Bool("enabled") && cfg.Bool("auto_assign") && cfg.Bool("return_pickups"))
+            || ret.Status != "approved" || ret.FleetRequestedAt is null)
+            return null;
+        if (await fleet.ActiveForSubAsync(sub.Id, uow) is not null) return null;
+        var triedCount = await fleet.AutoOffersForReturnAsync(ret.Id, uow);
+        if (triedCount >= cfg.Int("max_offers"))
+        {
+            await AlertPickupUnassignedAsync(ret, $"{triedCount} partners were asked and none took it.", uow);
+            return null;
+        }
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var pool = (await CandidatesAsync(sub, order, cfg, uow, ret: ret)).Where(c => c["ok"]!.GetValue<bool>()).ToList();
+        if (pool.Count == 0)
+        {
+            await AlertPickupUnassignedAsync(ret, "No free partner is online near the customer right now.", uow);
+            return null;
+        }
+        var boy = await delivery.PartnerByIdAsync(Guid.Parse(pool[0]["boy_id"]!.GetValue<string>()))
+                  ?? throw new NotFoundException("Delivery partner");
+        return await OfferAsync(sub, order, boy, "auto", cfg, uow, ret: ret);
+    }
+
+    /// <summary>Reference: _alert_pickup_unassigned - one staff note per return pickup wait.</summary>
+    private async Task AlertPickupUnassignedAsync(ReturnRequestModel ret, string reason, IUnitOfWork uow)
+    {
+        if (ret.FleetAlertedAt is not null) return;
+        ret.FleetAlertedAt = DateTimeFunctions.UtcNow();
+        await returnsDal.UpdateReturnAsync(ret, uow);
+        await NotifyStaffAsync("delivery", "staff_delivery_unassigned",
+            new Dictionary<string, string> { ["order_number"] = $"return {ret.Number}", ["reason"] = reason },
+            "/admin/delivery/queue?tab=returns");
+    }
+
+    /// <summary>A freed return pickup: offer it again (auto-assign) or tell staff (reference: release's pickup branch).</summary>
+    private async Task ReleasePickupAsync(DeliveryAssignmentModel a, string why, JsonObject cfg, IUnitOfWork uow)
+    {
+        if (a.ReturnId is null) return;
+        var ret = await returnsDal.ReturnForUpdateAsync(a.ReturnId.Value, uow);
+        if (ret is null || ret.Status != "approved" || ret.FleetRequestedAt is null) return;
+        if (!cfg.Bool("auto_assign"))
+        {
+            ret.FleetAlertedAt = null;
+            await returnsDal.UpdateReturnAsync(ret, uow);
+        }
+        var sub = await orders.GetSubAsync(a.SubOrderId);
+        if (!cfg.Bool("auto_assign") || sub is null || await AutoAssignPickupAsync(ret, sub, cfg, uow) is null)
+            await AlertPickupUnassignedAsync(ret, why, uow);
+    }
+
+    /// <summary>The return was cancelled (or switched to a courier) before the item was collected
+    /// (reference: cancel_return_pickup).</summary>
+    public async Task CancelReturnPickupAsync(ReturnRequestModel ret, string why, IUnitOfWork uow, UserModel? user = null)
+    {
+        ret.FleetRequestedAt = null;
+        await returnsDal.UpdateReturnAsync(ret, uow);
+        var a = await fleet.ActiveForReturnAsync(ret.Id, uow);
+        if (a is not null && a.Status is "offered" or "accepted" or "reached")
+            await EndAsync(a, "cancelled", why, uow, userId: user?.Id, actor: user is not null ? "admin" : "system", tellPartner: true);
+    }
+
+    /// <summary>The seller marked the return received while the partner's trip was still open: close it
+    /// (reference: close_pickup_on_receive).</summary>
+    public async Task ClosePickupOnReceiveAsync(ReturnRequestModel ret, IUnitOfWork uow, UserModel? user = null)
+    {
+        var a = await fleet.ActiveForReturnAsync(ret.Id, uow);
+        if (a is null) return;
+        if (a.Status is "picked" or "on_the_way")
+        {
+            var cfg = await deliverySettings.GetAsync();
+            var now = DateTimeFunctions.UtcNow();
+            a.Status = "delivered"; a.DeliveredAt = now; a.EndedAt = now; a.StatusAt = now;
+            a.FeePaise = FeeFor(cfg, null);
+            a.BonusPaise = await WeatherBonusAsync(cfg);
+            await fleet.UpdateAsync(a, uow);
+            await LogStatusAsync(uow, a.OrderId, a.SubOrderId, a.Id, "return_delivered", "seller", user?.Id,
+                "The seller received the return");
+        }
+        else
+            await EndAsync(a, "cancelled", "The seller already has the return", uow, userId: user?.Id, actor: "seller", tellPartner: true);
+    }
+
+    /// <summary>A return pickup as the customer, the seller or staff see it; each sees only their own code
+    /// (reference: pickup_tracking).</summary>
+    public async Task<JsonObject?> PickupTrackingAsync(ReturnRequestModel ret, string viewer, IUnitOfWork? uow = null)
+    {
+        if (ret.FleetRequestedAt is null && ret.PickupOtp.Length == 0) return null;
+        var own = uow is null;
+        uow ??= await db.BeginAsync();
+        var a = await fleet.LatestForReturnAsync(ret.Id, uow);
+        var boy = a is not null ? await delivery.PartnerByIdAsync(a.DeliveryBoyId) : null;
+        var live = a is not null && DeliveryFleetDAL.OnTrip.Contains(a.Status);
+        var waiting = ret.Status == "approved" && ret.FleetRequestedAt is not null && (a is null || !DeliveryFleetDAL.OnTrip.Contains(a.Status));
+        var label = waiting ? "Finding a delivery partner" : a?.Status switch
+        {
+            "accepted" => "Partner on the way to collect", "reached" => "Partner at the door",
+            "picked" => "Collected", "on_the_way" => "On the way to the seller",
+            "delivered" => "Handed to the seller", "failed" => "Not collected", _ => "",
+        };
+        var sub = await orders.GetSubAsync(ret.SubOrderId);
+        JsonObject outObj = new()
+        {
+            ["requested"] = ret.FleetRequestedAt is not null,
+            ["status"] = a?.Status ?? "waiting",
+            ["label"] = label ?? "",
+            ["assignment_id"] = a?.Id.ToString(),
+            ["fail_reason"] = a is not null && a.Status == "failed" ? a.FailReason : "",
+            ["partner"] = boy is not null && live
+                ? new JsonObject
+                {
+                    ["name"] = boy.Name,
+                    ["vehicle"] = DeliverySettingsBAL.VehicleLabels.GetValueOrDefault(boy.VehicleType, ""),
+                    ["vehicle_no"] = boy.VehicleNo,
+                    ["phone"] = boy.Phone,
+                    ["photo"] = boy.Photo,
+                }
+                : null,
+        };
+        if (viewer == "customer" && ret.Status == "approved")
+            outObj["code"] = ret.PickupOtp; // given to the partner at collection
+        if (viewer == "seller" && live && a!.Status is "picked" or "on_the_way")
+            outObj["code"] = sub?.PickupCode ?? ""; // given to the partner when the item reaches the store
+        if (own)
+        {
+            await uow.CommitAsync();
+            await uow.DisposeAsync();
+        }
+        return outObj;
+    }
+
     /// <summary>After a request ended without the work done: offer it again or tell staff (reference: _after_release).</summary>
     private async Task AfterReleaseAsync(SubOrderModel sub, string why, JsonObject cfg, IUnitOfWork uow)
     {
@@ -505,8 +697,10 @@ public class DeliveryFleetBAL(
         foreach (var a in rows)
         {
             await EndAsync(a, "expired", "Not accepted in time", uow);
-            var sub = await orders.GetSubAsync(a.SubOrderId);
-            if (sub is not null) await AfterReleaseAsync(sub, "The partner did not answer in time.", cfg, uow);
+            if (a.Kind == "pickup")
+                await ReleasePickupAsync(a, "The partner did not answer in time.", cfg, uow);
+            else if (await orders.GetSubAsync(a.SubOrderId) is { } sub)
+                await AfterReleaseAsync(sub, "The partner did not answer in time.", cfg, uow);
         }
         return rows.Count;
     }
@@ -526,8 +720,10 @@ public class DeliveryFleetBAL(
             if (a.ExpiresAt is not null && a.ExpiresAt < DateTimeFunctions.UtcNow())
             {
                 await EndAsync(a, "expired", "Not accepted in time", uow);
-                var sub = await orders.GetSubAsync(a.SubOrderId);
-                if (sub is not null) await AfterReleaseAsync(sub, "The partner answered too late.", cfg, uow);
+                if (a.Kind == "pickup")
+                    await ReleasePickupAsync(a, "The partner answered too late.", cfg, uow);
+                else if (await orders.GetSubAsync(a.SubOrderId) is { } sub)
+                    await AfterReleaseAsync(sub, "The partner answered too late.", cfg, uow);
                 throw new AppException("Time is up for this request; it went to another partner", "offer_expired", 409);
             }
             var busy = await fleet.OnTripCountAsync(boy.Id, uow);
@@ -561,9 +757,11 @@ public class DeliveryFleetBAL(
                    (note.Trim().Length > 0 ? $": {note.Trim()}" : "");
         a.RejectReason = text[..Math.Min(200, text.Length)];
         await EndAsync(a, "rejected", text, uow, userId: boy.UserId, actor: "delivery");
-        var sub = await orders.GetSubAsync(a.SubOrderId);
         var cfg = await deliverySettings.GetAsync();
-        if (sub is not null) await AfterReleaseAsync(sub, $"{boy.Name} declined: {text}", cfg, uow);
+        if (a.Kind == "pickup")
+            await ReleasePickupAsync(a, $"{boy.Name} declined: {text}", cfg, uow);
+        else if (await orders.GetSubAsync(a.SubOrderId) is { } sub)
+            await AfterReleaseAsync(sub, $"{boy.Name} declined: {text}", cfg, uow);
         await uow.CommitAsync();
         return new JsonObject { ["ok"] = true };
     }

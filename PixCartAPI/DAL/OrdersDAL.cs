@@ -315,15 +315,15 @@ public class OrdersDAL(IMySqlDapperHelper db)
             "SELECT EXISTS(SELECT 1 FROM seller_ledger WHERE sub_order_id = @subId AND kind = @kind)", new { subId, kind });
 
     /// <summary>One seller_ledger row (reference: ledger._entry).</summary>
-    public Task<int> InsertLedgerAsync(Guid sellerId, Guid subId, string kind, long amount, string description, DateTime availableAt, IUnitOfWork uow) =>
+    public Task<int> InsertLedgerAsync(Guid sellerId, Guid subId, string kind, long amount, string description, DateTime availableAt, IUnitOfWork uow, Guid? returnId = null) =>
         uow.ExecuteAsync(
             """
             INSERT INTO seller_ledger (id, seller_id, sub_order_id, return_id, kind, amount, description, available_at, payout_id, created_at)
-            VALUES (@id, @sellerId, @subId, NULL, @kind, @amount, @description, @availableAt, NULL, UTC_TIMESTAMP(6))
+            VALUES (@id, @sellerId, @subId, @returnId, @kind, @amount, @description, @availableAt, NULL, UTC_TIMESTAMP(6))
             """,
             new
             {
-                id = Guid.NewGuid().ToString(), sellerId, subId, kind, amount,
+                id = Guid.NewGuid().ToString(), sellerId, subId, returnId = returnId?.ToString(), kind, amount,
                 description = description.Length > 200 ? description[..200] : description, availableAt,
             });
 
