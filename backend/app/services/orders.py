@@ -43,7 +43,7 @@ from app.models import (
     Variant,
     Warehouse,
 )
-from app.services import fee_invoices, inventory, razorpay
+from app.services import fee_invoices, inventory, razorpay, regional
 from app.services import fees as fees_svc
 from app.services.catalog import images_for, refresh_product_aggregates, variant_label
 from app.services.coupons import CouponResult, evaluate
@@ -259,6 +259,7 @@ async def place_order(
     buyer_business: str = "",
     instructions: str | None = None,
     no_bag: bool = False,
+    currency: str | None = None,
 ) -> tuple[Order, Payment | None]:
     existing = (
         await session.execute(select(Order).where(Order.user_id == user.id, Order.idempotency_key == idempotency_key))
@@ -474,13 +475,25 @@ async def place_order(
         session.add(CouponRedemption(coupon_id=coupon.coupon.id, user_id=user.id, order_id=order.id, discount_paise=coupon.discount, created_at=now))
 
     payment = None
+    # the shopper's currency (Admin → Languages and currencies): kept on the order with today's rate; Razorpay charges it
+    # only when the admin chose "charge in the shopper's currency", otherwise rupees
+    reg = await regional.get_regional(session)
+    shown = (currency or regional.BASE).upper()
+    shown_rate = regional.currency_rate(reg, shown)
+    if shown_rate is not None:
+        order.currency, order.fx_rate = shown, shown_rate
+    charge_currency, _, charge = regional.charge_plan(reg, currency, grand_total) if is_online else (regional.BASE, None, None)
     if is_online:
         # Created inside the transaction: if the gateway call fails, nothing above is committed.
         try:
-            rp = await razorpay.create_order(grand_total, order.number, {"order_number": order.number})
+            rp = await razorpay.create_order(charge or grand_total, order.number, {"order_number": order.number}, currency=charge_currency)
         except razorpay.GatewayError as exc:
+            if charge_currency != regional.BASE:
+                raise ApiError(f"Paying in {charge_currency} is not available right now ({exc}). Switch the currency to ₹ (INR) and try again.",
+                               "currency_unavailable", 502) from exc
             raise ApiError(f"Could not start the payment: {exc}", "gateway_error", 502) from exc
-        payment = Payment(order_id=order.id, provider="razorpay", provider_order_id=rp["id"], amount_paise=grand_total)
+        payment = Payment(order_id=order.id, provider="razorpay", provider_order_id=rp["id"], amount_paise=grand_total,
+                          currency=charge_currency, charge_amount=charge)
         session.add(payment)
     else:
         await _announce_placed(session, order, user)
@@ -510,8 +523,8 @@ def checkout_payload(order: Order, payment: Payment | None, user: User, brand: s
         "key_id": cfg.razorpay_key_id,
         "checkout_url": cfg.razorpay_checkout_url,
         "razorpay_order_id": payment.provider_order_id,
-        "amount": payment.amount_paise,
-        "currency": "INR",
+        "amount": payment.charge_amount or payment.amount_paise,
+        "currency": payment.currency or "INR",
         "name": brand,
         "description": f"Order {order.number}",
         "prefill": {"name": user.name, "contact": f"+91{user.phone}" if user.phone else "", "email": user.email or ""},
@@ -532,11 +545,11 @@ async def mark_paid(session: AsyncSession, payment: Payment, provider_payment_id
         return "already"
     if (await session.execute(select(Refund.id).where(Refund.provider_payment_id == provider_payment_id))).first():
         return "already"  # a duplicate payment already being refunded
-    if amount != payment.amount_paise:
+    if amount != (payment.charge_amount or payment.amount_paise):
         raise ApiError("Payment amount does not match the order", "amount_mismatch")
     if payment.status == "captured":
         # A second successful payment for the same order (two tabs, a retried UPI request): refund it in full, to itself.
-        session.add(Refund(order_id=order.id, payment_id=payment.id, provider_payment_id=provider_payment_id, amount_paise=amount,
+        session.add(Refund(order_id=order.id, payment_id=payment.id, provider_payment_id=provider_payment_id, amount_paise=payment.amount_paise,
                            reason="Duplicate payment"))
         return "refund"
     payment.status = "captured"
@@ -557,8 +570,8 @@ async def mark_paid(session: AsyncSession, payment: Payment, provider_payment_id
         return "paid"
     # Paid after the order was cancelled (payment window expired): refund in full.
     order.payment_status = "refunded"
-    session.add(Refund(order_id=order.id, payment_id=payment.id, amount_paise=amount, reason="Payment received after order was cancelled"))
-    order.refunded_total += amount
+    session.add(Refund(order_id=order.id, payment_id=payment.id, amount_paise=payment.amount_paise, reason="Payment received after order was cancelled"))
+    order.refunded_total += payment.amount_paise
     return "refund"
 
 
@@ -569,13 +582,22 @@ async def confirm_with_gateway(session: AsyncSession, payment: Payment, provider
         raise ApiError("Payment does not belong to this order", "payment_mismatch")
     status = data.get("status")
     if status == "authorized":
-        data = await razorpay.capture_payment(provider_payment_id, payment.amount_paise)
+        data = await razorpay.capture_payment(provider_payment_id, payment.charge_amount or payment.amount_paise, payment.currency or "INR")
         status = data.get("status")
     if status != "captured":
         payment.status = "failed" if status == "failed" else payment.status
         payment.error = (data.get("error_description") or status or "")[:500]
         return "not_captured"
     return await mark_paid(session, payment, provider_payment_id, data.get("method", ""), int(data.get("amount", 0)))
+
+
+def refund_charge(payment: Payment, paise: int) -> int:
+    """A refund in rupees as Razorpay must send it: in the currency the shopper paid, at the order's own rate."""
+    if not payment.charge_amount or payment.currency in ("", "INR") or not payment.amount_paise:
+        return paise
+    if paise >= payment.amount_paise:
+        return payment.charge_amount
+    return max(1, (paise * payment.charge_amount + payment.amount_paise // 2) // payment.amount_paise)
 
 
 async def check_with_gateway(session: AsyncSession, payment: Payment) -> dict:
@@ -780,7 +802,7 @@ async def process_refund(session: AsyncSession, refund_id: uuid.UUID) -> None:
     payment = await session.get(Payment, refund.payment_id)
     refund.attempts += 1
     try:
-        data = await razorpay.refund_payment(refund.provider_payment_id or payment.provider_payment_id or "", refund.amount_paise, str(refund.id),
+        data = await razorpay.refund_payment(refund.provider_payment_id or payment.provider_payment_id or "", refund_charge(payment, refund.amount_paise), str(refund.id),
                                              {"refund_id": str(refund.id)})
     except razorpay.GatewayError as exc:
         refund.last_error = str(exc)[:500]

@@ -42,6 +42,8 @@ class User(IdMixin, TimestampMixin, Base):
     ui_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     # "Sign out of other devices": access tokens issued before this moment are refused (refresh sessions are revoked)
     sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # the shopper's customer at Razorpay: Razorpay keeps their saved cards (tokenised); we never see card numbers
+    razorpay_customer_id: Mapped[str | None] = mapped_column(String(40))
 
     __table_args__ = (CheckConstraint("phone IS NOT NULL OR email IS NOT NULL", name="has_identifier"),)
 

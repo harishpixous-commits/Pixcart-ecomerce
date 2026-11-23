@@ -14,6 +14,7 @@ import { ShopBackBar } from "@/components/back-button";
 import { BackToTop } from "@/components/back-to-top";
 import { CompareTray } from "@/components/compare";
 import { ShopAssistant } from "@/components/shop-assistant/widget";
+import { RegionStrip } from "@/components/region-picker";
 import { Logo } from "@/components/shop-chrome";
 import { ShopRouteSkeleton } from "@/components/skeletons";
 import { useSession } from "@/lib/session";
@@ -119,6 +120,7 @@ function OpenShop({ maintenance, children }: { maintenance: boolean; children: R
       <ShopBackBar />
       <main className="mx-auto w-full min-h-[60vh] max-w-shop flex-1 px-3 py-4 sm:px-4 sm:py-6">{children}</main>
       <BackToTop />
+      <RegionStrip />
       <Footer />
       {MobileNav && <MobileNav />}
       <ShopAssistant />

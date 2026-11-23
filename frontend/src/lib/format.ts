@@ -1,14 +1,91 @@
 const inr0 = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const inr2 = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** ₹1,23,456 — paise shown only when present. */
+/*
+ * The shopper's currency (Admin → Languages and currencies). The books are always in rupees; on shop pages amounts are
+ * shown in the currency the shopper picked, at the admin's rate. The admin, seller and delivery panels always show
+ * rupees (lib/regional.tsx decides, before the page renders).
+ */
+export type DisplayCurrency = { code: string; rate: number; digits: number };
+const BASE: DisplayCurrency = { code: "INR", rate: 1, digits: 2 };
+let display: DisplayCurrency = BASE;
+const formats = new Map<string, Intl.NumberFormat>();
+
+export function setDisplayCurrency(d: DisplayCurrency | null) {
+  display = d && d.code !== "INR" && d.rate > 0 ? d : BASE;
+}
+export function displayCurrency(): DisplayCurrency {
+  return display;
+}
+
+function foreign(paise: number, exact: boolean): string {
+  const { code, rate, digits } = display;
+  const value = (paise / 100) * rate;
+  const key = `${code}:${digits}`;
+  let f = formats.get(key);
+  if (!f) {
+    try {
+      f = new Intl.NumberFormat("en-US", { style: "currency", currency: code, currencyDisplay: "narrowSymbol", minimumFractionDigits: digits, maximumFractionDigits: digits });
+    } catch {
+      f = new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+    formats.set(key, f);
+  }
+  void exact;
+  return f.format(value);
+}
+
+/** ₹1,23,456 — paise shown only when present. In the shopper's currency on shop pages. */
 export function rupees(paise: number): string {
+  if (display.code !== "INR") return foreign(paise, false);
   return paise % 100 === 0 ? inr0.format(paise / 100) : inr2.format(paise / 100);
 }
 
-/** Always two decimals; for invoices and settlement tables. */
+/** Always two decimals; for invoices and settlement tables. In the shopper's currency on shop pages. */
 export function rupeesExact(paise: number): string {
+  if (display.code !== "INR") return foreign(paise, true);
   return inr2.format(paise / 100);
+}
+
+/** Always rupees, whatever the shopper picked: what is actually charged, cash on delivery, invoices. */
+export function inRupees(paise: number): string {
+  return paise % 100 === 0 ? inr0.format(paise / 100) : inr2.format(paise / 100);
+}
+
+/** An amount Razorpay charged, in its currency's smallest unit (cents, fils...). */
+export function money(minor: number, code: string, digits = 2): string {
+  if (code === "INR") return inRupees(minor);
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: code, currencyDisplay: "narrowSymbol", minimumFractionDigits: digits, maximumFractionDigits: digits })
+      .format(minor / 10 ** digits);
+  } catch {
+    return `${code} ${(minor / 10 ** digits).toFixed(digits)}`;
+  }
+}
+
+/** An amount the shopper typed in their currency ("12.50"), as paise (rupees) for the server; null if not a number. */
+export function shownToPaise(text: string): number | null {
+  const clean = text.replace(/[^\d.]/g, "");
+  if (!/^\d+(\.\d{1,3})?$/.test(clean)) return null;
+  return Math.round((parseFloat(clean) / (display.code === "INR" ? 1 : display.rate)) * 100);
+}
+
+/** Paise as the shopper's currency for an input box ("12.5"), the reverse of shownToPaise. */
+export function paiseToShown(paise: number): string {
+  if (display.code === "INR") return paiseToInput(paise);
+  const v = (paise / 100) * display.rate;
+  return String(Number(v.toFixed(display.digits)));
+}
+
+/** The symbol of the shopper's currency, for labels like "Price (₹)". */
+export function currencySymbol(): string {
+  if (display.code === "INR") return "₹";
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: display.code, currencyDisplay: "narrowSymbol" }).formatToParts(0)
+      .find((p) => p.type === "currency")?.value ?? display.code;
+  } catch {
+    return display.code;
+  }
 }
 
 export function toPaise(rupeesText: string): number | null {

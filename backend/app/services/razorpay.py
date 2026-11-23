@@ -54,8 +54,9 @@ async def _call(method: str, path: str, json: dict | None = None) -> dict[str, A
     return resp.json()
 
 
-async def create_order(amount_paise: int, receipt: str, notes: dict[str, str]) -> dict[str, Any]:
-    return await _call("POST", "/orders", {"amount": amount_paise, "currency": "INR", "receipt": receipt[:40], "notes": notes})
+async def create_order(amount: int, receipt: str, notes: dict[str, str], currency: str = "INR") -> dict[str, Any]:
+    """amount is in the currency's smallest unit (paise for INR). Other currencies need Razorpay international payments."""
+    return await _call("POST", "/orders", {"amount": amount, "currency": currency, "receipt": receipt[:40], "notes": notes})
 
 
 async def fetch_payment(payment_id: str) -> dict[str, Any]:
@@ -67,8 +68,8 @@ async def order_payments(order_id: str) -> list[dict[str, Any]]:
     return data.get("items", [])
 
 
-async def capture_payment(payment_id: str, amount_paise: int) -> dict[str, Any]:
-    return await _call("POST", f"/payments/{payment_id}/capture", {"amount": amount_paise, "currency": "INR"})
+async def capture_payment(payment_id: str, amount: int, currency: str = "INR") -> dict[str, Any]:
+    return await _call("POST", f"/payments/{payment_id}/capture", {"amount": amount, "currency": currency})
 
 
 async def refund_payment(payment_id: str, amount_paise: int, receipt: str, notes: dict[str, str]) -> dict[str, Any]:
@@ -77,6 +78,29 @@ async def refund_payment(payment_id: str, amount_paise: int, receipt: str, notes
         f"/payments/{payment_id}/refund",
         {"amount": amount_paise, "speed": "normal", "receipt": receipt[:40], "notes": notes},
     )
+
+
+# ----------------------------------------------------------------------------- customers and saved cards
+# Razorpay keeps saved cards as network tokens (RBI card-on-file tokenisation) under a Razorpay customer. The shopper
+# agrees to save a card inside Razorpay's payment window; we only ever see the last 4 digits, network and expiry.
+
+
+async def create_customer(name: str, contact: str, email: str) -> dict[str, Any]:
+    body = {"name": (name or "Customer")[:50], "fail_existing": "0"}
+    if contact:
+        body["contact"] = contact
+    if email:
+        body["email"] = email
+    return await _call("POST", "/customers", body)
+
+
+async def customer_tokens(customer_id: str) -> list[dict[str, Any]]:
+    data = await _call("GET", f"/customers/{customer_id}/tokens")
+    return data.get("items", [])
+
+
+async def delete_token(customer_id: str, token_id: str) -> None:
+    await _call("DELETE", f"/customers/{customer_id}/tokens/{token_id}")
 
 
 async def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> bool:

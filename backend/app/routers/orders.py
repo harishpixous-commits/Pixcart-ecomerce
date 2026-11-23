@@ -33,7 +33,7 @@ from app.models import (
 )
 from app.routers.addresses import get_owned_address
 from app.services import fees as fees_svc
-from app.services import fleet, razorpay
+from app.services import fleet, razorpay, regional
 from app.services.cms import get_site
 from app.services.coupons import evaluate
 from app.services.orders import (
@@ -71,6 +71,7 @@ class PlaceIn(QuoteIn):
     buyer_business: str = Field(default="", max_length=160)
     instructions: str | None = Field(default=None, max_length=300)  # empty: the address's saved instructions
     no_bag: bool = False
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")  # the shopper's currency (Admin → Languages and currencies)
 
 
 class VerifyIn(BaseModel):
@@ -139,7 +140,10 @@ async def order_detail(session, o: Order, *, for_admin: bool = False) -> dict:
         "status": o.status,
         "payment_method": o.payment_method,
         "payment_status": o.payment_status,
+        "currency": o.currency or "INR",
+        "fx_rate": float(o.fx_rate or 1),
         "paid": {"amount": captured.amount_paise, "method": captured.method, "reference": captured.provider_payment_id or "",
+                 "currency": captured.currency or "INR", "charge_amount": captured.charge_amount,
                  "at": captured.updated_at.isoformat() if captured.updated_at else None} if captured else None,
         "ship_to": o.ship_to,
         "items_total": o.items_total,
@@ -286,13 +290,14 @@ async def create_order(body: PlaceIn, user: CurrentUser, session: SessionDep) ->
             buyer_business=body.buyer_business,
             instructions=body.instructions,
             no_bag=body.no_bag,
+            currency=body.currency,
         )
     except IntegrityError:
         # Same idempotency key submitted twice at the same moment: return the winner.
         await session.rollback()
         order = (await session.execute(select(Order).where(Order.user_id == user.id, Order.idempotency_key == body.idempotency_key))).scalar_one()
         payment = (await session.execute(select(Payment).where(Payment.order_id == order.id))).scalar_one_or_none()
-    return {"order": await order_detail(session, order), "payment": checkout_payload(order, payment, user, (await get_site(session))["brand_name"], await get_integrations(session))}
+    return {"order": await order_detail(session, order), "payment": await shopper_checkout(session, order, payment, user)}
 
 
 @router.get("/api/orders")
@@ -328,7 +333,28 @@ async def _shopper_order(session, o: Order, user) -> dict:
     """The order as its shopper sees it, with what the payment window needs while it is unpaid."""
     data = await order_detail(session, o)
     payment = (await session.execute(select(Payment).where(Payment.order_id == o.id).order_by(Payment.created_at.desc()).limit(1))).scalar_one_or_none()
-    data["payment"] = checkout_payload(o, payment, user, (await get_site(session))["brand_name"], await get_integrations(session))
+    data["payment"] = await shopper_checkout(session, o, payment, user)
+    return data
+
+
+async def shopper_checkout(session, order: Order, payment: Payment | None, user) -> dict | None:
+    """What the payment window needs: the amount and currency, which ways to pay the admin offers, and the shopper's
+    Razorpay customer so Razorpay can offer their saved cards and save new ones (with their consent, in its window)."""
+    data = checkout_payload(order, payment, user, (await get_site(session))["brand_name"], await get_integrations(session))
+    if data is None:
+        return None
+    reg = await regional.get_regional(session)
+    data["methods"] = reg["pay_methods"]
+    data["card_networks"] = reg["card_networks"]
+    if reg["save_cards"] and (user.phone or user.email):
+        if not user.razorpay_customer_id:
+            try:
+                cust = await razorpay.create_customer(user.name, f"+91{user.phone}" if user.phone else "", user.email or "")
+                user.razorpay_customer_id = str(cust.get("id") or "")[:40] or None
+                await session.commit()
+            except razorpay.GatewayError as exc:
+                log.warning("razorpay customer for saved cards not created: %s", exc)
+        data["customer_id"] = user.razorpay_customer_id or ""
     return data
 
 

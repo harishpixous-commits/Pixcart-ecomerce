@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NotificationBell } from "@/components/shop-chrome";
+import { RegionButton } from "@/components/region-picker";
 import { useAdmin } from "@/lib/admin";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -227,6 +228,7 @@ export function UserTools({ tone = "dark" }: { tone?: "light" | "dark" }) {
     <div className={clsx("flex items-center gap-1.5 text-sm", dark ? "text-white/90" : "text-ink-soft")}>
       <EnvironmentBadge />
       <NotificationBell dark={!dark} />
+      <RegionButton languageOnly tone={dark ? "dark" : "light"} />
       <LayoutSwitcher tone={tone} />
       <span className="hidden max-w-[12rem] flex-col leading-tight md:flex">
         <span className={clsx("truncate font-semibold", dark ? "text-white" : "text-ink")}>{user?.name || user?.email || user?.phone}</span>

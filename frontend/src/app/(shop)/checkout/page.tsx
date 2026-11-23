@@ -24,6 +24,7 @@ import { ProductRail } from "@/components/product";
 import { Button, ButtonLink, EmptyState, ErrorNote, PageLoader, useToast } from "@/components/ui";
 import { api, ApiError, latestOnly } from "@/lib/api";
 import { rupees } from "@/lib/format";
+import { useRegional } from "@/lib/regional";
 import { useSession } from "@/lib/session";
 import { useLists, useSite } from "@/lib/site";
 import type { Address, CartView, CheckoutPayload, OrderDetail, ProductCard } from "@/lib/types";
@@ -60,6 +61,7 @@ export default function CheckoutPage() {
   const site = useSite();
   const lists = useLists();
   const { user, ready, cartCount, refreshCart } = useSession();
+  const { currency } = useRegional();
 
   const [addresses, setAddresses] = useState<Address[] | null>(null);
   const [addressId, setAddressId] = useState<string | null>(null);
@@ -252,6 +254,7 @@ export default function CheckoutPage() {
           buyer_business: withBiz ? business.trim() : "",
           instructions,
           no_bag: !!opts?.no_bag_enabled && noBag,
+          currency: currency !== "INR" ? currency : undefined, // Admin → Languages and currencies: may be charged in it
         },
       });
       setDone(true);
@@ -424,6 +427,7 @@ export default function CheckoutPage() {
           codAllowed={quote?.cod_allowed}
           codMax={quote?.cod_max_order_paise ?? 0}
           codFee={summary?.cod_fee ?? 0}
+          total={summary?.grand_total}
         />
 
         {showBar && (

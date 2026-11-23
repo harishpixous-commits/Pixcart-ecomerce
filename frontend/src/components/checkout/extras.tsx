@@ -9,7 +9,7 @@ import clsx from "clsx";
 import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-react";
 import { useId, useState } from "react";
 import { Button, Input, TextField, Textarea } from "@/components/ui";
-import { paiseToInput, rupees, toPaise } from "@/lib/format";
+import { currencySymbol, paiseToShown, rupees, shownToPaise } from "@/lib/format";
 import { Card, CardHeading, IconBadge } from "./card";
 
 /* ---------------------------------------------------------------- delivery instructions */
@@ -127,8 +127,8 @@ export function TipSection({ presets, max, tip, onTip }: { presets: number[]; ma
 
   function addOther(e: React.FormEvent) {
     e.preventDefault();
-    const paise = toPaise(text);
-    if (paise === null || paise < 100) return setError("Enter an amount of at least ₹1");
+    const paise = shownToPaise(text);
+    if (paise === null || paise < 100) return setError(`Enter an amount of at least ${rupees(100)}`);
     if (paise > max) return setError(`A tip can be at most ${rupees(max)}`);
     choose(paise);
   }
@@ -143,7 +143,7 @@ export function TipSection({ presets, max, tip, onTip }: { presets: number[]; ma
         <Chip
           on={other || custom}
           onClick={() => {
-            setText(custom ? paiseToInput(tip) : "");
+            setText(custom ? paiseToShown(tip) : "");
             setError(null);
             setOther(true);
           }}
@@ -155,7 +155,7 @@ export function TipSection({ presets, max, tip, onTip }: { presets: number[]; ma
       {other && (
         <form onSubmit={addOther} className="mt-3 flex flex-wrap items-start gap-2" noValidate>
           <div className="relative w-36">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-ink-soft" aria-hidden>₹</span>
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-ink-soft" aria-hidden>{currencySymbol()}</span>
             <Input
               id={inputId}
               inputMode="decimal"

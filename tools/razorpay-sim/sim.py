@@ -51,6 +51,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 ORDERS: dict[str, dict] = {}
 PAYMENTS: dict[str, dict] = {}
 REFUNDS: dict[str, dict] = {}
+CUSTOMERS: dict[str, dict] = {}
+TOKENS: dict[str, list[dict]] = {}
 EVENTS: list[dict] = []
 
 
@@ -95,12 +97,44 @@ async def list_orders(request: Request, count: int = 10) -> dict:
 async def create_order(request: Request) -> dict:
     _auth(request)
     b = await request.json()
-    if not isinstance(b.get("amount"), int) or b["amount"] < 100:
+    if b.get("currency", "INR") == "INR" and isinstance(b.get("amount"), int) and b["amount"] < 100:
         return _err(400, "The amount must be atleast INR 1.00")
+    if not isinstance(b.get("amount"), int) or b["amount"] < 1:
+        return _err(400, "The amount must be at least 1")
     o = {"id": _id("order"), "entity": "order", "amount": b["amount"], "amount_paid": 0, "amount_due": b["amount"], "currency": b.get("currency", "INR"),
          "receipt": b.get("receipt"), "status": "created", "attempts": 0, "notes": b.get("notes", {}), "created_at": int(time.time())}
     ORDERS[o["id"]] = o
     return o
+
+
+@app.post("/v1/customers")
+async def create_customer(request: Request) -> dict:
+    _auth(request)
+    b = await request.json()
+    for c in CUSTOMERS.values():
+        if b.get("contact") and c.get("contact") == b.get("contact"):
+            return c
+    c = {"id": _id("cust"), "entity": "customer", "name": b.get("name", ""), "contact": b.get("contact", ""), "email": b.get("email", ""),
+         "created_at": int(time.time())}
+    CUSTOMERS[c["id"]], TOKENS[c["id"]] = c, []
+    return c
+
+
+@app.get("/v1/customers/{cid}/tokens")
+async def tokens(cid: str, request: Request) -> dict:
+    _auth(request)
+    if cid not in CUSTOMERS:
+        return _err(400, "The id provided does not exist")
+    return {"entity": "collection", "count": len(TOKENS[cid]), "items": TOKENS[cid]}
+
+
+@app.delete("/v1/customers/{cid}/tokens/{tid}")
+async def delete_token(cid: str, tid: str, request: Request) -> dict:
+    _auth(request)
+    if cid not in CUSTOMERS:
+        return _err(400, "The id provided does not exist")
+    TOKENS[cid] = [t for t in TOKENS[cid] if t["id"] != tid]
+    return {"deleted": True}
 
 
 @app.get("/v1/orders/{order_id}/payments")
@@ -169,8 +203,13 @@ async def sim_pay(request: Request) -> dict:
                          "captured": False, "amount_refunded": 0, "error_description": "Payment failed (simulated)", "created_at": int(time.time())}
         await _webhook("payment.failed", {"payment": {"entity": PAYMENTS[pid]}})
         return {"error": {"description": "Payment failed (simulated)", "metadata": {"payment_id": pid, "order_id": o["id"]}}}
+    if b.get("save_card") and b.get("customer_id") in TOKENS:
+        # the shopper ticked "save this card" (RBI tokenisation): Razorpay keeps a network token, not the number
+        TOKENS[b["customer_id"]].append({"id": _id("token"), "entity": "token", "method": "card", "used_at": int(time.time()),
+                                          "card": {"last4": "1111", "network": "Visa", "type": "credit", "issuer": "HDFC",
+                                                   "expiry_month": 12, "expiry_year": 2030, "international": False}})
     pid = _id("pay")
-    p = {"id": pid, "entity": "payment", "amount": o["amount"], "currency": "INR", "status": "captured", "order_id": o["id"], "method": b.get("method", "upi"),
+    p = {"id": pid, "entity": "payment", "amount": o["amount"], "currency": o["currency"], "status": "captured", "order_id": o["id"], "method": b.get("method", "upi"),
          "captured": True, "amount_refunded": 0, "refund_status": None, "email": "", "contact": "", "created_at": int(time.time())}
     PAYMENTS[pid] = p
     o["status"], o["amount_paid"], o["amount_due"], o["attempts"] = "paid", o["amount"], 0, o["attempts"] + 1
@@ -206,12 +245,14 @@ CHECKOUT_JS = """
     var wrap = document.createElement('div');
     wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-label','Razorpay test payment');
     wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:99999;font-family:system-ui,sans-serif';
-    var amt = (o.amount/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
+    var cur = o.currency || 'INR', dig = ({JPY:0,KRW:0,VND:0,KWD:3,BHD:3,OMR:3,JOD:3})[cur]; if (dig === undefined) dig = 2;
+    var amt = (o.amount/Math.pow(10,dig)).toLocaleString('en-IN',{style:'currency',currency:cur});
     wrap.innerHTML = '<div style="background:#fff;border-radius:14px;padding:22px;width:320px;box-shadow:0 20px 60px rgba(0,0,0,.3)">'+
       '<p style="margin:0;font-size:12px;color:#b45309;font-weight:700">TEST MODE · SIMULATOR</p>'+
       '<p style="margin:6px 0 2px;font-weight:700;font-size:18px">'+(o.name||'')+'</p>'+
       '<p style="margin:0 0 14px;color:#555">'+(o.description||'')+' · <b>'+amt+'</b></p>'+
       '<button data-x="ok" style="width:100%%;padding:12px;border:0;border-radius:10px;background:#0B5563;color:#fff;font-weight:700;font-size:15px;cursor:pointer">Pay '+amt+' (succeeds)</button>'+
+      (o.customer_id ? '<button data-x="card" style="width:100%%;margin-top:8px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">Pay by card and save it (Visa 1111)</button>' : '')+
       '<button data-x="later" style="width:100%%;margin-top:8px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">Pay in UPI app (approved in a few seconds)</button>'+
       '<button data-x="fail" style="width:100%%;margin-top:8px;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">Simulate a failed payment</button>'+
       '<button data-x="close" style="width:100%%;margin-top:8px;padding:8px;border:0;background:none;color:#666;cursor:pointer">Close</button></div>';
@@ -226,7 +267,7 @@ CHECKOUT_JS = """
     wrap.addEventListener('click', function(e){
       var x = e.target && e.target.getAttribute && e.target.getAttribute('data-x'); if(!x) return;
       if(x==='close'){ done(); o.modal && o.modal.ondismiss && o.modal.ondismiss(); return; }
-      fetch(BASE + '/sim/pay', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({order_id:o.order_id, outcome: x==='ok'?'success':(x==='later'?'later':'fail')})})
+      fetch(BASE + '/sim/pay', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({order_id:o.order_id, outcome: (x==='ok'||x==='card')?'success':(x==='later'?'later':'fail'), method: x==='card'?'card':'upi', save_card: x==='card', customer_id: o.customer_id || ''})})
         .then(function(r){return r.json();}).then(function(r){
           if(r.pending){ done(); o.modal && o.modal.ondismiss && o.modal.ondismiss(); return; }
           if(r.error){

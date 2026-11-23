@@ -22,12 +22,15 @@ import "@fontsource/playfair-display/600.css";
 import "@fontsource/playfair-display/700.css";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { cookies, headers } from "next/headers";
 import Script from "next/script";
 import { Suspense } from "react";
 import { NavTracker } from "@/components/back-button";
 import { RouteProgress } from "@/components/route-progress";
 import { ToastProvider } from "@/components/ui";
-import { loadSiteServer } from "@/lib/server-api";
+import { RegionalProvider } from "@/lib/regional";
+import { CUR_COOKIE, LANG_COOKIE, resolveChoice } from "@/lib/regional-shared";
+import { loadRegionalServer, loadSiteServer } from "@/lib/server-api";
 import { SessionProvider } from "@/lib/session";
 import { SiteProvider } from "@/lib/site";
 import { WishlistProvider } from "@/lib/wishlist";
@@ -81,16 +84,24 @@ function organizationJsonLd(site: Site): string {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const site = await loadSite();
+  // the visitor's language and currency: their choice, else the one for their country (Admin → Languages and currencies)
+  const h = await headers();
+  const jar = await cookies();
+  const country = (h.get("x-vercel-ip-country") || h.get("cf-ipcountry") || "").toUpperCase();
+  const regional = await loadRegionalServer(/^[A-Z]{2}$/.test(country) ? country : "");
+  const choice = resolveChoice(regional, jar.get(CUR_COOKIE)?.value, jar.get(LANG_COOKIE)?.value);
+  const rtl = regional.languages.find((l) => l.code === choice.language)?.rtl;
   const ga = site.analytics.google_analytics_id;
   const pixel = site.analytics.meta_pixel_id;
   return (
-    <html lang="en-IN">
+    <html lang={choice.language === "en" ? "en-IN" : choice.language} dir={rtl ? "rtl" : "ltr"}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: themeCss(site.colors, site.radius) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: organizationJsonLd(site) }} />
       </head>
       <body>
         <SiteProvider site={site}>
+          <RegionalProvider data={regional} currency={choice.currency} language={choice.language}>
           <NavTracker />
           <Suspense>
             <RouteProgress />
@@ -100,6 +111,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <ToastProvider>{children}</ToastProvider>
             </WishlistProvider>
           </SessionProvider>
+          </RegionalProvider>
         </SiteProvider>
         {/^G-[A-Z0-9]{4,12}$/.test(ga) && (
           <>

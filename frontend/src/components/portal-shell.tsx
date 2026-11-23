@@ -1,5 +1,6 @@
 "use client";
 
+import { RegionButton } from "@/components/region-picker";
 import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -32,6 +33,7 @@ export function PortalShell({ title, nav, children, root }: { title: string; nav
             <span className="rounded-md bg-white/15 px-2 py-0.5 text-sm font-semibold text-white">{title}</span>
             <div className="ml-auto flex items-center gap-3 text-sm text-white/90">
               <NotificationBell />
+              <RegionButton languageOnly tone="dark" />
               <span className="hidden sm:inline">{user?.name || user?.email || user?.phone}</span>
               <button onClick={() => signOut().then(() => window.location.assign(new URL("/", window.location.origin)))} className="rounded-md px-2 py-1 font-semibold hover:bg-white/10">
                 Sign out

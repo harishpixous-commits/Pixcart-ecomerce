@@ -15,8 +15,9 @@ import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { dateTime, rupees } from "@/lib/format";
+import { dateTime, money, rupees } from "@/lib/format";
 import { clearPaying, payingSince, payWithRazorpay } from "@/lib/razorpay";
+import { useRegional } from "@/lib/regional";
 import { useSite } from "@/lib/site";
 import type { OrderDetail } from "@/lib/types";
 
@@ -40,6 +41,8 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
   placed: boolean;
 }) {
   const site = useSite();
+  const { data: regional } = useRegional();
+  const digits = (code: string) => regional.currencies.find((c) => c.code === code)?.digits ?? 2;
   const pending = order.status === "pending_payment" && !!order.payment;
   const [phase, setPhase] = useState<Phase>(() => (arrival.outcome === "failed" ? "failed" : arrival.outcome === "checking" ? "checking" : "idle"));
   const [reason, setReason] = useState(arrival.reason);
@@ -169,7 +172,7 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
           <p className="font-display text-xl font-semibold">{paid ? "Payment received. Order placed" : "Order placed"}</p>
           {paid && (
             <p className="break-words text-ink-soft">
-              {rupees(paid.amount)} paid{METHOD[paid.method] ? ` by ${METHOD[paid.method]}` : ""}
+              <span translate="no">{paid.currency && paid.currency !== "INR" && paid.charge_amount ? money(paid.charge_amount, paid.currency, digits(paid.currency)) : money(paid.amount, "INR")}</span> paid{METHOD[paid.method] ? ` by ${METHOD[paid.method]}` : ""}
               {paid.reference && <>. Reference <span className="font-semibold text-ink">{paid.reference}</span></>}
             </p>
           )}
@@ -179,7 +182,8 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
     );
   }
 
-  const total = rupees(order.grand_total);
+  // what the button pays: Razorpay's amount in the currency it charges (rupees unless the admin charges the shopper's)
+  const total = order.payment ? money(order.payment.amount, order.payment.currency, digits(order.payment.currency)) : rupees(order.grand_total);
   const held = order.payment_expires_at ? ` Your items are held until ${dateTime(order.payment_expires_at)}.` : "";
 
   // ---------------------------------------------------------------- failed

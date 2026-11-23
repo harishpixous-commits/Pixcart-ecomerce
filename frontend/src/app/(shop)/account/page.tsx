@@ -4,6 +4,7 @@ import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddressForm } from "@/components/address-form";
+import { SavedCards } from "@/components/saved-cards";
 import { SignedInDevices } from "@/components/signed-in-devices";
 import { Button, ErrorNote, Modal, PageLoader, Pill, TextField, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
@@ -136,7 +137,7 @@ export default function AccountPage() {
                     {a.is_default && <Pill tone="blue">Default</Pill>}
                     {a.lat != null && <Pill tone="green"><MapPin className="mr-0.5 h-3 w-3" aria-hidden />Pinned</Pill>}
                   </p>
-                  <p className="text-ink-soft">{[a.line1, a.line2, a.landmark, a.city].filter(Boolean).join(", ")}, {a.state} {a.pincode}</p>
+                  <p className="text-ink-soft" translate="no">{[a.line1, a.line2, a.landmark, a.city].filter(Boolean).join(", ")}, {a.state} {a.pincode}</p>
                   <p className="text-sm text-ink-faint">{a.phone}</p>
                   {a.instructions && <p className="mt-1 text-sm text-ink-soft"><span className="font-semibold text-ink">Instructions:</span> {a.instructions}</p>}
                 </div>
@@ -149,6 +150,7 @@ export default function AccountPage() {
           </ul>
         )}
       </section>
+      <SavedCards />
     </div>
   );
 }

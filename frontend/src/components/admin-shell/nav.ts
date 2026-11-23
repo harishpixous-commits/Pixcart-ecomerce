@@ -5,7 +5,7 @@
  */
 
 import {
-  BarChart3, Bell, Bike, Bot, ChartColumn, Cpu, FileClock, FileDown, Flag, FolderTree, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, LogIn,
+  BarChart3, Bell, Bike, Bot, ChartColumn, Cpu, FileClock, FileDown, Flag, FolderTree, Globe, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, LogIn,
   MapPinned, Megaphone, MessageCircleQuestion, MessageSquareText, MessageSquareWarning, MessagesSquare, Package, PackageCheck, Palette,
   PanelsTopLeft, Plug, Radar, Receipt, Rocket, RotateCcw, Route, Settings, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Store, Tag,
   Truck, Undo2, Users, Wallet, Zap, type LucideIcon,
@@ -66,6 +66,7 @@ const DEFS: Def[] = [
   { section: "AI", href: "/admin/ai", label: "AI studio", icon: Sparkles, p: "settings" },
   { section: "AI", href: "/admin/ai-providers", label: "AI providers", icon: Cpu, p: "ai_providers" },
   { section: "Administration", href: "/admin/settings", label: "Marketplace settings", icon: Settings, p: "settings" },
+  { section: "Administration", href: "/admin/regional", label: "Languages and currencies", icon: Globe, p: "settings" },
   { section: "Administration", href: "/admin/sign-in", label: "Sign-in and accounts", icon: LogIn, p: "settings" },
   { section: "Administration", href: "/admin/integrations", label: "Integrations", icon: Plug, p: "integrations" },
   { section: "Administration", href: "/admin/staff", label: "Staff and roles", icon: ShieldCheck, p: "staff" },

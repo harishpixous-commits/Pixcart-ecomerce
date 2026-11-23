@@ -70,6 +70,8 @@ class FakeRazorpay:
         self.refunds: dict[str, dict] = {}
         self.fail_next: str | None = None
         self.auto_capture = True
+        self.customers: dict[str, dict] = {}
+        self.tokens: dict[str, list[dict]] = {}
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         auth = request.headers.get("authorization", "")
@@ -82,8 +84,26 @@ class FakeRazorpay:
         body = json.loads(request.content or b"{}")
         if request.method == "POST" and path == "/orders":
             oid = "order_" + secrets.token_hex(7)
-            self.orders[oid] = {"id": oid, "amount": body["amount"], "currency": "INR", "receipt": body["receipt"], "status": "created"}
+            self.orders[oid] = {"id": oid, "amount": body["amount"], "currency": body.get("currency", "INR"), "receipt": body["receipt"], "status": "created"}
             return httpx.Response(200, json=self.orders[oid])
+        if request.method == "POST" and path == "/customers":
+            existing = next((c for c in self.customers.values() if c.get("contact") == body.get("contact")), None)
+            if existing:
+                return httpx.Response(200, json=existing)
+            cid = "cust_" + secrets.token_hex(7)
+            self.customers[cid] = {"id": cid, "name": body.get("name"), "contact": body.get("contact"), "email": body.get("email")}
+            self.tokens[cid] = []
+            return httpx.Response(200, json=self.customers[cid])
+        if path.startswith("/customers/") and "/tokens" in path:
+            parts = path.split("/")
+            cid = parts[2]
+            if cid not in self.customers:
+                return httpx.Response(400, json={"error": {"description": "The id provided does not exist"}})
+            if request.method == "GET":
+                return httpx.Response(200, json={"entity": "collection", "count": len(self.tokens[cid]), "items": self.tokens[cid]})
+            if request.method == "DELETE":
+                self.tokens[cid] = [t for t in self.tokens[cid] if t["id"] != parts[4]]
+                return httpx.Response(200, json={"deleted": True})
         if request.method == "GET" and path.startswith("/orders/") and path.endswith("/payments"):
             oid = path.split("/")[2]
             return httpx.Response(200, json={"items": [p for p in self.payments.values() if p["order_id"] == oid]})
@@ -103,6 +123,14 @@ class FakeRazorpay:
             self.refunds[rid] = {"id": rid, "payment_id": pid, "amount": body["amount"], "receipt": body["receipt"], "status": "processed"}
             return httpx.Response(200, json=self.refunds[rid])
         return httpx.Response(404, json={"error": {"description": f"unhandled {request.method} {path}"}})
+
+    def save_card(self, customer_id: str, last4: str = "1111", network: str = "Visa") -> str:
+        """What happens when the shopper ticks "save this card" in Razorpay's window: a network token."""
+        tid = "token_" + secrets.token_hex(7)
+        self.tokens[customer_id].append({"id": tid, "entity": "token", "method": "card", "used_at": 1700000000,
+                                         "card": {"last4": last4, "network": network, "type": "credit", "issuer": "HDFC",
+                                                  "expiry_month": 12, "expiry_year": 2030, "international": False}})
+        return tid
 
     def pay(self, order_id: str, *, amount: int | None = None, method: str = "upi") -> tuple[str, str]:
         """Simulates the customer completing Checkout; returns (payment_id, signature)."""

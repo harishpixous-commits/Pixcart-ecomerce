@@ -41,7 +41,7 @@ function AddressText({ a }: { a: Address }) {
       <span className="mt-1.5 block font-semibold text-ink">
         {a.full_name} <span className="font-normal text-ink-soft">· {a.phone}</span>
       </span>
-      <span className="block text-sm leading-snug text-ink-soft">{addressLine(a)}</span>
+      <span className="block text-sm leading-snug text-ink-soft" translate="no">{addressLine(a)}</span>
     </span>
   );
 }
@@ -193,7 +193,7 @@ function PinPrompt({ address, onSaved }: { address: Address; onSaved: (a: Addres
       )}
       <Modal open={open} onClose={() => setOpen(false)} title="Pin your delivery location" wide>
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-ink-soft">{addressLine(address)}</p>
+          <p className="text-sm text-ink-soft" translate="no">{addressLine(address)}</p>
           <LocationPicker value={pin} onChange={(lat, lng) => setPin({ lat, lng })} />
           <Button className="self-start" disabled={!pin} loading={busy} onClick={() => pin && save(pin)}>Save this location</Button>
         </div>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -80,6 +82,9 @@ class Order(IdMixin, TimestampMixin, Base):
     fee_invoice_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     buyer_business: Mapped[str] = mapped_column(String(160), default="", server_default="")
     grand_total: Mapped[int] = mapped_column(BigInteger)
+    # the shopper's currency and the rate (units of it per rupee) fixed at the order; the books stay in rupees
+    currency: Mapped[str] = mapped_column(String(3), default="INR", server_default="INR")
+    fx_rate: Mapped[Decimal] = mapped_column(Numeric(20, 10), default=Decimal(1), server_default="1")
     refunded_total: Mapped[int] = mapped_column(BigInteger, default=0)
     idempotency_key: Mapped[str] = mapped_column(String(64))
     payment_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -219,7 +224,10 @@ class Payment(IdMixin, TimestampMixin, Base):
     provider: Mapped[str] = mapped_column(String(12))  # razorpay
     provider_order_id: Mapped[str] = mapped_column(String(40), unique=True)
     provider_payment_id: Mapped[str | None] = mapped_column(String(40), unique=True)
-    amount_paise: Mapped[int] = mapped_column(BigInteger)
+    amount_paise: Mapped[int] = mapped_column(BigInteger)  # the order's total in paise (the books)
+    # what Razorpay charges: in rupees (charge_amount empty) or the shopper's currency, in its smallest unit
+    currency: Mapped[str] = mapped_column(String(3), default="INR", server_default="INR")
+    charge_amount: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(String(12), default="created")
     method: Mapped[str] = mapped_column(String(20), default="")
     error: Mapped[str] = mapped_column(Text, default="")
@@ -259,6 +267,20 @@ class WebhookEvent(IdMixin, Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (UniqueConstraint("provider", "event_id", name="uq_webhook_events_provider_event"),)
+
+
+class Translation(IdMixin, TimestampMixin, Base):
+    """A piece of the site's text in another language: from the AI, or written by staff (origin "manual")."""
+
+    __tablename__ = "translations"
+
+    lang: Mapped[str] = mapped_column(String(12))
+    source_hash: Mapped[str] = mapped_column(String(40))
+    source: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(String(8), default="ai", server_default="ai")
+
+    __table_args__ = (UniqueConstraint("lang", "source_hash", name="uq_translations_lang_source"),)
 
 
 class PlatformSetting(Base):

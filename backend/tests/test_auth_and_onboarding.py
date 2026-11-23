@@ -37,13 +37,24 @@ async def test_otp_login_wrong_code_then_success_and_refresh_rotation(client):
     new_cookie = client.cookies.get("pc_refresh")
     assert new_cookie and new_cookie != old_cookie
 
-    # Replaying the rotated token revokes every session of the user (theft detection).
+    # The same browser racing itself (a reload while the refresh was on its way) is not theft: renewed quietly.
+    client.cookies.clear()
     client.cookies.set("pc_refresh", old_cookie, path="/api/auth")
     r = await client.post("/api/auth/refresh", headers={"X-Requested-With": "pixcart"})
+    assert r.status_code == 200
+    raced_cookie = r.cookies.get("pc_refresh")
+    assert raced_cookie and raced_cookie not in (old_cookie, new_cookie)
+
+    # Replaying a rotated token from another browser revokes every session of the user (theft detection).
+    client.cookies.clear()
+    client.cookies.set("pc_refresh", old_cookie, path="/api/auth")
+    r = await client.post("/api/auth/refresh", headers={"X-Requested-With": "pixcart", "User-Agent": "Stolen/1.0"})
     assert r.status_code == 401
-    client.cookies.set("pc_refresh", new_cookie, path="/api/auth")
-    r = await client.post("/api/auth/refresh", headers={"X-Requested-With": "pixcart"})
-    assert r.status_code == 401
+    for cookie in (new_cookie, raced_cookie):
+        client.cookies.clear()
+        client.cookies.set("pc_refresh", cookie, path="/api/auth")
+        r = await client.post("/api/auth/refresh", headers={"X-Requested-With": "pixcart"})
+        assert r.status_code == 401
 
 
 async def test_otp_attempt_limit(client):

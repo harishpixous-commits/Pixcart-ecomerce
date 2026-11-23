@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, ChevronDown, Heart, Home, LayoutGrid, MapPin, Package, ShoppingCart, User as UserIcon, X } from "lucide-react";
+import { Bell, ChevronDown, Globe, Heart, Home, LayoutGrid, MapPin, Package, ShoppingCart, User as UserIcon, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { fillTokens, splitBrand } from "@/lib/tokens";
 import { NavBar, ReturnsOrders, SearchBox } from "@/components/shop-nav";
 import type { Address, CategoryNode } from "@/lib/types";
 import { ContactList, fillCopyright, SocialLinks } from "@/components/social";
+import { RegionDialog, useHasRegionChoice } from "@/components/region-picker";
 
 let categoryCache: CategoryNode[] | null = null;
 
@@ -43,7 +44,7 @@ export function Logo({ light = true }: { light?: boolean }) {
   const name = site.brand_name;
   const [first, second] = splitBrand(name);
   return (
-    <Link href="/" className={clsx("flex items-baseline font-display text-2xl font-bold tracking-tight", light ? "text-white" : "text-peacock")} aria-label={`${name} home`}>
+    <Link href="/" translate="no" className={clsx("flex items-baseline font-display text-2xl font-bold tracking-tight", light ? "text-white" : "text-peacock")} aria-label={`${name} home`}>
       {first}
       {second && <span className="text-marigold">{second}</span>}
     </Link>
@@ -91,6 +92,8 @@ export function AccountMenu({ tone = "dark", compact = false }: { tone?: HeaderT
   const site = useSite();
   const { user, ready, signOut } = useSession();
   const [open, setOpen] = useState(false);
+  const [regionOpen, setRegionOpen] = useState(false);
+  const hasRegion = useHasRegionChoice();
   const pathname = usePathname();
   const [path, setPath] = useState(pathname);
   const box = useRef<HTMLDivElement>(null);
@@ -147,11 +150,17 @@ export function AccountMenu({ tone = "dark", compact = false }: { tone?: HeaderT
             <Link href="/sell" className="block px-4 py-2 hover:bg-mist">Sell on {site.brand_name}</Link>
           )}
           {user.is_admin && <Link href="/admin" className="block px-4 py-2 hover:bg-mist">Admin panel</Link>}
+          {hasRegion && (
+            <button type="button" onClick={() => { setOpen(false); setRegionOpen(true); }} className="flex w-full items-center gap-2 border-t border-line px-4 py-2 text-left hover:bg-mist" data-testid="menu-region">
+              <Globe className="h-4 w-4 text-peacock" aria-hidden /> Language and currency
+            </button>
+          )}
           <button onClick={() => signOut()} className="block w-full border-t border-line px-4 py-2 text-left hover:bg-mist">
             Sign out
           </button>
         </div>
       )}
+      {regionOpen && <RegionDialog open onClose={() => setRegionOpen(false)} />}
     </div>
   );
 }

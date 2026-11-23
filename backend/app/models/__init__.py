@@ -52,6 +52,7 @@ from app.models.order import (
     Refund,
     SavedItem,
     SubOrder,
+    Translation,
     WebhookEvent,
 )
 from app.models.promotions import AdCampaign, AdCampaignProduct, AdClick, AdImpression, AdStat, Deal
@@ -94,6 +95,7 @@ __all__ = [
     "Seller",
     "SellerDocument",
     "SubOrder",
+    "Translation",
     "User",
     "Variant",
     "WebhookEvent",

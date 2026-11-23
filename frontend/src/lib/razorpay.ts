@@ -117,6 +117,13 @@ export async function payWithRazorpay(payment: CheckoutPayload, opts: PayOptions
       options.redirect = false; // a failed attempt stays in the window, to try again or pick another app
     }
     if (app) options.webview_intent = true; // lets the app open the UPI apps (Razorpay: UPI intent in WebView)
+    // the ways to pay the admin switched on (Admin → Languages and currencies → Payments)
+    if (payment.methods) options.method = payment.methods;
+    // saved cards: Razorpay shows the shopper's saved cards and asks before saving a new one (RBI card tokenisation)
+    if (payment.customer_id) {
+      options.customer_id = payment.customer_id;
+      options.remember_customer = true;
+    }
     const rzp = new window.Razorpay!(options);
     rzp.on("payment.failed", (r: unknown) => {
       const err = (r as { error?: { description?: string } } | null)?.error;

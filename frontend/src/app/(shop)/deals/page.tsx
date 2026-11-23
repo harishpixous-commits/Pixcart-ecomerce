@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { ProductTile } from "@/components/product";
 import { Pagination, Select } from "@/components/ui";
 import { api, latestOnly, quietly } from "@/lib/api";
+import { currencySymbol, paiseToShown, shownToPaise } from "@/lib/format";
 import type { ProductCard } from "@/lib/types";
 
 type DealsData = {
@@ -39,7 +40,8 @@ function DealsPage() {
   const minRating = sp.get("min_rating") ?? "";
   const sort = sp.get("sort") ?? "featured";
   const page = Number(sp.get("page") ?? 1);
-  const [price, setPrice] = useState({ min: sp.get("min_price") ? String(Number(sp.get("min_price")) / 100) : "", max: sp.get("max_price") ? String(Number(sp.get("max_price")) / 100) : "" });
+  const [price, setPrice] = useState({ min: sp.get("min_price") ? paiseToShown(Number(sp.get("min_price"))) : "", max: sp.get("max_price") ? paiseToShown(Number(sp.get("max_price"))) : "" });
+  const sym = currencySymbol();
 
   useEffect(() => {
     const q = new URLSearchParams(key);
@@ -94,10 +96,10 @@ function DealsPage() {
       </fieldset>
       <fieldset>
         <legend className="mb-2 font-semibold">Price</legend>
-        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); set({ min_price: price.min ? String(Math.round(Number(price.min) * 100)) : null, max_price: price.max ? String(Math.round(Number(price.max) * 100)) : null }); setDrawer(false); }}>
-          <input inputMode="numeric" aria-label="Minimum price in rupees" placeholder="₹ Min" value={price.min} onChange={(e) => setPrice({ ...price, min: e.target.value.replace(/\D/g, "") })} className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
+        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); set({ min_price: price.min ? String(shownToPaise(price.min) ?? "") || null : null, max_price: price.max ? String(shownToPaise(price.max) ?? "") || null : null }); setDrawer(false); }}>
+          <input inputMode="numeric" aria-label="Minimum price" placeholder={`${sym} Min`} value={price.min} onChange={(e) => setPrice({ ...price, min: e.target.value.replace(/[^\d.]/g, "") })} className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
           <span>to</span>
-          <input inputMode="numeric" aria-label="Maximum price in rupees" placeholder="₹ Max" value={price.max} onChange={(e) => setPrice({ ...price, max: e.target.value.replace(/\D/g, "") })} className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
+          <input inputMode="numeric" aria-label="Maximum price" placeholder={`${sym} Max`} value={price.max} onChange={(e) => setPrice({ ...price, max: e.target.value.replace(/[^\d.]/g, "") })} className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
           <button type="submit" className="h-9 rounded-md border border-line px-3 font-semibold hover:bg-mist">Go</button>
         </form>
       </fieldset>

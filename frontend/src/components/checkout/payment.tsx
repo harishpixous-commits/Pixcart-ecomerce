@@ -5,7 +5,9 @@
 import clsx from "clsx";
 import { Banknote, Check, ChevronUp, CircleAlert, Smartphone, Wallet } from "lucide-react";
 import { ErrorNote } from "@/components/ui";
-import { rupees } from "@/lib/format";
+import { AcceptedPayments } from "@/components/pay-logos";
+import { inRupees, rupees } from "@/lib/format";
+import { useRegional } from "@/lib/regional";
 import { Card, CardHeading, CARD } from "./card";
 import { SlideToPay } from "./slide-to-pay";
 
@@ -48,7 +50,7 @@ function MethodCard({ value, checked, disabled, onPick, icon, title, children, b
   );
 }
 
-export function PaymentMethods({ method, onMethod, onlineAvailable, codAvailable, codAllowed, codMax, codFee, className }: {
+export function PaymentMethods({ method, onMethod, onlineAvailable, codAvailable, codAllowed, codMax, codFee, className, total }: {
   method: PayMethod;
   onMethod: (m: PayMethod) => void;
   onlineAvailable: boolean;
@@ -59,7 +61,15 @@ export function PaymentMethods({ method, onMethod, onlineAvailable, codAvailable
   /** the cash-on-delivery fee on this bill (only known once cash on delivery is chosen) */
   codFee: number;
   className?: string;
+  /** the bill's total in paise: shown in rupees when the shopper browses in another currency but pays in rupees */
+  total?: number;
 }) {
+  const { data, currency, shop } = useRegional();
+  const ways = data.pay_methods;
+  const foreign = shop && currency !== "INR";
+  const chargedInRupees = foreign && (method === "cod" || data.charge_in === "base");
+  const labels: [string, string][] = [["upi", "UPI"], ["card", "Cards"], ["netbanking", "Net banking"], ["wallet", "Wallets"], ["emi", "EMI"], ["paylater", "Pay later"]];
+  const offered = labels.filter(([k]) => ways[k] !== false);
   return (
     <Card id="checkout-payment" labelledBy="co-pay-h" testId="checkout-payment" className={className}>
       <CardHeading id="co-pay-h" icon={Wallet} title="Payment method" />
@@ -76,12 +86,12 @@ export function PaymentMethods({ method, onMethod, onlineAvailable, codAvailable
             badge={onlineAvailable ? <span className="rounded-full bg-leaf-light px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-leaf">Instant</span> : null}
           >
             <span className="mt-0.5 block text-sm leading-snug text-ink-soft">
-              {onlineAvailable ? "UPI, cards, net banking and wallets via Razorpay" : "Not available right now"}
+              {onlineAvailable ? `${offered.map(([, t]) => t).join(", ").replace(/, ([^,]*)$/, " and $1")} via Razorpay` : "Not available right now"}
             </span>
             {onlineAvailable && (
               <span className="mt-2 flex flex-wrap gap-1.5" aria-hidden>
-                {["UPI", "Cards", "Net banking", "Wallets"].map((t) => (
-                  <span key={t} className="rounded-md bg-white px-1.5 py-0.5 text-[11px] font-semibold text-ink-soft ring-1 ring-line">{t}</span>
+                {offered.map(([k, t]) => (
+                  <span key={k} className="rounded-md bg-white px-1.5 py-0.5 text-[11px] font-semibold text-ink-soft ring-1 ring-line">{t}</span>
                 ))}
               </span>
             )}
@@ -104,6 +114,15 @@ export function PaymentMethods({ method, onMethod, onlineAvailable, codAvailable
           </MethodCard>
         </div>
       </fieldset>
+      {onlineAvailable && (
+        <AcceptedPayments className="mt-3" networks={data.card_networks} methods={ways} label="We accept" />
+      )}
+      {chargedInRupees && total ? (
+        <p className="mt-3 rounded-xl bg-mist px-3 py-2 text-sm text-ink-soft" data-testid="charged-in-rupees">
+          Prices are shown in {currency} at today&apos;s rate. You pay <span className="font-semibold text-ink" translate="no">{inRupees(total)}</span> in Indian rupees
+          {method === "cod" ? " in cash" : "; your bank converts it"}.
+        </p>
+      ) : null}
       {method === "cod" && codAllowed === false && (
         <p className="mt-3 flex items-start gap-2 rounded-xl bg-vermilion-light px-3 py-2 text-sm text-vermilion" role="alert">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />

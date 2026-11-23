@@ -6,6 +6,7 @@
  * larger screens. Works the same in a phone browser, installed to the home screen and inside the Android app.
  */
 
+import { RegionButton } from "@/components/region-picker";
 import clsx from "clsx";
 import { Bell, HelpCircle, History, Home, LogOut, Loader2, UserRound, Wallet } from "lucide-react";
 import Link from "next/link";
@@ -220,6 +221,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-1.5">
             {/* the home screen has its own big switch on phones */}
             <span className={pathname === "/delivery" ? "hidden lg:block" : undefined}><OnlineSwitch /></span>
+            <RegionButton languageOnly tone="dark" className="h-10" />
             <Link href="/delivery/notifications" aria-label={`Notifications, ${unread} unread`} className="relative flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/10">
               <Bell className="h-5 w-5" />
               {unread > 0 && <span className="absolute right-1 top-1 min-w-[18px] rounded-full bg-vermilion px-1 text-center text-[11px] font-bold leading-[18px]">{unread > 9 ? "9+" : unread}</span>}

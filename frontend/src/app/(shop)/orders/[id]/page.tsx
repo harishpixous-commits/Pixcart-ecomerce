@@ -239,11 +239,11 @@ function OrderView() {
               </h2>
               {a.label && <Pill tone="blue">{a.label}</Pill>}
             </div>
-            <p className="mt-2 break-words font-semibold">
+            <p className="mt-2 break-words font-semibold" translate="no">
               {a.name}
               {a.phone && <span className="font-normal text-ink-soft">, {a.phone}</span>}
             </p>
-            <p className="break-words text-ink-soft">
+            <p className="break-words text-ink-soft" translate="no">
               {a.street}
               {a.street && a.place && <br />}
               {a.place}

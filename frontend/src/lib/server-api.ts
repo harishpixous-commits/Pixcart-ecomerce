@@ -24,3 +24,14 @@ export const loadSiteServer = cache(async () => {
   type S = import("@/lib/types").Site;
   return withDefaults(await serverGet<Partial<S>>("/api/site", 0).catch(() => null));
 });
+
+/**
+ * Languages and currencies (Admin → Languages and currencies) with the suggestion for the visitor's country
+ * (Vercel and Cloudflare tell us the country; nothing else about the visitor is sent).
+ */
+export const loadRegionalServer = cache(async (country: string) => {
+  const { REGIONAL_FALLBACK } = await import("@/lib/regional-shared");
+  type R = import("@/lib/regional-shared").RegionalPublic;
+  const data = await serverGet<R>(`/api/regional?country=${encodeURIComponent(country.slice(0, 2))}`, 0).catch(() => null);
+  return data ?? REGIONAL_FALLBACK;
+});

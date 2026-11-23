@@ -360,6 +360,9 @@ async def totp_disable(body: TotpCode, user: CurrentUser, session: SessionDep) -
     return {"ok": True}
 
 
+REUSE_GRACE = timedelta(seconds=60)
+
+
 @router.post("/refresh")
 async def refresh(request: Request, response: Response, session: SessionDep) -> dict:
     _require_csrf_header(request)
@@ -378,6 +381,17 @@ async def refresh(request: Request, response: Response, session: SessionDep) -> 
             # this device was signed out from another one ("Sign out of other devices"): refuse it, nothing more
             response.delete_cookie(settings.refresh_cookie_name, path="/api/auth")
             raise Unauthorized("You were signed out on this device. Please sign in again.")
+        # The same browser racing itself: a page reloaded (or a second tab opened) while a refresh was on its way, so
+        # the old cookie came back moments after it was rotated. Not theft: renew quietly. Only when this token was
+        # rotated (a newer session from the same browser began right then) and within a minute.
+        agent = (request.headers.get("user-agent") or "")[:300]
+        if now - row.revoked_at <= REUSE_GRACE and (row.user_agent or "") == agent:
+            rotated = (await session.execute(select(RefreshSession.id).where(
+                RefreshSession.user_id == row.user_id, RefreshSession.user_agent == row.user_agent,
+                RefreshSession.created_at >= row.revoked_at, RefreshSession.created_at <= row.revoked_at + timedelta(seconds=5)).limit(1))).first()
+            user = await session.get(User, row.user_id)
+            if rotated and user is not None and user.is_active:
+                return await _issue_session(session, request, response, user, new_sign_in=False)
         # A rotated token was replayed: assume theft and end every session of this user.
         await session.execute(
             update(RefreshSession).where(RefreshSession.user_id == row.user_id, RefreshSession.revoked_at.is_(None)).values(revoked_at=now)

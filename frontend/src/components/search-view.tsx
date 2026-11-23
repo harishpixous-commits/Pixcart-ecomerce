@@ -16,7 +16,7 @@ import { GridFrame, ProductRail, ProductTile } from "@/components/product";
 import { ListingSkeleton } from "@/components/skeletons";
 import { Button, EmptyState, Modal, Pagination, Select } from "@/components/ui";
 import { api, latestOnly } from "@/lib/api";
-import { rupees, toPaise } from "@/lib/format";
+import { currencySymbol, paiseToShown, rupees, shownToPaise } from "@/lib/format";
 import { isPincode, setPincode, usePincode } from "@/lib/pincode";
 import type { ProductCard, SearchResult } from "@/lib/types";
 import { useLayout } from "@/themes/context";
@@ -100,19 +100,20 @@ function BrandFilter({ data, params, set }: FilterProps) {
 }
 
 function PriceFilter({ data, params, set }: FilterProps) {
-  const [min, setMin] = useState(params.get("min_price") ? String(Number(params.get("min_price")) / 100) : "");
-  const [max, setMax] = useState(params.get("max_price") ? String(Number(params.get("max_price")) / 100) : "");
+  const [min, setMin] = useState(params.get("min_price") ? paiseToShown(Number(params.get("min_price"))) : "");
+  const [max, setMax] = useState(params.get("max_price") ? paiseToShown(Number(params.get("max_price"))) : "");
+  const sym = currencySymbol();
   return (
     <div>
       <form className="flex items-center gap-2" onSubmit={(e) => {
         e.preventDefault();
-        const lo = min ? toPaise(min) : null;
-        const hi = max ? toPaise(max) : null;
+        const lo = min ? shownToPaise(min) : null;
+        const hi = max ? shownToPaise(max) : null;
         set({ min_price: lo !== null ? String(lo) : null, max_price: hi !== null ? String(hi) : null });
       }}>
-        <input aria-label="Minimum price in rupees" inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} placeholder="Min ₹" className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
+        <input aria-label="Minimum price" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} placeholder={`Min ${sym}`} className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
         <span className="text-ink-faint">to</span>
-        <input aria-label="Maximum price in rupees" inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value)} placeholder="Max ₹" className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
+        <input aria-label="Maximum price" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} placeholder={`Max ${sym}`} className="h-9 min-w-0 flex-1 rounded-md border border-line px-2" />
         <Button size="sm" type="submit">Go</Button>
       </form>
       {data.facets.price_max > 0 && <p className="mt-1 text-xs text-ink-faint">From {rupees(data.facets.price_min)} to {rupees(data.facets.price_max)}</p>}

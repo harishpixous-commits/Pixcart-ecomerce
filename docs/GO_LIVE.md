@@ -117,6 +117,7 @@ Every key is encrypted before it is saved and never shown again. Saving keys ask
 | 5.10 | **AI providers** | Add Claude (or OpenAI, Gemini, Groq, …); add 2+ keys and a fallback provider if you like; set routes | Test → "OK in … ms" |
 | 5.11 | **AI assistant** | Name, house rules, decision layer (built-in rules is fine), voice languages | "Try" shows the decision |
 | 5.12 | **Staff and roles** | Edit roles or create your own; add staff | Staff sign in and see only their pages |
+| 5.13 | **Languages and currencies** | Currencies shoppers can pick (rates typed or updated daily), charge in rupees or in the shopper's currency (needs Razorpay international payments), languages, country rules, ways to pay, card logos, saved cards | The shop footer shows "Pay with" logos and the language and currency picker; Tamil and Hindi work for the main screens at once, other lines once an AI model is on the "Translating the site" route |
 
 ---
 
@@ -128,6 +129,8 @@ Do each and tick it. Use Razorpay **test** cards: `4111 1111 1111 1111`, any fut
 - [ ] Register as a seller, upload KYC; approve in Admin → Sellers; add a product; approve it in Admin → Listings.
 - [ ] Buy it with **online payment**: the Razorpay window opens, pay, order shows "Payment received" with the Razorpay reference.
 - [ ] On a **phone** (and in the Android app): pay by UPI (test UPI `success@razorpay`, or the UPI app list on a real phone). After paying you come back to the order and see "Payment received". Use `failure@razorpay`: you see "Payment not received", the reason, and **Try again**.
+- [ ] Pick another currency in the footer: prices change; checkout says what you will pay (₹, or the currency when charged in it). Pay by card and tick "Save this card": Account → Saved cards lists it (last 4 digits only); remove it.
+- [ ] Pick Tamil or Hindi: the shop, seller hub, delivery app and admin show in it; correct a line under Admin → Languages and currencies → Translations.
 - [ ] Admin → Orders → an online order → **Check payment with Razorpay** answers (for an order a shopper says they paid but that still waits for payment).
 - [ ] Razorpay Dashboard → Webhooks shows deliveries with status 200.
 - [ ] Seller confirms, packs, ships (Shiprocket or manual AWB), marks delivered; invoice PDF opens.

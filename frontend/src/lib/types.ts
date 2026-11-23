@@ -380,12 +380,18 @@ export interface CheckoutPayload {
   key_id: string;
   checkout_url?: string;
   razorpay_order_id: string;
-  amount: Paise;
-  currency: "INR";
+  /** in the smallest unit of `currency` (paise for INR) */
+  amount: number;
+  currency: string;
   name: string;
   description: string;
   prefill: { name: string; contact: string; email: string };
   expires_at: string | null;
+  /** ways to pay the admin offers (Admin → Languages and currencies → Payments) */
+  methods?: Record<string, boolean>;
+  card_networks?: string[];
+  /** the shopper's Razorpay customer: Razorpay offers their saved cards and can save new ones */
+  customer_id?: string;
 }
 
 export interface OrderDetail {
@@ -417,7 +423,10 @@ export interface OrderDetail {
   refunds: { id?: string; amount: Paise; status: string; reason: string; created_at?: string; attempts?: number; last_error?: string }[];
   payment?: CheckoutPayload | null;
   /** the online payment Razorpay confirmed: "Payment received ₹X via UPI, reference pay_…" */
-  paid?: { amount: Paise; method: string; reference: string; at: string | null } | null;
+  paid?: { amount: Paise; method: string; reference: string; at: string | null; currency?: string; charge_amount?: number | null } | null;
+  /** the shopper's currency and the rate fixed when the order was placed (amounts above are still paise) */
+  currency?: string;
+  fx_rate?: number;
   customer?: { id: string; name: string; phone: string | null; email: string | null };
   /** Packages our own delivery partners carry, by sub-order id. */
   fleet?: Record<string, FleetTracking>;
