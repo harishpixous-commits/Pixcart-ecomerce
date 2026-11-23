@@ -20,6 +20,10 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["price_drop"] = ("Price dropped", "{{item}} in your wishlist is now {{price}} (was {{old_price}})."),
         ["question_answered"] = ("Your question was answered", "{{answerer}} answered your question about {{item}}."),
         ["seller_new_question"] = ("New customer question", "A shopper asked about {{item}}: {{question}}"),
+        ["order_placed"] = ("Order {{order_number}} placed", "Thanks! Your order for {{amount}} is confirmed."),
+        ["seller_new_order"] = ("New order {{order_number}}", "{{items}} — {{amount}}. Dispatch within {{dispatch_days}} days."),
+        ["order_cancelled"] = ("Order {{order_number}} cancelled", "Your order was cancelled. {{refund_note}}"),
+        ["seller_order_cancelled"] = ("Order {{order_number}} cancelled", "{{items}} — the customer cancelled {{reason}}."),
     };
 
     [GeneratedRegex(@"\{\{\s*(\w+)\s*\}\}")]
