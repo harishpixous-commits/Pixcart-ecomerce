@@ -11,6 +11,9 @@
 # Keep the same keystore for every release: Android only installs updates signed with the same key.
 name: Android shop app
 on:
+  # or push a tag: git tag android-v1.0.1 && git push origin android-v1.0.1 (builds both apps for the live site below)
+  push:
+    tags: ["android-v*"]
   workflow_dispatch:
     inputs:
       web_url:
@@ -38,9 +41,10 @@ jobs:
     timeout-minutes: 40
     defaults: { run: { working-directory: mobile/shop-app } }
     env:
-      PIXCART_WEB_URL: ${{ inputs.web_url }}
-      PIXCART_APP_ID: ${{ inputs.app_id }}
-      APP_VERSION: ${{ inputs.version }}
+      # a tag push has no inputs: the live site is the repository variable PIXCART_WEB_URL, else the demo site
+      PIXCART_WEB_URL: ${{ inputs.web_url || vars.PIXCART_WEB_URL || 'https://pixcart-shop.vercel.app' }}
+      PIXCART_APP_ID: ${{ inputs.app_id || 'in.pixcart.shop' }}
+      INPUT_VERSION: ${{ inputs.version }}
       APP_BUILD: ${{ github.run_number }}
       GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -56,6 +60,8 @@ jobs:
 
       - name: Check the inputs
         run: |
+          APP_VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#android-v}}"  # the input, or the tag android-v1.2.3
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           case "$PIXCART_WEB_URL" in https://*) ;; *) echo "::error::web_url must start with https://"; exit 1;; esac
           echo "$APP_VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$' || { echo "::error::version must look like 1.0.0"; exit 1; }
 
@@ -92,7 +98,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pixcart-shop-${{ inputs.version }}
+          name: pixcart-shop-${{ env.APP_VERSION }}
           path: ${{ runner.temp }}/pixcart-shop.apk
           if-no-files-found: error
 
