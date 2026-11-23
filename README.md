@@ -13,6 +13,7 @@ invoices, payment screens, two-step sign-in and search-engine data. Changes show
 ## Start here
 
 - **Launching?** Follow `docs/GO_LIVE.md` (staging → production, step by step; also at Admin → Go-live checklist).
+- **Deploying on Vercel?** The website goes on Vercel and the API on a server: `docs/DEPLOY_VERCEL.md`.
 - **Changing code (person or AI agent)?** Read `AGENTS.md`.
 - **AI assistant internals:** `docs/AI_ASSISTANT.md`.
 - **Customer chat on the website (shop assistant):** `docs/SHOP_ASSISTANT.md`.
@@ -288,7 +289,7 @@ e2e/             Playwright browser tests
 mobile/partner-app/  Android partner app (Capacitor shell around /delivery), built by GitHub Actions
 infra/terraform/ AWS: VPC, RDS, ECS Fargate, ALB + WAF, S3 + CloudFront, ECR, Secrets Manager, alarms
 .github/         CI (tests, audits, E2E, Terraform checks) and the deploy pipeline
-docs/            DEPLOY.md, BUSINESS_RULES.md, DELIVERY.md, GO_LIVE.md, AI_ASSISTANT.md, SHOP_ASSISTANT.md
+docs/            DEPLOY.md, DEPLOY_VERCEL.md, ADMIN_SPEC_STATUS.md, BUSINESS_RULES.md, DELIVERY.md, GO_LIVE.md, AI_ASSISTANT.md, SHOP_ASSISTANT.md
 ```
 
 See [docs/DEPLOY.md](docs/DEPLOY.md) for AWS deployment, integrations and the go-live checklist, and
