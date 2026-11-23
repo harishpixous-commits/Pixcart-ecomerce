@@ -96,6 +96,10 @@ public class AdminDeliveryController(
     public async Task<JsonObject> PutSettings([FromBody] JsonObject body) =>
         await admin.UpdateSettingsAsync(await current.RequireAsync(), body);
 
+    /// <summary>Partners and trips right now, for the live map (reference: GET .../live).</summary>
+    [HttpGet("live"), SignedIn]
+    public async Task<JsonObject> Live() => await admin.LiveAsync(await current.RequireAsync());
+
     // ------------------------------------------------------------------ cash, payouts, reports, feedback
 
     /// <summary>Cash in hand per partner and recent deposits (reference: GET .../cash).</summary>

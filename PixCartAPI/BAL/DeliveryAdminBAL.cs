@@ -884,4 +884,113 @@ public class DeliveryAdminBAL(
             note[..Math.Min(200, note.Length)]);
         return new JsonObject { ["ok"] = true };
     }
+
+    // ------------------------------------------------------------------ live map (reference: delivery_admin.live)
+
+    /// <summary>Reference: GET /api/admin/delivery/live.</summary>
+    public async Task<JsonObject> LiveAsync(UserModel user)
+    {
+        await StaffAsync(user);
+        await fleetBal.SweepExpiredAsync();
+        var now = DateTimeFunctions.UtcNow();
+        var cfg = await deliverySettings.GetAsync();
+        var boys = (await fleet.LiveBoysAsync()).ToList();
+        var ids = boys.Select(b => b.Id).ToList();
+        await using var uow = await db.BeginAsync();
+        var cash = await fleet.CashByPartnerAsync(ids, uow);
+        var load = await fleet.LoadsAsync(ids, uow);
+        await uow.CommitAsync();
+        var istToday = (now + Ist).Date;
+        var day = istToday - Ist;
+        var today = (await fleet.TodayStatsMultiAsync(ids.Count > 0 ? ids : [Guid.Empty], day))
+            .ToDictionary(r => r.BoyId, r => (r.Trips, r.Earned));
+        var zones = (await delivery.AllZonesAsync()).ToDictionary(z => z.Id);
+        var trips = (await fleet.ActiveTripsAsync()).ToList();
+        var stuckLimit = now - TimeSpan.FromMinutes(cfg.Int("stuck_minutes"));
+        string[] onTrip = ["accepted", "at_store", "picked", "on_the_way", "reached"];
+        var tripViews = new List<JsonObject>();
+        foreach (var a in trips)
+        {
+            var v = await fleetBal.TripViewStaffAsync(a.Id);
+            v["minutes_in_step"] = (int)(now - a.StatusAt).TotalMinutes;
+            v["stuck"] = onTrip.Contains(a.Status) && a.StatusAt < stuckLimit;
+            tripViews.Add(v);
+        }
+        var partners = new List<JsonObject>();
+        foreach (var b in boys)
+        {
+            var mine = tripViews.Where(t => t["partner"]!["id"]!.GetValue<string>() == b.Id.ToString()).ToList();
+            var age = b.LocationAt is not null ? (int?)(now - b.LocationAt.Value).TotalSeconds : null;
+            partners.Add(new JsonObject
+            {
+                ["id"] = b.Id.ToString(), ["name"] = b.Name, ["phone"] = b.Phone, ["photo"] = b.Photo,
+                ["vehicle"] = DeliverySettingsBAL.VehicleLabels.GetValueOrDefault(b.VehicleType, ""),
+                ["vehicle_no"] = b.VehicleNo,
+                ["zone"] = b.ZoneId is not null && zones.TryGetValue(b.ZoneId.Value, out var z)
+                    ? new JsonObject { ["id"] = z.Id.ToString(), ["name"] = z.Name, ["city"] = z.City }
+                    : null,
+                ["online"] = b.IsOnline,
+                ["online_since"] = b.IsOnline && b.OnlineSince is not null ? b.OnlineSince.Value.ToString("o") : null,
+                ["online_minutes"] = b.IsOnline && b.OnlineSince is not null
+                    ? (int)(now - b.OnlineSince.Value).TotalMinutes
+                    : null,
+                ["lat"] = b.Lat, ["lng"] = b.Lng, ["location_age_seconds"] = age,
+                ["location_state"] = age is null ? "unknown" : age <= 120 ? "live" : age <= 900 ? "stale" : "unknown",
+                ["load"] = load.GetValueOrDefault(b.Id), ["max_active"] = cfg.Int("max_active"),
+                ["state"] = mine.Count > 0 ? "on_trip" : "free",
+                ["trips"] = new JsonArray(mine.Select(t => (JsonNode?)new JsonObject
+                {
+                    ["id"] = t["id"]!.GetValue<string>(), ["order_number"] = t["order_number"]!.GetValue<string>(),
+                    ["status"] = t["status"]!.GetValue<string>(), ["status_label"] = t["status_label"]!.GetValue<string>(),
+                    ["stuck"] = t["stuck"]!.GetValue<bool>(),
+                }).ToArray()),
+                ["today_trips"] = today.GetValueOrDefault(b.Id).Trips,
+                ["today_earned"] = today.GetValueOrDefault(b.Id).Earned,
+                ["cash_in_hand"] = cash.GetValueOrDefault(b.Id), ["cash_limit"] = cfg.Long("cod_limit_paise"),
+                ["rating_avg"] = Math.Round(b.RatingAvg, 1), ["rating_count"] = b.RatingCount,
+            });
+        }
+        partners = partners
+            .OrderBy(p => !p["online"]!.GetValue<bool>())
+            .ThenBy(p => p["state"]!.GetValue<string>() != "free")
+            .ThenBy(p => p["name"]!.GetValue<string>()).ToList();
+        var byZone = new Dictionary<string, JsonObject>();
+        foreach (var p in partners)
+        {
+            var key = p["zone"] is JsonObject zo ? zo["name"]!.GetValue<string>() : "No zone";
+            if (!byZone.TryGetValue(key, out var zr))
+            {
+                zr = new JsonObject { ["zone"] = key, ["online"] = 0, ["free"] = 0, ["on_trip"] = 0 };
+                byZone[key] = zr;
+            }
+            var on = p["online"]!.GetValue<bool>();
+            var onTripNow = p["state"]!.GetValue<string>() == "on_trip";
+            zr["online"] = zr["online"]!.GetValue<int>() + (on ? 1 : 0);
+            zr["free"] = zr["free"]!.GetValue<int>() + (on && !onTripNow ? 1 : 0);
+            zr["on_trip"] = zr["on_trip"]!.GetValue<int>() + (onTripNow ? 1 : 0);
+        }
+        var waiting = (await fleet.WaitingSubsAsync()).Count();
+        return new JsonObject
+        {
+            ["partners"] = new JsonArray(partners.Select(p => (JsonNode?)p).ToArray()),
+            ["trips"] = new JsonArray(tripViews.Select(t => (JsonNode?)t).ToArray()),
+            ["zones"] = new JsonArray(zones.Values.Where(z => z.IsActive).Select(z => (JsonNode?)new JsonObject
+            {
+                ["id"] = z.Id.ToString(), ["name"] = z.Name, ["city"] = z.City,
+                ["lat"] = z.CenterLat, ["lng"] = z.CenterLng,
+            }).ToArray()),
+            ["summary"] = new JsonObject
+            {
+                ["online"] = partners.Count(p => p["online"]!.GetValue<bool>()),
+                ["free"] = partners.Count(p => p["online"]!.GetValue<bool>() && p["state"]!.GetValue<string>() == "free"),
+                ["on_trip"] = partners.Count(p => p["state"]!.GetValue<string>() == "on_trip"),
+                ["stuck"] = tripViews.Count(t => t["stuck"]!.GetValue<bool>()),
+                ["waiting"] = waiting,
+                ["cash_in_hand"] = partners.Sum(p => p["cash_in_hand"]!.GetValue<long>()),
+            },
+            ["by_zone"] = new JsonArray(byZone.Values.OrderBy(z => z["zone"]!.GetValue<string>()).Select(z => (JsonNode?)z).ToArray()),
+            ["map_tiles"] = cfg.Str("map_tiles"), ["map_attribution"] = cfg.Str("map_attribution"),
+            ["server_time"] = now.ToString("o"),
+        };
+    }
 }
