@@ -574,4 +574,7 @@ public class OrdersDAL(IMySqlDapperHelper db)
     public Task<IEnumerable<SubOrderModel>> UnconfirmedForUpdateAsync(DateTime cutoff, IUnitOfWork uow) => uow.QueryAsync<SubOrderModel>(
         "SELECT * FROM sub_orders WHERE status = 'placed' AND created_at < @cutoff ORDER BY created_at LIMIT 50 FOR UPDATE SKIP LOCKED",
         new { cutoff });
+    /// <summary>One package by its customer-facing number (reference: assistant/actions.py _package).</summary>
+    public Task<SubOrderModel?> SubByNumberAsync(string number) =>
+        db.QueryFirstOrDefaultAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE UPPER(number) = @number", new { number });
 }

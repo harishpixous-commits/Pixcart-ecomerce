@@ -17,6 +17,7 @@ public class AdminOpsBAL(
     IPlatformSettingsBAL platformSettings,
     IAccessBAL access,
     IRefundQueue refundQueue,
+    IPayoutsBAL payoutsBal,
     IMySqlDapperHelper db) : IAdminOpsBAL
 {
     private static async Task AuditAsync(IUnitOfWork uow, UserModel user, string action, string entityType,
@@ -156,12 +157,44 @@ public class AdminOpsBAL(
     public async Task<JsonObject> WriteSettingsAsync(UserModel admin, JsonObject body)
     {
         await access.RequireAsync(admin, "settings");
-        var result = await platformSettings.UpdateAsync(body);
+        // Reference: write_settings — validate, locked merge and the audit row in ONE transaction.
+        var clean = platformSettings.Validate(body);
         await using var uow = await db.BeginAsync();
+        await platformSettings.MergeValidatedAsync(clean, uow);
         var detail = body.ToJsonString();
         if (detail.Length > 1000) detail = detail[..1000];
         await AuditAsync(uow, admin, "settings.update", "settings", "marketplace", detail);
         await uow.CommitAsync();
-        return result;
+        platformSettings.InvalidateCache();
+        return await platformSettings.GetAsync();
     }
+
+    /// <summary>Create payouts for sellers with money due (reference: routers/admin_extras.py run_payouts).</summary>
+    public async Task<JsonObject> RunPayoutsAsync(UserModel admin)
+    {
+        await access.RequireAsync(admin, "payouts");
+        var cfg = await platformSettings.GetAsync();
+        var created = await payoutsBal.CreatePayoutsAsync(cfg.Int("payout_min_paise"));
+        await using var uow = await db.BeginAsync();
+        await AuditAsync(uow, admin, "payout.run", "payout", "batch", $"{created.Count} payouts");
+        await uow.CommitAsync();
+        var items = new JsonArray();
+        foreach (var p in created)
+        {
+            var bank = new JsonObject();
+            if (JsonNode.Parse(p.BankSnapshot) is JsonObject snap)
+                foreach (var (k, v) in snap)
+                    if (k != "account_enc") bank[k] = v?.DeepClone();
+            items.Add(new JsonObject
+            {
+                ["id"] = p.Id.ToString(), ["number"] = p.Number, ["seller_id"] = p.SellerId.ToString(),
+                ["seller_name"] = "", ["amount"] = p.Amount, ["status"] = p.Status, ["mode"] = p.Mode,
+                ["utr"] = p.Utr, ["failure_reason"] = p.FailureReason, ["bank"] = bank, ["bank_changed"] = false,
+                ["created_at"] = p.CreatedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00"),
+                ["paid_at"] = p.PaidAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00"),
+            });
+        }
+        return new JsonObject { ["created"] = created.Count, ["items"] = items };
+    }
+
 }

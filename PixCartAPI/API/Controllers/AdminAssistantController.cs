@@ -16,7 +16,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/admin")]
 [SignedIn]
-public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access, ICurrentUser current, BAL.AssistantAskBAL ask, BAL.Interface.IRateLimitBAL rateLimit) : ControllerBase
+public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access, ICurrentUser current, BAL.AssistantAskBAL ask, BAL.Interface.IRateLimitBAL rateLimit, BAL.AssistantActionsBAL actions) : ControllerBase
 {
     private async Task<UserModel> RequireAsync(string permission)
     {
@@ -127,6 +127,15 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
             await Response.Body.FlushAsync(cancellationToken);
         }
     }
+    /// <summary>Confirm or cancel a proposed change (reference: POST /api/admin/assistant/actions/{action_id}/{decision_}).</summary>
+    [HttpPost("assistant/actions/{actionId:guid}/{decision}")]
+    public async Task<JsonObject> DecideAction(Guid actionId, string decision)
+    {
+        if (decision is not ("confirm" or "cancel"))
+            throw new AppException("decision must be confirm or cancel", "validation", 422);
+        return await actions.DecideAsync(await current.RequireAsync(), actionId, decision);
+    }
+
 }
 
 /// <summary>Reference: routers/assistant.py AskIn.</summary>

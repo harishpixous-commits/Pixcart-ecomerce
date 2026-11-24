@@ -33,4 +33,7 @@ public interface IAdminOpsBAL
 
     /// <summary>Merge platform setting updates (reference: PUT /api/admin/settings).</summary>
     Task<JsonObject> WriteSettingsAsync(UserModel admin, JsonObject body);
+
+    /// <summary>Create payouts for sellers with money due (reference: POST /api/admin/payouts/run).</summary>
+    Task<JsonObject> RunPayoutsAsync(UserModel admin);
 }

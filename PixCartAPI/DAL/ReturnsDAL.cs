@@ -172,4 +172,9 @@ public class ReturnsDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync(
             "UPDATE orders SET refunded_total = refunded_total + @amount, payment_status = @paymentStatus, updated_at = UTC_TIMESTAMP(6) WHERE id = @orderId",
             new { orderId, amount, paymentStatus });
+
+    /// <summary>One return by its customer-facing number (reference: assistant/actions.py return_decision).</summary>
+    public Task<ReturnRequestModel?> ReturnByNumberAsync(string number) =>
+        db.QueryFirstOrDefaultAsync<ReturnRequestModel>("SELECT * FROM return_requests WHERE UPPER(number) = @number", new { number });
+
 }

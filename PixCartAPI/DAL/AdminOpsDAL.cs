@@ -46,4 +46,9 @@ public class AdminOpsDAL(IMySqlDapperHelper db)
     /// <summary>One user row, locked (reference: block_user / unblock_user).</summary>
     public Task<UserModel?> UserForUpdateAsync(Guid userId, IUnitOfWork uow) =>
         uow.QueryFirstOrDefaultAsync<UserModel>("SELECT * FROM users WHERE id = @userId FOR UPDATE", new { userId });
+
+    /// <summary>One refund row (reference: assistant/actions.py prepare's refund lookup).</summary>
+    public Task<RefundModel?> RefundAsync(Guid refundId) =>
+        db.QueryFirstOrDefaultAsync<RefundModel>("SELECT * FROM refunds WHERE id = @refundId", new { refundId });
+
 }

@@ -2,13 +2,13 @@ namespace BAL;
 
 using System.Text.Json.Nodes;
 using DAL;
+using Model.DomainModel;
 using Utils;
 
 /// <summary>
 /// The assistant tool handlers whose backing queries are ported (reference: app/assistant/tools.py).
-/// gst_tcs_report, marketplace_settings, prepare_export, file_overview/file_query/file_compare and
-/// propose_action stay unregistered until their services (reports, settings/integrations, exports,
-/// uploads, actions) are ported.
+/// gst_tcs_report, marketplace_settings, prepare_export and file_overview/file_query/file_compare stay
+/// unregistered until their services (reports, settings/integrations, exports, uploads) are ported.
 /// </summary>
 public partial class AssistantToolsBAL
 {
@@ -34,7 +34,39 @@ public partial class AssistantToolsBAL
         ["coupons"] = new("coupons", ["marketing"], CouponsAsync),
         ["open_page"] = new("open_page", Dashboard, OpenPageAsync),
         ["remember"] = new("remember", ["assistant"], RememberAsync),
+        ["propose_action"] = new("propose_action", ["assistant_actions"], ProposeActionAsync),
     };
+
+    // ----------------------------------------------------------------------------- change proposals
+
+    /// <summary>Reference: tools.propose_action — validate and store a pending change; nothing runs until the
+    /// person presses Confirm.</summary>
+    private async Task<AssistantToolOutput> ProposeActionAsync(AssistantToolContext ctx, JsonObject a)
+    {
+        var kind = Str(a, "kind");
+        var prms = a["params"] as JsonObject ?? new JsonObject();
+        AssistantActionModel act;
+        try
+        {
+            act = await actionsBal.PrepareAsync(ctx.UserId, ctx.Permissions, ctx.ConversationId, kind, prms);
+        }
+        catch (AssistantActionException exc)
+        {
+            return new AssistantToolOutput(new JsonObject { ["error"] = exc.Message, ["params_needed"] = null }, []);
+        }
+        var details = JsonNode.Parse(act.Result) is JsonObject ro && ro["details"] is JsonArray d ? (JsonArray)d.DeepClone() : new JsonArray();
+        var card = new JsonObject
+        {
+            ["type"] = "action", ["action_id"] = act.Id.ToString(), ["kind"] = act.Kind,
+            ["summary"] = act.Summary, ["details"] = details, ["status"] = "pending",
+        };
+        return new AssistantToolOutput(
+            new JsonObject
+            {
+                ["prepared"] = true, ["summary"] = act.Summary,
+                ["note"] = "Waiting for the person to press Confirm. Do not say it is done.",
+            }, [card]);
+    }
 
     // ----------------------------------------------------------------------------- business numbers
 

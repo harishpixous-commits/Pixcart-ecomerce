@@ -36,4 +36,23 @@ public partial class AssistantDAL(IMySqlDapperHelper db)
         (await db.QueryAsync<AssistantActionModel>(
             "SELECT * FROM assistant_actions WHERE conversation_id = @conversationId", new { conversationId }))
         .ToDictionary(a => a.Id, a => a.Status);
+
+    // ------------------------------------------------------------------ action rows (assistant actions slice)
+
+    public Task InsertActionAsync(AssistantActionModel a) =>
+        db.ExecuteAsync(
+            "INSERT INTO assistant_actions (conversation_id, user_id, kind, params, summary, status, result, created_at, decided_at, id) " +
+            "VALUES (@ConversationId, @UserId, @Kind, CAST(@Params AS JSON), @Summary, @Status, CAST(@Result AS JSON), @CreatedAt, @DecidedAt, @Id)", a);
+
+    /// <summary>One action row, locked (reference: routers/assistant.py _action FOR UPDATE).</summary>
+    public Task<AssistantActionModel?> ActionForUpdateAsync(Guid actionId, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<AssistantActionModel>("SELECT * FROM assistant_actions WHERE id = @actionId FOR UPDATE", new { actionId });
+
+    public Task SaveActionDecisionAsync(Guid actionId, string status, DateTime decidedAt, string result, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE assistant_actions SET status = @status, decided_at = @decidedAt, result = CAST(@result AS JSON) WHERE id = @actionId",
+            new { actionId, status, decidedAt, result });
+
+    public Task SaveActionStatusAsync(Guid actionId, string status, IUnitOfWork uow) =>
+        uow.ExecuteAsync("UPDATE assistant_actions SET status = @status WHERE id = @actionId", new { actionId, status });
 }

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using BAL.Interface;
 using DAL;
 using Utils;
+using Utils.Interface;
 
 namespace BAL;
 
@@ -231,6 +232,14 @@ public partial class PlatformSettingsBAL(SettingsDAL settings, CatalogSupportDAL
     private JsonObject? _cache;
 
     public async Task<JsonObject> GetAsync() => _cache ??= SettingsDAL.Merge(Defaults(), await settings.GetAsync(RowKey));
+
+    /// <summary>Locked merge of already-validated updates inside the caller's transaction (reference:
+    /// update_settings' single session, so the audit row commits with the change).</summary>
+    public async Task MergeValidatedAsync(JsonObject clean, IUnitOfWork uow) =>
+        await support.MergeSettingsAsync(RowKey, clean, uow);
+
+    /// <summary>Drops the cached settings after an outside-the-service write.</summary>
+    public void InvalidateCache() => _cache = null;
 
     public JsonObject Validate(JsonObject updates)
     {
