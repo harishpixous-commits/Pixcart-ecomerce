@@ -29,6 +29,8 @@ public class AssistantActionsBAL(
     IPlatformSettingsBAL platformSettings,
     SellerModerationDAL sellersDal,
     ISellerModerationBAL sellers,
+    ProductModerationDAL productsDal,
+    IProductModerationBAL products,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan ExpiresAfter = TimeSpan.FromMinutes(30);
@@ -44,6 +46,8 @@ public class AssistantActionsBAL(
         ["unblock_customer"] = ("Unblock a customer", "customers", ["customer"]),
         ["update_setting"] = ("Change a marketplace setting", "settings", ["key", "value"]),
         ["run_payouts"] = ("Create payouts for sellers with money due", "payouts", []),
+        ["approve_product"] = ("Approve a listing", "catalog", ["product"]),
+        ["reject_product"] = ("Send a listing back to the seller", "catalog", ["product", "reason"]),
         ["approve_seller"] = ("Approve a seller", "sellers", ["seller"]),
         ["reject_seller"] = ("Ask a seller to fix their application", "sellers", ["seller", "reason"]),
         ["suspend_seller"] = ("Suspend a seller", "sellers", ["seller", "reason"]),
@@ -166,6 +170,25 @@ public class AssistantActionsBAL(
                     "WHERE payout_id IS NULL AND available_at <= UTC_TIMESTAMP(6) GROUP BY seller_id HAVING SUM(amount) > 0) t");
                 Detail("Sellers with money due", dueCount.ToString()); Detail("Total due now", Rupees(dueTotal));
                 summary = "Create payouts for all sellers with money due";
+                break;
+            }
+            case "approve_product":
+            case "reject_product":
+            {
+                var prod = await productsDal.ResolveProductAsync(Str(prms, "product"))
+                    ?? throw new AssistantActionException(
+                        "I could not find exactly one listing with that id or title. Search the catalogue first.");
+                if (kind == "approve_product" && prod.Status != "pending")
+                    throw new AssistantActionException($"This listing is {prod.Status}, not waiting for review.");
+                var prodSeller = await sellersDal.SellerAsync(prod.SellerId);
+                clean["product_id"] = prod.Id.ToString();
+                Detail("Listing", prod.Title); Detail("Seller", prodSeller?.DisplayName ?? ""); Detail("Status now", prod.Status);
+                summary = (kind == "approve_product" ? "Approve " : "Send back ") + "\u201c" + prod.Title + "\u201d";
+                if (kind == "reject_product")
+                {
+                    clean["reason"] = Str(prms, "reason").Trim()[..Math.Min(1000, Str(prms, "reason").Trim().Length)];
+                    Detail("Reason for seller", clean["reason"]!.GetValue<string>());
+                }
                 break;
             }
             case "approve_seller":
@@ -300,6 +323,8 @@ public class AssistantActionsBAL(
             "update_setting" => await adminOps.WriteSettingsAsync(user,
                 new JsonObject { [Str(p, "key")] = p["value"]?.DeepClone() }),
             "run_payouts" => await adminOps.RunPayoutsAsync(user),
+            "approve_product" => await products.ApproveAsync(user, Guid.Parse(Str(p, "product_id"))),
+            "reject_product" => await products.RejectAsync(user, Guid.Parse(Str(p, "product_id")), Str(p, "reason")),
             "approve_seller" => await sellers.ApproveAsync(user, Guid.Parse(Str(p, "seller_id"))),
             "reject_seller" => await sellers.RejectAsync(user, Guid.Parse(Str(p, "seller_id")), Str(p, "reason")),
             "suspend_seller" => await sellers.SuspendAsync(user, Guid.Parse(Str(p, "seller_id")), Str(p, "reason")),
