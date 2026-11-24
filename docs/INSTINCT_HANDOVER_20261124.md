@@ -127,7 +127,11 @@ privacy (DPDP), notification outbox dispatcher.
 - Assistant actions + admin ops (8d16c39, 120a63c, 38bfd1a, 991eda6, 9900296, ddd5c5d,
   2071a6a): all 19 action kinds wired with dispatch; admin moderation for sellers,
   products, coupons, reviews, tickets, announcements; staff-deliver verified; decide
-  endpoint fully runtime-verified.
+  endpoint runtime-verified. The admin assistant is NOT fully done: for create_coupon,
+  set_coupon_active, moderate_review, reply_ticket and set_announcement the seeded-row
+  dispatch checks do not establish the full preparation-to-execution path, and those
+  named preparation/coverage gaps remain open (see the honest-gaps list). This is
+  distinct from the shop-assistant surfaces, which are not implemented at all.
 
 ### Implemented but NOT fully exercised (honest gaps)
 
