@@ -17,7 +17,8 @@ public class AssistantUploadTests(ApiFactory f):ApiTest(f)
         Assert.Equal("date",r.Json["columns"]![4]!["type"]!.GetValue<string>());var id=r.Json["id"]!.GetValue<string>();
         Assert.Equal(1,await ApiFactory.DbScalarAsync<int>("SELECT COUNT(*) FROM assistant_uploads WHERE id=@id AND DATEDIFF(expires_at,created_at)=7 AND row_count=3",new{id}));
         Assert.Equal(403,(await user.Delete("/api/admin/assistant/uploads/"+id)).Status);
-        Assert.True((await admin.Delete("/api/admin/assistant/uploads/"+Guid.NewGuid())).Json["ok"]!.GetValue<bool>());await admin.Delete("/api/admin/assistant/uploads/"+id);
+        Assert.True((await admin.Delete("/api/admin/assistant/uploads/"+Guid.NewGuid())).Json["ok"]!.GetValue<bool>());var conv=await admin.Post("/api/admin/assistant/conversations",new{title="Synthetic files"});var cid=conv.Json["id"]!.GetValue<string>();var answer=await admin.Post("/api/admin/assistant/conversations/"+cid+"/messages",new{text="Read this file",upload_ids=new[]{id,"invalid",Guid.NewGuid().ToString()}});Assert.True(answer.Status==200,answer.ToString());Assert.Contains("file_overview",answer.Text);Assert.Contains("file_analysis",answer.Text);Assert.Contains("Amount (2)",answer.Text);var saved=await admin.Get("/api/admin/assistant/conversations/"+cid);Assert.Equal("files",saved.Json["messages"]![0]!["blocks"]![0]!["type"]!.GetValue<string>());Assert.Single(saved.Json["messages"]![0]!["blocks"]![0]!["items"]!.AsArray());
+        await admin.Delete("/api/admin/assistant/uploads/"+id);
         Assert.Equal(0,await ApiFactory.DbScalarAsync<int>("SELECT COUNT(*) FROM assistant_uploads WHERE id=@id",new{id}));
         r=await Upload("a.tsv","x\ty\n1\t2\n3\t4");Assert.True(r.Status==201,r.ToString());
         Assert.Equal(2,r.Json["rows"]!.GetValue<int>());

@@ -16,6 +16,7 @@ public partial class AssistantToolsBAL
 
     private Dictionary<string, ExecutableTool> BuildRegistry() => new()
     {
+        ["file_overview"] = new("file_overview", ["assistant_files"], FileOverviewAsync),
         ["business_overview"] = new("business_overview", Dashboard, BusinessOverviewAsync),
         ["sales_breakdown"] = new("sales_breakdown", Dashboard, SalesBreakdownAsync),
         ["work_queue"] = new("work_queue", Dashboard, WorkQueueAsync),
@@ -36,6 +37,9 @@ public partial class AssistantToolsBAL
         ["remember"] = new("remember", ["assistant"], RememberAsync),
         ["propose_action"] = new("propose_action", ["assistant_actions"], ProposeActionAsync),
     };
+
+    private async Task<AssistantToolOutput> FileOverviewAsync(AssistantToolContext ctx,JsonObject a)
+    {var id=Str(a,"file_id")??ctx.UploadIds.LastOrDefault();var up=Guid.TryParse(id,out var fid)?await uploads.OwnAsync(ctx.UserId,fid,DateTime.UtcNow):null;if(up is null)return new(new JsonObject{["error"]="No uploaded file found. Ask the person to attach one."},[]);var profile=AssistantUploadBAL.Profile(up);if(profile["kind"]!.GetValue<string>()=="text")return new(profile,[]);var cols=profile["columns"]!.AsArray().Select(c=>new JsonArray(new[]{"name","type","filled","distinct","sum","min","max"}.Select(k=>c![k]?.DeepClone()??JsonValue.Create("")).ToArray()));return new(profile,[TableCard($"{up.Filename} · {up.RowCount:N0} rows",["Column","Type","Filled","Distinct","Sum","Min","Max"],cols,note:up.Truncated?"Only the first 50,000 rows were read.":"")]);}
 
     // ----------------------------------------------------------------------------- change proposals
 

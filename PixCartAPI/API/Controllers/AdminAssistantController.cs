@@ -123,7 +123,7 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
         Response.Headers["X-Accel-Buffering"] = "no";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
         await Response.Body.FlushAsync(cancellationToken);
-        await foreach (var ev in ask.AskEventsAsync(user, convId, body.Text.Trim(), page, body.Voice, cancellationToken))
+        await foreach (var ev in ask.AskEventsAsync(user, convId, body.Text.Trim(), page, body.Voice, cancellationToken,body.UploadIds))
         {
             var line = "data: " + ev.ToJsonString() + "\n\n";
             await Response.Body.WriteAsync(System.Text.Encoding.UTF8.GetBytes(line), cancellationToken);

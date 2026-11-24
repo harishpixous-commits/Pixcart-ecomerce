@@ -20,7 +20,7 @@ public class AssistantAskBAL(
     AssistantBAL asst,
     AssistantToolsBAL tools,
     IAccessBAL access,
-    ILogger<AssistantAskBAL> log)
+    ILogger<AssistantAskBAL> log,AssistantUploadDAL uploads)
 {
     /// <summary>Mutable turn state shared with the sandbox iterator (C# iterators cannot yield inside try/catch).</summary>
     private sealed class TurnState
@@ -32,7 +32,7 @@ public class AssistantAskBAL(
     /// <summary>Reference: agent.run — streams the events for one question.</summary>
     public async IAsyncEnumerable<JsonObject> AskEventsAsync(
         UserModel user, Guid convId, string text, JsonObject? page, bool voice,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default,List<string>? uploadIds=null)
     {
         var conv = await dal.ConversationAsync(convId);
         if (conv is null || conv.UserId != user.Id)
@@ -44,13 +44,14 @@ public class AssistantAskBAL(
         var perms = await access.PermissionsForAsync(user);
         var names = AssistantTools.Available(perms).Select(t => t.Name)
             .Where(n => tools.RegisteredNames.Contains(n)).ToHashSet();
-        var now = DateTimeFunctions.UtcNow();
+        var now = DateTimeFunctions.UtcNow();var files=new JsonArray();var ownedIds=new List<string>();foreach(var id in (uploadIds??[]).Take(5))if(Guid.TryParse(id,out var fid)&&await uploads.OwnAsync(user.Id,fid,now) is {} up){files.Add(new JsonObject{["id"]=up.Id.ToString(),["filename"]=up.Filename,["rows"]=up.RowCount,["columns"]=(JsonNode.Parse(up.Columns) as JsonArray)?.Count??0});ownedIds.Add(up.Id.ToString());}
+        var modelText=text+(files.Count>0?"\n\n[Attached: "+string.Join("; ",files.Select(f=>$"{f!["filename"]!.GetValue<string>()} (file_id {f["id"]!.GetValue<string>()})"))+"]":"");
         var userMsg = new AssistantMessageModel
         {
             Id = Guid.NewGuid(), ConversationId = conv.Id, Role = "user", Text = text,
-            Blocks = "[]",
-            ModelContent = JsonSerializer.Serialize(new object[] { new { role = "user", content = text } }),
-            UploadIds = "[]", Status = "done", Mode = "", CreatedAt = now,
+            Blocks = files.Count>0?new JsonArray(new JsonObject{["type"]="files",["items"]=files}).ToJsonString():"[]",
+            ModelContent = JsonSerializer.Serialize(new object[] { new { role = "user", content = modelText } }),
+            UploadIds = JsonSerializer.Serialize(ownedIds), Status = "done", Mode = "", CreatedAt = now,
         };
         await dal.InsertMessageAsync(userMsg);
         string? title = null;
@@ -64,7 +65,7 @@ public class AssistantAskBAL(
             await dal.TouchForAskAsync(conv.Id, title, page?.ToJsonString(), now);
         var replyId = Guid.NewGuid();
         const string mode = "sandbox";
-        var dec = AssistantDecision.Decide(text, cfg["decision"] as JsonObject ?? new JsonObject(), names, false);
+        var dec = AssistantDecision.Decide(text, cfg["decision"] as JsonObject ?? new JsonObject(), names,ownedIds.Count>0);
         yield return new JsonObject
         {
             ["type"] = "start", ["user_message_id"] = userMsg.Id.ToString(), ["message_id"] = replyId.ToString(),
@@ -75,7 +76,7 @@ public class AssistantAskBAL(
         yield return decEvent;
 
         var shareContacts = cfg["share_contact_details"]?.GetValue<bool>() ?? false;
-        var ctx = new AssistantToolsBAL.AssistantToolContext(user.Id, perms, conv.Id, shareContacts, []);
+        var ctx = new AssistantToolsBAL.AssistantToolContext(user.Id, perms, conv.Id, shareContacts, ownedIds);
         var state = new TurnState();
         var status = "done";
 
@@ -142,7 +143,7 @@ public class AssistantAskBAL(
         AssistantToolsBAL.AssistantToolContext ctx, HashSet<string> names, string text, TurnState state,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var (d, calls) = AssistantSandbox.Choose(text, names, false);
+        var (d, calls) = AssistantSandbox.Choose(text, names, ctx.UploadIds.Count>0);
         var results = new List<(string Name, JsonNode? Data)>();
         foreach (var (name, args) in calls)
         {

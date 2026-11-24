@@ -12,7 +12,7 @@ using Utils;
 /// Only tools whose backing queries are ported are registered for execution; the status endpoint still
 /// reports all 25 from <see cref="AssistantTools"/>. Permissions are re-checked on every execution.
 /// </summary>
-public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst, AiBAL ai, AssistantActionsBAL actionsBal)
+public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst, AiBAL ai, AssistantActionsBAL actionsBal,AssistantUploadDAL uploads)
 {
     public sealed record AssistantToolContext(Guid UserId, HashSet<string> Permissions, Guid ConversationId, bool ShareContacts, List<string> UploadIds);
 
