@@ -45,7 +45,18 @@ public class AdminDeliveryController(
 
     public sealed record ReturnAssignIn(Guid? ReturnId, Guid? PartnerId, bool Direct = false, bool Force = false);
 
-    /// <summary>Offer or assign a return pickup to a chosen partner (reference: POST .../returns/assign).</summary>
+    public sealed record PickupAssignIn(Guid? PartnerId,bool Direct=false,bool Force=false);
+
+    /// <summary>Reference route: the return ID is in the URL, not in the request body.</summary>
+    [HttpPost("returns/{returnId:guid}/assign"), SignedIn]
+    public async Task<JsonObject> AssignReturn(Guid returnId,PickupAssignIn body)
+    {
+        var user=await current.RequireAsync();
+        if(body.PartnerId is null)throw new AppException("Choose a partner","required",422);
+        return await fleet.AssignPickupByStaffAsync(user,returnId,body.PartnerId.Value,body.Direct,body.Force);
+    }
+
+    /// <summary>Compatibility route retained for existing callers of this port's earlier body-ID shape.</summary>
     [HttpPost("returns/assign"), SignedIn]
     public async Task<JsonObject> AssignReturn(ReturnAssignIn body)
     {
