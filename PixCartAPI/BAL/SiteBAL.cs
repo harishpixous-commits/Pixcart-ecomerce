@@ -23,7 +23,7 @@ public class SiteBAL(SettingsDAL settings, CmsDAL cms, AppSettings app, IConfigu
 
     public async Task<JsonObject> GetSiteAsync() => Cms.ReadSite(await settings.GetAsync(SiteKey), Env);
 
-    public async Task<JsonObject> SaveSiteAsync(JsonObject data)
+    public async Task<JsonObject> SaveSiteAsync(JsonObject data, System.Data.IDbTransaction? tx = null)
     {
         JsonObject site;
         try
@@ -34,11 +34,11 @@ public class SiteBAL(SettingsDAL settings, CmsDAL cms, AppSettings app, IConfigu
         {
             throw new AppException(e.Message, "invalid_site");
         }
-        await settings.SaveAsync(SiteKey, site);
+        await settings.SaveAsync(SiteKey, site, tx);
         return site;
     }
 
-    public async Task<JsonObject> SaveThemeAsync(string theme, JsonObject? themeSettings)
+    public async Task<JsonObject> SaveThemeAsync(string theme, JsonObject? themeSettings, System.Data.IDbTransaction? tx = null)
     {
         var site = await GetSiteAsync();
         site["theme"] = theme;
@@ -54,7 +54,7 @@ public class SiteBAL(SettingsDAL settings, CmsDAL cms, AppSettings app, IConfigu
         {
             throw new AppException(e.Message, "invalid_theme");
         }
-        await settings.SaveAsync(SiteKey, saved);
+        await settings.SaveAsync(SiteKey, saved, tx);
         return new JsonObject { ["theme"] = saved["theme"]!.DeepClone(), ["theme_settings"] = saved["theme_settings"]!.DeepClone() };
     }
 
