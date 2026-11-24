@@ -3,7 +3,7 @@
  * provider). Used by the admin live map, the partner's trip, the customer's tracking and the address pin.
  * Leaflet is loaded in the browser only. Markers are simple coloured badges so they stay sharp on every screen.
  * Port of components/map/live-map.tsx:
- *   <pc-live-map [markers] [lines] tiles attribution fitKey [fitPoints] [center] [zoom] class="h-52" [pickable] (pick) (marker) />
+ *   <pc-live-map [markers] [lines] tiles attribution fitKey [fitPoints] [center] [zoom] mapClass="h-52" [pickable] (pick) (marker) />
  */
 
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, viewChild } from "@angular/core";
@@ -71,7 +71,7 @@ export class LiveMap {
   readonly fitPoints = input<[number, number][] | undefined>(undefined);
   readonly center = input<[number, number] | undefined>(undefined);
   readonly zoom = input(13);
-  readonly mapClass = input<string | undefined>(undefined, { alias: "class" });
+  readonly mapClass = input<string | undefined>(undefined);
   readonly pickable = input(false);
   /** tap the map (or drag the pin) to move the pin */
   readonly pick = output<{ lat: number; lng: number }>();
