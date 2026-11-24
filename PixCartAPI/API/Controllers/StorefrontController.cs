@@ -20,7 +20,7 @@ public class StorefrontController(ICatalogBAL catalog, ICurrentUser current, App
     private string Visitor()
     {
         var vid = Request.Cookies[VisitorCookie] ?? "";
-        return VisitorId.IsMatch(vid) ? vid : Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)).Replace('+', '-').Replace('/', '_');
+        return VisitorId.IsMatch(vid) ? vid : Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)).Replace('+', '-').Replace('/', '_').TrimEnd('=');
     }
 
     /// <summary>Reference: ads.keep_visitor.</summary>

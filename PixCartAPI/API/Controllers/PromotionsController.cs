@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
 using BAL.Interface;
+using API.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
@@ -10,7 +11,7 @@ namespace API.Controllers;
 /// payload). Public routes.
 /// </summary>
 [ApiController]
-public class PromotionsController(IPromotionsBAL promotions) : ControllerBase
+public class PromotionsController(IPromotionsBAL promotions, ICurrentUser current) : ControllerBase
 {
     [HttpGet("/api/catalog/deals")]
     public async Task<JsonObject> Deals(
@@ -34,4 +35,20 @@ public class PromotionsController(IPromotionsBAL promotions) : ControllerBase
 
     [HttpGet("/api/catalog/coupons")]
     public async Task<JsonObject> Coupons() => await promotions.CouponsPageAsync();
+
+    /// <summary>"Inspired by your browsing history": popular products from the categories of the ones viewed.</summary>
+    [HttpGet("/api/catalog/related")]
+    public async Task<JsonObject> Related([FromQuery, StringLength(800)] string ids = "", [FromQuery, Range(1, 24)] int limit = 12)
+    {
+        var seen = new List<Guid>();
+        foreach (var x in ids.Split(',').Take(20))
+            if (Guid.TryParse(x.Trim(), out var id)) seen.Add(id);
+        return await promotions.RelatedAsync(seen, limit);
+    }
+
+    /// <summary>Products from the shopper's delivered orders that are still on sale, most recent first.</summary>
+    [SignedIn]
+    [HttpGet("/api/orders/buy-again")]
+    public async Task<JsonObject> BuyAgain([FromQuery, Range(1, 24)] int limit = 12) =>
+        await promotions.BuyAgainAsync((await current.RequireAsync()).Id, limit);
 }

@@ -120,4 +120,23 @@ public class PromotionsDAL(IMySqlDapperHelper db)
             "AND (c.starts_at IS NULL OR c.starts_at <= UTC_TIMESTAMP(6)) AND (c.ends_at IS NULL OR c.ends_at >= UTC_TIMESTAMP(6)) " +
             "AND (c.usage_limit IS NULL OR c.used_count < c.usage_limit) " +
             "ORDER BY c.seller_id IS NOT NULL, c.ends_at IS NULL, c.ends_at, c.created_at DESC LIMIT 200");
+
+    /// <summary>Categories of the given products (reference: related_products).</summary>
+    public async Task<List<Guid>> CategoriesOfAsync(IReadOnlyList<Guid> ids) =>
+        (await db.QueryAsync<Guid>("SELECT DISTINCT category_id FROM products WHERE id IN @ids", new { ids })).ToList();
+
+    /// <summary>Popular in-stock products in these categories, excluding the seen ones (reference: related_products).</summary>
+    public Task<IEnumerable<ProductModel>> RelatedAsync(IReadOnlyList<Guid> categoryIds, IReadOnlyList<Guid> excludeIds, int limit) =>
+        db.QueryAsync<ProductModel>(
+            $"SELECT p.* FROM products p WHERE {PublicProduct} AND p.in_stock = 1 AND p.category_id IN @categoryIds AND p.id NOT IN @excludeIds " +
+            "ORDER BY p.sold_count DESC, p.rating_avg DESC LIMIT @limit", new { categoryIds, excludeIds, limit });
+
+    /// <summary>Products from the shopper's delivered orders, most recent first (reference: buy_again).</summary>
+    public Task<IEnumerable<ProductModel>> BuyAgainAsync(Guid userId, int limit) =>
+        db.QueryAsync<ProductModel>(
+            $"SELECT p.* FROM products p JOIN (" +
+            "SELECT oi.product_id, MAX(o.created_at) AS at FROM order_items oi " +
+            "JOIN sub_orders so ON so.id = oi.sub_order_id JOIN orders o ON o.id = so.order_id " +
+            "WHERE o.user_id = @userId AND so.status = 'delivered' GROUP BY oi.product_id) last ON last.product_id = p.id " +
+            $"WHERE {PublicProduct} ORDER BY last.at DESC LIMIT @limit", new { userId, limit });
 }

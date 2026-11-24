@@ -209,4 +209,19 @@ public class PromotionsBAL(PromotionsDAL promotions, ICatalogBAL catalog, IPlatf
         }
         return new JsonObject { ["items"] = items, ["enabled"] = true };
     }
+
+    public async Task<JsonObject> RelatedAsync(IReadOnlyList<Guid> ids, int limit)
+    {
+        if (ids.Count == 0) return new JsonObject { ["items"] = new JsonArray() };
+        var cats = await promotions.CategoriesOfAsync(ids);
+        if (cats.Count == 0) return new JsonObject { ["items"] = new JsonArray() };
+        var rows = (await promotions.RelatedAsync(cats, ids, limit)).ToList();
+        return new JsonObject { ["items"] = new JsonArray((await catalog.ProductCardsAsync(rows)).Select(c => c.DeepClone()).ToArray<JsonNode>()) };
+    }
+
+    public async Task<JsonObject> BuyAgainAsync(Guid userId, int limit)
+    {
+        var rows = (await promotions.BuyAgainAsync(userId, limit)).ToList();
+        return new JsonObject { ["items"] = new JsonArray((await catalog.ProductCardsAsync(rows)).Select(c => c.DeepClone()).ToArray<JsonNode>()) };
+    }
 }

@@ -10,4 +10,10 @@ public interface IPromotionsBAL
         int? minPrice, int? maxPrice, string sort, int page);
     Task<JsonObject> TopListsAsync(string list, string? category);
     Task<JsonObject> CouponsPageAsync();
+
+    /// <summary>Reference: related_products — popular products from the categories of the ones the shopper viewed.</summary>
+    Task<JsonObject> RelatedAsync(IReadOnlyList<Guid> ids, int limit);
+
+    /// <summary>Reference: buy_again — products from the shopper's delivered orders that are still on sale.</summary>
+    Task<JsonObject> BuyAgainAsync(Guid userId, int limit);
 }
