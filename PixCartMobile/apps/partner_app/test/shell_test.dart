@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pixcart_core/pixcart_core.dart';
-
 import 'package:partner_app/main.dart';
+import 'package:pixcart_core/pixcart_core.dart';
 
 void main() {
   testWidgets('the shell opens with the fallback site', (tester) async {

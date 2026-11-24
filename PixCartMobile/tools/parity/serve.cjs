@@ -16,8 +16,8 @@ http.createServer((req, res) => {
     req.pipe(p);
     return;
   }
-  let file = path.join(root, decodeURIComponent(req.url.split("?")[0]));
-  if (!file.startsWith(path.resolve(root)) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(root, "index.html");
+  let file = path.resolve(root, "." + decodeURIComponent(req.url.split("?")[0]));
+  if (!file.startsWith(path.resolve(root)) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.resolve(root, "index.html");
   res.writeHead(200, { "content-type": types[path.extname(file)] || "application/octet-stream", "cache-control": "no-store" });
   fs.createReadStream(file).pipe(res);
 }).listen(Number(port), () => console.log(`serving ${root} on :${port}, api ${api}`));

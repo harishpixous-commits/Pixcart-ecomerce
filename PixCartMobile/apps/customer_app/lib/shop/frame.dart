@@ -38,9 +38,11 @@ class ShopFrame extends ConsumerWidget {
 /// The scrolling page: the back bar (not on the home page), the content (px-3 py-4), "Back to top", the region
 /// strip and the footer. [children] are laid out like the page's main column.
 class ShopBody extends ConsumerStatefulWidget {
-  const ShopBody({super.key, required this.children, this.back = true, this.onRefresh, this.gap = 0, this.padding, this.bottom, this.controller});
+  const ShopBody({super.key, required this.children, this.back, this.onRefresh, this.gap = 0, this.padding, this.bottom, this.controller});
   final List<Widget> children;
-  final bool back;
+
+  /// the back bar (default: on every page but the home page)
+  final bool? back;
   final Future<void> Function()? onRefresh;
   final double gap;
   final EdgeInsets? padding;
@@ -81,7 +83,7 @@ class _ShopBodyState extends ConsumerState<ShopBody> {
       controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (widget.back) const BackBar(),
+        if (widget.back ?? GoRouterState.of(context).uri.path != '/') const BackBar(),
         main,
         if (site.homeExtras.flag('back_to_top', true))
           BackToTop(onTap: () => _scroll.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut)),

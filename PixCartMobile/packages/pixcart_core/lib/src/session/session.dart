@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
@@ -33,6 +34,10 @@ class SessionState {
 class SessionNotifier extends Notifier<SessionState> {
   static const guestKey = 'pc_guest_cart_v1';
 
+  /// Non-secret hint that a refresh cookie probably exists (the web build cannot see the HttpOnly cookie), so
+  /// signed-out visitors skip the refresh call.
+  static const hintKey = 'pc_signed_in';
+
   final _restored = Completer<void>();
   StreamSubscription<String?>? _tokens;
 
@@ -51,18 +56,31 @@ class SessionNotifier extends Notifier<SessionState> {
 
   Future<void> _restore() async {
     try {
-      if (await _api.hasRefreshToken() && await _api.refreshSession()) {
+      if (await _hint() && await _api.hasRefreshToken() && await _api.refreshSession()) {
         try {
           await _loadUser();
         } catch (_) {
           _api.setAccessToken(null);
         }
       }
+      if (state.user == null) await _hint(false);
       if (state.user != null) await _mergeGuest();
     } finally {
       state = state.copyWith(ready: true);
       if (!_restored.isCompleted) _restored.complete();
       await refreshCart();
+    }
+  }
+
+  Future<bool> _hint([bool? on]) async {
+    try {
+      final prefs = await ref.read(prefsProvider.future);
+      if (on == true) await prefs.setBool(hintKey, true);
+      if (on == false) await prefs.remove(hintKey);
+      // phones keep the token itself in secure storage: no hint needed there
+      return !kIsWeb || (prefs.getBool(hintKey) ?? false);
+    } catch (_) {
+      return true;
     }
   }
 
@@ -146,6 +164,7 @@ class SessionNotifier extends Notifier<SessionState> {
   Future<void> signIn(String token, User user) async {
     _api.setAccessToken(token);
     state = state.copyWith(user: user, ready: true);
+    await _hint(true);
     await _mergeGuest();
     await refreshCart();
   }
@@ -157,6 +176,7 @@ class SessionNotifier extends Notifier<SessionState> {
       /* already signed out */
     }
     state = state.copyWith(clearUser: true);
+    await _hint(false);
     await _api.clearSession();
     await refreshCart();
   }

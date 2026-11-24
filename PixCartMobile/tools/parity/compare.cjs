@@ -39,7 +39,7 @@ async function shoot(browser, base, kind) {
   await page.goto(`${base}/`, { waitUntil: "networkidle" }).catch(() => {});
   if (args.login) {
     await signIn(page, base, args.login);
-    await page.evaluate(() => { try { localStorage.setItem("pc_signed_in", "1"); } catch {} });
+    await page.evaluate(() => { try { localStorage.setItem("pc_signed_in", "1"); localStorage.setItem("flutter.pc_signed_in", "true"); } catch {} });
   }
   const files = {};
   for (const r of routes) {
