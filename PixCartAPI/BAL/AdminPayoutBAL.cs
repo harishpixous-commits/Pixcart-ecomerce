@@ -5,7 +5,7 @@ using Model.DomainModel;
 using Utils;
 using Utils.Interface;
 namespace BAL;
-public class AdminPayoutBAL(AdminPayoutDAL data,IAccessBAL access,IIntegrationBAL integrations,EncryptDecrypt crypto,IMySqlDapperHelper db,AuditDAL audit,INotifyBAL notify):IAdminPayoutBAL
+public class AdminPayoutBAL(AdminPayoutDAL data,IAccessBAL access,IIntegrationBAL integrations,EncryptDecrypt crypto,IMySqlDapperHelper db,AuditDAL audit,INotifyBAL notify,ISiteBAL site):IAdminPayoutBAL
 {
     internal bool BankChanged(PayoutModel p,SellerModel seller)
     {
@@ -35,4 +35,11 @@ public class AdminPayoutBAL(AdminPayoutDAL data,IAccessBAL access,IIntegrationBA
         }
         p.UpdatedAt=now;await data.SaveAsync(p,tx);await audit.InsertAsync(new(){Id=Guid.NewGuid(),ActorUserId=user.Id,Action=action=="use-current-bank"?"payout.bank_confirmed":"payout."+action,EntityType="payout",EntityId=id.ToString(),Detail=detail,CreatedAt=now},tx.Transaction);await tx.CommitAsync();return seller is null?SellerHubBAL.PayoutOut(p):Out(p,seller);
     }
+    internal static string Narration(string brand,string number){var text=System.Text.RegularExpressions.Regex.Replace(brand+" "+number,"[^A-Za-z0-9 ]"," ");text=System.Text.RegularExpressions.Regex.Replace(text,@"\s+"," ").Trim();return text[..Math.Min(30,text.Length)].Trim();}
+    internal static string Cell(string value){if(value.Length>0&&"=+-@\t\r".Contains(value[0]))value="'"+value;return "\""+value.Replace("\"","\"\"")+"\"";}
+    public async Task<(string Csv,string Filename)> BankFileAsync(UserModel user)
+    {
+        await access.RequireAsync(user,"payouts");var rows=(await data.ManualPendingAsync()).ToList();await using(var tx=await db.BeginAsync()){await audit.InsertAsync(new(){Id=Guid.NewGuid(),ActorUserId=user.Id,Action="payout.bank_file",EntityType="payout",EntityId="batch",Detail=$"{rows.Count} rows",CreatedAt=DateTime.UtcNow},tx.Transaction);await tx.CommitAsync();}var brand=(await site.GetSiteAsync())["brand_name"]!.GetValue<string>();var lines=new List<string>{"Payout number,Beneficiary name,Account number,IFSC,Amount (INR),Narration"};foreach(var p in rows){var seller=(await data.SellerAsync(p.SellerId))!;if(BankChanged(p,seller))continue;var snap=JsonNode.Parse(p.BankSnapshot) as JsonObject??[];string Saved(string key,string fallback)=>string.IsNullOrEmpty(snap[key]?.GetValue<string>())?fallback:snap[key]!.GetValue<string>();var account=crypto.Decrypt(Saved("account_enc",seller.BankAccountEnc));lines.Add(string.Join(",",Cell(p.Number),Cell(Saved("holder",seller.BankHolderName)),Cell(account),Cell(Saved("ifsc",seller.BankIfsc)),(p.Amount/100.0).ToString("F2",System.Globalization.CultureInfo.InvariantCulture),Cell(Narration(brand,p.Number))));}var slug=System.Text.RegularExpressions.Regex.Replace(brand.ToLowerInvariant(),"[^a-z0-9]+","-").Trim('-');if(slug.Length==0)slug="payouts";return(string.Join("\n",lines)+"\n",$"{slug}-bank-transfer-{DateTime.UtcNow.AddMinutes(330):yyyy-MM-dd}.csv");
+    }
+
 }
