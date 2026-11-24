@@ -43,6 +43,8 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["seller_return_arriving"] = ("Return on its way: {{return_number}}", "{{partner}} collected return {{return_number}} ({{order_number}}) and is bringing it to you. Give pickup code {{code}} when you receive it."),
         ["seller_return_delivered"] = ("Return delivered: {{return_number}}", "{{partner}} brought return {{return_number}} to your store. Check the item, then mark it received to refund the customer."),
         ["delivery_new_return_pickup"] = ("New return pickup", "Collect a return from a customer in {{drop_area}} and bring it to {{store}} ({{pickup_area}}). {{fee}}. Accept within {{seconds}} seconds."),
+        ["seller_kyc_update"] = ("Seller account {{status}}", "{{message}}"),
+        ["listing_update"] = ("Listing {{status}}", "{{title}}: {{message}}"),
         ["delivery_return_pickup_assigned"] = ("Return pickup assigned to you", "{{order_number}}: collect the return from a customer in {{drop_area}} and bring it to {{store}}."),
         ["return_pickup_scheduled"] = ("Return pickup on the way", "{{partner}} will collect your return {{return_number}}. Keep the item packed and give pickup code {{code}} when you hand it over."),
         ["return_pickup_failed"] = ("Return pickup missed: {{return_number}}", "We could not collect your return ({{reason}}). We will arrange another pickup."),

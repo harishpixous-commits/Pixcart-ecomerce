@@ -27,6 +27,8 @@ public class AssistantActionsBAL(
     IReturnsBAL returns,
     IAccessBAL access,
     IPlatformSettingsBAL platformSettings,
+    SellerModerationDAL sellersDal,
+    ISellerModerationBAL sellers,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan ExpiresAfter = TimeSpan.FromMinutes(30);
@@ -42,6 +44,10 @@ public class AssistantActionsBAL(
         ["unblock_customer"] = ("Unblock a customer", "customers", ["customer"]),
         ["update_setting"] = ("Change a marketplace setting", "settings", ["key", "value"]),
         ["run_payouts"] = ("Create payouts for sellers with money due", "payouts", []),
+        ["approve_seller"] = ("Approve a seller", "sellers", ["seller"]),
+        ["reject_seller"] = ("Ask a seller to fix their application", "sellers", ["seller", "reason"]),
+        ["suspend_seller"] = ("Suspend a seller", "sellers", ["seller", "reason"]),
+        ["set_seller_commission"] = ("Change a seller's commission", "sellers", ["seller"]),
     };
 
     private static string Str(JsonObject p, string key) =>
@@ -162,6 +168,43 @@ public class AssistantActionsBAL(
                 summary = "Create payouts for all sellers with money due";
                 break;
             }
+            case "approve_seller":
+            case "reject_seller":
+            case "suspend_seller":
+            case "set_seller_commission":
+            {
+                var sid = await sellersDal.ResolveSellerAsync(Str(prms, "seller"))
+                    ?? throw new AssistantActionException("I could not find exactly one seller with that name, GSTIN or id.");
+                clean["seller_id"] = sid.Id.ToString();
+                Detail("Seller", sid.DisplayName); Detail("Legal name", sid.LegalName); Detail("Status now", sid.Status);
+                var verb = kind switch
+                {
+                    "approve_seller" => "Approve", "reject_seller" => "Ask to fix",
+                    "suspend_seller" => "Suspend", _ => "Change commission for",
+                };
+                summary = $"{verb} {sid.DisplayName}";
+                if (kind is "reject_seller" or "suspend_seller")
+                {
+                    clean["reason"] = Str(prms, "reason").Trim()[..Math.Min(1000, Str(prms, "reason").Trim().Length)];
+                    Detail("Reason", clean["reason"]!.GetValue<string>());
+                }
+                if (kind == "set_seller_commission")
+                {
+                    var pct = Str(prms, "percent").Trim();
+                    int? bps = null;
+                    if (pct.Length > 0)
+                    {
+                        if (!double.TryParse(pct, out var pd))
+                            throw new AssistantActionException("Commission must be between 0% and 50%");
+                        bps = (int)Math.Round(pd * 100);
+                        if (bps is < 0 or > 5000)
+                            throw new AssistantActionException("Commission must be between 0% and 50%");
+                    }
+                    clean["bps"] = bps;
+                    Detail("New commission", bps is null ? "Category rates" : $"{bps.Value / 100m:0.##}%");
+                }
+                break;
+            }
             default:
                 throw new AssistantActionException("Not supported");
         }
@@ -257,6 +300,11 @@ public class AssistantActionsBAL(
             "update_setting" => await adminOps.WriteSettingsAsync(user,
                 new JsonObject { [Str(p, "key")] = p["value"]?.DeepClone() }),
             "run_payouts" => await adminOps.RunPayoutsAsync(user),
+            "approve_seller" => await sellers.ApproveAsync(user, Guid.Parse(Str(p, "seller_id"))),
+            "reject_seller" => await sellers.RejectAsync(user, Guid.Parse(Str(p, "seller_id")), Str(p, "reason")),
+            "suspend_seller" => await sellers.SuspendAsync(user, Guid.Parse(Str(p, "seller_id")), Str(p, "reason")),
+            "set_seller_commission" => await sellers.CommissionAsync(user, Guid.Parse(Str(p, "seller_id")),
+                p["bps"] is JsonValue bv && bv.TryGetValue<int>(out var b) ? b : null),
             _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
                 "action_unavailable", 400),
         };
