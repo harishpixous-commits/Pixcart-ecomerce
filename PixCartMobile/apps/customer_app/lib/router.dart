@@ -26,15 +26,12 @@ const signedInOnly = ['/checkout', '/orders', '/account', '/wishlist', '/notific
 
 bool needsSignIn(String path) => signedInOnly.any((p) => path == p || path.startsWith('$p/'));
 
-final _rootKey = GlobalKey<NavigatorState>();
-
 GoRouter createRouter(Ref ref, {String initialLocation = '/'}) {
   final session = ValueNotifier<SessionState>(ref.read(sessionProvider));
   ref.listen(sessionProvider, (_, s) => session.value = s);
   ref.onDispose(session.dispose);
   Page<void> page(GoRouterState s, Widget child) => NoTransitionPage(key: s.pageKey, child: child);
   return GoRouter(
-    navigatorKey: _rootKey,
     initialLocation: initialLocation,
     refreshListenable: session,
     redirect: (context, state) {
@@ -70,8 +67,11 @@ GoRouter createRouter(Ref ref, {String initialLocation = '/'}) {
   );
 }
 
+/// Where the app opens (tests open a given screen).
+final initialLocationProvider = Provider<String>((ref) => '/');
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final r = createRouter(ref);
+  final r = createRouter(ref, initialLocation: ref.read(initialLocationProvider));
   ref.onDispose(r.dispose);
   return r;
 });
