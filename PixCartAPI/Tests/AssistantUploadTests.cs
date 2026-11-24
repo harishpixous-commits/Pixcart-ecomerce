@@ -70,4 +70,40 @@ public class AssistantUploadTests(ApiFactory f):ApiTest(f)
         Assert.Equal(epoch1904 ? "1904-01-02T02:57:46.666000" : "1900-01-01T02:57:46.666000", rows[3]!["Value"]!.GetValue<string>());
         Assert.Equal("-1 day, 12:00:00", rows[4]!["Value"]!.GetValue<string>());
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Excel_sparse_header_keeps_declared_columns_and_missing_first_row(bool missingFirstRow)
+    {
+        var admin = await Admin(); using var memory = new MemoryStream();
+        using (var zip = new ZipArchive(memory, ZipArchiveMode.Create, true))
+        {
+            void Entry(string path, string content) { using var w = new StreamWriter(zip.CreateEntry(path).Open()); w.Write(content); }
+            Entry("xl/workbook.xml", "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Synthetic\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+            Entry("xl/_rels/workbook.xml.rels", "<Relationships><Relationship Id=\"rId1\" Target=\"worksheets/sheet1.xml\"/></Relationships>");
+            var first = missingFirstRow ? "" : "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Name</t></is></c></row>";
+            Entry("xl/worksheets/sheet1.xml", "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><dimension ref=\"A1:C3\"/><sheetData>" + first + "<row r=\"3\"><c r=\"A3\" t=\"inlineStr\"><is><t>Synthetic value</t></is></c></row></sheetData></worksheet>");
+        }
+        var r = await admin.Post("/api/admin/assistant/uploads", File("sparse.xlsx", memory.ToArray()));
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal(1, r.Json["rows"]!.GetValue<int>());
+        Assert.Equal(3, r.Json["columns"]!.AsArray().Count);
+        Assert.Equal(missingFirstRow ? "Column 1" : "Name", r.Json["columns"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal("Column 3", r.Json["columns"]![2]!["name"]!.GetValue<string>());
+        Assert.Equal("Synthetic value", r.Json["first_rows"]![0]![missingFirstRow ? "Column 1" : "Name"]!.GetValue<string>());
+    }
+    [Theory]
+    [InlineData(50000, false)]
+    [InlineData(50001, true)]
+    public async Task Csv_row_and_column_caps_are_exact(int count, bool truncated)
+    {
+        var admin = await Admin();
+        var csv = "x\n" + string.Concat(Enumerable.Repeat("1\n", count));
+        var r = await admin.Post("/api/admin/assistant/uploads", File("caps.csv", Encoding.UTF8.GetBytes(csv)));
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal(50000, r.Json["rows"]!.GetValue<int>());
+        Assert.Equal(truncated, r.Json["truncated"]!.GetValue<bool>());
+        Assert.Single(r.Json["columns"]!.AsArray());
+        Assert.Equal("50000", r.Json["columns"]![0]!["sum"]!.GetValue<string>());
+    }
 }

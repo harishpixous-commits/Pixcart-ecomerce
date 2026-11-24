@@ -33,10 +33,23 @@ public partial class AssistantUploadBAL(AssistantUploadDAL data,IAccessBAL acces
         if(bytes.Length<2||bytes[0]!='P'||bytes[1]!='K')throw Bad("This is not a valid Excel file.");try
         {
             using var zip=new ZipArchive(new MemoryStream(bytes),ZipArchiveMode.Read);XNamespace ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";XNamespace rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships";XDocument Xml(string path){using var stream=(zip.GetEntry(path)??throw new InvalidDataException()).Open();return XDocument.Load(stream);}var strings=zip.GetEntry("xl/sharedStrings.xml") is null?[]:Xml("xl/sharedStrings.xml").Descendants(ns+"si").Select(e=>string.Concat(e.Descendants(ns+"t").Select(t=>t.Value))).ToList();var sheet=Xml("xl/workbook.xml").Descendants(ns+"sheet").First();var rid=sheet.Attribute(rel+"id")!.Value;var target=Xml("xl/_rels/workbook.xml.rels").Root!.Elements().Single(e=>e.Attribute("Id")?.Value==rid).Attribute("Target")!.Value;var path=target.StartsWith('/')?target.TrimStart('/'):"xl/"+target;var rows=new List<JsonArray>();List<string>? header=null;var truncated=false;var dateStyles=DateStyles(zip,Xml,ns);var epoch1904=Xml("xl/workbook.xml").Root?.Element(ns+"workbookPr")?.Attribute("date1904")?.Value is "1" or "true";
-            foreach(var row in Xml(path).Descendants(ns+"row"))
+            var worksheet = Xml(path);
+            var dimension = worksheet.Root?.Element(ns + "dimension")?.Attribute("ref")?.Value;
+            var endCell = dimension?.Split(':').Last();
+            var declaredWidth = endCell is null ? 0 : Math.Min(MaxCols, ColumnIndex(Regex.Match(endCell, "^[A-Za-z]+").Value) + 1);
+            var firstRow = true;
+            foreach(var row in worksheet.Descendants(ns+"row"))
             {
-                if(header is not null&&rows.Count>=MaxRows){truncated=true;break;}var vals=new JsonArray();foreach(var c in row.Elements(ns+"c")){var index=ColumnIndex(ColumnName(c));if(index>=MaxCols)continue;while(vals.Count<=index)vals.Add("");var type=c.Attribute("t")?.Value;var value=c.Element(ns+"v")?.Value??"";vals[index]=type=="s"?strings[int.Parse(value,CultureInfo.InvariantCulture)].Trim():type=="inlineStr"?string.Concat(c.Descendants(ns+"t").Select(x=>x.Value)).Trim():type=="b"?JsonValue.Create(value=="1"):type is null or "n"&&double.TryParse(value,NumberStyles.Float,CultureInfo.InvariantCulture,out var num)?JsonValue.Create(num):JsonValue.Create(value.Trim());if((type is null or "n")&&c.Attribute("s") is {} style&&dateStyles.ContainsKey(int.Parse(style.Value))&&double.TryParse(value,NumberStyles.Float,CultureInfo.InvariantCulture,out var serial)){vals[index]=ExcelTemporal(serial,epoch1904,dateStyles[int.Parse(style.Value)]);}}if(header is null){header=vals.Select(Str).ToList();continue;}if(vals.Any(v=>Str(v).Length>0))rows.Add(vals);
-            }Table(up,header??[],rows,truncated);
+                if(header is not null&&rows.Count>=MaxRows){truncated=true;break;}
+                if (firstRow)
+                {
+                    firstRow = false;
+                    // read_only openpyxl iter_rows begins at worksheet row one, even when it has no cells.
+                    if (int.TryParse(row.Attribute("r")?.Value, out var rowIndex) && rowIndex > 1)
+                        header = Enumerable.Repeat("", declaredWidth).ToList();
+                }
+                var vals=new JsonArray();foreach(var c in row.Elements(ns+"c")){var index=ColumnIndex(ColumnName(c));if(index>=MaxCols)continue;while(vals.Count<=index)vals.Add("");var type=c.Attribute("t")?.Value;var value=c.Element(ns+"v")?.Value??"";vals[index]=type=="s"?strings[int.Parse(value,CultureInfo.InvariantCulture)].Trim():type=="inlineStr"?string.Concat(c.Descendants(ns+"t").Select(x=>x.Value)).Trim():type=="b"?JsonValue.Create(value=="1"):type is null or "n"&&double.TryParse(value,NumberStyles.Float,CultureInfo.InvariantCulture,out var num)?JsonValue.Create(num):JsonValue.Create(value.Trim());if((type is null or "n")&&c.Attribute("s") is {} style&&dateStyles.ContainsKey(int.Parse(style.Value))&&double.TryParse(value,NumberStyles.Float,CultureInfo.InvariantCulture,out var serial)){vals[index]=ExcelTemporal(serial,epoch1904,dateStyles[int.Parse(style.Value)]);}}if(header is null){while(vals.Count<declaredWidth)vals.Add("");header=vals.Select(Str).ToList();continue;}if(vals.Any(v=>Str(v).Length>0))rows.Add(vals);
+            }Table(up,header??Enumerable.Repeat("",declaredWidth).ToList(),rows,truncated);
         }
         catch(AppException){throw;}catch{throw Bad("This Excel file could not be read. Save it again as .xlsx (no password).");}
     }
