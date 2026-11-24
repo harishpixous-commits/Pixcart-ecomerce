@@ -23,6 +23,9 @@ public class MySqlDapperHelper : IMySqlDapperHelper
             GuidFormat = MySqlGuidFormat.Char36,
             AllowUserVariables = true,
             ConvertZeroDateTime = true,
+            // Pin utf8mb4 explicitly (the schema's charset) so non-ASCII text such as the rupee sign
+            // is never dependent on server-negotiated defaults.
+            CharacterSet = "utf8mb4",
         };
         _connectionString = b.ConnectionString;
     }
