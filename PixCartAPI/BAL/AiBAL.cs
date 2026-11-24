@@ -38,7 +38,7 @@ public class AiBAL(
     private JsonObject Defaults() => new()
     {
         ["enabled"] = true,
-        ["model"] = "claude-haiku-5-5",
+        ["model"] = app.AiModel, // reference: defaults() uses env.ai_model
         ["monthly_token_budget"] = 5_000_000,
         ["price_input_per_mtok"] = 1.0,
         ["price_output_per_mtok"] = 5.0,

@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
 using API.Infrastructure;
+using BAL.AI;
 using BAL.Interface;
+using DAL;
 using Model.DomainModel;
 using Microsoft.AspNetCore.Mvc;
 using Utils;
@@ -16,7 +18,8 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/admin")]
 [SignedIn]
-public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access, ICurrentUser current, BAL.AssistantAskBAL ask, BAL.Interface.IRateLimitBAL rateLimit, BAL.AssistantActionsBAL actions) : ControllerBase
+public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access, ICurrentUser current, BAL.AssistantAskBAL ask, BAL.Interface.IRateLimitBAL rateLimit, BAL.AssistantActionsBAL actions,
+    ILlmConfigBAL llmConfig, ILlmRouterBAL llmRouter, AuditDAL audit) : ControllerBase
 {
     private async Task<UserModel> RequireAsync(string permission)
     {
@@ -136,6 +139,90 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
         return await actions.DecideAsync(await current.RequireAsync(), actionId, decision);
     }
 
+    // ----------------------------------------------------------------------------- AI providers
+    // (reference: routers/assistant.py ai-providers endpoints — same paths, payload shape and audit entries)
+
+    private async Task AuditAsync(UserModel user, string action, string entityId, string detail = "") =>
+        await audit.InsertAsync(new AuditLogModel
+        {
+            Id = Guid.NewGuid(), ActorUserId = user.Id, Action = action, EntityType = "ai_provider",
+            EntityId = entityId, Detail = detail, CreatedAt = DateTimeFunctions.UtcNow(),
+        });
+
+    /// <summary>The LLM connections, key health and fallback routes (reference: GET /api/admin/ai-providers).</summary>
+    [HttpGet("ai-providers")]
+    public async Task<JsonObject> Providers()
+    {
+        await RequireAsync("ai_providers");
+        return await llmConfig.ViewAsync();
+    }
+
+    /// <summary>Add a connection (reference: POST /api/admin/ai-providers/connections; 201 with the updated view).</summary>
+    [HttpPost("ai-providers/connections")]
+    public async Task<IActionResult> AddConnection([FromBody] JsonObject body)
+    {
+        var user = await RequireAsync("ai_providers");
+        JsonObject rec;
+        try { rec = await llmConfig.SaveConnectionAsync(body ?? new JsonObject(), null); }
+        catch (LlmConfigException e) { throw new AppException(e.Message, "invalid_connection", 400); }
+        await AuditAsync(user, "ai_provider.create", rec["id"]!.GetValue<string>(),
+            $"{rec["type"]!.GetValue<string>()} {rec["name"]!.GetValue<string>()} keys={(rec["keys"] as JsonArray)?.Count ?? 0}");
+        return StatusCode(201, await llmConfig.ViewAsync());
+    }
+
+    /// <summary>Edit a connection (reference: PUT /api/admin/ai-providers/connections/{conn_id}; the built-in is edited in Integrations).</summary>
+    [HttpPut("ai-providers/connections/{connId}")]
+    public async Task<JsonObject> EditConnection(string connId, [FromBody] JsonObject body)
+    {
+        var user = await RequireAsync("ai_providers");
+        if (connId == LlmConfigBAL.BuiltinId)
+            throw new AppException("This connection uses the Claude key from Integrations; change it there.", "builtin_connection", 400);
+        JsonObject rec;
+        try { rec = await llmConfig.SaveConnectionAsync(body ?? new JsonObject(), connId); }
+        catch (LlmConfigException e) { throw new AppException(e.Message, "invalid_connection", 400); }
+        var added = (body?["add_keys"] as JsonArray)?.Count ?? 0;
+        var removed = (body?["remove_keys"] as JsonArray)?.Count ?? 0;
+        await AuditAsync(user, "ai_provider.update", connId,
+            $"keys added={added} removed={removed} models={(rec["models"] as JsonArray)?.Count ?? 0}");
+        return await llmConfig.ViewAsync();
+    }
+
+    /// <summary>Delete a connection (reference: DELETE /api/admin/ai-providers/connections/{conn_id}).</summary>
+    [HttpDelete("ai-providers/connections/{connId}")]
+    public async Task<JsonObject> RemoveConnection(string connId)
+    {
+        var user = await RequireAsync("ai_providers");
+        await llmConfig.DeleteConnectionAsync(connId);
+        await AuditAsync(user, "ai_provider.delete", connId);
+        return await llmConfig.ViewAsync();
+    }
+
+    /// <summary>Live-test one connection/model (reference: POST /api/admin/ai-providers/connections/{conn_id}/test; rate-limited 30 per 10 minutes).</summary>
+    [HttpPost("ai-providers/connections/{connId}/test")]
+    public async Task<JsonObject> TestConnection(string connId, AiProviderTestIn body)
+    {
+        var user = await RequireAsync("ai_providers");
+        await rateLimit.RateLimitAsync($"llm-test:{user.Id}", 30, 600);
+        var conn = (await llmConfig.ConnectionsAsync()).FirstOrDefault(c => c.Id == connId) ?? throw new NotFoundException("Connection");
+        var model = body.Model ?? (conn.Models.Count > 0 ? conn.Models[0] : "");
+        var (ok, message, latency) = await llmRouter.TestTargetAsync(conn, model);
+        if (connId != LlmConfigBAL.BuiltinId) await llmConfig.RecordTestAsync(connId, ok, message);
+        await AuditAsync(user, "ai_provider.test", connId, ok ? "ok" : "failed");
+        return new JsonObject { ["ok"] = ok, ["message"] = message, ["latency_ms"] = latency };
+    }
+
+    /// <summary>Replace the fallback routes (reference: PUT /api/admin/ai-providers/routes).</summary>
+    [HttpPut("ai-providers/routes")]
+    public async Task<JsonObject> PutRoutes([FromBody] JsonObject body)
+    {
+        var user = await RequireAsync("ai_providers");
+        var routes = body?["routes"] as JsonObject ?? new JsonObject();
+        try { await llmConfig.SaveRoutesAsync(routes); }
+        catch (LlmConfigException e) { throw new AppException(e.Message, "invalid_routes", 400); }
+        await AuditAsync(user, "ai_provider.routes", "routes", string.Join(", ", routes.Select(r => $"{r.Key}:{(r.Value as JsonArray)?.Count ?? 0}")));
+        return await llmConfig.ViewAsync();
+    }
+
 }
 
 /// <summary>Reference: routers/assistant.py AskIn.</summary>
@@ -156,3 +243,6 @@ public sealed record AssistantDecisionTestIn([param: MinLength(1), MaxLength(200
 
 /// <summary>Reference: routers/assistant.py MemoryIn.</summary>
 public sealed record AssistantMemoryIn(JsonArray? Notes = null);
+
+/// <summary>Reference: routers/assistant.py TestIn (ai-providers connection test).</summary>
+public sealed record AiProviderTestIn([param: MaxLength(120)] string? Model = null);
