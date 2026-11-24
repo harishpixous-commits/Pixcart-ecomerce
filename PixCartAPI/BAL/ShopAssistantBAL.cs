@@ -25,7 +25,7 @@ public partial class ShopAssistantBAL(
     ShopAssistantDAL dal, OrdersDAL orders, ReturnsDAL returns, SupportTicketDAL tickets, CatalogDAL catalog,
     SettingsDAL settings, IRateLimitBAL rateLimit, PlatformSettingsBAL platform, SiteBAL site, FeesBAL fees,
     SupportBAL support, OrdersBAL ordersBal, ReturnsBAL returnsBal, CatalogBAL catalogBal, IMySqlDapperHelper db,
-    ILogger<ShopAssistantBAL> log) : IShopAssistantBAL
+    IAccessBAL access, IAuditBAL audit, ILogger<ShopAssistantBAL> log) : IShopAssistantBAL
 {
     private const string SettingsKey = "shop_assistant";
     private static readonly TimeSpan ActionTtl = TimeSpan.FromMinutes(30);

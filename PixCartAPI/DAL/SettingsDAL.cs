@@ -42,7 +42,8 @@ public class SettingsDAL(IMySqlDapperHelper db)
     {
         var outp = (JsonObject)defaults.DeepClone();
         foreach (var (k, v) in saved)
-            if (outp.ContainsKey(k)) outp[k] = v?.DeepClone();
+            if (outp.ContainsKey(k))
+                outp[k] = outp[k] is JsonObject od && v is JsonObject vd ? Merge(od, vd) : v?.DeepClone();
         return outp;
     }
 }

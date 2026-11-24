@@ -1,4 +1,5 @@
 using DAL.Helpers;
+using Dapper;
 using System.Data;
 using Model.DomainModel;
 using Utils.Interface;
@@ -80,6 +81,128 @@ public class ShopAssistantDAL(IMySqlDapperHelper db)
 
     public Task<bool> AnyArticleAsync() =>
         db.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM shop_kb_articles LIMIT 1)");
+
+    // ---- admin: knowledge base CRUD
+    public Task<IEnumerable<ShopKbArticleModel>> AllArticlesAsync() =>
+        db.QueryAsync<ShopKbArticleModel>("SELECT * FROM shop_kb_articles ORDER BY position, title");
+
+    public Task<ShopKbArticleModel?> GetArticleAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<ShopKbArticleModel>("SELECT * FROM shop_kb_articles WHERE id = @id", new { id });
+
+    public Task<int> UpdateArticleAsync(ShopKbArticleModel a) =>
+        db.ExecuteAsync(
+            "UPDATE shop_kb_articles SET title=@Title, body=@Body, keywords=CAST(@Keywords AS JSON), topic=@Topic, link=@Link, " +
+            "is_published=@IsPublished, position=@Position, uses=@Uses, updated_at=@UpdatedAt WHERE id=@Id", a);
+
+    public Task<int> DeleteArticleAsync(Guid id) =>
+        db.ExecuteAsync("DELETE FROM shop_kb_articles WHERE id = @id", new { id });
+
+    // ---- admin: customer chats and statistics
+    public async Task<(IEnumerable<AdminChatRow> Rows, int Total)> AdminChatsAsync(int? feedback, bool escalated, string q, int offset)
+    {
+        var where = "c.message_count > 0";
+        var p = new DynamicParameters();
+        if (feedback is not null) { where += " AND c.feedback = @feedback"; p.Add("feedback", feedback); }
+        if (escalated) where += " AND c.ticket_id IS NOT NULL";
+        if (q.Length > 0) { where += " AND (c.title LIKE @q OR u.name LIKE @q OR u.phone LIKE @q)"; p.Add("q", "%" + q + "%"); }
+        p.Add("offset", offset);
+        var total = await db.ExecuteScalarAsync<int>(
+            $"SELECT COUNT(*) FROM shop_chat_sessions c LEFT JOIN users u ON u.id = c.user_id WHERE {where}", p);
+        var rows = await db.QueryAsync<AdminChatRow>(
+            $"SELECT c.id, c.title, c.user_id AS UserId, u.name AS CustomerName, u.phone AS CustomerPhone, c.message_count AS Messages, " +
+            $"c.feedback, c.language, CAST(c.page AS CHAR) AS Page, c.ticket_id AS TicketId, c.updated_at AS UpdatedAt, " +
+            $"(SELECT number FROM support_tickets t WHERE t.id = c.ticket_id) AS TicketNumber " +
+            $"FROM shop_chat_sessions c LEFT JOIN users u ON u.id = c.user_id WHERE {where} ORDER BY c.updated_at DESC LIMIT 25 OFFSET @offset", p);
+        return (rows, total);
+    }
+
+    public sealed class AdminChatRow
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = "";
+        public Guid? UserId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerPhone { get; set; }
+        public int Messages { get; set; }
+        public int? Feedback { get; set; }
+        public string Language { get; set; } = "";
+        public string Page { get; set; } = "{}";
+        public Guid? TicketId { get; set; }
+        public string? TicketNumber { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    public sealed class AdminChatDetailRow
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = "";
+        public Guid? UserId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerPhone { get; set; }
+        public int? Feedback { get; set; }
+        public string Language { get; set; } = "";
+        public string Page { get; set; } = "{}";
+        public Guid? TicketId { get; set; }
+        public string? TicketNumber { get; set; }
+        public string? TicketStatus { get; set; }
+    }
+
+    public Task<AdminChatDetailRow?> AdminChatDetailAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<AdminChatDetailRow>(
+            "SELECT c.id, c.title, c.user_id AS UserId, u.name AS CustomerName, u.phone AS CustomerPhone, c.feedback, c.language, " +
+            "CAST(c.page AS CHAR) AS Page, c.ticket_id AS TicketId, t.number AS TicketNumber, t.status AS TicketStatus " +
+            "FROM shop_chat_sessions c LEFT JOIN users u ON u.id = c.user_id LEFT JOIN support_tickets t ON t.id = c.ticket_id WHERE c.id = @id",
+            new { id });
+
+    public async Task<AdminStatsRow> AdminStatsAsync(DateTime since)
+    {
+        var r = new AdminStatsRow();
+        var p = new { since };
+        var chats = await db.QueryFirstOrDefaultAsync<CountRow>(
+            "SELECT COUNT(*) AS A, COUNT(user_id) AS B, COUNT(ticket_id) AS C FROM shop_chat_sessions WHERE created_at >= @since AND message_count > 0", p);
+        r.Chats = chats?.A ?? 0; r.CustomerChats = chats?.B ?? 0; r.Escalated = chats?.C ?? 0;
+        r.Helpful = await db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM shop_chat_sessions WHERE created_at >= @since AND feedback = 1", p);
+        r.NotHelpful = await db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM shop_chat_sessions WHERE created_at >= @since AND feedback = -1", p);
+        r.Messages = await db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM shop_chat_messages WHERE role = 'user' AND created_at >= @since", p);
+        r.VoiceMessages = await db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM shop_chat_messages WHERE role = 'user' AND voice = 1 AND created_at >= @since", p);
+        r.Cancellations = await db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM shop_chat_actions WHERE kind = 'cancel_order' AND status = 'done' AND created_at >= @since", p);
+        r.Intents = (await db.QueryAsync<LabelCount>(
+            "SELECT intent AS Label, COUNT(*) AS N FROM shop_chat_messages WHERE role = 'user' AND created_at >= @since GROUP BY intent ORDER BY N DESC LIMIT 12", p)).ToList();
+        r.Modes = (await db.QueryAsync<LabelCount>(
+            "SELECT mode AS Label, COUNT(*) AS N FROM shop_chat_messages WHERE role = 'assistant' AND created_at >= @since GROUP BY mode", p)).ToList();
+        r.TopArticles = (await db.QueryAsync<LabelCount>(
+            "SELECT title AS Label, uses AS N FROM shop_kb_articles WHERE uses > 0 ORDER BY uses DESC LIMIT 5")).ToList();
+        return r;
+    }
+
+    public sealed class CountRow { public int A { get; set; } public int B { get; set; } public int C { get; set; } }
+    public sealed class LabelCount { public string Label { get; set; } = ""; public int N { get; set; } }
+
+    public sealed class AdminStatsRow
+    {
+        public int Chats { get; set; }
+        public int CustomerChats { get; set; }
+        public int Escalated { get; set; }
+        public int Helpful { get; set; }
+        public int NotHelpful { get; set; }
+        public int Messages { get; set; }
+        public int VoiceMessages { get; set; }
+        public int Cancellations { get; set; }
+        public List<LabelCount> Intents { get; set; } = [];
+        public List<LabelCount> Modes { get; set; } = [];
+        public List<LabelCount> TopArticles { get; set; } = [];
+    }
+
+    /// <summary>Tokens used this month by a route, for the admin status card (reference: _status).</summary>
+    public Task<int> TokensThisMonthAsync(string task, DateTime monthStart) =>
+        db.ExecuteScalarAsync<int>(
+            "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM ai_runs WHERE task = @task AND created_at >= @monthStart",
+            new { task, monthStart });
 
     public Task<int> InsertArticleAsync(ShopKbArticleModel a, IDbTransaction? tx = null) =>
         db.ExecuteAsync(ShopAssistantDalArticleSql.Insert, a, tx);
