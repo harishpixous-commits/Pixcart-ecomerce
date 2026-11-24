@@ -16,6 +16,11 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
         if(status!=null&&status is not ("draft" or "pending" or "approved" or "rejected" or "archived")||q.Length>100||page<1||pageSize<1||pageSize>100) throw new AppException("Invalid catalogue filter","validation",422);
         return await bal.ListAsync(await Seller(),status,q,lowStock,page,pageSize);
     }
+    [HttpGet("products/import-template.csv")]
+    public async Task<IActionResult> ImportTemplate() { await Seller();return File(System.Text.Encoding.UTF8.GetBytes(bal.ImportTemplate()),"text/csv; charset=utf-8","listing-upload-template.csv"); }
+    [HttpPost("products/import")]
+    public async Task<object> Import(IFormFile file,[FromQuery(Name="dry_run")]bool dryRun=true,CancellationToken ct=default)
+    {var seller=await Seller();return await bal.ImportAsync(await me.RequireAsync(),seller,await ReadBoundedAsync(file,2*1024*1024,ct),file.FileName,dryRun);}
     [HttpGet("products/{id:guid}")] public async Task<object> Detail(Guid id)=>await bal.DetailAsync(await Seller(),id);
     [HttpGet("listing-requirements")] public async Task<object> Requirements([FromQuery(Name="category_id")]Guid category)=>await bal.RequirementsAsync(await Seller(),category);
     [HttpGet("categories")] public async Task<object> Categories()=>await bal.CategoriesAsync(await Seller());

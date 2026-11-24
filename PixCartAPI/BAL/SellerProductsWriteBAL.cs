@@ -5,6 +5,7 @@ using BAL.Interface;
 using Model.CustomeAttributes;
 using Model.DomainModel;
 using Utils;
+using Utils.Interface;
 namespace BAL;
 public partial class SellerProductsBAL
 {
@@ -18,7 +19,9 @@ public partial class SellerProductsBAL
     private static long Number(JsonObject o,string key,long min,long max,long? fallback=null)
     {
         if(o[key] is null) return fallback??throw Invalid(key+" is required");
-        if(o[key] is not JsonValue j||!j.TryGetValue<long>(out var v)||v<min||v>max) throw Invalid($"Invalid {key}");return v;
+        if(o[key] is not JsonValue j)throw Invalid($"Invalid {key}");
+        long v;if(j.TryGetValue<long>(out var value))v=value;else if(j.TryGetValue<int>(out var integer))v=integer;else throw Invalid($"Invalid {key}");
+        if(v<min||v>max)throw Invalid($"Invalid {key}");return v;
     }
     private string Media(string value,string folder)
     {
@@ -52,11 +55,16 @@ public partial class SellerProductsBAL
     }
     public async Task<JsonObject> SaveAsync(UserModel user,SellerModel seller,Guid? id,JsonObject b)
     {
-        try { return await SaveCoreAsync(user,seller,id,b); }
+        try
+        {
+            Guid saved;
+            await using(var tx=await db.BeginAsync()) { saved=await SaveCoreAsync(user,seller,id,b,tx);await tx.CommitAsync(); }
+            return await DetailAsync(seller,saved);
+        }
         catch(Exception e) when(e is InvalidOperationException or FormatException or System.Text.Json.JsonException)
         { throw Invalid("Invalid listing field type"); }
     }
-    private async Task<JsonObject> SaveCoreAsync(UserModel user,SellerModel seller,Guid? id,JsonObject b)
+    private async Task<Guid> SaveCoreAsync(UserModel user,SellerModel seller,Guid? id,JsonObject b,IUnitOfWork tx,bool validateOnly=false,bool writeAudit=true)
     {
         if(id is null&&seller.Status=="suspended")throw new ConflictException("Your seller account is suspended","seller_suspended");
         if(!Guid.TryParse(Text(b,"category_id",1,40),out var categoryId))throw Invalid("Invalid category_id");
@@ -73,13 +81,13 @@ public partial class SellerProductsBAL
         foreach(var x in videos){var v=x as JsonObject??throw Invalid("Invalid video");var poster=Text(v,"poster_url",0,400,"");vids.Add(new(){Url=Media(Text(v,"url",1,400),"videos"),PosterUrl=poster.Length>0?Media(poster,"products"):"",Title=Text(v,"title",0,120,""),DurationS=(int)Number(v,"duration_s",0,3600,0)});}
         var details=ProductModerationBAL.DetailsDump(ProductInfo.DetailsOf((b["details"]??new JsonObject()).ToJsonString(),strict:true));
         var inputs=ReadVariants(b);
-        await using(var tx=await db.BeginAsync())
         {
             var p=id is {} pid?await dal.OwnedAsync(seller.Id,pid,tx)??throw new NotFoundException("Product"):new ProductModel {Id=Guid.NewGuid(),SellerId=seller.Id,Status="draft",CreatedAt=DateTimeFunctions.UtcNow()};
             if(p.Status=="archived")throw new ConflictException("Restore this product before editing it","archived");
             var cat=await catalog.GetCategoryAsync(categoryId);if(cat is null||!cat.IsActive)throw new AppException("Choose a valid category","invalid_category",fields:new Dictionary<string,string>{{"category_id","Invalid"}});
             if(await dal.HasChildrenAsync(categoryId,tx))throw new AppException("Choose the most specific sub-category","category_not_leaf",fields:new Dictionary<string,string>{{"category_id","Pick a sub-category"}});
             days??=id is null?cat.ReturnWindowDays:p.ReturnWindowDays;if(days<cat.MinReturnWindowDays)throw new AppException($"Listings in {cat.Name} need a return window of at least {cat.MinReturnWindowDays} days","return_window_too_short");
+            if(validateOnly)return Guid.Empty;
             var before=id is null?null:await detail.DetailAsync(p);var oldVideos=before?["videos"]?.AsArray().Select(v=>v!["url"]!.GetValue<string>()).ToList()??[];
             if(vids.Count>0&&!oldVideos.SequenceEqual(vids.Select(v=>v.Url))) {var cfg=await platform.GetAsync();if(!cfg.Bool("feature_product_videos"))throw new AppException("Product videos are switched off on this marketplace","videos_off");if(vids.Count>cfg.Int("max_videos_per_listing"))throw new AppException($"At most {cfg.Int("max_videos_per_listing")} videos per listing","too_many_videos");}
             p.CategoryId=categoryId;p.Title=title.Trim();p.Brand=brand.Trim();p.Description=description;p.Highlights=cleanHighlights.ToJsonString();p.Specs=cleanSpecs.ToJsonString();p.HsnCode=hsn;p.GstBps=gst;p.CountryOfOrigin=country;p.ReturnWindowDays=days.Value;p.Details=details.ToJsonString();p.UpdatedAt=DateTimeFunctions.UtcNow();
@@ -104,8 +112,8 @@ public partial class SellerProductsBAL
                 contentChanged=after.Any(kv=>!JsonNode.DeepEquals(kv.Value,before[kv.Key]))||!before["images"]!.AsArray().Select(x=>x!.GetValue<string>()).SequenceEqual(urls)||!oldVideos.SequenceEqual(vids.Select(v=>v.Url));
                 if(contentChanged&&p.Status=="approved"){p.Status="pending";p.SubmittedAt=DateTimeFunctions.UtcNow();}
             }
-            await dal.UpdateProductAsync(p,tx);await catalog.RefreshAggregatesAsync(p.Id,tx);await audit.AuditAsync(user,id is null?"product.create":"product.update","product",p.Id,id is null?"":contentChanged?"content changed":"price/stock",tx);await tx.CommitAsync();id=p.Id;
+            await dal.UpdateProductAsync(p,tx);await catalog.RefreshAggregatesAsync(p.Id,tx);if(writeAudit)await audit.AuditAsync(user,id is null?"product.create":"product.update","product",p.Id,id is null?"":contentChanged?"content changed":"price/stock",tx);id=p.Id;
         }
-        return await DetailAsync(seller,id!.Value);
+        return id!.Value;
     }
 }
