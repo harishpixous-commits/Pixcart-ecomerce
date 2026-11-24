@@ -66,9 +66,16 @@ and unbuilt in this session.
 
 ## Open items / honest gaps
 
-- Customer auth (otp request/verify, login, refresh, me) and the storefront catalog HTTP
-  surface are UNPORTED - no controllers exist for them yet (only cart/checkout/orders on the
-  customer side). This is a missing surface, not merely an unverified one.
+- Customer auth is now PORTED and runtime-verified (2026-11-24 08:19 slice): otp request
+  (purpose checks, cooldown, per-phone/per-IP limits, dev-OTP in test mode only), otp verify
+  (attempts counter, signup validation, account creation, session issue), password login
+  (lockout limits, totp_required/totp verify), change password (revokes sessions), TOTP
+  setup/enable/disable, refresh rotation, logout, sessions list, sign-out-others, me/update_me.
+  NOT yet exercised: the refresh theft-replay branch and the 60-second grace-window renew
+  branch. In-app notifications only for security notices (reference also emails/SMSes).
+- The storefront catalog HTTP surface is UNPORTED - no controllers exist for it yet (only
+  cart/checkout/orders on the customer side). This is a missing surface, not merely an
+  unverified one.
 - Credit-note numbering collision quirk: the 16-char truncation collision is preserved
   temporarily but UNRESOLVED; it is not an accepted defect, and the reference numbering
   contract stays unchanged unless Harish decides otherwise.
