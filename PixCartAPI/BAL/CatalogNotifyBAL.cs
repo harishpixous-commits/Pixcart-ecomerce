@@ -17,6 +17,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
     public static readonly IReadOnlyDictionary<string, (string Subject, string Body)> InApp = new Dictionary<string, (string, string)>
     {
         ["back_in_stock"] = ("Back in stock", "{{item}} is available again. Order before it sells out."),
+        ["ticket_reply"] = ("Reply on ticket {{ticket_number}}", "Our team replied to your request: {{subject}}."),
         ["price_drop"] = ("Price dropped", "{{item}} in your wishlist is now {{price}} (was {{old_price}})."),
         ["question_answered"] = ("Your question was answered", "{{answerer}} answered your question about {{item}}."),
         ["seller_new_question"] = ("New customer question", "A shopper asked about {{item}}: {{question}}"),

@@ -33,6 +33,7 @@ public class AssistantActionsBAL(
     IProductModerationBAL products,
     ICouponAdminBAL coupons,
     IReviewModerationBAL reviews,
+    ISupportDeskBAL supportDesk,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan ExpiresAfter = TimeSpan.FromMinutes(30);
@@ -57,6 +58,7 @@ public class AssistantActionsBAL(
         ["create_coupon"] = ("Create a coupon", "marketing", ["code", "description", "kind", "value"]),
         ["set_coupon_active"] = ("Switch a coupon on or off", "marketing", ["coupon_id"]),
         ["moderate_review"] = ("Publish or hide a review", "catalog", ["review_id", "decision"]),
+        ["reply_ticket"] = ("Reply to a support ticket", "support", ["ticket_number", "body"]),
     };
 
     private static string Str(JsonObject p, string key) =>
@@ -287,6 +289,24 @@ public class AssistantActionsBAL(
                 summary = $"{(decision == "publish" ? "Publish" : "Hide")} review on {pname}";
                 break;
             }
+            case "reply_ticket":
+            {
+                // Reference: prepare reply_ticket (permission "support").
+                var tno = Str(prms, "ticket_number").Trim();
+                var tk = await db.QueryFirstOrDefaultAsync<SupportTicketModel>(
+                    "SELECT * FROM support_tickets WHERE number = @tno", new { tno })
+                    ?? throw new AssistantActionException($"I could not find a ticket {tno}.");
+                clean["ticket_id"] = tk.Id.ToString();
+                var tbody = Str(prms, "body").Trim();
+                if (tbody.Length == 0)
+                    throw new AssistantActionException("I need the reply text.");
+                clean["body"] = tbody[..Math.Min(5000, tbody.Length)];
+                clean["internal"] = Str(prms, "internal") is "true" or "True" or "1" or "yes";
+                Detail("Ticket", tk.Number); Detail("Subject", tk.Subject);
+                Detail("Reply", clean["body"]!.GetValue<string>());
+                summary = $"Reply to ticket {tk.Number}";
+                break;
+            }
             default:
                 throw new AssistantActionException("Not supported");
         }
@@ -394,6 +414,8 @@ public class AssistantActionsBAL(
             "set_coupon_active" => await coupons.SetActiveAsync(user, Guid.Parse(Str(p, "coupon_id")),
                 p["active"] is JsonValue av && av.TryGetValue<bool>(out var a) && a),
             "moderate_review" => await reviews.ModerateAsync(user, Guid.Parse(Str(p, "review_id")), Str(p, "decision")),
+            "reply_ticket" => await supportDesk.ReplyAsync(user, Guid.Parse(Str(p, "ticket_id")), Str(p, "body"),
+                p["internal"] is JsonValue iv && iv.TryGetValue<bool>(out var ib) && ib, null, null, null),
             _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
                 "action_unavailable", 400),
         };
