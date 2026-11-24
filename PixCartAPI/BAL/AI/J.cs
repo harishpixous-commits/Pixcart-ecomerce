@@ -52,21 +52,22 @@ public static class J
         {
             if (v.TryGetValue<bool>(out var b)) return b;
             if (v.TryGetValue<string>(out var s)) return s.Length > 0;
-            if (v.TryGetValue<double>(out var d)) return d != 0;
-            return true;
+            if (v.GetValueKind() == JsonValueKind.Number) return (Double(v) ?? 0) != 0;
+            return v.GetValueKind() != JsonValueKind.Null;
         }
         if (n is JsonArray a) return a.Count > 0;
         if (n is JsonObject o) return o.Count > 0;
         return true;
     }
 
+    /// <summary>The number's text when the value is a JSON number (whatever CLR type the node was built from).</summary>
+    private static string? NumberText(JsonValue v) => v.GetValueKind() == JsonValueKind.Number ? v.ToJsonString() : null;
+
     public static long? Long(JsonNode? n)
     {
         if (n is not JsonValue v) return null;
-        if (v.TryGetValue<long>(out var l)) return l;
-        if (v.TryGetValue<int>(out var i)) return i;
-        if (v.TryGetValue<double>(out var d)) return (long)d;
-        if (v.TryGetValue<decimal>(out var m)) return (long)m;
+        if (NumberText(v) is { } t)
+            return decimal.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var m) ? (long)m : (long?)null;
         if (v.TryGetValue<string>(out var s) && long.TryParse(s.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var p)) return p;
         return null;
     }
@@ -74,16 +75,14 @@ public static class J
     public static double? Double(JsonNode? n)
     {
         if (n is not JsonValue v) return null;
-        if (v.TryGetValue<double>(out var d)) return d;
-        if (v.TryGetValue<long>(out var l)) return l;
-        if (v.TryGetValue<decimal>(out var m)) return (double)m;
+        if (NumberText(v) is { } t) return double.Parse(t, NumberStyles.Float, CultureInfo.InvariantCulture);
         if (v.TryGetValue<string>(out var s) && double.TryParse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var p)) return p;
         return null;
     }
 
-    /// <summary>A JSON number that is a whole number and not a boolean (Python's isinstance(v, int) and not bool).</summary>
+    /// <summary>A JSON number written as a whole number and not a boolean (Python's isinstance(v, int) and not bool).</summary>
     public static bool IsInt(JsonNode? n) =>
-        n is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<long>(out _);
+        n is JsonValue v && NumberText(v) is { } t && !t.Contains('.') && !t.Contains('e') && !t.Contains('E') && long.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
 
     public static bool IsNumber(JsonNode? n) => n is JsonValue v && v.GetValueKind() == JsonValueKind.Number;
 

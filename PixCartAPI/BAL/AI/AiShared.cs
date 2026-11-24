@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using DAL;
 using Model.DomainModel;
 using Utils;
+using Utils.Interface;
 
 namespace BAL.AI;
 

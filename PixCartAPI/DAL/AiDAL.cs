@@ -16,7 +16,7 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
 
     public static double? D(object? v) => v switch { null or DBNull => null, _ => Convert.ToDouble(v) };
 
-    private static IDictionary<string, object?> Row(dynamic? r) => (IDictionary<string, object?>?)r ?? new Dictionary<string, object?>();
+    private static IDictionary<string, object?> Row(object? r) => (IDictionary<string, object?>?)r ?? new Dictionary<string, object?>();
 
     // ---------------------------------------------------------------- settings rows, audit, rate limits
 
@@ -124,7 +124,7 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
 
     public async Task<Dictionary<string, long>> RunCountsByTaskAsync(DateTime since, bool usedOnly)
     {
-        var rows = await db.QueryAsync<dynamic>(
+        var rows = await db.QueryAsync<object>(
             "SELECT task, COUNT(*) AS n FROM ai_runs WHERE created_at >= @since" + (usedOnly ? " AND status IN ('applied','sent')" : "") + " GROUP BY task", new { since });
         return rows.Select(Row).ToDictionary(r => (string)r["task"]!, r => N(r["n"]));
     }
@@ -132,7 +132,7 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
     /// <summary>Live runs since a moment: runs, input (incl. cache write and read), output and cache-read tokens.</summary>
     public async Task<(long Runs, long Input, long Output, long CacheRead)> UsageSinceAsync(DateTime since)
     {
-        var r = Row(await db.QueryFirstOrDefaultAsync<dynamic>(
+        var r = Row(await db.QueryFirstOrDefaultAsync<object>(
             "SELECT COUNT(*) AS runs, COALESCE(SUM(input_tokens + cache_creation_tokens + cache_read_tokens), 0) AS input, " +
             "COALESCE(SUM(output_tokens), 0) AS output, COALESCE(SUM(cache_read_tokens), 0) AS cache_read FROM ai_runs WHERE created_at >= @since AND mode = 'live'",
             new { since }));
@@ -194,8 +194,8 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
                               "COALESCE(SUM(returned_total), 0) AS returned, " +
                               "COALESCE(SUM(CASE WHEN status <> 'cancelled' THEN platform_discount + seller_discount ELSE 0 END), 0) AS discounts " +
                               "FROM sub_orders WHERE status <> 'pending_payment' AND created_at >= @a AND created_at < @b";
-        var cur = Row(await db.QueryFirstOrDefaultAsync<dynamic>(period, new { a = start, b = end }));
-        var prev = Row(await db.QueryFirstOrDefaultAsync<dynamic>(period, new { a = prevStart, b = start }));
+        var cur = Row(await db.QueryFirstOrDefaultAsync<object>(period, new { a = start, b = end }));
+        var prev = Row(await db.QueryFirstOrDefaultAsync<object>(period, new { a = prevStart, b = start }));
         var p = new { start, end, sd = startDay.ToDateTime(TimeOnly.MinValue), ed = endDay.ToDateTime(TimeOnly.MinValue) };
         var returns = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM return_requests WHERE created_at >= @start AND created_at < @end", p);
         var delivered = await db.ExecuteScalarAsync<long>(
@@ -203,7 +203,7 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
         var shipHours = D(await db.ExecuteScalarAsync<object>(
             "SELECT AVG(TIMESTAMPDIFF(MICROSECOND, created_at, shipped_at) / 3600000000) FROM sub_orders WHERE status <> 'pending_payment' AND shipped_at >= @start AND shipped_at < @end", p));
         var views = N(await db.ExecuteScalarAsync<object>("SELECT COALESCE(SUM(views), 0) FROM product_daily_stats WHERE day >= @sd AND day <= @ed", p));
-        var top = (await db.QueryAsync<dynamic>(
+        var top = (await db.QueryAsync<object>(
             "SELECT i.title AS title FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.status NOT IN ('pending_payment','cancelled') " +
             "AND s.created_at >= @start AND s.created_at < @end GROUP BY i.product_id, i.title ORDER BY SUM(i.line_total) DESC LIMIT 10", p))
             .Select(r => (string)Row(r)["title"]!).ToList();
@@ -234,7 +234,7 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
     public async Task<(long Total, long CancelledBySeller, long Late, long Rto, long Delivered, long Returns, long RejectedListings)> SellerRiskAsync(
         Guid sellerId, DateTime since, int lateDays)
     {
-        var r = Row(await db.QueryFirstOrDefaultAsync<dynamic>(
+        var r = Row(await db.QueryFirstOrDefaultAsync<object>(
             "SELECT COUNT(*) AS total, " +
             "COALESCE(SUM(CASE WHEN status = 'cancelled' AND cancelled_by = 'seller' AND shipped_at IS NULL THEN 1 ELSE 0 END), 0) AS cancelled, " +
             "COALESCE(SUM(CASE WHEN shipped_at IS NOT NULL AND shipped_at > DATE_ADD(created_at, INTERVAL @lateDays DAY) THEN 1 ELSE 0 END), 0) AS late, " +
