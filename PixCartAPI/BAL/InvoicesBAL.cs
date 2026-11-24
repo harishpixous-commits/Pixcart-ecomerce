@@ -11,7 +11,7 @@ namespace BAL;
 
 /// <inheritdoc cref="IInvoicesBAL"/>
 public class InvoicesBAL(OrdersDAL orders, SellerAccountDAL sellers, ReturnsDAL returns, ISiteBAL site,
-    IFeesBAL fees, IMySqlDapperHelper db) : IInvoicesBAL
+    IFeesBAL fees, IMySqlDapperHelper db, IAccessBAL access) : IInvoicesBAL
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -157,6 +157,16 @@ public class InvoicesBAL(OrdersDAL orders, SellerAccountDAL sellers, ReturnsDAL 
         if (order.UserId != userId || order.FeesTotal == 0) throw new NotFoundException("Invoice");
         if (order.FeeInvoiceNumber.Length == 0)
             throw new AppException("The invoice for the marketplace fees is issued when your first package is delivered", "invoice_not_ready");
+        return await FeeCoreAsync(order);
+    }
+    public async Task<(byte[] Pdf,string Filename)> AdminFeeInvoicePdfAsync(UserModel admin,Guid orderId)
+    {
+        await access.RequireAsync(admin,"orders");var order=await orders.GetOrderAsync(orderId);
+        if(order is null||order.FeeInvoiceNumber.Length==0)throw new NotFoundException("Fee invoice");
+        return await FeeCoreAsync(order);
+    }
+    private async Task<(byte[] Pdf,string Filename)> FeeCoreAsync(OrderModel order)
+    {
         var op = await OperatorAsync();
         var ck = await fees.GetAsync();
         var st = ShipTo(order);

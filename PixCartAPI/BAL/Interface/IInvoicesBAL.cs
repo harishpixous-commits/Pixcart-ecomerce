@@ -4,6 +4,7 @@ namespace BAL.Interface;
 /// credit_note + services/invoices.py, services/fee_invoices.py).</summary>
 public interface IInvoicesBAL
 {
+    Task<(byte[] Pdf,string Filename)> AdminFeeInvoicePdfAsync(Model.DomainModel.UserModel admin,Guid orderId);
     Task<(byte[] Pdf,string Filename)> SellerInvoicePdfAsync(Guid sellerId,Guid subId);
     Task<(byte[] Pdf,string Filename)> SellerCreditNotePdfAsync(Guid sellerId,Guid returnId);
     /// <summary>The seller's tax invoice for a sub-order the customer owns; issued when the package ships.</summary>

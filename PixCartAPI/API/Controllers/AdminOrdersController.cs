@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Utils;
 namespace API.Controllers;
 [ApiController,SignedIn,Route("/api/admin/orders")]
-public class AdminOrdersController(IAdminOrdersBAL bal,ICurrentUser me):ControllerBase
+public class AdminOrdersController(IAdminOrdersBAL bal,ICurrentUser me,IInvoicesBAL invoices):ControllerBase
 {
     private static DateTime? Date(string? value,bool end=false){if(value is null)return null;if(!DateTime.TryParseExact(value,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out var d))throw new AppException("Dates must be valid (YYYY-MM-DD)","invalid_date");try{return DateTime.SpecifyKind((end?d.AddDays(1):d).AddMinutes(-330),DateTimeKind.Utc);}catch(ArgumentOutOfRangeException){throw new AppException("Dates must be valid (YYYY-MM-DD)","invalid_date");}}
     [HttpGet("")]public async Task<object> List(
@@ -18,4 +18,5 @@ public class AdminOrdersController(IAdminOrdersBAL bal,ICurrentUser me):Controll
         [FromQuery(Name="date_from"),RegularExpression(@"^\d{4}-\d{2}-\d{2}$")]string? from=null,[FromQuery(Name="date_to"),RegularExpression(@"^\d{4}-\d{2}-\d{2}$")]string? to=null,
         [FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery(Name="page_size"),Range(1,100)]int size=25)=>await bal.ListAsync(await me.RequireAsync(),new(status,q,method,payment,package,seller,customer,Date(from),Date(to,true),page,size));
     [HttpGet("{id:guid}")]public async Task<object> Detail(Guid id)=>await bal.DetailAsync(await me.RequireAsync(),id);
+    [HttpGet("{id:guid}/fee-invoice.pdf")]public async Task<IActionResult> FeeInvoice(Guid id){var(pdf,name)=await invoices.AdminFeeInvoicePdfAsync(await me.RequireAsync(),id);Response.Headers.CacheControl="private, no-store";Response.Headers.ContentDisposition=$"inline; filename=\"{name}\"";return File(pdf,"application/pdf");}
 }
