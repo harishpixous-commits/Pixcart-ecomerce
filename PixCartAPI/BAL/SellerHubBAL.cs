@@ -7,14 +7,14 @@ using Model.DomainModel;
 using Utils;
 using Utils.Interface;
 namespace BAL;
-public interface ISellerHubBAL
+public partial interface ISellerHubBAL
 {
     JsonObject Preferences(SellerModel seller);
     Task<JsonObject> PreferencesAsync(UserModel user,SellerModel seller,int days,bool holiday,string prefix,string? cutoff);
     Task<JsonArray> WarehousesAsync(SellerModel seller);
     Task<JsonArray> WarehouseAsync(UserModel user,SellerModel seller,Guid? id,JsonObject body);
 }
-public class SellerHubBAL(IMySqlDapperHelper db,IInventoryBAL stock,InventoryDAL inventory,CatalogDAL catalog,IAuditBAL audit):ISellerHubBAL
+public partial class SellerHubBAL(IMySqlDapperHelper db,IInventoryBAL stock,InventoryDAL inventory,CatalogDAL catalog,IAuditBAL audit,IPlatformSettingsBAL platform):ISellerHubBAL
 {
     public JsonObject Preferences(SellerModel s)=>new(){["dispatch_days"]=s.DispatchDays,["holiday_mode"]=s.HolidayMode,["invoice_prefix"]=s.InvoicePrefix,["dispatch_cutoff"]=s.DispatchCutoff,["rating_avg"]=s.RatingAvg,["rating_count"]=s.RatingCount};
     public async Task<JsonObject> PreferencesAsync(UserModel user,SellerModel s,int days,bool holiday,string prefix,string? cutoff)

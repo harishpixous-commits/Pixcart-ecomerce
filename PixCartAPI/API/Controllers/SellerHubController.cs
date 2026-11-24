@@ -6,7 +6,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
 namespace API.Controllers;
 [ApiController,SignedIn,Route("/api/seller")]
-public class SellerHubController(ISellerHubBAL bal,IOrdersBAL orders,ICurrentUser me):ControllerBase
+public partial class SellerHubController(ISellerHubBAL bal,IOrdersBAL orders,ICurrentUser me):ControllerBase
 {
     private async Task<Model.DomainModel.SellerModel> Seller(bool approved=false)=>await orders.RequireSellerAsync(await me.RequireAsync(),approved);
     public record PrefsIn
