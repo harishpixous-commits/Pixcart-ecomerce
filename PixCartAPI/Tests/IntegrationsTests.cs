@@ -116,7 +116,7 @@ public class IntegrationsTests(ApiFactory f) : ApiTest(f)
     {
         var admin = await Admin();
         var perms = (await admin.Get("/api/admin/permissions")).Json["items"]!.AsArray().Select(p => p!["code"]!.GetValue<string>()).ToHashSet();
-        Assert.Superset(perms, new HashSet<string> { "integrations", "assistant", "staff" });
+        Assert.Superset(new HashSet<string> { "integrations", "assistant", "staff" }, perms);
         var r = await admin.Post("/api/admin/roles", new { name = "Warehouse lead", description = "Ships orders", permissions = new[] { "orders", "customers" } });
         Assert.True(r.Status == 201, r.ToString());
         var code = r.Json["code"]!.GetValue<string>();
@@ -276,7 +276,7 @@ public class IntegrationsTests(ApiFactory f) : ApiTest(f)
         await rider.Post("/api/push/tokens/remove", new { token = "phone-token-" + new string('a', 30) });
         var other = await LoginPhone("9600000903", "Other");
         await other.Post("/api/push/tokens", new { token = "phone-token-" + new string('a', 30) });
-        Assert.Equal([other.Id], await ApiFactory.DbQueryAsync<string>("SELECT user_id FROM push_tokens"));
+        Assert.Equal([Guid.Parse(other.Id)], await ApiFactory.DbQueryAsync<Guid>("SELECT user_id FROM push_tokens"));
     }
 
     [Fact]

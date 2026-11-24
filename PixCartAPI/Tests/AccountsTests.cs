@@ -149,8 +149,7 @@ public class AccountsTests(ApiFactory f) : ApiTest(f)
         r = await admin.Post($"/api/admin/customers/{cid}/sign-out");
         Assert.Equal(1, r.Json["sessions"]!.GetValue<int>());
         var hist = (await admin.Get($"/api/admin/customers/{cid}")).Json["history"]!.AsArray().Select(h => h!["action"]!.GetValue<string>()).ToHashSet();
-        Assert.Superset(hist, new HashSet<string> { "user.edit", "user.sign_out", "user.create" });
-        Assert.Contains(hist, x => x == "user.edit");
+        Assert.Superset(new HashSet<string> { "user.edit", "user.sign_out", "user.create" }, hist);
 
         // support staff can read customers; a catalogue manager cannot
         var cat = await Staff(admin, "cat1@kadai.in", "catalog", "Catalog@2026xx");
@@ -224,7 +223,7 @@ public class AccountsTests(ApiFactory f) : ApiTest(f)
         })).Status); // bad check digit
 
         var actions = (await ApiFactory.DbQueryAsync<string>("SELECT action FROM audit_logs WHERE entity_id = @sid", new { sid })).ToHashSet();
-        Assert.Superset(actions, new HashSet<string> { "seller.edit_bank", "seller.edit_pickup", "seller.edit_business" });
+        Assert.Superset(new HashSet<string> { "seller.edit_bank", "seller.edit_pickup", "seller.edit_business" }, actions);
 
         // staff without the sellers permission cannot change them
         var sup = await Staff(admin, "sup2@kadai.in", "support", "Support@2026xx");
