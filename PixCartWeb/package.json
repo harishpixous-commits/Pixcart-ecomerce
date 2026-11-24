@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "test:categories": "ngc -p tsconfig.app.json && vitest run categories.contract.spec.ts --environment jsdom"
   },
   "private": true,
   "packageManager": "npm@10.9.9",
