@@ -56,15 +56,40 @@ public class AssistantActionsBAL(
         ["reject_seller"] = ("Ask a seller to fix their application", "sellers", ["seller", "reason"]),
         ["suspend_seller"] = ("Suspend a seller", "sellers", ["seller", "reason"]),
         ["set_seller_commission"] = ("Change a seller's commission", "sellers", ["seller"]),
-        ["create_coupon"] = ("Create a coupon", "marketing", ["code", "description", "kind", "value"]),
-        ["set_coupon_active"] = ("Switch a coupon on or off", "marketing", ["coupon_id"]),
+        ["create_coupon"] = ("Create a coupon", "marketing", ["code", "kind"]),
+        ["set_coupon_active"] = ("Switch a coupon on or off", "marketing", ["code"]),
         ["moderate_review"] = ("Publish or hide a review", "catalog", ["review_id", "decision"]),
-        ["reply_ticket"] = ("Reply to a support ticket", "support", ["ticket_number", "body"]),
+        ["reply_ticket"] = ("Reply to a support ticket", "support", []),
         ["set_announcement"] = ("Change the storefront announcement bar", "marketing", ["text"]),
     };
 
     private static string Str(JsonObject p, string key) =>
         p[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+
+    /// <summary>A numeric parameter, whether the model sent it as a number or a string.</summary>
+    private static bool TryNum(JsonObject p, string key, out double value)
+    {
+        value = 0;
+        if (p[key] is not JsonValue v) return false;
+        if (v.TryGetValue<int>(out var i)) { value = i; return true; }
+        if (v.TryGetValue<long>(out var l)) { value = l; return true; }
+        if (v.TryGetValue<double>(out var d)) { value = d; return true; }
+        return v.TryGetValue<string>(out var s) && double.TryParse(s, out value);
+    }
+
+    /// <summary>A boolean parameter: JSON true/false or the strings true/1/yes/on (reference: str checks in actions.prepare).</summary>
+    private static bool BoolParam(JsonObject p, string key)
+    {
+        if (p[key] is JsonValue v && v.TryGetValue<bool>(out var b)) return b;
+        return Str(p, key).Trim().ToLowerInvariant() is "true" or "1" or "yes" or "on";
+    }
+
+    /// <summary>A rupees amount parameter converted to paise (reference: actions._rupees_to_paise). Null when absent/empty.</summary>
+    private static long? RupeesToPaise(JsonObject p, string key)
+    {
+        if (!TryNum(p, key, out var v)) return null;
+        return Math.Max(0, (long)(v * 100));
+    }
 
     private static string Rupees(long paise) => Money.Rupees(paise);
 
@@ -243,33 +268,49 @@ public class AssistantActionsBAL(
                 // Reference: prepare create_coupon / set_coupon_active (permission "marketing").
                 if (kind == "create_coupon")
                 {
+                    // Reference: prepare create_coupon. Model-facing value is percent (1-90) or flat rupees.
+                    // HELD DEVIATION (owner decision pending): the reference prepare stores a percent value
+                    // UNCONVERTED (int(value)), which its own endpoint then rejects (100..9000 bps). We keep
+                    // reference-exact behavior here until the owner approves the percent->bps conversion;
+                    // flat values convert rupees -> paise exactly like the reference.
                     var code = Str(prms, "code").Trim().ToUpperInvariant();
                     var ck = Str(prms, "kind").Trim().ToLowerInvariant();
                     if (ck is not ("percent" or "flat"))
-                        throw new AssistantActionException("Coupon kind must be percent or flat.");
-                    if (!int.TryParse(Str(prms, "value"), out var cval) || cval <= 0)
+                        throw new AssistantActionException("kind is percent or flat");
+                    if (!TryNum(prms, "value", out var rawValue) || rawValue <= 0)
                         throw new AssistantActionException("Coupon value must be a positive number.");
-                    if (ck == "percent" && cval is < 100 or > 9000)
-                        throw new AssistantActionException("A percentage coupon must be between 1% and 90%");
+                    var storeValue = ck == "percent" ? (long)Math.Round(rawValue) : (long)Math.Round(rawValue * 100);
                     if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM coupons WHERE UPPER(code) = @code", new { code }) > 0)
                         throw new AssistantActionException("This code is already used");
-                    clean["code"] = code; clean["kind"] = ck; clean["value"] = cval;
+                    clean["code"] = code; clean["kind"] = ck; clean["value"] = storeValue;
+                    clean["min_order_paise"] = RupeesToPaise(prms, "min_order_rupees") ?? 0;
+                    var maxDisc = RupeesToPaise(prms, "max_discount_rupees");
+                    if (maxDisc is not null) clean["max_discount_paise"] = maxDisc.Value;
+                    if (TryNum(prms, "usage_limit", out var ul) && ul > 0) clean["usage_limit"] = (int)ul;
+                    clean["ends_on"] = Str(prms, "ends_on").Trim();
                     var desc = Str(prms, "description").Trim();
                     clean["description"] = desc[..Math.Min(200, desc.Length)];
-                    Detail("Code", code); Detail("Kind", ck); Detail("Value", ck == "percent" ? $"{cval / 100m:0.##}%" : Money.Rupees(cval));
+                    Detail("Code", code);
+                    Detail("Discount", ck == "percent" ? $"{rawValue:0.##}%" : Money.Rupees(storeValue));
+                    if (ck == "percent") Detail("Note", "Stored as-is (reference behavior); percent conversion is pending owner approval");
+                    Detail("Minimum order", Money.Rupees(RupeesToPaise(prms, "min_order_rupees") ?? 0));
+                    Detail("Cap", maxDisc is null ? "None" : Money.Rupees(maxDisc.Value));
+                    Detail("Total uses", clean["usage_limit"]?.GetValue<int>().ToString() ?? "Unlimited");
+                    Detail("Last day", Str(prms, "ends_on").Trim().Length > 0 ? Str(prms, "ends_on").Trim() : "No end date");
                     summary = $"Create coupon {code}";
                 }
                 else
                 {
-                    var cid = Str(prms, "coupon_id");
-                    if (!Guid.TryParse(cid, out var cguid))
-                        throw new AssistantActionException("I need the coupon's id.");
-                    var found = await db.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE id = @cguid", new { cguid })
-                        ?? throw new AssistantActionException("I could not find a coupon with that id.");
-                    clean["coupon_id"] = cguid.ToString();
-                    var active = Str(prms, "active") is not ("false" or "False" or "0" or "no");
+                    // Reference: prepare set_coupon_active — the model names the coupon by its code.
+                    var ccode = Str(prms, "code").Trim().ToUpperInvariant();
+                    var found = await db.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE UPPER(code) = @ccode", new { ccode })
+                        ?? throw new AssistantActionException("No coupon with that code.");
+                    if (prms["active"] is null)
+                        throw new AssistantActionException("Missing: active");
+                    var active = BoolParam(prms, "active");
+                    clean["coupon_id"] = found.Id.ToString();
                     clean["active"] = active;
-                    Detail("Coupon", found.Code); Detail("Switch", active ? "on" : "off");
+                    Detail("Coupon", found.Code); Detail("Now", found.IsActive ? "on" : "off"); Detail("After", active ? "on" : "off");
                     summary = $"Switch coupon {found.Code} {(active ? "on" : "off")}";
                 }
                 break;
@@ -293,19 +334,31 @@ public class AssistantActionsBAL(
             }
             case "reply_ticket":
             {
-                // Reference: prepare reply_ticket (permission "support").
-                var tno = Str(prms, "ticket_number").Trim();
+                // Reference: prepare reply_ticket (permission "support") — params ticket (number), message, optional status.
+                var tno = Str(prms, "ticket").Trim();
+                if (tno.Length == 0) tno = Str(prms, "ticket_number").Trim();
+                if (tno.Length == 0)
+                    throw new AssistantActionException("Missing: ticket");
                 var tk = await db.QueryFirstOrDefaultAsync<SupportTicketModel>(
-                    "SELECT * FROM support_tickets WHERE number = @tno", new { tno })
-                    ?? throw new AssistantActionException($"I could not find a ticket {tno}.");
+                    "SELECT * FROM support_tickets WHERE UPPER(number) = UPPER(@tno)", new { tno })
+                    ?? throw new AssistantActionException("No ticket with that number.");
                 clean["ticket_id"] = tk.Id.ToString();
-                var tbody = Str(prms, "body").Trim();
+                var tbody = Str(prms, "message").Trim();
+                if (tbody.Length == 0) tbody = Str(prms, "body").Trim();
                 if (tbody.Length == 0)
-                    throw new AssistantActionException("I need the reply text.");
+                    throw new AssistantActionException("Missing: message");
                 clean["body"] = tbody[..Math.Min(5000, tbody.Length)];
-                clean["internal"] = Str(prms, "internal") is "true" or "True" or "1" or "yes";
-                Detail("Ticket", tk.Number); Detail("Subject", tk.Subject);
+                var tstatus = Str(prms, "status").Trim().ToLowerInvariant();
+                if (tstatus.Length > 0)
+                {
+                    if (tstatus is not ("open" or "awaiting_customer" or "resolved" or "closed"))
+                        throw new AssistantActionException("status is open, awaiting_customer, resolved or closed");
+                    clean["status"] = tstatus;
+                }
+                clean["internal"] = BoolParam(prms, "internal");
+                Detail("Ticket", $"{tk.Number} — {tk.Subject}");
                 Detail("Reply", clean["body"]!.GetValue<string>());
+                if (tstatus.Length > 0) Detail("New status", tstatus);
                 summary = $"Reply to ticket {tk.Number}";
                 break;
             }
@@ -427,16 +480,29 @@ public class AssistantActionsBAL(
             "set_seller_commission" => await sellers.CommissionAsync(user, Guid.Parse(Str(p, "seller_id")),
                 p["bps"] is JsonValue bv && bv.TryGetValue<int>(out var b) ? b : null),
             "create_coupon" => await coupons.CreateAsync(user, Str(p, "code"), Str(p, "description"), Str(p, "kind"),
-                int.Parse(Str(p, "value")), null, 0, null, null, null, 1, true, null, false, true),
+                (int)(p["value"] is JsonValue cv && cv.TryGetValue<long>(out var cvv) ? cvv : 0),
+                p["max_discount_paise"] is JsonValue md && md.TryGetValue<long>(out var mdv) ? mdv : null,
+                p["min_order_paise"] is JsonValue mo && mo.TryGetValue<long>(out var mov) ? mov : 0,
+                null, CouponEndsOn(Str(p, "ends_on")),
+                p["usage_limit"] is JsonValue ul2 && ul2.TryGetValue<int>(out var ulv) ? ulv : null,
+                1, true, null, false, true),
             "set_coupon_active" => await coupons.SetActiveAsync(user, Guid.Parse(Str(p, "coupon_id")),
                 p["active"] is JsonValue av && av.TryGetValue<bool>(out var a) && a),
             "moderate_review" => await reviews.ModerateAsync(user, Guid.Parse(Str(p, "review_id")), Str(p, "decision")),
             "reply_ticket" => await supportDesk.ReplyAsync(user, Guid.Parse(Str(p, "ticket_id")), Str(p, "body"),
-                p["internal"] is JsonValue iv && iv.TryGetValue<bool>(out var ib) && ib, null, null, null),
+                p["internal"] is JsonValue iv && iv.TryGetValue<bool>(out var ib) && ib,
+                Str(p, "status") is { Length: > 0 } st ? st : null, null, null),
             "set_announcement" => await SetAnnouncementAsync(user, Str(p, "text"), Str(p, "link")),
             _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
                 "action_unavailable", 400),
         };
+    }
+
+    /// <summary>Reference: execute create_coupon — an ends_on date means 23:59:59 IST that day; stored as UTC.</summary>
+    private static DateTime? CouponEndsOn(string endsOn)
+    {
+        if (!DateTime.TryParse(endsOn.Trim(), out var d)) return null;
+        return new DateTimeOffset(d.Year, d.Month, d.Day, 23, 59, 59, TimeSpan.FromMinutes(330)).UtcDateTime;
     }
 
     /// <summary>Reference: execute set_announcement — merge the announcement bar into the site document.</summary>
