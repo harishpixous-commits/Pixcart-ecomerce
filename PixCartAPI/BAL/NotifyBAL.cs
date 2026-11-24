@@ -23,8 +23,8 @@ public class NotifyBAL(
     IMailHelper mail, ISMSHelper sms, IHttpClientFactory http, IServiceScopeFactory scopes, AppSettings env, IMySqlDapperHelper db,
     ILogger<NotifyBAL> log) : INotifyBAL, IAsyncDisposable
 {
-    // pushes queued by this scope; each may wait for a notification row of the same transaction (sent only if it committed)
-    private readonly List<(PushItem Item, Guid? Witness)> _pushes = [];
+    // Nontransactional pushes flush when this scope is disposed. Transactional pushes use commit callbacks.
+    private readonly List<PushItem> _pushes = [];
 
     /// <summary>Fills {{name}} placeholders; unknown names become empty.</summary>
     public static string Render(string text, IReadOnlyDictionary<string, string> variables) => EmailSMSTemplate.Render(text, variables);
@@ -74,7 +74,6 @@ public class NotifyBAL(
         };
         foreach (var (k, v) in variables) vars[k] = PyStr(v);
         var now = DateTimeFunctions.UtcNow();
-        Guid? witness = null;
         var pushes = new List<PushItem>();
         foreach (var channel in channels ?? INotifyBAL.AllChannels)
         {
@@ -120,10 +119,12 @@ public class NotifyBAL(
                 Attempts = 0, Error = "", SentAt = channel == "inapp" ? now : null, CreatedAt = now,
             };
             await dal.InsertAsync(row, uow?.Transaction);
-            if (uow is not null) witness ??= row.Id;
         }
-        lock (_pushes)
-            foreach (var p in pushes) _pushes.Add((p, uow is null ? null : witness));
+        if (pushes.Count > 0)
+        {
+            if (uow is not null) uow.AfterCommit(() => DispatchPush(pushes));
+            else lock (_pushes) foreach (var p in pushes) _pushes.Add(p);
+        }
     }
 
     public async Task NotifySellerAsync(Guid sellerId, string evt, IDictionary<string, object?> variables, string link = "", IUnitOfWork? uow = null)
@@ -151,33 +152,26 @@ public class NotifyBAL(
 
     public void FlushPush()
     {
-        List<(PushItem Item, Guid? Witness)> items;
+        List<PushItem> items;
         lock (_pushes)
         {
             items = [.. _pushes];
             _pushes.Clear();
         }
         if (items.Count == 0) return;
+        DispatchPush(items);
+    }
+
+    private void DispatchPush(IReadOnlyList<PushItem> items)
+    {
         _ = Task.Run(async () =>
         {
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                var sp = scope.ServiceProvider;
-                var helper = sp.GetRequiredService<IMySqlDapperHelper>();
-                var ready = new List<PushItem>();
-                foreach (var (item, witness) in items)
-                {
-                    // a push that belongs to a transaction goes out only if that transaction committed
-                    if (witness is { } w && await helper.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM notifications WHERE id = @w", new { w }) == 0) continue;
-                    ready.Add(item);
-                }
-                if (ready.Count > 0) await sp.GetRequiredService<IPushBAL>().SendToUsersAsync(ready);
+                await scope.ServiceProvider.GetRequiredService<IPushBAL>().SendToUsersAsync(items);
             }
-            catch (Exception e)
-            {
-                log.LogError(e, "sending push notifications failed");
-            }
+            catch (Exception e) { log.LogError(e, "sending push notifications failed"); }
         });
     }
 

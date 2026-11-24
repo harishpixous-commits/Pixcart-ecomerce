@@ -85,6 +85,12 @@ public class MySqlDapperHelper : IMySqlDapperHelper
     private sealed class UnitOfWork(MySqlConnection connection, MySqlTransaction transaction) : IUnitOfWork
     {
         private bool _done;
+        private readonly List<Action> _afterCommit = [];
+        public void AfterCommit(Action callback)
+        {
+            if (_done) throw new InvalidOperationException("Transaction already completed.");
+            _afterCommit.Add(callback);
+        }
         public IDbConnection Connection => connection;
         public IDbTransaction Transaction => transaction;
         public Task<IEnumerable<T>> QueryAsync<T>(string sql, object? param = null) => connection.QueryAsync<T>(sql, param, transaction);
@@ -96,6 +102,8 @@ public class MySqlDapperHelper : IMySqlDapperHelper
         {
             await transaction.CommitAsync();
             _done = true;
+            foreach (var callback in _afterCommit) callback();
+            _afterCommit.Clear();
         }
 
         public async ValueTask DisposeAsync()

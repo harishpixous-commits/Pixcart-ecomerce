@@ -27,5 +27,7 @@ public interface IUnitOfWork : IAsyncDisposable
     Task<T?> QueryFirstOrDefaultAsync<T>(string sql, object? param = null);
     Task<T?> ExecuteScalarAsync<T>(string sql, object? param = null);
     Task<int> ExecuteAsync(string sql, object? param = null);
+    /// <summary>Runs only after a successful commit; discarded on rollback/disposal.</summary>
+    void AfterCommit(Action callback);
     Task CommitAsync();
 }
