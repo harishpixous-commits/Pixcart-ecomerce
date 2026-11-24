@@ -341,8 +341,11 @@ class ProductGrid extends StatelessWidget {
 
 /// A horizontal row of tiles that swipes (hairline: 46% wide cells with a line between).
 class ProductRail extends StatelessWidget {
-  const ProductRail({super.key, required this.title, required this.items, this.href, this.linkText = 'See all', this.showAdd = false, this.ranked = false, this.note});
+  const ProductRail({super.key, required this.title, required this.items, this.href, this.linkText = 'See all', this.showAdd = false, this.ranked = false, this.note, this.extra});
   final String title;
+
+  /// shown after the title (the deals rail's countdown chip)
+  final Widget? extra;
   final List<ProductCard> items;
   final String? href;
   final String linkText;
@@ -360,9 +363,10 @@ class ProductRail extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Expanded(
-              child: Wrap(spacing: 12, crossAxisAlignment: WrapCrossAlignment.end, children: [
+              child: Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 Text(title, style: Tw.heading(20, color: t.ink)),
                 if (note != null) Text(note!, style: Tw.xs(color: t.inkFaint)),
+                ?extra,
               ]),
             ),
             if (href != null) PcLink(linkText, onTap: () => openLink(context, href!)),
