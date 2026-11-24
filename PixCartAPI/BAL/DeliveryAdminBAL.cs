@@ -33,6 +33,7 @@ public class DeliveryAdminBAL(
     IOrdersBAL ordersBal,
     ICatalogNotifyBAL notify,
     EncryptDecrypt crypto,
+    IImageUpload images,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan Ist = TimeSpan.FromHours(5.5);
@@ -296,6 +297,76 @@ public class DeliveryAdminBAL(
             ["fleet_modes"] = new JsonArray(DeliverySettingsBAL.FleetModes.Select(m => (JsonNode?)m).ToArray()),
             ["fee_modes"] = new JsonArray(DeliverySettingsBAL.FeeModes.Select(m => (JsonNode?)m).ToArray()),
         };
+    }
+
+    // ------------------------------------------------------------------ partner documents + app upload (reference: delivery_admin.py)
+
+    /// <summary>Staff read a partner's KYC document, written to the audit log (reference: GET .../partners/{id}/docs/{kind}).
+    /// The photo lives at a public URL, so only the private documents are served here.</summary>
+    public async Task<(byte[] Data, string Media, string FileName)> PartnerDocAsync(UserModel user, Guid partnerId, string kind)
+    {
+        await StaffAsync(user);
+        var b = await RequireBoyAsync(partnerId);
+        var key = kind switch
+        {
+            "license" => b.LicenseDoc, "id_proof" => b.IdProofDoc, "vehicle_rc" => b.VehicleDoc, _ => "",
+        };
+        if (key.Length == 0) throw new NotFoundException("Document");
+        await AuditSimpleAsync(user, "delivery.kyc_view", "delivery_boy", b.Id, kind);
+        var data = await images.ReadPrivateAsync(key);
+        var ext = key[(key.LastIndexOf('.') + 1)..];
+        var media = ext switch { "pdf" => "application/pdf", "png" => "image/png", "webp" => "image/webp", _ => "image/jpeg" };
+        return (data, media, $"{kind}.{ext}");
+    }
+
+    /// <summary>Staff upload or replace a partner's document (reference: POST .../partners/{id}/docs/{kind}).</summary>
+    public async Task<JsonObject> UploadPartnerDocAsync(UserModel user, Guid partnerId, string kind, byte[] data)
+    {
+        await StaffAsync(user);
+        var b = await RequireBoyAsync(partnerId);
+        if (kind == "photo")
+            b.Photo = await images.SaveImageAsync(data, $"delivery/{b.Id}");
+        else
+        {
+            var (key, _) = await images.SavePrivateAsync(data, $"delivery-kyc/{b.Id}");
+            switch (kind)
+            {
+                case "license": b.LicenseDoc = key; break;
+                case "id_proof": b.IdProofDoc = key; break;
+                default: b.VehicleDoc = key; break;
+            }
+        }
+        await delivery.UpdatePartnerAsync(b);
+        await AuditSimpleAsync(user, "delivery.kyc_upload", "delivery_boy", b.Id, kind);
+        var zones = (await delivery.AllZonesAsync()).ToDictionary(z => z.Id);
+        return OutAdmin(b, zones, await deliverySettings.GetAsync());
+    }
+
+    private const long ApkMaxBytes = 120L * 1024 * 1024;
+    private static readonly System.Text.RegularExpressions.Regex VersionPattern =
+        new("^[0-9A-Za-z.\\-+ ]{0,20}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Publish the partner Android app (reference: POST .../app). The checked APK is stored publicly and the
+    /// download link and version shown in the partner app are updated.</summary>
+    public async Task<JsonObject> UploadAppAsync(UserModel user, byte[] data, string version)
+    {
+        await StaffAsync(user);
+        version = version.Trim();
+        if (!VersionPattern.IsMatch(version))
+            throw new AppException("Use a version like 1.0.3", "invalid_version");
+        var name = "pixcart-partner" + (version.Length > 0
+            ? $"-{System.Text.RegularExpressions.Regex.Replace(version, "[^0-9A-Za-z.]+", "-")}" : "");
+        var url = await images.SaveAppPackageAsync(data, ApkMaxBytes, name);
+        var updates = new JsonObject { ["android_apk_url"] = url };
+        if (version.Length > 0) updates["app_version"] = version;
+        var values = await deliverySettings.UpdateAsync(updates);
+        await using var uow = await db.BeginAsync();
+        await uow.ExecuteAsync(
+            "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
+            "VALUES (@actor, 'delivery.app_upload', 'settings', 'delivery', @detail, UTC_TIMESTAMP(6), @id)",
+            new { actor = user.Id, detail = $"{(version.Length > 0 ? version : "no version")} {data.Length / 1024} KB", id = Guid.NewGuid() });
+        await uow.CommitAsync();
+        return new JsonObject { ["values"] = values, ["size"] = data.Length };
     }
 
     // ------------------------------------------------------------------ partners (reference: delivery_admin.py partners)

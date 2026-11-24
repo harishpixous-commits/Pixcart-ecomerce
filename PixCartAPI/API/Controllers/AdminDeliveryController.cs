@@ -16,7 +16,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/admin/delivery")]
 public class AdminDeliveryController(
-    DeliveryAdminBAL admin, IDeliveryFleetBAL fleet, ICurrentUser current) : ControllerBase
+    DeliveryAdminBAL admin, IDeliveryFleetBAL fleet, ICurrentUser current, AppSettings app) : ControllerBase
 {
     /// <summary>The dispatch queue (reference: GET /api/admin/delivery/queue).</summary>
     [HttpGet("queue"), SignedIn]
@@ -218,6 +218,47 @@ public class AdminDeliveryController(
     [HttpGet("partners/{partnerId:guid}/bank"), SignedIn]
     public async Task<JsonObject> PartnerBank(Guid partnerId) =>
         await admin.PartnerBankAsync(await current.RequireAsync(), partnerId);
+
+    /// <summary>Read a partner's KYC document, audited (reference: GET .../partners/{partner_id}/docs/{kind}).</summary>
+    [HttpGet("partners/{partnerId:guid}/docs/{kind}"), SignedIn]
+    public async Task<IActionResult> PartnerDoc(Guid partnerId, string kind)
+    {
+        var (data, media, fileName) = await admin.PartnerDocAsync(await current.RequireAsync(), partnerId, kind);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.ContentDisposition = $"inline; filename=\"{fileName}\"";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return File(data, media);
+    }
+
+    /// <summary>Upload or replace a partner's document (reference: POST .../partners/{partner_id}/docs/{kind}).</summary>
+    [HttpPost("partners/{partnerId:guid}/docs/{kind}"), SignedIn]
+    public async Task<JsonObject> UploadPartnerDoc(Guid partnerId, string kind, IFormFile file)
+    {
+        if (kind is not ("photo" or "license" or "id_proof" or "vehicle_rc"))
+            throw new AppException("Unknown document kind", "validation", 422);
+        var max = kind == "photo" ? app.MaxImageBytes : app.MaxDocumentBytes;
+        if (file is null || file.Length == 0)
+            throw new AppException(kind == "photo" ? "This file is not a valid image" : "Upload a PDF, JPG or PNG file",
+                kind == "photo" ? "invalid_image" : "invalid_document");
+        if (file.Length > max)
+            throw new AppException(
+                kind == "photo" ? $"Image must be smaller than {max / (1024 * 1024)} MB" : $"File must be smaller than {max / (1024 * 1024)} MB",
+                "file_too_large");
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        return await admin.UploadPartnerDocAsync(await current.RequireAsync(), partnerId, kind, ms.ToArray());
+    }
+
+    /// <summary>Publish the partner Android app (reference: POST .../app).</summary>
+    [HttpPost("app"), SignedIn, RequestSizeLimit(130_000_000)]
+    public async Task<JsonObject> UploadApp(IFormFile file, [FromQuery, StringLength(20)] string version = "")
+    {
+        if (file is null || file.Length == 0)
+            throw new AppException("Upload the Android app file (.apk)", "invalid_apk");
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        return await admin.UploadAppAsync(await current.RequireAsync(), ms.ToArray(), version);
+    }
 
     /// <summary>Approve or reject a registration (reference: POST .../partners/{id}/kyc).</summary>
     [HttpPost("partners/{partnerId:guid}/kyc"), SignedIn]

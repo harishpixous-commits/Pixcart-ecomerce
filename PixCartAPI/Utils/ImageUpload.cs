@@ -96,6 +96,31 @@ public class ImageUpload(AppSettings settings, IFTPHelpers ftp) : IImageUpload
         return $"{settings.MediaBaseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
     }
 
+    /// <summary>Reference: storage.save_app_package + check_apk — an APK is a ZIP with AndroidManifest.xml and a
+    /// classes*.dex entry; anything else is refused. Stored under apps/{name}-{8 hex}.apk, served publicly.</summary>
+    public async Task<string> SaveAppPackageAsync(byte[] data, long maxBytes, string name, CancellationToken ct = default)
+    {
+        if (data.Length > maxBytes)
+            throw new AppException($"The app file must be smaller than {maxBytes / (1024 * 1024)} MB", "file_too_large");
+        if (!data.AsSpan().StartsWith("PK\u0003\u0004"u8))
+            throw new AppException("Upload the Android app file (.apk)", "invalid_apk");
+        try
+        {
+            using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(data), System.IO.Compression.ZipArchiveMode.Read);
+            var names = zip.Entries.Select(e => e.FullName).ToList();
+            if (!names.Contains("AndroidManifest.xml") || !names.Any(n => n.StartsWith("classes") && n.EndsWith(".dex")))
+                throw new AppException("This is not an Android app file (.apk). Upload the APK the build produced.", "invalid_apk");
+        }
+        catch (System.IO.InvalidDataException)
+        {
+            throw new AppException("This .apk file is damaged. Download it again.", "invalid_apk");
+        }
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var key = $"apps/{name}-{suffix}.apk";
+        await WritePublic(key, data, ct);
+        return $"{settings.MediaBaseUrl.TrimEnd('/')}/{key}";
+    }
+
     public async Task<(string Key, string ContentType)> SavePrivateAsync(byte[] data, string folder, CancellationToken ct = default)
     {
         if (data.Length > settings.MaxDocumentBytes)
