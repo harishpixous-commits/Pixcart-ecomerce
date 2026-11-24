@@ -30,4 +30,8 @@ public interface IAssistantBAL
     Task<JsonObject> PatchConversationAsync(UserModel user, Guid convId, string? title, bool? archived);
     Task<JsonObject> DeleteConversationAsync(UserModel user, Guid convId);
     Task<JsonObject> GetConversationAsync(UserModel user, Guid convId);
+    Task<AssistantDownload> DownloadMessageAsync(UserModel user, Guid messageId, string format);
+    Task<AssistantDownload> DownloadConversationAsync(UserModel user, Guid conversationId, string format);
 }
+
+public sealed record AssistantDownload(byte[] Bytes, string ContentType, string FileName);

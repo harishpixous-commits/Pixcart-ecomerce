@@ -31,6 +31,13 @@ public partial class AssistantDAL(IMySqlDapperHelper db)
         db.QueryAsync<AssistantMessageModel>(
             "SELECT * FROM assistant_messages WHERE conversation_id = @conversationId ORDER BY created_at", new { conversationId });
 
+    public Task<AssistantMessageModel?> MessageAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<AssistantMessageModel>("SELECT * FROM assistant_messages WHERE id = @id", new { id });
+
+    public Task<AssistantMessageModel?> PriorQuestionAsync(Guid conversationId, DateTime createdAt) =>
+        db.QueryFirstOrDefaultAsync<AssistantMessageModel>(
+            "SELECT * FROM assistant_messages WHERE conversation_id = @conversationId AND role = 'user' AND created_at <= @createdAt ORDER BY created_at DESC LIMIT 1", new { conversationId, createdAt });
+
     /// <summary>Action statuses by id, for marking action blocks in a conversation's messages.</summary>
     public async Task<IReadOnlyDictionary<Guid, string>> ActionStatusesAsync(Guid conversationId) =>
         (await db.QueryAsync<AssistantActionModel>(

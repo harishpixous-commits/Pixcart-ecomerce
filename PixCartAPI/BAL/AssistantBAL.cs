@@ -12,13 +12,13 @@ using Utils;
 /// conversation endpoints of routers/assistant.py). The chat engine (ask, tools, actions, uploads) is a later
 /// slice; the mode is reported "sandbox" because no LLM route can be configured in this environment.
 /// </summary>
-public class AssistantBAL(
+public partial class AssistantBAL(
     AssistantDAL dal,
     SettingsDAL settings,
     AuditDAL audit,
     IAccessBAL access,
     IStepUpBAL stepUp,
-    EncryptDecrypt crypto) : IAssistantBAL
+    EncryptDecrypt crypto, ISiteBAL site) : IAssistantBAL
 {
     public const string SettingsKey = "assistant";
     private const int MaxNotes = 30;

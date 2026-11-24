@@ -12,8 +12,8 @@ namespace API.Controllers;
 
 /// <summary>
 /// The staff assistant's settings, status, memory and conversations (reference: routers/assistant.py — same
-/// paths and payloads). The chat engine (ask, uploads, actions, downloads) is a later slice; until it lands the
-/// assistant answers in sandbox mode only.
+/// paths and payloads). Saved downloads are generated locally from stored messages; ask/provider execution is
+/// governed separately by assistant configuration and provider policy.
 /// </summary>
 [ApiController]
 [Route("/api/admin")]
@@ -90,6 +90,20 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
     [HttpGet("assistant/conversations/{convId:guid}")]
     public async Task<JsonObject> GetConversation(Guid convId) =>
         await assistant.GetConversationAsync(await RequireAsync("assistant"), convId);
+
+    private IActionResult SavedDownload(AssistantDownload download)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return File(download.Bytes, download.ContentType, download.FileName);
+    }
+
+    [HttpGet("assistant/messages/{messageId:guid}/download.{format}")]
+    public async Task<IActionResult> DownloadMessage(Guid messageId, string format) =>
+        SavedDownload(await assistant.DownloadMessageAsync(await RequireAsync("assistant"), messageId, format));
+
+    [HttpGet("assistant/conversations/{convId:guid}/download.{format}")]
+    public async Task<IActionResult> DownloadConversation(Guid convId, string format) =>
+        SavedDownload(await assistant.DownloadConversationAsync(await RequireAsync("assistant"), convId, format));
 
     /// <summary>
     /// Ask the assistant; the answer streams back as server-sent events (reference: POST
