@@ -28,7 +28,12 @@ public class AdminDeliveryController(
     public async Task<JsonArray> Candidates(Guid subOrderId) =>
         await admin.CandidatesAsync(await current.RequireAsync(), subOrderId);
 
-    /// <summary>Offer or assign a package to a chosen partner (reference: POST .../assign).</summary>
+    /// <summary>Partners who could fetch a return, best first (reference: GET .../returns/{return_id}/candidates).</summary>
+    [HttpGet("returns/{returnId:guid}/candidates"), SignedIn]
+    public async Task<JsonArray> ReturnCandidates(Guid returnId) =>
+        await fleet.ReturnCandidatesAsync(await current.RequireAsync(), returnId);
+
+        /// <summary>Offer or assign a package to a chosen partner (reference: POST .../assign).</summary>
     [HttpPost("assign"), SignedIn]
     public async Task<JsonObject> Assign(AssignIn body)
     {
@@ -38,10 +43,35 @@ public class AdminDeliveryController(
         return await fleet.AssignByStaffAsync(user, body.SubOrderId.Value, body.PartnerId.Value, body.Direct, body.Force);
     }
 
-    /// <summary>Run auto-assignment now (reference: POST .../packages/{sub_id}/auto-assign).</summary>
+    public sealed record ReturnAssignIn(Guid? ReturnId, Guid? PartnerId, bool Direct = false, bool Force = false);
+
+    /// <summary>Offer or assign a return pickup to a chosen partner (reference: POST .../returns/assign).</summary>
+    [HttpPost("returns/assign"), SignedIn]
+    public async Task<JsonObject> AssignReturn(ReturnAssignIn body)
+    {
+        var user = await current.RequireAsync();
+        if (body.ReturnId is null || body.PartnerId is null)
+            throw new AppException("Choose a return and a partner", "required", 422);
+        return await fleet.AssignPickupByStaffAsync(user, body.ReturnId.Value, body.PartnerId.Value, body.Direct, body.Force);
+    }
+
+        /// <summary>Run auto-assignment now (reference: POST .../packages/{sub_id}/auto-assign).</summary>
     [HttpPost("packages/{subOrderId:guid}/auto-assign"), SignedIn]
     public async Task<JsonObject> RunAuto(Guid subOrderId) =>
         await fleet.AutoAssignByStaffAsync(await current.RequireAsync(), subOrderId);
+
+    /// <summary>Run return-pickup auto-assignment now (reference: POST .../returns/{return_id}/auto-assign).</summary>
+    [HttpPost("returns/{returnId:guid}/auto-assign"), SignedIn]
+    public async Task<JsonObject> RunReturnAuto(Guid returnId) =>
+        await fleet.AutoAssignPickupByStaffAsync(await current.RequireAsync(), returnId);
+
+    /// <summary>Move a return pickup to a courier (reference: POST .../returns/{return_id}/courier).</summary>
+    [HttpPost("returns/{returnId:guid}/courier"), SignedIn]
+    public async Task<JsonObject> ReturnToCourier(Guid returnId)
+    {
+        await fleet.PickupToCourierByStaffAsync(await current.RequireAsync(), returnId);
+        return new JsonObject { ["ok"] = true };
+    }
 
     /// <summary>Take a request or trip off a partner before pickup (reference: POST .../assignments/{id}/cancel).</summary>
     [HttpPost("assignments/{assignmentId:guid}/cancel"), SignedIn]

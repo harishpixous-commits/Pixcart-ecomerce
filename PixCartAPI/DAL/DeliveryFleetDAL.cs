@@ -76,6 +76,12 @@ public class DeliveryFleetDAL(IMySqlDapperHelper db)
             "SELECT COUNT(*) FROM delivery_assignments WHERE sub_order_id = @subOrderId AND mode = 'auto'",
             new { subOrderId })!;
 
+    /// <summary>The most recent failed attempt's reason on a package (reference: returned's last_fail).</summary>
+    public Task<string?> LastFailReasonAsync(Guid subOrderId, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<string?>(
+            "SELECT fail_reason FROM delivery_assignments WHERE sub_order_id = @subOrderId AND status = 'failed' ORDER BY created_at DESC LIMIT 1",
+            new { subOrderId });
+
     /// <summary>The open pickup trip for a return (reference: cancel_return_pickup / close_pickup_on_receive).</summary>
     public async Task<DeliveryAssignmentModel?> ActiveForReturnAsync(Guid returnId, IUnitOfWork uow) =>
         (await uow.QueryAsync<DeliveryAssignmentModel>(
@@ -193,6 +199,13 @@ public class DeliveryFleetDAL(IMySqlDapperHelper db)
             "SELECT a.status AS Status, a.reject_reason AS RejectReason, a.fail_reason AS FailReason, b.name AS Partner " +
             "FROM delivery_assignments a JOIN delivery_boys b ON b.id=a.delivery_boy_id " +
             "WHERE a.sub_order_id=@subOrderId ORDER BY a.created_at", new { subOrderId });
+
+    /// <summary>Every ask for a return pickup, oldest first (reference: the pickup-item tries lookup).</summary>
+    public Task<IEnumerable<TryRow>> TriesForReturnAsync(Guid returnId) =>
+        db.QueryAsync<TryRow>(
+            "SELECT a.status AS Status, a.reject_reason AS RejectReason, a.fail_reason AS FailReason, b.name AS Partner " +
+            "FROM delivery_assignments a JOIN delivery_boys b ON b.id=a.delivery_boy_id " +
+            "WHERE a.return_id=@returnId ORDER BY a.created_at", new { returnId });
 
     public Task<IEnumerable<DeliveryAssignmentModel>> TripsPageAsync(string status, string like, Guid? partnerId, int offset) =>
         db.QueryAsync<DeliveryAssignmentModel>(

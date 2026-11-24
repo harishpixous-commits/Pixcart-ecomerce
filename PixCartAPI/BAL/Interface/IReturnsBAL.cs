@@ -27,6 +27,26 @@ public interface IReturnsBAL
     /// <summary>The customer cancels their own return (reference: POST /api/returns/{id}/cancel).</summary>
     Task<JsonObject> CancelAsync(UserModel user, Guid returnId);
 
+    /// <summary>The seller's returns page (reference: GET /api/seller/returns).</summary>
+    Task<JsonObject> SellerListAsync(UserModel user, string? status, int page);
+
+    /// <summary>The seller decides on a return (reference: POST /api/seller/returns/{return_id}).</summary>
+    Task<JsonObject> SellerActAsync(UserModel user, Guid returnId, string action, string note,
+        string courier, string tracking, IReadOnlyDictionary<Guid, string> conditions);
+
+    /// <summary>Staff returns search (reference: GET /api/admin/returns).</summary>
+    Task<JsonObject> AdminListAsync(UserModel admin, string? status, string q, Guid? sellerId, int page);
+
+    /// <summary>Staff view of what can still be returned from an order (reference: GET /api/admin/orders/{id}/returnable).</summary>
+    Task<JsonObject> AdminReturnableAsync(UserModel admin, Guid orderId);
+
+    /// <summary>Staff open a return for the customer (reference: POST /api/admin/returns).</summary>
+    Task<JsonObject> AdminCreateAsync(UserModel admin, Guid subOrderId,
+        IReadOnlyList<(Guid OrderItemId, int Qty)> lines, string reason, string comment, string refundUpi);
+
+    /// <summary>Staff act on a return, including marking a COD refund paid (reference: POST /api/admin/returns/{id}).</summary>
+    Task<JsonObject> AdminActAsync(UserModel admin, Guid returnId, string action, string note, string reference);
+
     /// <summary>A return as the customer, the seller or staff see it (reference: return_out).</summary>
     Task<JsonObject> ReturnOutAsync(ReturnRequestModel ret, string viewer = "customer", IUnitOfWork? uow = null,
         bool withUpi = false);

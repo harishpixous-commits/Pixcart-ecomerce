@@ -37,6 +37,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["delivery_out_for_delivery"] = ("Out for delivery", "{{item}} is on the way with {{partner}}. Share OTP {{otp}} only when you receive the package."),
         ["delivery_arriving"] = ("Your delivery partner has arrived", "{{partner}} is at your address with {{item}}. Keep OTP {{otp}} ready."),
         ["seller_package_delivered"] = ("Delivered: {{order_number}}", "{{partner}} delivered {{order_number}} to the customer."),
+        ["seller_package_returned"] = ("Package returned: {{order_number}}", "{{partner}} returned {{order_number}} to your store ({{reason}}). The stock is back in your inventory."),
         ["return_update"] = ("Return {{return_number}}: {{status}}", "{{message}}"),
         ["seller_return_requested"] = ("Return requested on {{order_number}}", "Reason: {{reason}}. Review it from your returns page."),
         ["seller_return_arriving"] = ("Return on its way: {{return_number}}", "{{partner}} collected return {{return_number}} ({{order_number}}) and is bringing it to you. Give pickup code {{code}} when you receive it."),

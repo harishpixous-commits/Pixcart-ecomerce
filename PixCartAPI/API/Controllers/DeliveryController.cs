@@ -179,6 +179,19 @@ public class DeliveryController(
         return await fleet.FailAsync(user, assignmentId, body.Reason, body.Note, body.Lat, body.Lng);
     }
 
+    public sealed record ReturnedIn(
+        [param: MaxLength(8)] string Code = "",
+        [param: Range(-90, 90)] decimal? Lat = null,
+        [param: Range(-180, 180)] decimal? Lng = null);
+
+    /// <summary>Hand a package back to the seller (reference: POST /api/delivery/trips/{assignment_id}/returned).</summary>
+    [HttpPost("trips/{assignmentId:guid}/returned"), SignedIn]
+    public async Task<JsonObject> TripReturned(Guid assignmentId, ReturnedIn body)
+    {
+        var user = await current.RequireAsync();
+        return await fleet.ReturnedAsync(user, assignmentId, body.Code, body.Lat, body.Lng);
+    }
+
     /// <summary>The partner's own delivery proof photo (reference: GET /api/delivery/trips/{assignment_id}/proof).</summary>
     [HttpGet("trips/{assignmentId:guid}/proof"), SignedIn]
     public async Task<FileContentResult> TripProof(Guid assignmentId)

@@ -976,7 +976,9 @@ public class OrdersBAL(
 
     /// <summary>Reference: cancel_sub_order. Every cancellation of paid money creates a refund record; stock, deals
     /// and sold counts go back; the last package standing takes the coupon back and closes the order.</summary>
-    private async Task<RefundModel?> CancelSubOrderAsync(SubOrderModel sub, string actor, string reason, IUnitOfWork uow)
+    /// <summary>Cancels one package with stock release and online refund row (reference: orders.cancel_sub_order).
+    /// Internal callers (fleet return-to-store) use it inside their own transaction.</summary>
+    public async Task<RefundModel?> CancelSubOrderAsync(SubOrderModel sub, string actor, string reason, IUnitOfWork uow)
     {
         if (!CanTransition(sub.Status, "cancelled"))
             throw new AppException("This order can no longer be cancelled", "not_cancellable", 409);

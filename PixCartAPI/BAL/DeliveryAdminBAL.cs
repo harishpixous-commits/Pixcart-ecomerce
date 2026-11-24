@@ -22,6 +22,7 @@ namespace BAL;
 /// </summary>
 public class DeliveryAdminBAL(
     DeliveryFleetDAL fleet,
+    ReturnsDAL returnsDal,
     DeliveryDAL delivery,
     OrdersDAL orders,
     AccountDAL accounts,
@@ -91,6 +92,7 @@ public class DeliveryAdminBAL(
         var failed = (await fleet.FailedListAsync()).GroupBy(a => a.SubOrderId).Select(g => g.First()).ToList();
         var items = new List<JsonObject>();
         await using var uow = await db.BeginAsync();
+        var pickups = (await returnsDal.PickupsWaitingAsync(uow)).ToList();
         if (tab == "waiting")
         {
             foreach (var s in waiting) items.Add(await PackageAsync(s, uow));
@@ -129,16 +131,55 @@ public class DeliveryAdminBAL(
                 items.Add(item);
             }
         }
-        // tab "returns": return pickups arrive with the returns module; counts report zero until then.
+        else if (tab == "returns")
+        {
+            foreach (var r in pickups) items.Add(await PickupItemAsync(r, uow));
+        }
         await uow.CommitAsync();
         return new JsonObject
         {
             ["items"] = new JsonArray(items.Select(i => (JsonNode?)i).ToArray()),
             ["counts"] = new JsonObject
             {
-                ["waiting"] = waiting.Count, ["offered"] = offered.Count, ["failed"] = failed.Count, ["returns"] = 0,
+                ["waiting"] = waiting.Count, ["offered"] = offered.Count, ["failed"] = failed.Count,
+                ["returns"] = pickups.Count,
             },
         };
+    }
+
+    /// <summary>A return waiting for a partner to collect it, as a queue row (reference: delivery_admin._pickup_item).</summary>
+    private async Task<JsonObject> PickupItemAsync(ReturnRequestModel ret, IUnitOfWork uow)
+    {
+        var sub = await orders.GetSubAsync(ret.SubOrderId) ?? throw new NotFoundException("Order");
+        var item = await PackageAsync(sub, uow);
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var st = DeliveryFleetBAL.ShipToOf(order);
+        DeliveryZoneModel? zone = null;
+        var pin = st["pincode"]?.GetValue<string>() ?? "";
+        if (pin.Length > 0)
+            foreach (var z in await delivery.ActiveZonesAsync())
+            {
+                var pins = JsonSerializer.Deserialize<List<string>>(z.Pincodes) ?? [];
+                if (pins.Contains(pin)) { zone = z; break; }
+            }
+        var tries = (await fleet.TriesForReturnAsync(ret.Id)).ToList();
+        var titles = (await returnsDal.ItemTitlesAsync(ret.Id, uow))
+            .Select(t => $"{t.Title} × {t.Qty}").ToList();
+        item["return_id"] = ret.Id.ToString();
+        item["return_number"] = ret.Number;
+        item["ready_since"] = ret.FleetRequestedAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00");
+        item["zone"] = zone is not null
+            ? new JsonObject { ["id"] = zone.Id.ToString(), ["name"] = zone.Name }
+            : null;
+        item["payment"] = "online";
+        item["cod_amount"] = 0;
+        item["return_items"] = new JsonArray(titles.Select(t => (JsonNode?)t).ToArray());
+        item["tries"] = new JsonArray(tries.Select(t => (JsonNode?)new JsonObject
+        {
+            ["status"] = t.Status, ["reason"] = t.FailReason.Length > 0 ? t.FailReason : t.RejectReason,
+            ["partner"] = t.Partner,
+        }).ToArray());
+        return item;
     }
 
     /// <summary>Reference: GET /api/admin/delivery/packages/{sub_id}/candidates.</summary>

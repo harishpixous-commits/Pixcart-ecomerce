@@ -20,7 +20,10 @@ public partial class ReturnsBAL(
     OrdersDAL orders,
     CatalogDAL catalog,
     IPlatformSettingsBAL platform,
+    IAccessBAL access,
     ICatalogNotifyBAL notify,
+    IOrdersBAL ordersBal,
+    CatalogSupportDAL support,
     IDeliveryFleetBAL fleetBal,
     IInventoryBAL inventoryBal,
     IRefundQueue refundQueue,
@@ -352,6 +355,144 @@ public partial class ReturnsBAL(
             ["return_number"] = ret.Number, ["status"] = ret.Status.Replace('_', ' '), ["message"] = message,
         }, $"/orders/{sub.OrderId}");
     }
+
+    // ----------------------------------------------------------------------------- seller flows (reference: seller_extras returns)
+
+    /// <summary>The seller's returns page (reference: GET /api/seller/returns).</summary>
+    public async Task<JsonObject> SellerListAsync(UserModel user, string? status, int page)
+    {
+        var seller = await ordersBal.RequireSellerAsync(user, true);
+        await using var uow = await db.BeginAsync();
+        var rows = await returnsDal.SellerReturnsAsync(seller.Id, status, (page - 1) * 20, uow);
+        var counts = await returnsDal.StatusCountsAsync(seller.Id, uow);
+        var items = new List<JsonObject>();
+        foreach (var r in rows)
+            items.Add(await ReturnOutAsync(r, "seller", uow));
+        await uow.CommitAsync();
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(items.Select(i => (JsonNode?)i).ToArray()),
+            ["status_counts"] = new JsonObject(counts.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, kv.Value)).ToArray()),
+            ["page"] = page,
+        };
+    }
+
+    /// <summary>The seller decides on a return: approve, reject (with a note), picked_up (own courier) or received
+    /// with per-item conditions (reference: POST /api/seller/returns/{return_id}).</summary>
+    public async Task<JsonObject> SellerActAsync(UserModel user, Guid returnId, string action, string note,
+        string courier, string tracking, IReadOnlyDictionary<Guid, string> conditions)
+    {
+        if (action is not ("approve" or "reject" or "picked_up" or "received"))
+            throw new AppException("action must be one of approve, reject, picked_up, received", "validation", 422);
+        if (note.Length > 2000 || courier.Length > 60 || tracking.Length > 60)
+            throw new AppException("note must be at most 2000 characters, courier and tracking at most 60", "validation", 422);
+        var seller = await ordersBal.RequireSellerAsync(user, true);
+        await using var uow = await db.BeginAsync();
+        var ret = await returnsDal.ReturnForUpdateAsync(returnId, uow);
+        if (ret is null || ret.SellerId != seller.Id) throw new NotFoundException("Return");
+        if (action == "reject" && note.Trim().Length < 10)
+            throw new AppException("Explain to the customer why the return cannot be accepted", "note_required",
+                400, new Dictionary<string, string> { ["note"] = "Required" });
+        var dst = action switch { "approve" => "approved", "reject" => "rejected", "picked_up" => "picked_up", _ => "received" };
+        var refundIds = await SetStatusAsync(ret, dst, uow, note: note, courier: courier, tracking: tracking,
+            conditions: conditions, actor: user);
+        var damaged = conditions.Values.Count(c => c == "damaged");
+        await AuditAsync(uow, user, $"return.{dst}", ret.Id,
+            (note[..Math.Min(150, note.Length)] + (damaged > 0 ? $" ({damaged} item(s) kept out of stock)" : "")).Trim());
+        var outObj = await ReturnOutAsync(ret, "seller", uow);
+        await uow.CommitAsync();
+        refundQueue.Enqueue(refundIds);
+        return outObj;
+    }
+
+    // ----------------------------------------------------------------------------- staff flows (reference: admin_extras returns)
+
+    /// <summary>Staff returns search (reference: GET /api/admin/returns).</summary>
+    public async Task<JsonObject> AdminListAsync(UserModel admin, string? status, string q, Guid? sellerId, int page)
+    {
+        await access.RequireAsync(admin, "orders");
+        var like = q.Trim().Length > 0 ? $"%{q.Trim()}%" : "";
+        await using var uow = await db.BeginAsync();
+        var rows = await returnsDal.AdminReturnsAsync(status, like, sellerId, (page - 1) * 30, uow);
+        var total = await returnsDal.AdminCountAsync(status, like, sellerId, uow);
+        var counts = await returnsDal.StatusCountsAsync(null, uow);
+        var items = new List<JsonObject>();
+        foreach (var r in rows)
+            items.Add(await ReturnOutAsync(r, "admin", uow, withUpi: true));
+        await uow.CommitAsync();
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(items.Select(i => (JsonNode?)i).ToArray()),
+            ["status_counts"] = new JsonObject(counts.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, kv.Value)).ToArray()),
+            ["total"] = total, ["page"] = page, ["page_size"] = 30,
+        };
+    }
+
+    /// <summary>What can still be returned from an order, by the customer's own rules
+    /// (reference: GET /api/admin/orders/{order_id}/returnable).</summary>
+    public async Task<JsonObject> AdminReturnableAsync(UserModel admin, Guid orderId)
+    {
+        await access.RequireAsync(admin, "orders");
+        var order = await orders.GetOrderAsync(orderId) ?? throw new NotFoundException("Order");
+        await using var uow = await db.BeginAsync();
+        var subs = await orders.SubOrdersForUpdateAsync(orderId, uow);
+        var items = new JsonObject();
+        foreach (var s in subs)
+            items[s.Id.ToString()] = new JsonArray((await ReturnableItemsAsync(s, uow)).Select(r => (JsonNode?)r).ToArray());
+        await uow.CommitAsync();
+        return new JsonObject { ["items"] = items, ["needs_upi"] = order.PaymentMethod == "cod" };
+    }
+
+    /// <summary>Staff open a return for the customer, with the customer's own checks
+    /// (reference: POST /api/admin/returns).</summary>
+    public async Task<JsonObject> AdminCreateAsync(UserModel admin, Guid subOrderId,
+        IReadOnlyList<(Guid OrderItemId, int Qty)> lines, string reason, string comment, string refundUpi)
+    {
+        await access.RequireAsync(admin, "orders");
+        var order = await returnsDal.OrderForSubAsync(subOrderId) ?? throw new NotFoundException("Order");
+        var customer = await support.GetUserAsync(order.UserId) ?? throw new NotFoundException("Order");
+        var ret = await CreateAsync(customer, subOrderId, lines, reason, comment, refundUpi);
+        await using var uow = await db.BeginAsync();
+        await AuditAsync(uow, admin, "return.admin_open", ret.Id, $"{ret.Number} on order {order.Number}, reason {reason}");
+        await uow.CommitAsync();
+        return await ReturnOutAsync(ret, "admin", withUpi: true);
+    }
+
+    /// <summary>Staff act on a return, including marking a COD refund paid with its UPI/bank reference
+    /// (reference: POST /api/admin/returns/{return_id}).</summary>
+    public async Task<JsonObject> AdminActAsync(UserModel admin, Guid returnId, string action, string note, string reference)
+    {
+        await access.RequireAsync(admin, "refunds");
+        if (action is not ("approve" or "reject" or "received" or "mark_refunded"))
+            throw new AppException("action must be one of approve, reject, received, mark_refunded", "validation", 422);
+        if (note.Length > 2000 || reference.Length > 60)
+            throw new AppException("note must be at most 2000 characters, reference at most 60", "validation", 422);
+        await using var uow = await db.BeginAsync();
+        var ret = await returnsDal.ReturnForUpdateAsync(returnId, uow) ?? throw new NotFoundException("Return");
+        List<Guid> refundIds;
+        if (action == "mark_refunded")
+        {
+            if (reference.Trim().Length == 0)
+                throw new AppException("Enter the UPI/bank reference of the refund you paid", "reference_required");
+            refundIds = await SetStatusAsync(ret, "refunded", uow, note: $"Refund reference {reference.Trim()}", actor: admin);
+        }
+        else
+        {
+            var dst = action switch { "approve" => "approved", "reject" => "rejected", _ => "received" };
+            refundIds = await SetStatusAsync(ret, dst, uow, note: note, actor: admin);
+        }
+        await AuditAsync(uow, admin, $"return.admin_{action}", ret.Id, note.Length > 0 ? note : reference);
+        var outObj = await ReturnOutAsync(ret, "admin", uow, withUpi: true);
+        await uow.CommitAsync();
+        refundQueue.Enqueue(refundIds);
+        return outObj;
+    }
+
+    private static async Task AuditAsync(IUnitOfWork uow, UserModel user, string action, Guid returnId, string detail = "") =>
+        await uow.ExecuteAsync(
+            "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
+            "VALUES (@actor, @action, 'return', @eid, @detail, UTC_TIMESTAMP(6), @id)",
+            new { actor = user.Id, action, eid = returnId.ToString(), detail, id = Guid.NewGuid() });
 
     // ----------------------------------------------------------------------------- customer flows
 

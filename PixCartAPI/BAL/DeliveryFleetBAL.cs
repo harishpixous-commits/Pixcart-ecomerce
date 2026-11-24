@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BAL.Interface;
+using Microsoft.Extensions.DependencyInjection;
 using DAL;
 using Model.DomainModel;
 using Utils;
@@ -28,11 +29,15 @@ public class DeliveryFleetBAL(
     IDeliverySettingsBAL deliverySettings,
     IFeesBAL fees,
     IOrdersBAL ordersBal,
+    IRefundQueue refundQueue,
     ICatalogNotifyBAL notify,
     IRateLimitBAL rateLimit,
     IImageUpload images,
+    IServiceProvider services,
     IMySqlDapperHelper db) : IDeliveryFleetBAL
 {
+    // ReturnsBAL also consumes this BAL, so it is resolved lazily to avoid a constructor cycle.
+    private IReturnsBAL Returns => services.GetRequiredService<IReturnsBAL>();
     private const double RoadFactor = 1.3; // roads are longer than the straight line between two points
     private static readonly TimeSpan Ist = TimeSpan.FromHours(5.5);
 
@@ -44,11 +49,23 @@ public class DeliveryFleetBAL(
         ["expired"] = "Not accepted in time", ["cancelled"] = "Cancelled", ["failed"] = "Delivery attempt failed",
     };
 
-    /// <summary>Reference STEPS for a delivery trip (the return-pickup steps come with the returns slice).</summary>
+    /// <summary>Reference STEPS for a delivery trip.</summary>
     private static readonly IReadOnlyDictionary<string, string[]> Steps = new Dictionary<string, string[]>
     {
         ["at_store"] = ["accepted"], ["picked"] = ["accepted", "at_store"],
         ["on_the_way"] = ["picked"], ["reached"] = ["picked", "on_the_way"],
+    };
+
+    /// <summary>Reference: advance's kind "return" table (a package on its way back to the store).</summary>
+    private static readonly IReadOnlyDictionary<string, string[]> ReturnSteps = new Dictionary<string, string[]>
+    {
+        ["on_the_way"] = ["picked"], ["reached"] = ["picked", "on_the_way"],
+    };
+
+    /// <summary>Reference PICKUP_STEPS: reached = at the customer's door, picked = collected, on_the_way = to the store.</summary>
+    private static readonly IReadOnlyDictionary<string, string[]> PickupSteps = new Dictionary<string, string[]>
+    {
+        ["reached"] = ["accepted"], ["picked"] = ["accepted", "reached"], ["on_the_way"] = ["picked"],
     };
 
     // ------------------------------------------------------------------------- small helpers (reference: fleet.py top)
@@ -776,12 +793,24 @@ public class DeliveryFleetBAL(
         var boy = await partners.RequireApprovedAsync(user);
         await using var uow = await db.BeginAsync();
         var a = await OwnTripAsync(assignmentId, boy, uow, "Delivery");
-        if (!Steps.GetValueOrDefault(to, []).Contains(a.Status))
+        var allowed = a.Kind switch
+        {
+            "return" => ReturnSteps.GetValueOrDefault(to, []),
+            "pickup" => PickupSteps.GetValueOrDefault(to, []),
+            _ => Steps.GetValueOrDefault(to, []),
+        };
+        if (!allowed.Contains(a.Status))
             throw new AppException($"You cannot mark this as {to.Replace('_', ' ')} now", "invalid_step", 409);
         var cfg = await deliverySettings.GetAsync();
         var sub = await orders.GetSubAsync(a.SubOrderId) ?? throw new NotFoundException("Order");
         var order = await orders.GetOrderAsync(a.OrderId) ?? throw new NotFoundException("Order");
         var now = DateTimeFunctions.UtcNow();
+        if (a.Kind == "pickup")
+        {
+            await AdvancePickupAsync(a, boy, sub, to, cfg, code, lat, lng, uow);
+            await uow.CommitAsync();
+            return await TripViewAsync(a.Id, boy);
+        }
         if (to == "picked")
         {
             if (cfg.Bool("pickup_code_required"))
@@ -808,7 +837,7 @@ public class DeliveryFleetBAL(
         }
         await fleet.UpdateAsync(a, uow);
         await LogStatusAsync(uow, a.OrderId, a.SubOrderId, a.Id, to, "delivery", boy.UserId, lat: lat, lng: lng);
-        if (to is "picked" or "reached")
+        if (a.Kind == "delivery" && (to is "picked" or "reached"))
         {
             var item = await FirstTitleAsync(sub, uow) is { Length: > 0 } t ? t : "Your package";
             if (to == "picked")
@@ -822,6 +851,50 @@ public class DeliveryFleetBAL(
         }
         await uow.CommitAsync();
         return await TripViewAsync(a.Id, boy);
+    }
+
+    /// <summary>Steps of a return pickup. Collecting checks the customer's pickup code and marks the return picked
+    /// up (reference: _advance_pickup).</summary>
+    private async Task AdvancePickupAsync(DeliveryAssignmentModel a, DeliveryBoyModel boy, SubOrderModel sub,
+        string to, JsonObject cfg, string code, decimal? lat, decimal? lng, IUnitOfWork uow)
+    {
+        var ret = a.ReturnId is not null ? await returnsDal.ReturnForUpdateAsync(a.ReturnId.Value, uow) : null;
+        if (ret is null || ret.Status is not ("approved" or "picked_up"))
+            throw new AppException("This return is no longer waiting to be collected", "invalid_step", 409);
+        var now = DateTimeFunctions.UtcNow();
+        if (to == "picked")
+        {
+            if (cfg.Bool("delivery_otp_required"))
+            {
+                await rateLimit.RateLimitAsync($"dret-otp:{a.Id}", 6, 900);
+                if (code.Trim() != ret.PickupOtp)
+                    throw new AppException("The pickup code does not match. Ask the customer for the code on their order page or SMS.", "wrong_code");
+            }
+            a.PickedLat = lat; a.PickedLng = lng;
+            if (ret.Status == "approved")
+                await Returns.SetStatusAsync(ret, "picked_up", uow,
+                    courier: "Our delivery partner", tracking: sub.Number, byFleet: true);
+            await notify.NotifySellerAsync(sub.SellerId, "seller_return_arriving", new Dictionary<string, string>
+            {
+                ["return_number"] = ret.Number, ["order_number"] = sub.Number, ["partner"] = boy.Name,
+                ["code"] = sub.PickupCode,
+            }, "/seller/returns");
+        }
+        a.Status = to; a.StatusAt = now; a.StuckAlertedAt = null;
+        switch (to)
+        {
+            case "picked": a.PickedAt = now; break;
+            case "on_the_way": a.OnTheWayAt = now; break;
+            case "reached": a.ReachedAt = now; break;
+        }
+        await fleet.UpdateAsync(a, uow);
+        await LogStatusAsync(uow, a.OrderId, a.SubOrderId, a.Id, $"return_{to}", "delivery", boy.UserId, lat: lat, lng: lng,
+            note: to switch
+            {
+                "reached" => "At the customer's door",
+                "picked" => $"Collected return {ret.Number}",
+                _ => "Bringing it to the store",
+            });
     }
 
     public async Task<JsonObject> DeliverAsync(UserModel user, Guid assignmentId, string otp, byte[]? proofPhoto,
@@ -887,6 +960,12 @@ public class DeliveryFleetBAL(
         var boy = await partners.RequireApprovedAsync(user);
         await using var uow = await db.BeginAsync();
         var a = await OwnTripAsync(assignmentId, boy, uow, "Delivery");
+        if (a.Kind == "pickup")
+        {
+            await FailPickupAsync(a, boy, reason, note, lat, lng, uow);
+            await uow.CommitAsync();
+            return await TripViewAsync(a.Id, boy);
+        }
         if (a.Kind != "delivery" || a.Status is not ("picked" or "on_the_way" or "reached"))
             throw new AppException("Only a package you are carrying can be marked as not delivered", "invalid_step", 409);
         var text = DeliverySettingsBAL.FailReasons.GetValueOrDefault(reason, "Other reason") +
@@ -908,6 +987,110 @@ public class DeliveryFleetBAL(
         }, "/admin/delivery/queue?tab=failed");
         await uow.CommitAsync();
         return await TripViewAsync(a.Id, boy);
+    }
+
+    /// <summary>The partner could not collect a return: the return waits for another try (reference: _fail_pickup).</summary>
+    private async Task FailPickupAsync(DeliveryAssignmentModel a, DeliveryBoyModel boy, string reason, string note,
+        decimal? lat, decimal? lng, IUnitOfWork uow)
+    {
+        if (a.Status is not ("accepted" or "reached"))
+            throw new AppException("Only a return you have not collected yet can be marked as not collected", "invalid_step", 409);
+        var text = DeliverySettingsBAL.FailReasons.GetValueOrDefault(reason, "Other reason") +
+                   (note.Trim().Length > 0 ? $": {note.Trim()}" : "");
+        a.FailReason = text[..Math.Min(200, text.Length)];
+        a.DropLat = lat; a.DropLng = lng;
+        await EndAsync(a, "failed", text, uow, userId: boy.UserId, actor: "delivery");
+        var ret = a.ReturnId is not null ? await returnsDal.ReturnForUpdateAsync(a.ReturnId.Value, uow) : null;
+        if (ret is null) return;
+        var order = await orders.GetOrderAsync(a.OrderId) ?? throw new NotFoundException("Order");
+        await notify.NotifyUserAsync(ret.UserId, "return_pickup_failed", new Dictionary<string, string>
+        {
+            ["return_number"] = ret.Number,
+            ["reason"] = DeliverySettingsBAL.FailReasons.GetValueOrDefault(reason, "Other reason"),
+        }, $"/orders/{order.Id}");
+        ret.FleetAlertedAt = DateTimeFunctions.UtcNow();
+        await returnsDal.UpdateReturnAsync(ret, uow);
+        await NotifyStaffAsync("delivery", "staff_delivery_failed", new Dictionary<string, string>
+        {
+            ["order_number"] = $"return {ret.Number}", ["partner"] = boy.Name, ["reason"] = text,
+        }, "/admin/delivery/queue?tab=returns");
+    }
+
+    /// <summary>The partner hands a package back to the seller: a collected return, or a package coming back after
+    /// failed attempts or a cancellation (reference: returned + _pickup_handed_over).</summary>
+    public async Task<JsonObject> ReturnedAsync(UserModel user, Guid assignmentId, string code, decimal? lat, decimal? lng)
+    {
+        if (code.Length > 8) throw new AppException("code must be at most 8 characters", "validation", 422);
+        var boy = await partners.RequireApprovedAsync(user);
+        await using var uow = await db.BeginAsync();
+        var a = await OwnTripAsync(assignmentId, boy, uow, "Delivery");
+        var cfg = await deliverySettings.GetAsync();
+        var sub = await orders.GetSubAsync(a.SubOrderId) ?? throw new NotFoundException("Order");
+        if (a.Kind == "pickup")
+        {
+            await PickupHandedOverAsync(a, boy, sub, cfg, code, lat, lng, uow);
+            await uow.CommitAsync();
+            return await TripViewAsync(a.Id, boy);
+        }
+        if (a.Kind != "return" || a.Status is not ("picked" or "on_the_way" or "reached"))
+            throw new AppException("This is not a return to the store", "invalid_step", 409);
+        if (cfg.Bool("pickup_code_required"))
+        {
+            await rateLimit.RateLimitAsync($"dret:{a.Id}", 8, 900);
+            if (code.Trim() != sub.PickupCode)
+                throw new AppException("The code does not match. Ask the seller for the pickup code on their order screen.", "wrong_code");
+        }
+        var now = DateTimeFunctions.UtcNow();
+        a.Status = "delivered"; a.DeliveredAt = now; a.EndedAt = now; a.StatusAt = now;
+        a.DropLat = lat; a.DropLng = lng;
+        a.FeePaise = FeeFor(cfg, null);
+        a.BonusPaise = await WeatherBonusAsync(cfg);
+        await fleet.UpdateAsync(a, uow);
+        var lastFail = await fleet.LastFailReasonAsync(sub.Id, uow) ?? "Order cancelled";
+        await LogStatusAsync(uow, a.OrderId, a.SubOrderId, a.Id, "returned", "delivery", boy.UserId, lat: lat, lng: lng);
+        RefundModel? refund = null;
+        if (sub.Status != "cancelled")
+            refund = await ordersBal.CancelSubOrderAsync(sub, "admin", $"Returned to the seller: {lastFail}", uow);
+        await notify.NotifySellerAsync(sub.SellerId, "seller_package_returned", new Dictionary<string, string>
+        {
+            ["order_number"] = sub.Number, ["partner"] = boy.Name, ["reason"] = lastFail,
+        }, $"/seller/orders/{sub.Id}");
+        await uow.CommitAsync();
+        if (refund is not null)
+            refundQueue.Enqueue([refund.Id]);
+        return await TripViewAsync(a.Id, boy);
+    }
+
+    /// <summary>The partner gives the collected return to the seller (the seller's pickup code). The seller then
+    /// checks the item and marks the return received (reference: _pickup_handed_over).</summary>
+    private async Task PickupHandedOverAsync(DeliveryAssignmentModel a, DeliveryBoyModel boy, SubOrderModel sub,
+        JsonObject cfg, string code, decimal? lat, decimal? lng, IUnitOfWork uow)
+    {
+        if (a.Status is not ("picked" or "on_the_way"))
+            throw new AppException("Collect the return from the customer first", "invalid_step", 409);
+        if (cfg.Bool("pickup_code_required"))
+        {
+            await rateLimit.RateLimitAsync($"dret:{a.Id}", 8, 900);
+            if (code.Trim() != sub.PickupCode)
+                throw new AppException("The code does not match. Ask the seller for the pickup code on their returns screen.", "wrong_code");
+        }
+        var now = DateTimeFunctions.UtcNow();
+        a.Status = "delivered"; a.DeliveredAt = now; a.EndedAt = now; a.StatusAt = now;
+        a.DropLat = lat; a.DropLng = lng;
+        if (a.PickedLat is not null && lat is not null)
+            a.DistanceKm = (decimal)Math.Round(
+                HaversineKm((double)a.PickedLat.Value, (double)a.PickedLng!.Value, (double)lat.Value, (double)lng!.Value) * RoadFactor, 2);
+        a.FeePaise = FeeFor(cfg, a.DistanceKm is not null ? (double)a.DistanceKm.Value : null);
+        a.BonusPaise = await WeatherBonusAsync(cfg);
+        await fleet.UpdateAsync(a, uow);
+        var ret = a.ReturnId is not null ? await returnsDal.ReturnAsync(a.ReturnId.Value) : null;
+        await LogStatusAsync(uow, a.OrderId, a.SubOrderId, a.Id, "return_delivered", "delivery", boy.UserId,
+            lat: lat, lng: lng, note: $"Return {ret?.Number ?? ""} handed to the store");
+        if (ret is not null)
+            await notify.NotifySellerAsync(sub.SellerId, "seller_return_delivered", new Dictionary<string, string>
+            {
+                ["return_number"] = ret.Number, ["partner"] = boy.Name,
+            }, "/seller/returns");
     }
 
     // ------------------------------------------------------------------------- location, feed and views
@@ -1142,11 +1325,12 @@ public class DeliveryFleetBAL(
         return outObj;
     }
 
-    private async Task AuditAsync(IUnitOfWork uow, UserModel user, string action, Guid subId, string detail = "") =>
+    private async Task AuditAsync(IUnitOfWork uow, UserModel user, string action, Guid subId, string detail = "",
+        string entityType = "sub_order") =>
         await uow.ExecuteAsync(
             "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
-            "VALUES (@actor, @action, 'sub_order', @eid, @detail, UTC_TIMESTAMP(6), @id)",
-            new { actor = user.Id, action, eid = subId.ToString(), detail, id = Guid.NewGuid() });
+            "VALUES (@actor, @action, @etype, @eid, @detail, UTC_TIMESTAMP(6), @id)",
+            new { actor = user.Id, action, etype = entityType, eid = subId.ToString(), detail, id = Guid.NewGuid() });
 
     /// <summary>Reference: fleet.release/_after_release - re-offer a freed package or tell staff.</summary>
     public async Task ReleaseAsync(Guid subOrderId, string why)
@@ -1183,6 +1367,7 @@ public class DeliveryFleetBAL(
     /// <summary>Reference: delivery_admin.assign.</summary>
     public async Task<JsonObject> AssignByStaffAsync(UserModel admin, Guid subOrderId, Guid partnerId, bool direct, bool force)
     {
+        await access.RequireAsync(admin, "delivery");
         await using var uow = await db.BeginAsync();
         var sub = await orders.SubForUpdateAsync(subOrderId, uow);
         if (sub is null || sub.ShippingProvider != "fleet" || sub.Status != "packed")
@@ -1209,6 +1394,7 @@ public class DeliveryFleetBAL(
     /// <summary>Reference: delivery_admin.run_auto.</summary>
     public async Task<JsonObject> AutoAssignByStaffAsync(UserModel admin, Guid subOrderId)
     {
+        await access.RequireAsync(admin, "delivery");
         await using var uow = await db.BeginAsync();
         var sub = await orders.SubForUpdateAsync(subOrderId, uow);
         if (sub is null || sub.ShippingProvider != "fleet") throw new NotFoundException("Package");
@@ -1223,10 +1409,93 @@ public class DeliveryFleetBAL(
         if (a is null) throw new AppException("No free partner can take it right now", "no_partner", 409);
         return AssignmentBrief(a);
     }
+    // ------------------------------------------------------------------ staff return-pickup operations (reference: delivery_admin returns routes)
+
+    /// <summary>An approved, fleet-flagged return, locked (reference: _approved_pickup).</summary>
+    private async Task<(ReturnRequestModel Ret, SubOrderModel Sub)> ApprovedPickupAsync(Guid returnId, IUnitOfWork uow)
+    {
+        var ret = await returnsDal.ReturnForUpdateAsync(returnId, uow);
+        if (ret is null || ret.Status != "approved" || ret.FleetRequestedAt is null)
+            throw new AppException("This return is not waiting for a partner to collect it", "not_waiting", 409);
+        var sub = await orders.GetSubAsync(ret.SubOrderId) ?? throw new NotFoundException("Return");
+        return (ret, sub);
+    }
+
+    /// <summary>Offer or assign a return pickup to a chosen partner (reference: POST .../returns/{id}/assign).</summary>
+    public async Task<JsonObject> AssignPickupByStaffAsync(UserModel admin, Guid returnId, Guid partnerId, bool direct, bool force)
+    {
+        await access.RequireAsync(admin, "delivery");
+        await using var uow = await db.BeginAsync();
+        var (ret, sub) = await ApprovedPickupAsync(returnId, uow);
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var boy = await delivery.PartnerByIdAsync(partnerId) ?? throw new NotFoundException("Delivery partner");
+        if (boy.KycStatus != "approved" || !boy.IsActive)
+            throw new AppException("This partner is not approved or is switched off", "partner_unavailable");
+        var cfg = await deliverySettings.GetAsync();
+        var match = (await CandidatesAsync(sub, order, cfg, uow, onlineOnly: false, ret: ret))
+            .FirstOrDefault(c => c["boy_id"]!.GetValue<string>() == boy.Id.ToString());
+        var reasons = match is null
+            ? new List<string>()
+            : match["reasons"]!.AsArray().Select(r => r!.GetValue<string>()).Where(r => r != "already asked").ToList();
+        if (reasons.Count > 0 && !force)
+            throw new AppException($"{boy.Name}: {string.Join(", ", reasons)}. Assign anyway to override.",
+                "partner_not_free", 409);
+        var a = await OfferAsync(sub, order, boy, "manual", cfg, uow, by: admin, direct: direct, ret: ret);
+        await AuditAsync(uow, admin, "delivery.assign_pickup", ret.Id, $"{boy.Name}{(direct ? " (direct)" : "")}", "return_request");
+        await uow.CommitAsync();
+        return AssignmentBrief(a);
+    }
+
+    /// <summary>Partners who could fetch a return, best first, for staff (reference: GET .../returns/{id}/candidates).</summary>
+    public async Task<JsonArray> ReturnCandidatesAsync(UserModel admin, Guid returnId)
+    {
+        await access.RequireAsync(admin, "delivery");
+        await using var uow = await db.BeginAsync();
+        var (ret, sub) = await ApprovedPickupAsync(returnId, uow);
+        var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
+        var cfg = await deliverySettings.GetAsync();
+        var cands = await CandidatesAsync(sub, order, cfg, uow, onlineOnly: false, ret: ret);
+        await uow.CommitAsync();
+        return new JsonArray(cands.Select(c => (JsonNode?)c).ToArray());
+    }
+
+        /// <summary>Run auto-assignment for a return pickup now (reference: POST .../returns/{id}/auto-assign).</summary>
+    public async Task<JsonObject> AutoAssignPickupByStaffAsync(UserModel admin, Guid returnId)
+    {
+        await access.RequireAsync(admin, "delivery");
+        await using var uow = await db.BeginAsync();
+        var (ret, sub) = await ApprovedPickupAsync(returnId, uow);
+        var cfg = (JsonObject)(await deliverySettings.GetAsync()).DeepClone();
+        cfg["auto_assign"] = true;
+        ret.FleetAlertedAt = null;
+        await returnsDal.UpdateReturnAsync(ret, uow);
+        var a = await AutoAssignPickupAsync(ret, sub, cfg, uow);
+        await uow.CommitAsync();
+        if (a is null) throw new AppException("No free partner can collect it right now", "no_partner", 409);
+        return AssignmentBrief(a);
+    }
+
+    /// <summary>The seller arranges the pickup instead: our partners stop trying (reference: POST .../returns/{id}/courier).</summary>
+    public async Task<JsonObject> PickupToCourierByStaffAsync(UserModel admin, Guid returnId)
+    {
+        await access.RequireAsync(admin, "delivery");
+        await using var uow = await db.BeginAsync();
+        var (ret, sub) = await ApprovedPickupAsync(returnId, uow);
+        await CancelReturnPickupAsync(ret, "Switched to the seller's courier", uow, admin);
+        await AuditAsync(uow, admin, "delivery.pickup_to_courier", ret.Id, entityType: "return_request");
+        await notify.NotifySellerAsync(sub.SellerId, "seller_return_requested", new Dictionary<string, string>
+        {
+            ["order_number"] = sub.Number, ["reason"] = "arrange the pickup with your courier",
+        }, "/seller/returns");
+        await uow.CommitAsync();
+        return new JsonObject { ["ok"] = true };
+    }
+
 
     /// <summary>Reference: delivery_admin.cancel_assignment + fleet.cancel_by_staff.</summary>
     public async Task CancelByStaffAsync(UserModel admin, Guid assignmentId, string reason)
     {
+        await access.RequireAsync(admin, "delivery");
         await using var uow = await db.BeginAsync();
         var a = await fleet.AssignmentForUpdateAsync(assignmentId, uow) ?? throw new NotFoundException("Delivery");
         if (a.Status is not ("offered" or "accepted" or "at_store"))
@@ -1244,6 +1513,7 @@ public class DeliveryFleetBAL(
     /// <summary>Reference: delivery_admin.resolve + fleet.resolve_failed.</summary>
     public async Task<JsonObject> ResolveFailedAsync(UserModel admin, Guid assignmentId, string action)
     {
+        await access.RequireAsync(admin, "delivery");
         await using var uow = await db.BeginAsync();
         var failed = await fleet.AssignmentForUpdateAsync(assignmentId, uow) ?? throw new NotFoundException("Delivery");
         if (failed.Status != "failed")
@@ -1278,6 +1548,7 @@ public class DeliveryFleetBAL(
     /// <summary>Reference: delivery_admin.to_courier.</summary>
     public async Task ToCourierByStaffAsync(UserModel admin, Guid subOrderId)
     {
+        await access.RequireAsync(admin, "delivery");
         await using var uow = await db.BeginAsync();
         var sub = await orders.SubForUpdateAsync(subOrderId, uow);
         if (sub is null || sub.ShippingProvider != "fleet") throw new NotFoundException("Package");

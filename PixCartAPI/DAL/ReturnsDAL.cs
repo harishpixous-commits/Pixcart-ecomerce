@@ -39,6 +39,74 @@ public class ReturnsDAL(IMySqlDapperHelper db)
         return rows.ToDictionary(r => r.OrderItemId, r => r.Qty);
     }
 
+    /// <summary>A seller's returns, newest first, 20 per page (reference: seller_extras.seller_returns).</summary>
+    public async Task<IReadOnlyList<ReturnRequestModel>> SellerReturnsAsync(Guid sellerId, string? status, int offset, IUnitOfWork uow)
+    {
+        var sql = "SELECT * FROM return_requests WHERE seller_id = @sellerId"
+                  + (status is not null ? " AND status = @status" : "")
+                  + " ORDER BY created_at DESC LIMIT 20 OFFSET @offset";
+        var rows = await uow.QueryAsync<ReturnRequestModel>(sql, new { sellerId, status, offset });
+        return rows.ToList();
+    }
+
+    /// <summary>Status counts, for one seller or the whole marketplace (reference: the status_counts lookups).</summary>
+    public async Task<Dictionary<string, long>> StatusCountsAsync(Guid? sellerId, IUnitOfWork uow)
+    {
+        var rows = await uow.QueryAsync<(string Status, long N)>(
+            "SELECT status AS Status, COUNT(*) AS N FROM return_requests"
+            + (sellerId is not null ? " WHERE seller_id = @sellerId" : "")
+            + " GROUP BY status", new { sellerId });
+        return rows.ToDictionary(r => r.Status, r => r.N);
+    }
+
+    private const string AdminWhere = @"
+        FROM return_requests r
+        WHERE (@status IS NULL OR r.status = @status)
+          AND (@sellerId IS NULL OR r.seller_id = @sellerId)
+          AND (@like = '' OR r.number LIKE @like
+               OR r.sub_order_id IN (SELECT id FROM sub_orders WHERE number LIKE @like)
+               OR r.user_id IN (SELECT id FROM users WHERE phone LIKE @like OR name LIKE @like))";
+
+    /// <summary>Staff returns search (reference: admin_extras.admin_returns).</summary>
+    public async Task<IReadOnlyList<ReturnRequestModel>> AdminReturnsAsync(string? status, string like, Guid? sellerId, int offset, IUnitOfWork uow)
+    {
+        var rows = await uow.QueryAsync<ReturnRequestModel>(
+            "SELECT r.* " + AdminWhere + " ORDER BY r.created_at DESC LIMIT 30 OFFSET @offset",
+            new { status, like, sellerId, offset });
+        return rows.ToList();
+    }
+
+    public Task<long> AdminCountAsync(string? status, string like, Guid? sellerId, IUnitOfWork uow) =>
+        uow.ExecuteScalarAsync<long>("SELECT COUNT(*) " + AdminWhere, new { status, like, sellerId })!;
+
+    /// <summary>Approved returns our partners should collect that have no live request or trip
+    /// (reference: delivery_admin._pickups_waiting).</summary>
+    public async Task<IReadOnlyList<ReturnRequestModel>> PickupsWaitingAsync(IUnitOfWork uow)
+    {
+        var rows = await uow.QueryAsync<ReturnRequestModel>(
+            @"SELECT * FROM return_requests
+            WHERE status = 'approved' AND fleet_requested_at IS NOT NULL
+              AND id NOT IN (SELECT return_id FROM delivery_assignments
+                             WHERE return_id IS NOT NULL
+                               AND status IN ('offered','accepted','at_store','picked','on_the_way','reached'))
+            ORDER BY fleet_requested_at");
+        return rows.ToList();
+    }
+
+    /// <summary>"title x qty" parts of a return's lines (reference: _pickup_item return_items).</summary>
+    public async Task<IReadOnlyList<(string Title, int Qty)>> ItemTitlesAsync(Guid returnId, IUnitOfWork uow)
+    {
+        var rows = await uow.QueryAsync<(string Title, int Qty)>(
+            "SELECT oi.title AS Title, ri.qty AS Qty FROM return_items ri JOIN order_items oi ON oi.id = ri.order_item_id WHERE ri.return_id = @returnId",
+            new { returnId });
+        return rows.ToList();
+    }
+
+    /// <summary>The order a package belongs to (reference: the admin_open_return order lookup).</summary>
+    public Task<OrderModel?> OrderForSubAsync(Guid subOrderId) =>
+        db.QueryFirstOrDefaultAsync<OrderModel>(
+            "SELECT o.* FROM orders o JOIN sub_orders s ON s.order_id = o.id WHERE s.id = @subOrderId", new { subOrderId });
+
     public Task<int> InsertReturnAsync(ReturnRequestModel r, IUnitOfWork uow) =>
         uow.ExecuteAsync(
             """

@@ -61,6 +61,19 @@ public interface IDeliveryFleetBAL
     /// <summary>A return pickup as one viewer sees it (reference: pickup_tracking).</summary>
     Task<JsonObject?> PickupTrackingAsync(ReturnRequestModel ret, string viewer, IUnitOfWork? uow = null);
 
+    /// <summary>The partner hands a package back to the seller (reference: POST /api/delivery/trips/{id}/returned).</summary>
+    Task<JsonObject> ReturnedAsync(UserModel user, Guid assignmentId, string code, decimal? lat, decimal? lng);
+
+    /// <summary>Offer or assign a return pickup to a chosen partner (reference: delivery_admin assign_pickup).</summary>
+    Task<JsonArray> ReturnCandidatesAsync(UserModel admin, Guid returnId);
+    Task<JsonObject> AssignPickupByStaffAsync(UserModel admin, Guid returnId, Guid partnerId, bool direct, bool force);
+
+    /// <summary>Run auto-assignment for a return pickup now (reference: delivery_admin auto_assign_pickup).</summary>
+    Task<JsonObject> AutoAssignPickupByStaffAsync(UserModel admin, Guid returnId);
+
+    /// <summary>The seller arranges the pickup instead (reference: delivery_admin pickup_by_courier).</summary>
+    Task<JsonObject> PickupToCourierByStaffAsync(UserModel admin, Guid returnId);
+
     Task SweepExpiredAsync();
     Task ReleaseAsync(Guid subOrderId, string why);
     Task<JsonObject> PickupPlaceForAsync(SubOrderModel sub);

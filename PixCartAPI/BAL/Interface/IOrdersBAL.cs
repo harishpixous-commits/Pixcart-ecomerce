@@ -82,6 +82,10 @@ public interface IOrdersBAL
     /// <summary>What cash the delivery collects at the door for this package (reference: collect_amount).</summary>
     Task<long> CollectAmountAsync(SubOrderModel sub, OrderModel order, IUnitOfWork uow);
 
+    /// <summary>Cancels one package with stock release and refund row; returns the refund row to process after
+    /// commit when one was created (reference: orders.cancel_sub_order).</summary>
+    Task<RefundModel?> CancelSubOrderAsync(SubOrderModel sub, string actor, string reason, IUnitOfWork uow);
+
     /// <summary>confirm / pack (reference: _act). ship/deliver arrive with their invoice/payout companions.</summary>
     Task<JsonObject> SellerDashboardAsync(SellerModel seller);
 
