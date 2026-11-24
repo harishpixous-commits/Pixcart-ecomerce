@@ -264,6 +264,17 @@ public abstract class CatalogTestBase(CatalogFactory factory) : IAsyncLifetime
 
     protected async Task<Api> Admin() => await User("9000000000", "Admin", admin: true);
 
+    /// <summary>The reference tests' setup(): two sellers (Tamil Nadu, Karnataka), a shirt and a phone, both live.</summary>
+    protected async Task<(S Tn, S Ka, P Shirt, P Phone, Dictionary<string, Guid> Cats)> SetupAsync()
+    {
+        var cats = await Seed.CategoriesAsync();
+        var tn = await Seed.SellerAsync("9400000001", "Kovai Textiles", "33");
+        var ka = await Seed.SellerAsync("9400000002", "Mysuru Mart", "29", "Mysuru", "570001");
+        var shirt = await Seed.ProductAsync(tn, cats["shirts"], "Handloom Cotton Shirt Blue", [new("HL-1", 200000, 100000, 10)]);
+        var phone = await Seed.ProductAsync(ka, cats["mobiles"], "Feature Phone Dual SIM", [new("FP-1", 150000, 120000, 10)]);
+        return (tn, ka, shirt, phone, cats);
+    }
+
     protected Task Sql(string sql, object? args = null) => Seed.ExecAsync(sql, args);
 
     protected Task<T?> Scalar<T>(string sql, object? args = null) => Seed.ScalarAsync<T>(sql, args);

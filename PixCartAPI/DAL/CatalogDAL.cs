@@ -358,7 +358,7 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
             "rating" => "p.rating_avg DESC, p.rating_count DESC, p.id",
             "discount" => "(p.mrp_from - p.price_from) * 100 / NULLIF(p.mrp_from, 0) DESC, p.id",
             "popular" => "p.sold_count DESC, p.id",
-            _ => $"p.in_stock DESC, {Rank(f, p)} DESC, p.sold_count DESC, p.id",
+            _ => f.Text.Length > 0 ? $"p.in_stock DESC, {Rank(f, p)} DESC, p.sold_count DESC, p.id" : "p.in_stock DESC, p.sold_count DESC, p.id",
         };
         p.Add("take", take);
         p.Add("skip", skip);

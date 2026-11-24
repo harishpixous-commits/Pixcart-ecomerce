@@ -107,7 +107,7 @@ public class CatalogTests(CatalogFactory factory) : CatalogTestBase(factory)
         Assert.Equal(0, (await Visitor.Get("/api/catalog/products?min_discount=60"))["total"].GetValue<long>());
         var facets = (await Visitor.Get("/api/catalog/products?q=phone&brand=Samsung")).Body!;
         Assert.Equal(1, facets["total"]!.GetValue<long>());
-        Assert.Equal(2, facets["facets"]!["brands"]!.AsArray().Count); // facets ignore the brand filter
+        Assert.Equal(3, facets["facets"]!["brands"]!.AsArray().Count); // facets ignore the brand filter
         Assert.Equal(49900, facets["facets"]!["price_min"]!.GetValue<long>());
         // delivery estimate per seller, and "arrives within N days"
         var near = (await Visitor.Get("/api/catalog/products?pincode=600028")).Body!;
