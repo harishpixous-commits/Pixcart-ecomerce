@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Dapper" Version="2.1.100" />
     <PackageReference Include="FluentFTP" Version="55.1.0" />
     <PackageReference Include="MailKit" Version="5.0.0" />
