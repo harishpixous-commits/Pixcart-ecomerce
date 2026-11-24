@@ -21,8 +21,17 @@ public static class DateTimeFunctions
 
     public static DateTime IstToUtc(DateTime ist) => TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(ist, DateTimeKind.Unspecified), Ist);
 
-    /// <summary>ISO 8601 with offset, as the reference API sends times ("2026-11-23T10:15:00.123456+00:00").</summary>
-    public static string Iso(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'+00:00'");
+    /// <summary>
+    /// ISO 8601 with offset exactly like the reference API (Python isoformat): "2026-11-23T10:15:00.123456+00:00", and
+    /// without the fraction when it is zero ("2026-11-23T10:15:00+00:00").
+    /// </summary>
+    public static string Iso(DateTime utc)
+    {
+        var t = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return t.Ticks % TimeSpan.TicksPerSecond / 10 == 0
+            ? t.ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'")
+            : t.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'+00:00'");
+    }
 
     public static string? Iso(DateTime? utc) => utc.HasValue ? Iso(utc.Value) : null;
 }
