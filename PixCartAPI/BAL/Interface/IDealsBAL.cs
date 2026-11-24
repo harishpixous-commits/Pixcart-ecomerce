@@ -20,4 +20,25 @@ public interface IDealsBAL : IDealSync
     /// <summary>A version row locked inside the order's transaction (reference: the variant FOR UPDATE in
     /// _release_stock).</summary>
     Task<VariantModel?> VariantForUpdateAsync(Guid variantId, IUnitOfWork uow);
+
+    // ------------------------------------------------------------------ seller / admin surfaces
+
+    /// <summary>Reference: seller_deals — the seller's deals with counts and the feature rules.</summary>
+    Task<System.Text.Json.Nodes.JsonObject> SellerListAsync(SellerModel seller, string? status);
+
+    /// <summary>Reference: seller_deal_options — the seller's live products and versions for the new-deal form.</summary>
+    Task<System.Text.Json.Nodes.JsonObject> SellerOptionsAsync(SellerModel seller, string q);
+
+    /// <summary>Reference: deals.create — validates and inserts a deal; returns its id.</summary>
+    Task<Guid> CreateAsync(SellerModel seller, UserModel user, Guid variantId, string kind, long dealPrice,
+        DateTime startsAt, DateTime endsAt, int? qtyLimit);
+
+    /// <summary>Reference: seller_cancel_deal.</summary>
+    Task SellerCancelAsync(SellerModel seller, UserModel user, Guid dealId);
+
+    /// <summary>Reference: admin_deals.</summary>
+    Task<System.Text.Json.Nodes.JsonObject> AdminListAsync(UserModel admin, string? status, string q, int page);
+
+    /// <summary>Reference: admin_deal_action — approve, reject or cancel a deal.</summary>
+    Task<System.Text.Json.Nodes.JsonObject> AdminActionAsync(UserModel admin, Guid dealId, string action, string reason);
 }
