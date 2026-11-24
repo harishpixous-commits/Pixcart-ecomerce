@@ -46,4 +46,28 @@ public class AssistantUploadTests(ApiFactory f):ApiTest(f)
         Assert.Equal("7",r.Json["columns"]![0]!["sum"]!.GetValue<string>());Assert.Equal("1900-01-01T00:00:00",r.Json["first_rows"]![0]!["Date"]!.GetValue<string>());
         Assert.Equal(1,r.Json["rows"]!.GetValue<int>());
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Excel_time_duration_epoch_and_millisecond_values_match_reference(bool epoch1904)
+    {
+        var admin = await Admin();
+        using var memory = new MemoryStream();
+        using (var zip = new ZipArchive(memory, ZipArchiveMode.Create, true))
+        {
+            void Entry(string path, string content) { using var w = new StreamWriter(zip.CreateEntry(path).Open()); w.Write(content); }
+            Entry("xl/workbook.xml", "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><workbookPr date1904=\"" + (epoch1904 ? "1" : "0") + "\"/><sheets><sheet name=\"Synthetic\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+            Entry("xl/_rels/workbook.xml.rels", "<Relationships><Relationship Id=\"rId1\" Target=\"worksheets/sheet1.xml\"/></Relationships>");
+            Entry("xl/styles.xml", "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><numFmts><numFmt numFmtId=\"164\" formatCode=\"[h]:mm:ss\"/></numFmts><cellXfs><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/><xf numFmtId=\"20\"/><xf numFmtId=\"164\"/></cellXfs></styleSheet>");
+            Entry("xl/worksheets/sheet1.xml", "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Value</t></is></c></row><row r=\"2\"><c r=\"A2\" s=\"2\"><v>0.5</v></c></row><row r=\"3\"><c r=\"A3\" s=\"3\"><v>1.5</v></c></row><row r=\"4\"><c r=\"A4\" s=\"1\"><v>1</v></c></row><row r=\"5\"><c r=\"A5\" s=\"1\"><v>1.12345678</v></c></row><row r=\"6\"><c r=\"A6\" s=\"3\"><v>-0.5</v></c></row></sheetData></worksheet>");
+        }
+        var r = await admin.Post("/api/admin/assistant/uploads", File("time.xlsx", memory.ToArray()));
+        Assert.True(r.Status == 201, r.ToString());
+        var rows = r.Json["first_rows"]!;
+        Assert.Equal("12:00:00", rows[0]!["Value"]!.GetValue<string>());
+        Assert.Equal("1 day, 12:00:00", rows[1]!["Value"]!.GetValue<string>());
+        Assert.Equal(epoch1904 ? "1904-01-02T00:00:00" : "1900-01-01T00:00:00", rows[2]!["Value"]!.GetValue<string>());
+        Assert.Equal(epoch1904 ? "1904-01-02T02:57:46.666000" : "1900-01-01T02:57:46.666000", rows[3]!["Value"]!.GetValue<string>());
+        Assert.Equal("-1 day, 12:00:00", rows[4]!["Value"]!.GetValue<string>());
+    }
 }
