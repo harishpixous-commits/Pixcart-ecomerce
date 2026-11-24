@@ -143,6 +143,197 @@ public class AdsDAL(IMySqlDapperHelper db)
     public Task EndCampaignAsync(Guid campaignId, string note, IUnitOfWork uow) =>
         uow.ExecuteAsync("UPDATE ad_campaigns SET status = 'ended', note = @note WHERE id = @campaignId", new { campaignId, note });
 
+    // ------------------------------------------------------------------ seller / shared reporting
+
+    public class CampaignFullRow
+    {
+        public Guid Id { get; set; }
+        public Guid SellerId { get; set; }
+        public string Name { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string PlacementsJson { get; set; } = "[]";
+        public string KeywordsJson { get; set; } = "[]";
+        public long BidPaise { get; set; }
+        public long DailyBudgetPaise { get; set; }
+        public long? TotalBudgetPaise { get; set; }
+        public DateTime StartsAt { get; set; }
+        public DateTime? EndsAt { get; set; }
+        public long SpendPaise { get; set; }
+        public string Note { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+    }
+
+    private const string CampaignCols =
+        "id, seller_id, name, status, CAST(placements AS CHAR) AS placements_json, CAST(keywords AS CHAR) AS keywords_json, " +
+        "bid_paise, daily_budget_paise, total_budget_paise, starts_at, ends_at, spend_paise, note, created_at";
+
+    /// <summary>A seller's campaigns, newest first (reference: seller_ads).</summary>
+    public Task<IEnumerable<CampaignFullRow>> CampaignsForSellerAsync(Guid sellerId) =>
+        db.QueryAsync<CampaignFullRow>($"SELECT {CampaignCols} FROM ad_campaigns WHERE seller_id = @sellerId ORDER BY created_at DESC", new { sellerId });
+
+    public Task<CampaignFullRow?> CampaignForUpdateAsync(Guid id, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<CampaignFullRow>($"SELECT {CampaignCols} FROM ad_campaigns WHERE id = @id FOR UPDATE", new { id });
+
+    public class CampaignProductRow
+    {
+        public Guid CampaignId { get; set; }
+        public Guid ProductId { get; set; }
+        public string Title { get; set; } = "";
+        public string Slug { get; set; } = "";
+    }
+
+    /// <summary>Products of the given campaigns with titles (reference: _campaign_products).</summary>
+    public Task<IEnumerable<CampaignProductRow>> CampaignProductsAsync(IReadOnlyList<Guid> campaignIds) =>
+        campaignIds.Count == 0
+            ? Task.FromResult(Enumerable.Empty<CampaignProductRow>())
+            : db.QueryAsync<CampaignProductRow>(
+                "SELECT cp.campaign_id, p.id AS product_id, p.title, p.slug FROM ad_campaign_products cp JOIN products p ON p.id = cp.product_id WHERE cp.campaign_id IN @campaignIds",
+                new { campaignIds });
+
+    /// <summary>Approved products the seller owns, of the given ids (reference: _check_campaign ownership check).</summary>
+    public async Task<HashSet<Guid>> OwnedApprovedProductIdsAsync(Guid sellerId, IReadOnlyList<Guid> ids) =>
+        ids.Count == 0
+            ? []
+            : (await db.QueryAsync<Guid>("SELECT id FROM products WHERE id IN @ids AND seller_id = @sellerId AND status = 'approved'",
+                new { ids, sellerId })).ToHashSet();
+
+    /// <summary>The seller's approved products for the picker (reference: seller_ads_products).</summary>
+    public Task<IEnumerable<ProductModel>> SellerApprovedProductsAsync(Guid sellerId) =>
+        db.QueryAsync<ProductModel>(
+            "SELECT * FROM products WHERE seller_id = @sellerId AND status = 'approved' ORDER BY title LIMIT 300", new { sellerId });
+
+    public class SpentRow
+    {
+        public Guid CampaignId { get; set; }
+        public long Spent { get; set; }
+    }
+
+    public async Task<Dictionary<Guid, long>> SpentTodayMapAsync(IReadOnlyList<Guid> campaignIds, DateTime day) =>
+        campaignIds.Count == 0
+            ? []
+            : (await db.QueryAsync<SpentRow>(
+                "SELECT campaign_id, COALESCE(SUM(spend_paise), 0) AS spent FROM ad_stats " +
+                "WHERE campaign_id IN @campaignIds AND day = @day GROUP BY campaign_id", new { campaignIds, day }))
+                .ToDictionary(r => r.CampaignId, r => r.Spent);
+
+    public class StatsRow
+    {
+        public Guid CampaignId { get; set; }
+        public long Impressions { get; set; }
+        public long Clicks { get; set; }
+        public long InvalidClicks { get; set; }
+        public long Spend { get; set; }
+    }
+
+    /// <summary>Lifetime or date-bounded counters per campaign (reference: ads.campaign_report stats part).</summary>
+    public Task<IEnumerable<StatsRow>> CampaignStatsAsync(IReadOnlyList<Guid> campaignIds, DateTime? since) =>
+        campaignIds.Count == 0
+            ? Task.FromResult(Enumerable.Empty<StatsRow>())
+            : db.QueryAsync<StatsRow>(
+                "SELECT campaign_id, COALESCE(SUM(impressions), 0) AS impressions, COALESCE(SUM(clicks), 0) AS clicks, " +
+                "COALESCE(SUM(invalid_clicks), 0) AS invalid_clicks, COALESCE(SUM(spend_paise), 0) AS spend " +
+                $"FROM ad_stats WHERE campaign_id IN @campaignIds{(since is null ? "" : " AND day >= @since")} GROUP BY campaign_id",
+                new { campaignIds, since });
+
+    public class SalesRow
+    {
+        public Guid CampaignId { get; set; }
+        public long Orders { get; set; }
+        public long Sales { get; set; }
+    }
+
+    /// <summary>Attributed orders and sales per campaign (reference: ads.campaign_report attribution part, 7 days).</summary>
+    public Task<IEnumerable<SalesRow>> CampaignSalesAsync(IReadOnlyList<Guid> campaignIds) =>
+        campaignIds.Count == 0
+            ? Task.FromResult(Enumerable.Empty<SalesRow>())
+            : db.QueryAsync<SalesRow>(
+                "SELECT k.campaign_id, COUNT(DISTINCT o.id) AS orders, COALESCE(SUM(oi.line_total), 0) AS sales " +
+                "FROM ad_clicks k " +
+                "JOIN orders o ON o.user_id = k.user_id AND o.created_at >= k.created_at AND o.created_at <= k.created_at + INTERVAL 7 DAY " +
+                "JOIN sub_orders so ON so.order_id = o.id " +
+                "JOIN order_items oi ON oi.sub_order_id = so.id AND oi.product_id = k.product_id " +
+                "WHERE k.campaign_id IN @campaignIds AND k.user_id IS NOT NULL " +
+                "AND so.status IN ('placed','confirmed','packed','shipped','delivered') GROUP BY k.campaign_id",
+                new { campaignIds });
+
+    public class LedgerRow
+    {
+        public long Amount { get; set; }
+        public string Description { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+    }
+
+    /// <summary>Recent ad-spend ledger entries (reference: seller_ads billing).</summary>
+    public Task<IEnumerable<LedgerRow>> AdSpendLedgerAsync(Guid sellerId) =>
+        db.QueryAsync<LedgerRow>(
+            "SELECT amount, description, created_at FROM seller_ledger WHERE seller_id = @sellerId AND kind = 'ad_spend' ORDER BY created_at DESC LIMIT 10",
+            new { sellerId });
+
+    public Task InsertCampaignAsync(Guid id, Guid sellerId, string name, string status, string placementsJson, string keywordsJson,
+        long bid, long daily, long? total, DateTime startsAt, DateTime? endsAt, DateTime now, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "INSERT INTO ad_campaigns (id, seller_id, name, status, placements, keywords, bid_paise, daily_budget_paise, " +
+            "total_budget_paise, starts_at, ends_at, spend_paise, note, created_at, updated_at) " +
+            "VALUES (@id, @sellerId, @name, @status, CAST(@placementsJson AS JSON), CAST(@keywordsJson AS JSON), @bid, @daily, " +
+            "@total, @startsAt, @endsAt, 0, '', @now, @now)",
+            new { id, sellerId, name, status, placementsJson, keywordsJson, bid, daily, total, startsAt, endsAt, now });
+
+    /// <summary>Full update of a campaign's editable fields (reference: seller_update_campaign).</summary>
+    public Task UpdateCampaignAsync(Guid id, string name, string placementsJson, string keywordsJson, long bid, long daily,
+        long? total, DateTime startsAt, DateTime? endsAt, string status, string note, DateTime now, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE ad_campaigns SET name = @name, placements = CAST(@placementsJson AS JSON), keywords = CAST(@keywordsJson AS JSON), " +
+            "bid_paise = @bid, daily_budget_paise = @daily, total_budget_paise = @total, starts_at = @startsAt, " +
+            "ends_at = @endsAt, status = @status, note = @note, updated_at = @now WHERE id = @id",
+            new { id, name, placementsJson, keywordsJson, bid, daily, total, startsAt, endsAt, status, note, now });
+
+    /// <summary>Replace the campaign's products (reference: _set_products).</summary>
+    public async Task SetCampaignProductsAsync(Guid campaignId, IReadOnlyList<Guid> productIds, IUnitOfWork uow)
+    {
+        await uow.ExecuteAsync("DELETE FROM ad_campaign_products WHERE campaign_id = @campaignId", new { campaignId });
+        foreach (var pid in productIds.Distinct())
+            await uow.ExecuteAsync("INSERT INTO ad_campaign_products (campaign_id, product_id) VALUES (@campaignId, @pid)", new { campaignId, pid });
+    }
+
+    public Task SetCampaignStatusAsync(Guid id, string status, string note, DateTime now, IUnitOfWork uow) =>
+        uow.ExecuteAsync("UPDATE ad_campaigns SET status = @status, note = @note, updated_at = @now WHERE id = @id",
+            new { id, status, note, now });
+
+    public class DayStatsRow
+    {
+        public DateTime Day { get; set; }
+        public long Impressions { get; set; }
+        public long Clicks { get; set; }
+        public long InvalidClicks { get; set; }
+        public long Spend { get; set; }
+    }
+
+    /// <summary>Per-day counters for one campaign (reference: seller_campaign_report by_day).</summary>
+    public Task<IEnumerable<DayStatsRow>> ReportByDayAsync(Guid campaignId, DateTime since) =>
+        db.QueryAsync<DayStatsRow>(
+            "SELECT day, COALESCE(SUM(impressions), 0) AS impressions, COALESCE(SUM(clicks), 0) AS clicks, " +
+            "COALESCE(SUM(invalid_clicks), 0) AS invalid_clicks, COALESCE(SUM(spend_paise), 0) AS spend " +
+            "FROM ad_stats WHERE campaign_id = @campaignId AND day >= @since GROUP BY day ORDER BY day",
+            new { campaignId, since });
+
+    public class ProductStatsRow
+    {
+        public string Title { get; set; } = "";
+        public long Impressions { get; set; }
+        public long Clicks { get; set; }
+        public long InvalidClicks { get; set; }
+        public long Spend { get; set; }
+    }
+
+    /// <summary>Per-product counters for one campaign (reference: seller_campaign_report by_product).</summary>
+    public Task<IEnumerable<ProductStatsRow>> ReportByProductAsync(Guid campaignId, DateTime since) =>
+        db.QueryAsync<ProductStatsRow>(
+            "SELECT p.title, COALESCE(SUM(s.impressions), 0) AS impressions, COALESCE(SUM(s.clicks), 0) AS clicks, " +
+            "COALESCE(SUM(s.invalid_clicks), 0) AS invalid_clicks, COALESCE(SUM(s.spend_paise), 0) AS spend " +
+            "FROM ad_stats s JOIN products p ON p.id = s.product_id " +
+            "WHERE s.campaign_id = @campaignId AND s.day >= @since GROUP BY p.title ORDER BY SUM(s.clicks) DESC",
+            new { campaignId, since });
+
     /// <summary>Reference: ads_claim — link a recent unclaimed click to the signed-in shopper.</summary>
     public Task ClaimClickAsync(Guid clickId, Guid userId, DateTime cutoff) =>
         db.ExecuteAsync("UPDATE ad_clicks SET user_id = @userId WHERE id = @clickId AND user_id IS NULL AND created_at > @cutoff",

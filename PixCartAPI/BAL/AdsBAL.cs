@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,7 +16,7 @@ namespace BAL;
 /// click still opens the product, is free and counts as invalid.
 /// </summary>
 public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimitBAL rateLimit, ICatalogBAL catalog,
-    IMySqlDapperHelper db, AppSettings app) : IAdsBAL
+    IMySqlDapperHelper db, AppSettings app, CatalogDAL catalogDb, AuditDAL audit) : IAdsBAL
 {
     public static readonly IReadOnlyDictionary<string, string> Placements = new Dictionary<string, string>
     {
@@ -216,4 +217,215 @@ public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimi
 
     public Task ClaimAsync(Guid clickId, Guid userId) =>
         ads.ClaimClickAsync(clickId, userId, DateTimeFunctions.UtcNow().AddHours(-2));
+
+    // ------------------------------------------------------------------ seller
+
+    /// <summary>Reference: _ads_rules.</summary>
+    private static JsonObject Rules(JsonObject cfg) => new()
+    {
+        ["enabled"] = cfg.Bool("feature_ads"), ["need_approval"] = cfg.Bool("ads_need_approval"),
+        ["min_bid_paise"] = cfg.Long("ads_min_bid_paise"), ["min_daily_budget_paise"] = cfg.Long("ads_min_daily_budget_paise"),
+        ["gst_bps"] = cfg.Long("commission_gst_bps"),
+        ["placements"] = new JsonObject(Placements.Select(kv =>
+            new KeyValuePair<string, JsonNode?>(kv.Key, new JsonObject { ["label"] = kv.Value, ["enabled"] = cfg.Bool($"ads_{kv.Key}") })).ToArray()),
+        ["attribution_days"] = 7, ["link_hours"] = 48,
+        ["paid_clicks_per_address"] = cfg.Int("ads_paid_clicks_per_address"),
+        ["paid_clicks_per_network"] = cfg.Int("ads_paid_clicks_per_network"),
+    };
+
+    private async Task<JsonObject> CampaignOutAsync(AdsDAL.CampaignFullRow c, Dictionary<Guid, List<AdsDAL.CampaignProductRow>> productsByCampaign,
+        Dictionary<Guid, AdsDAL.StatsRow> stats, Dictionary<Guid, (long Orders, long Sales)> sales, Dictionary<Guid, long> spentToday)
+    {
+        var prods = productsByCampaign.GetValueOrDefault(c.Id) ?? [];
+        var imgs = await catalogDb.ImagesForAsync(prods.Select(p => p.ProductId));
+        var st = stats.GetValueOrDefault(c.Id);
+        var sa = sales.GetValueOrDefault(c.Id);
+        var statsJson = st is null
+            ? new JsonObject { ["impressions"] = 0, ["clicks"] = 0, ["invalid_clicks"] = 0, ["spend"] = 0, ["orders"] = 0, ["sales"] = 0, ["ctr"] = 0.0, ["acos"] = null }
+            : new JsonObject
+            {
+                ["impressions"] = st.Impressions, ["clicks"] = st.Clicks, ["invalid_clicks"] = st.InvalidClicks,
+                ["spend"] = st.Spend, ["orders"] = sa.Orders, ["sales"] = sa.Sales,
+                ["ctr"] = st.Impressions > 0 ? Math.Round(100.0 * st.Clicks / st.Impressions, 2) : 0.0,
+                ["acos"] = sa.Sales > 0 ? Math.Round(100.0 * st.Spend / (double)sa.Sales, 1) : null,
+            };
+        return new JsonObject
+        {
+            ["id"] = c.Id.ToString(), ["name"] = c.Name, ["status"] = c.Status, ["note"] = c.Note,
+            ["placements"] = JsonNode.Parse(c.PlacementsJson), ["keywords"] = JsonNode.Parse(c.KeywordsJson),
+            ["bid_paise"] = c.BidPaise, ["daily_budget_paise"] = c.DailyBudgetPaise, ["total_budget_paise"] = c.TotalBudgetPaise,
+            ["starts_at"] = c.StartsAt.ToString("yyyy-MM-ddTHH:mm:ss"), ["ends_at"] = c.EndsAt?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            ["spend_paise"] = c.SpendPaise, ["spent_today_paise"] = spentToday.GetValueOrDefault(c.Id),
+            ["products"] = new JsonArray(prods.Select(p => (JsonNode)new JsonObject
+            {
+                ["id"] = p.ProductId.ToString(), ["title"] = p.Title, ["slug"] = p.Slug,
+                ["image"] = imgs.GetValueOrDefault(p.ProductId)?.FirstOrDefault() ?? "",
+            }).ToArray()),
+            ["stats"] = statsJson,
+            ["created_at"] = c.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+        };
+    }
+
+    /// <summary>Reference: _campaigns_out.</summary>
+    private async Task<List<JsonObject>> CampaignsOutAsync(List<AdsDAL.CampaignFullRow> campaigns, DateTime? since = null)
+    {
+        var ids = campaigns.Select(c => c.Id).ToList();
+        var products = (await ads.CampaignProductsAsync(ids)).GroupBy(p => p.CampaignId).ToDictionary(g => g.Key, g => g.ToList());
+        var stats = (await ads.CampaignStatsAsync(ids, since)).ToDictionary(s => s.CampaignId);
+        var sales = (await ads.CampaignSalesAsync(ids)).ToDictionary(s => s.CampaignId, s => (s.Orders, s.Sales));
+        var today = await ads.SpentTodayMapAsync(ids, TodayIst());
+        var outp = new List<JsonObject>();
+        foreach (var c in campaigns) outp.Add(await CampaignOutAsync(c, products, stats, sales, today));
+        return outp;
+    }
+
+    public async Task<JsonObject> SellerListAsync(SellerModel seller)
+    {
+        var cfg = await platform.GetAsync();
+        var campaigns = (await ads.CampaignsForSellerAsync(seller.Id)).ToList();
+        var items = await CampaignsOutAsync(campaigns);
+        var since = TodayIst().AddDays(-29);
+        var report = (await ads.CampaignStatsAsync(campaigns.Select(c => c.Id).ToList(), since)).ToList();
+        var sales = (await ads.CampaignSalesAsync(campaigns.Select(c => c.Id).ToList())).ToList();
+        var totals = new JsonObject
+        {
+            ["impressions"] = report.Sum(r => r.Impressions), ["clicks"] = report.Sum(r => r.Clicks),
+            ["invalid_clicks"] = report.Sum(r => r.InvalidClicks), ["spend"] = report.Sum(r => r.Spend),
+            ["orders"] = sales.Sum(r => r.Orders), ["sales"] = sales.Sum(r => r.Sales),
+        };
+        var totalSpend = report.Sum(r => r.Spend);
+        var totalSales = sales.Sum(r => r.Sales);
+        totals["acos"] = totalSales > 0 ? Math.Round(100.0 * totalSpend / totalSales, 1) : null;
+        var billing = await ads.AdSpendLedgerAsync(seller.Id);
+        return new JsonObject
+        {
+            ["campaigns"] = new JsonArray(items.Select(i => (JsonNode)i).ToArray()),
+            ["rules"] = Rules(cfg),
+            ["totals_30d"] = totals,
+            ["billing"] = new JsonArray(billing.Select(e => (JsonNode)new JsonObject
+            {
+                ["amount"] = e.Amount, ["description"] = e.Description, ["at"] = e.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+            }).ToArray()),
+        };
+    }
+
+    public async Task<List<JsonObject>> SellerProductsAsync(SellerModel seller)
+    {
+        var rows = (await ads.SellerApprovedProductsAsync(seller.Id)).ToList();
+        var imgs = await catalogDb.ImagesForAsync(rows.Select(r => r.Id));
+        return rows.Select(p => new JsonObject
+        {
+            ["id"] = p.Id.ToString(), ["title"] = p.Title, ["image"] = imgs.GetValueOrDefault(p.Id)?.FirstOrDefault() ?? "",
+            ["price"] = p.PriceFrom, ["in_stock"] = p.InStock, ["rating_avg"] = (double)p.RatingAvg,
+        }).ToList();
+    }
+
+    /// <summary>Reference: _check_campaign.</summary>
+    private async Task CheckCampaignAsync(SellerModel seller, CampaignBody body, JsonObject cfg)
+    {
+        if (!cfg.Bool("feature_ads"))
+            throw new AppException("Sponsored products are switched off on this marketplace", "ads_off", 400);
+        if (body.BidPaise < cfg.Long("ads_min_bid_paise"))
+            throw new AppException($"Bid at least ₹{cfg.Long("ads_min_bid_paise") / 100.0:0.00} per click", "bid_too_low", 400);
+        if (body.DailyBudgetPaise < cfg.Long("ads_min_daily_budget_paise"))
+            throw new AppException($"Set a daily budget of at least ₹{cfg.Long("ads_min_daily_budget_paise") / 100:0}", "budget_too_low", 400);
+        var owned = await ads.OwnedApprovedProductIdsAsync(seller.Id, body.ProductIds.Distinct().ToList());
+        if (owned.Count != body.ProductIds.Distinct().Count())
+            throw new AppException("Choose your own live products", "invalid_products", 400);
+    }
+
+    /// <summary>Reference: CampaignIn keywords validator — lowercase, collapse spaces, <= 40 chars, >= 2 chars, unique.</summary>
+    private static List<string> CleanKeywords(IEnumerable<string> keywords)
+    {
+        var outp = new List<string>();
+        foreach (var raw in keywords)
+        {
+            var k = string.Join(' ', raw.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            if (k.Length > 40) k = k[..40];
+            if (k.Length >= 2 && !outp.Contains(k)) outp.Add(k);
+        }
+        return outp;
+    }
+
+    public async Task<JsonObject> SellerUpsertAsync(SellerModel seller, UserModel user, CampaignBody body, Guid? campaignId)
+    {
+        var cfg = await platform.GetAsync();
+        var keywords = CleanKeywords(body.Keywords);
+        var placements = body.Placements.Distinct().ToList();
+        await CheckCampaignAsync(seller, body, cfg);
+        var now = DateTimeFunctions.UtcNow();
+        var keywordsJson = System.Text.Json.JsonSerializer.Serialize(keywords);
+        var placementsJson = System.Text.Json.JsonSerializer.Serialize(placements);
+        Guid id;
+        await using var uow = await db.BeginAsync();
+        if (campaignId is null)
+        {
+            id = Guid.NewGuid();
+            var status = cfg.Bool("ads_need_approval") ? "pending" : "active";
+            await ads.InsertCampaignAsync(id, seller.Id, body.Name.Trim(), status, placementsJson, keywordsJson,
+                body.BidPaise, body.DailyBudgetPaise, body.TotalBudgetPaise, body.StartsAt ?? now, body.EndsAt, now, uow);
+            await ads.SetCampaignProductsAsync(id, body.ProductIds, uow);
+            await audit.InsertAsync(new AuditLogModel { ActorUserId = user.Id, Action = "ads.create", EntityType = "ad_campaign", EntityId = id.ToString(), Detail = body.Name.Trim(), CreatedAt = now, Id = Guid.NewGuid() }, uow.Transaction);
+        }
+        else
+        {
+            var c = await ads.CampaignForUpdateAsync(campaignId.Value, uow);
+            if (c is null || c.SellerId != seller.Id) throw new NotFoundException("Campaign");
+            if (c.Status == "ended") throw new ConflictException("This campaign has ended; create a new one");
+            var before = (await ads.CampaignProductsAsync([c.Id])).Select(p => p.ProductId).ToHashSet();
+            var targetingChanged = !before.SetEquals(body.ProductIds) ||
+                System.Text.Json.JsonSerializer.Deserialize<List<string>>(c.KeywordsJson)!.SequenceEqual(keywords) == false;
+            var status = c.Status;
+            var note = c.Note;
+            if (status == "rejected" || (targetingChanged && cfg.Bool("ads_need_approval") && status == "active"))
+                (status, note) = ("pending", "");
+            await ads.UpdateCampaignAsync(c.Id, body.Name.Trim(), placementsJson, keywordsJson, body.BidPaise, body.DailyBudgetPaise,
+                body.TotalBudgetPaise, body.StartsAt ?? c.StartsAt, body.EndsAt, status, note, now, uow);
+            await ads.SetCampaignProductsAsync(c.Id, body.ProductIds, uow);
+            await audit.InsertAsync(new AuditLogModel { ActorUserId = user.Id, Action = "ads.update", EntityType = "ad_campaign", EntityId = c.Id.ToString(), Detail = body.Name.Trim(), CreatedAt = now, Id = Guid.NewGuid() }, uow.Transaction);
+            id = c.Id;
+        }
+        await uow.CommitAsync();
+        return (await CampaignsOutAsync([(await ads.CampaignsForSellerAsync(seller.Id)).First(c => c.Id == id)]))[0];
+    }
+
+    public async Task<JsonObject> SellerActionAsync(SellerModel seller, UserModel user, Guid campaignId, string action)
+    {
+        var now = DateTimeFunctions.UtcNow();
+        await using var uow = await db.BeginAsync();
+        var c = await ads.CampaignForUpdateAsync(campaignId, uow);
+        if (c is null || c.SellerId != seller.Id) throw new NotFoundException("Campaign");
+        string status;
+        var note = c.Note;
+        if (action == "pause" && c.Status == "active") status = "paused";
+        else if (action == "resume" && c.Status == "paused") status = "active";
+        else if (action == "end" && c.Status is "pending" or "active" or "paused") { status = "ended"; note = "Ended by the seller"; }
+        else throw new AppException($"A {c.Status} campaign cannot be {action}d", "invalid_status", 409);
+        await ads.SetCampaignStatusAsync(c.Id, status, note, now, uow);
+        await audit.InsertAsync(new AuditLogModel { ActorUserId = user.Id, Action = $"ads.{action}", EntityType = "ad_campaign", EntityId = c.Id.ToString(), Detail = "", CreatedAt = now, Id = Guid.NewGuid() }, uow.Transaction);
+        await uow.CommitAsync();
+        return new JsonObject { ["ok"] = true, ["status"] = status };
+    }
+
+    public async Task<JsonObject> SellerReportAsync(SellerModel seller, Guid campaignId, int days)
+    {
+        var campaigns = (await ads.CampaignsForSellerAsync(seller.Id)).ToList();
+        var c = campaigns.FirstOrDefault(x => x.Id == campaignId) ?? throw new NotFoundException("Campaign");
+        var since = TodayIst().AddDays(-(days - 1));
+        var byDay = await ads.ReportByDayAsync(c.Id, since);
+        var byProduct = await ads.ReportByProductAsync(c.Id, since);
+        return new JsonObject
+        {
+            ["days"] = new JsonArray(byDay.Select(d => (JsonNode)new JsonObject
+            {
+                ["day"] = d.Day.ToString("yyyy-MM-dd"), ["impressions"] = d.Impressions, ["clicks"] = d.Clicks,
+                ["invalid_clicks"] = d.InvalidClicks, ["spend"] = d.Spend,
+            }).ToArray()),
+            ["products"] = new JsonArray(byProduct.Select(p => (JsonNode)new JsonObject
+            {
+                ["title"] = p.Title, ["impressions"] = p.Impressions, ["clicks"] = p.Clicks,
+                ["invalid_clicks"] = p.InvalidClicks, ["spend"] = p.Spend,
+            }).ToArray()),
+        };
+    }
 }
