@@ -34,6 +34,7 @@ public class AssistantActionsBAL(
     ICouponAdminBAL coupons,
     IReviewModerationBAL reviews,
     ISupportDeskBAL supportDesk,
+    ISiteBAL site,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan ExpiresAfter = TimeSpan.FromMinutes(30);
@@ -59,6 +60,7 @@ public class AssistantActionsBAL(
         ["set_coupon_active"] = ("Switch a coupon on or off", "marketing", ["coupon_id"]),
         ["moderate_review"] = ("Publish or hide a review", "catalog", ["review_id", "decision"]),
         ["reply_ticket"] = ("Reply to a support ticket", "support", ["ticket_number", "body"]),
+        ["set_announcement"] = ("Change the storefront announcement bar", "marketing", ["text"]),
     };
 
     private static string Str(JsonObject p, string key) =>
@@ -307,6 +309,21 @@ public class AssistantActionsBAL(
                 summary = $"Reply to ticket {tk.Number}";
                 break;
             }
+            case "set_announcement":
+            {
+                // Reference: prepare set_announcement (permission "marketing").
+                var atext = string.Join(' ', Str(prms, "text").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                atext = atext[..Math.Min(160, atext.Length)];
+                var alink = Str(prms, "link").Trim();
+                alink = alink[..Math.Min(200, alink.Length)];
+                if (alink.Length > 0 && !(alink.StartsWith('/') && !alink.StartsWith("//")))
+                    throw new AssistantActionException("The link must be a page on this site, starting with /");
+                clean["text"] = atext; clean["link"] = alink;
+                Detail("Announcement", atext.Length > 0 ? atext : "(hidden)");
+                Detail("Link", alink.Length > 0 ? alink : "\u2014");
+                summary = atext.Length == 0 ? "Hide the announcement bar" : "Change the announcement bar";
+                break;
+            }
             default:
                 throw new AssistantActionException("Not supported");
         }
@@ -416,9 +433,31 @@ public class AssistantActionsBAL(
             "moderate_review" => await reviews.ModerateAsync(user, Guid.Parse(Str(p, "review_id")), Str(p, "decision")),
             "reply_ticket" => await supportDesk.ReplyAsync(user, Guid.Parse(Str(p, "ticket_id")), Str(p, "body"),
                 p["internal"] is JsonValue iv && iv.TryGetValue<bool>(out var ib) && ib, null, null, null),
+            "set_announcement" => await SetAnnouncementAsync(user, Str(p, "text"), Str(p, "link")),
             _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
                 "action_unavailable", 400),
         };
+    }
+
+    /// <summary>Reference: execute set_announcement — merge the announcement bar into the site document.</summary>
+    private async Task<JsonObject> SetAnnouncementAsync(UserModel user, string text, string link)
+    {
+        await access.RequireAsync(user, "marketing");
+        var doc = await site.GetSiteAsync();
+        var ann = doc["announcement"] is JsonObject a ? a : new JsonObject();
+        ann["enabled"] = text.Length > 0;
+        if (text.Length > 0)
+            ann["text"] = text;
+        ann["link"] = link;
+        doc["announcement"] = ann;
+        await site.SaveSiteAsync(doc);
+        await using var uow = await db.BeginAsync();
+        await uow.ExecuteAsync(
+            "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
+            "VALUES (@actor, 'storefront.announcement', 'settings', 'site', 'assistant', UTC_TIMESTAMP(6), @id)",
+            new { actor = user.Id, id = Guid.NewGuid() });
+        await uow.CommitAsync();
+        return new JsonObject { ["enabled"] = text.Length > 0, ["text"] = ann["text"]?.GetValue<string>() };
     }
 
     /// <summary>Reference: actions._customer — a customer by id, email or mobile.</summary>
