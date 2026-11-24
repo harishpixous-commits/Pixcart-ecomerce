@@ -334,6 +334,78 @@ public class AdsDAL(IMySqlDapperHelper db)
             "WHERE s.campaign_id = @campaignId AND s.day >= @since GROUP BY p.title ORDER BY SUM(s.clicks) DESC",
             new { campaignId, since });
 
+    // ------------------------------------------------------------------ admin / billing
+
+    /// <summary>All campaigns with optional status and name/seller search (reference: admin_ads).</summary>
+    public async Task<(List<CampaignFullRow> Items, long Total)> AdminCampaignsAsync(string? status, string q, int offset, int size)
+    {
+        var where = "1=1";
+        if (status is not null && status != "all") where += " AND c.status = @status";
+        if (q.Trim().Length > 0)
+            where += " AND (c.name LIKE @like OR c.seller_id IN (SELECT id FROM sellers WHERE display_name LIKE @like))";
+        var param = new { status, like = $"%{q.Trim()}%", offset, size };
+        var total = await db.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM ad_campaigns c WHERE {where}", param);
+        var rows = await db.QueryAsync<CampaignFullRow>(
+            $"SELECT {CampaignCols} FROM ad_campaigns c WHERE {where} " +
+            "ORDER BY c.status = 'pending' DESC, c.created_at DESC LIMIT @size OFFSET @offset", param);
+        return (rows.ToList(), total);
+    }
+
+    public class StatusCountRow
+    {
+        public string Status { get; set; } = "";
+        public long N { get; set; }
+    }
+
+    /// <summary>Campaign counts by status (reference: admin_ads counts).</summary>
+    public Task<IEnumerable<StatusCountRow>> CampaignCountsAsync() =>
+        db.QueryAsync<StatusCountRow>("SELECT status, COUNT(*) AS n FROM ad_campaigns GROUP BY status");
+
+    /// <summary>All-campaign counters per day (reference: admin_ads revenue_30d days).</summary>
+    public Task<IEnumerable<DayStatsRow>> RevenueByDayAsync(DateTime since) =>
+        db.QueryAsync<DayStatsRow>(
+            "SELECT day, COALESCE(SUM(impressions), 0) AS impressions, COALESCE(SUM(clicks), 0) AS clicks, " +
+            "COALESCE(SUM(invalid_clicks), 0) AS invalid_clicks, COALESCE(SUM(spend_paise), 0) AS spend " +
+            "FROM ad_stats WHERE day >= @since GROUP BY day ORDER BY day", new { since });
+
+    public class SellerNameRow
+    {
+        public Guid Id { get; set; }
+        public string DisplayName { get; set; } = "";
+    }
+
+    public async Task<Dictionary<Guid, string>> SellerNamesAsync(IReadOnlyList<Guid> ids) =>
+        ids.Count == 0
+            ? []
+            : (await db.QueryAsync<SellerNameRow>("SELECT id, display_name FROM sellers WHERE id IN @ids", new { ids }))
+                .ToDictionary(r => r.Id, r => r.DisplayName);
+
+    public class UnbilledRow
+    {
+        public Guid SellerId { get; set; }
+        public DateTime Day { get; set; }
+        public long Spend { get; set; }
+        public long Clicks { get; set; }
+    }
+
+    /// <summary>Finished days not yet billed, per seller (reference: ads.bill).</summary>
+    public Task<IEnumerable<UnbilledRow>> UnbilledAsync(DateTime today, IUnitOfWork uow) =>
+        uow.QueryAsync<UnbilledRow>(
+            "SELECT c.seller_id, s.day, COALESCE(SUM(s.spend_paise), 0) AS spend, COALESCE(SUM(s.clicks), 0) AS clicks " +
+            "FROM ad_stats s JOIN ad_campaigns c ON c.id = s.campaign_id " +
+            "WHERE s.billed = 0 AND s.day < @today GROUP BY c.seller_id, s.day", new { today });
+
+    public Task MarkBilledAsync(Guid sellerId, DateTime day, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "UPDATE ad_stats SET billed = 1 WHERE day = @day AND billed = 0 " +
+            "AND campaign_id IN (SELECT id FROM ad_campaigns WHERE seller_id = @sellerId)", new { sellerId, day });
+
+    public Task InsertAdSpendLedgerAsync(Guid sellerId, long amount, string description, DateTime now, IUnitOfWork uow) =>
+        uow.ExecuteAsync(
+            "INSERT INTO seller_ledger (id, seller_id, sub_order_id, return_id, kind, amount, description, available_at, payout_id, created_at) " +
+            "VALUES (@id, @sellerId, NULL, NULL, 'ad_spend', @amount, @description, @now, NULL, @now)",
+            new { id = Guid.NewGuid(), sellerId, amount, description, now });
+
     /// <summary>Reference: ads_claim — link a recent unclaimed click to the signed-in shopper.</summary>
     public Task ClaimClickAsync(Guid clickId, Guid userId, DateTime cutoff) =>
         db.ExecuteAsync("UPDATE ad_clicks SET user_id = @userId WHERE id = @clickId AND user_id IS NULL AND created_at > @cutoff",

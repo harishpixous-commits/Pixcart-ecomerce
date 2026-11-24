@@ -31,6 +31,17 @@ public interface IAdsBAL
 
     /// <summary>Reference: seller_campaign_report — per-day and per-product counters.</summary>
     Task<JsonObject> SellerReportAsync(SellerModel seller, Guid campaignId, int days);
+
+    // ------------------------------------------------------------------ admin
+
+    /// <summary>Reference: admin_ads — all campaigns with stats, counts, rules and 30-day revenue.</summary>
+    Task<JsonObject> AdminListAsync(UserModel admin, string? status, string q, int page);
+
+    /// <summary>Reference: admin_ads_bill — post finished days' spend to seller ledgers.</summary>
+    Task<JsonObject> AdminBillAsync(UserModel admin);
+
+    /// <summary>Reference: admin_campaign_action — approve, reject, pause, resume, end.</summary>
+    Task<JsonObject> AdminActionAsync(UserModel admin, Guid campaignId, string action, string reason);
 }
 
 /// <summary>Reference: CampaignIn.</summary>

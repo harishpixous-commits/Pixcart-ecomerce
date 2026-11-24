@@ -16,7 +16,8 @@ namespace BAL;
 /// click still opens the product, is free and counts as invalid.
 /// </summary>
 public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimitBAL rateLimit, ICatalogBAL catalog,
-    IMySqlDapperHelper db, AppSettings app, CatalogDAL catalogDb, AuditDAL audit) : IAdsBAL
+    IMySqlDapperHelper db, AppSettings app, CatalogDAL catalogDb, AuditDAL audit, IAccessBAL access,
+    ICatalogNotifyBAL notify) : IAdsBAL
 {
     public static readonly IReadOnlyDictionary<string, string> Placements = new Dictionary<string, string>
     {
@@ -404,6 +405,112 @@ public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimi
         await ads.SetCampaignStatusAsync(c.Id, status, note, now, uow);
         await audit.InsertAsync(new AuditLogModel { ActorUserId = user.Id, Action = $"ads.{action}", EntityType = "ad_campaign", EntityId = c.Id.ToString(), Detail = "", CreatedAt = now, Id = Guid.NewGuid() }, uow.Transaction);
         await uow.CommitAsync();
+        return new JsonObject { ["ok"] = true, ["status"] = status };
+    }
+
+    // ------------------------------------------------------------------ admin
+
+    /// <summary>₹ formatting matching the reference f"{paise/100:,.2f}" (western grouping).</summary>
+    private static string Inr(double paise) => (paise / 100).ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+
+    public async Task<JsonObject> AdminListAsync(UserModel admin, string? status, string q, int page)
+    {
+        await access.RequireAsync(admin, "marketing");
+        var (campaigns, total) = await ads.AdminCampaignsAsync(status, q, (page - 1) * 30, 30);
+        var items = await CampaignsOutAsync(campaigns);
+        var names = await ads.SellerNamesAsync(campaigns.Select(c => c.SellerId).Distinct().ToList());
+        for (var i = 0; i < items.Count; i++)
+        {
+            items[i]["seller"] = names.GetValueOrDefault(campaigns[i].SellerId, "");
+            items[i]["seller_id"] = campaigns[i].SellerId.ToString();
+        }
+        var since = TodayIst().AddDays(-29);
+        var days = (await ads.RevenueByDayAsync(since)).ToList();
+        var counts = (await ads.CampaignCountsAsync()).ToDictionary(r => r.Status, r => (JsonNode?)JsonValue.Create(r.N));
+        var cfg = await platform.GetAsync();
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(items.Select(i => (JsonNode)i).ToArray()),
+            ["total"] = total, ["page"] = page, ["page_size"] = 30,
+            ["counts"] = new JsonObject(counts),
+            ["rules"] = Rules(cfg),
+            ["revenue_30d"] = new JsonObject
+            {
+                ["impressions"] = days.Sum(d => d.Impressions), ["clicks"] = days.Sum(d => d.Clicks),
+                ["invalid_clicks"] = days.Sum(d => d.InvalidClicks), ["spend"] = days.Sum(d => d.Spend),
+                ["days"] = new JsonArray(days.Select(d => (JsonNode)new JsonObject
+                {
+                    ["day"] = d.Day.ToString("yyyy-MM-dd"), ["impressions"] = d.Impressions, ["clicks"] = d.Clicks,
+                    ["invalid_clicks"] = d.InvalidClicks, ["spend"] = d.Spend,
+                }).ToArray()),
+            },
+        };
+    }
+
+    /// <summary>Reference: ads.bill — post each finished day's spend plus GST to the seller ledger. Returns entries posted.</summary>
+    public async Task<int> BillAsync()
+    {
+        var cfg = await platform.GetAsync();
+        var now = DateTimeFunctions.UtcNow();
+        var today = TodayIst();
+        var posted = 0;
+        await using var uow = await db.BeginAsync();
+        var rows = await ads.UnbilledAsync(today, uow);
+        foreach (var r in rows)
+        {
+            if (r.Spend > 0)
+            {
+                var gst = r.Spend * cfg.Long("commission_gst_bps") / 10_000;
+                await ads.InsertAdSpendLedgerAsync(r.SellerId, -(r.Spend + gst),
+                    $"Sponsored products {r.Day:yyyy-MM-dd}: {r.Clicks} clicks, ₹{Inr(r.Spend)} + GST ₹{Inr(gst)}", now, uow);
+                posted++;
+            }
+            await ads.MarkBilledAsync(r.SellerId, r.Day, uow);
+        }
+        await uow.CommitAsync();
+        return posted;
+    }
+
+    public async Task<JsonObject> AdminBillAsync(UserModel admin)
+    {
+        await access.RequireAsync(admin, "marketing");
+        var n = await BillAsync();
+        var now = DateTimeFunctions.UtcNow();
+        await audit.InsertAsync(new AuditLogModel { ActorUserId = admin.Id, Action = "ads.bill", EntityType = "ads", EntityId = "billing", Detail = $"{n} entries", CreatedAt = now, Id = Guid.NewGuid() });
+        return new JsonObject { ["posted"] = n };
+    }
+
+    public async Task<JsonObject> AdminActionAsync(UserModel admin, Guid campaignId, string action, string reason)
+    {
+        await access.RequireAsync(admin, "marketing");
+        var now = DateTimeFunctions.UtcNow();
+        await using var uow = await db.BeginAsync();
+        var c = await ads.CampaignForUpdateAsync(campaignId, uow);
+        if (c is null) throw new NotFoundException("Campaign");
+        var allowed = action switch
+        {
+            "approve" => c.Status == "pending",
+            "reject" => c.Status is "pending" or "active" or "paused",
+            "pause" => c.Status == "active",
+            "resume" => c.Status == "paused",
+            "end" => c.Status is "pending" or "active" or "paused",
+            _ => false,
+        };
+        if (!allowed) throw new AppException($"A {c.Status} campaign cannot be {action}d", "invalid_status", 409);
+        if (action is "reject" or "end" && reason.Trim().Length < 5)
+            throw new AppException("Give the seller a reason (at least 5 characters)", "reason_required", 400);
+        var status = action switch
+        {
+            "approve" => "active", "reject" => "rejected", "pause" => "paused", "resume" => "active", _ => "ended",
+        };
+        await ads.SetCampaignStatusAsync(c.Id, status, reason.Trim(), now, uow);
+        await audit.InsertAsync(new AuditLogModel { ActorUserId = admin.Id, Action = $"ads.{action}", EntityType = "ad_campaign", EntityId = c.Id.ToString(), Detail = reason.Length > 200 ? reason[..200] : reason, CreatedAt = now, Id = Guid.NewGuid() }, uow.Transaction);
+        await uow.CommitAsync();
+        await notify.NotifySellerAsync(c.SellerId, "listing_update", new Dictionary<string, string>
+        {
+            ["status"] = $"ad campaign {status}", ["title"] = c.Name,
+            ["message"] = reason.Trim().Length > 0 ? reason.Trim() : "Open Advertising in your seller hub for details.",
+        }, "/seller/advertising");
         return new JsonObject { ["ok"] = true, ["status"] = status };
     }
 
