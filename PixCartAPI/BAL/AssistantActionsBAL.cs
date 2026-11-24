@@ -32,6 +32,7 @@ public class AssistantActionsBAL(
     ProductModerationDAL productsDal,
     IProductModerationBAL products,
     ICouponAdminBAL coupons,
+    IReviewModerationBAL reviews,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan ExpiresAfter = TimeSpan.FromMinutes(30);
@@ -55,6 +56,7 @@ public class AssistantActionsBAL(
         ["set_seller_commission"] = ("Change a seller's commission", "sellers", ["seller"]),
         ["create_coupon"] = ("Create a coupon", "marketing", ["code", "description", "kind", "value"]),
         ["set_coupon_active"] = ("Switch a coupon on or off", "marketing", ["coupon_id"]),
+        ["moderate_review"] = ("Publish or hide a review", "catalog", ["review_id", "decision"]),
     };
 
     private static string Str(JsonObject p, string key) =>
@@ -268,6 +270,23 @@ public class AssistantActionsBAL(
                 }
                 break;
             }
+            case "moderate_review":
+            {
+                // Reference: prepare moderate_review (permission "catalog").
+                var rid = Str(prms, "review_id");
+                if (!Guid.TryParse(rid, out var rguid))
+                    throw new AssistantActionException("I need the review's id.");
+                var rev = await db.QueryFirstOrDefaultAsync<ReviewModel>("SELECT * FROM reviews WHERE id = @rguid", new { rguid })
+                    ?? throw new AssistantActionException("I could not find a review with that id.");
+                var decision = Str(prms, "decision").Trim().ToLowerInvariant();
+                if (decision is not ("publish" or "hide"))
+                    throw new AssistantActionException("I can publish or hide a review.");
+                clean["review_id"] = rguid.ToString(); clean["decision"] = decision;
+                var pname = await db.ExecuteScalarAsync<string?>("SELECT title FROM products WHERE id = @pid", new { pid = rev.ProductId }) ?? "";
+                Detail("Review", $"{rev.Rating} stars on {pname}"); Detail("Decision", decision);
+                summary = $"{(decision == "publish" ? "Publish" : "Hide")} review on {pname}";
+                break;
+            }
             default:
                 throw new AssistantActionException("Not supported");
         }
@@ -374,6 +393,7 @@ public class AssistantActionsBAL(
                 int.Parse(Str(p, "value")), null, 0, null, null, null, 1, true, null, false, true),
             "set_coupon_active" => await coupons.SetActiveAsync(user, Guid.Parse(Str(p, "coupon_id")),
                 p["active"] is JsonValue av && av.TryGetValue<bool>(out var a) && a),
+            "moderate_review" => await reviews.ModerateAsync(user, Guid.Parse(Str(p, "review_id")), Str(p, "decision")),
             _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
                 "action_unavailable", 400),
         };
