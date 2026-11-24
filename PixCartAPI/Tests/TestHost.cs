@@ -77,8 +77,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var tables = (await conn.QueryAsync<string>(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = @db AND table_type = 'BASE TABLE' AND table_name <> 'schema_versions'",
             new { db = Database })).ToList();
-        var sql = "SET FOREIGN_KEY_CHECKS = 0; " + string.Concat(tables.Select(t => $"TRUNCATE TABLE `{t}`; ")) + "SET FOREIGN_KEY_CHECKS = 1;";
-        await conn.ExecuteAsync(sql);
+        // DELETE rather than TRUNCATE: the tables are tiny, and TRUNCATE recreates each table file (slow on a busy server)
+        var sql = "SET FOREIGN_KEY_CHECKS = 0; " + string.Concat(tables.Select(t => $"DELETE FROM `{t}`; ")) + "SET FOREIGN_KEY_CHECKS = 1;";
+        await conn.ExecuteAsync(sql, commandTimeout: 300);
         Utils.SMSHelper.DevOutbox.Clear();
         FcmClient.Reset();
         Fakes.Reset();
