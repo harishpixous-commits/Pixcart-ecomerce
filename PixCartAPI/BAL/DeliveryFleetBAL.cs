@@ -1540,7 +1540,7 @@ public class DeliveryFleetBAL(
         var vars = await OfferVarsAsync(a, sub, order, await deliverySettings.GetAsync(), uow);
         vars["drop_area"] = kind == "return" ? "the store" : Area(ShipTo(order));
         await notify.NotifyUserAsync(boy.UserId, "delivery_assigned", vars, $"/delivery/trips/{a.Id}");
-        await AuditAsync(uow, admin, $"delivery.{action}", sub.Id);
+        await AuditAsync(uow, admin, $"delivery.{action}", failed.Id, entityType: "delivery_assignment");
         await uow.CommitAsync();
         return AssignmentBrief(a);
     }
