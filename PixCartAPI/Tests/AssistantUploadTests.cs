@@ -28,6 +28,8 @@ public class AssistantUploadTests(ApiFactory f):ApiTest(f)
         Assert.True(r.Json["truncated"]!.GetValue<bool>());
         Assert.Equal(200000,r.Json["characters"]!.GetValue<int>());
         Assert.Equal(3000,r.Json["preview"]!.GetValue<string>().Length);
+        r=await Upload("plain.json","{\"title\":\"Tamil தமிழ்\",\"items\":[1,2]}");Assert.Equal("{\n \"title\": \"Tamil தமிழ்\",\n \"items\": [\n  1,\n  2\n ]\n}",r.Json["preview"]!.GetValue<string>());
+        r=await Upload("blank-header.csv","\n1,2\n");Assert.Equal("Column 1",r.Json["columns"]![0]!["name"]!.GetValue<string>());Assert.Equal(1,r.Json["rows"]!.GetValue<int>());r=await Upload("quotes.csv","a,b\n\"multi\nline\",\"quote\"\"inside\"\n");Assert.Equal("multi\nline",r.Json["first_rows"]![0]!["a"]!.GetValue<string>());
         Assert.Equal("bad_upload",(await Upload("a.json","invalid")).ErrorCode);
         Assert.Equal("bad_upload",(await Upload("a.xlsm","invalid")).ErrorCode);
         Assert.Equal("bad_upload",(await Upload("a.xlsx","invalid")).ErrorCode);
@@ -38,9 +40,9 @@ public class AssistantUploadTests(ApiFactory f):ApiTest(f)
     }
     [Fact]public async Task Xlsx_uses_first_sheet_and_cached_formula_not_expression()
     {
-        var admin=await Admin();using var memory=new MemoryStream();using(var zip=new ZipArchive(memory,ZipArchiveMode.Create,true)){void Entry(string path,string content){using var w=new StreamWriter(zip.CreateEntry(path).Open());w.Write(content);}Entry("xl/workbook.xml","<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Synthetic\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");Entry("xl/_rels/workbook.xml.rels","<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Target=\"worksheets/sheet2.xml\"/></Relationships>");Entry("xl/worksheets/sheet2.xml","<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Amount</t></is></c></row><row r=\"2\"><c r=\"A2\"><f>1+2</f><v>7</v></c></row></sheetData></worksheet>");}var r=await admin.Post("/api/admin/assistant/uploads",File("synthetic.xlsx",memory.ToArray()));
+        var admin=await Admin();using var memory=new MemoryStream();using(var zip=new ZipArchive(memory,ZipArchiveMode.Create,true)){void Entry(string path,string content){using var w=new StreamWriter(zip.CreateEntry(path).Open());w.Write(content);}Entry("xl/workbook.xml","<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Synthetic\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");Entry("xl/_rels/workbook.xml.rels","<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Target=\"worksheets/sheet2.xml\"/></Relationships>");Entry("xl/styles.xml","<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><cellXfs count=\"2\"><xf numFmtId=\"0\"/><xf numFmtId=\"14\"/></cellXfs></styleSheet>");Entry("xl/worksheets/sheet2.xml","<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Amount</t></is></c><c r=\"B1\" t=\"inlineStr\"><is><t>Date</t></is></c></row><row r=\"2\"><c r=\"A2\"><f>1+2</f><v>7</v></c><c r=\"B2\" s=\"1\"><v>1</v></c></row></sheetData></worksheet>");}var r=await admin.Post("/api/admin/assistant/uploads",File("synthetic.xlsx",memory.ToArray()));
         Assert.True(r.Status==201,r.ToString());
-        Assert.Equal("7",r.Json["columns"]![0]!["sum"]!.GetValue<string>());
+        Assert.Equal("7",r.Json["columns"]![0]!["sum"]!.GetValue<string>());Assert.Equal("1900-01-01T00:00:00",r.Json["first_rows"]![0]!["Date"]!.GetValue<string>());
         Assert.Equal(1,r.Json["rows"]!.GetValue<int>());
     }
 }
