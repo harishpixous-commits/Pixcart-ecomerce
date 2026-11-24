@@ -1,0 +1,13 @@
+using System.Text.Json.Nodes;
+namespace Tests;
+public class NotificationAdminTests(ApiFactory f):ApiTest(f)
+{
+    [Fact]public async Task Notification_template_defaults_customization_and_coupon_listing_are_permission_scoped()
+    {
+        var admin=await Admin();var user=await LoginPhone("9886000001");Assert.Equal(403,(await user.Get("/api/admin/notifications/templates")).Status);var catalog=await Staff(admin,"templatecatalog@example.test","support");Assert.Equal(403,(await catalog.Get("/api/admin/coupons")).Status);
+        var r=await admin.Get("/api/admin/notifications/templates");Assert.True(r.Status==200,r.ToString());var items=r.Json["items"]!.AsArray();Assert.Contains(items,x=>x!["event"]!.GetValue<string>()=="order_placed"&&x["channel"]!.GetValue<string>()=="whatsapp"&&!x["is_active"]!.GetValue<bool>());Assert.DoesNotContain(items,x=>x!["channel"]!.GetValue<string>()=="push");
+        r=await admin.Put("/api/admin/notifications/templates/order_placed/email",new{subject="Synthetic subject",body="Synthetic {{name}}",provider_template="  TEST-1  ",is_active=false});Assert.Equal(200,r.Status);r=await admin.Get("/api/admin/notifications/templates");var t=r.Json["items"]!.AsArray().Single(x=>x!["event"]!.GetValue<string>()=="order_placed"&&x["channel"]!.GetValue<string>()=="email")!;Assert.True(t["customised"]!.GetValue<bool>());Assert.Equal("TEST-1",t["provider_template"]!.GetValue<string>());Assert.False(t["is_active"]!.GetValue<bool>());
+        Assert.Equal(200,(await admin.Put("/api/admin/notifications/templates/order_placed/email",new{body=""})).Status);Assert.Equal(1,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notification_templates WHERE event='order_placed' AND channel='email'"));Assert.Equal(2,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action='template.save'"));Assert.Equal(0,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications"));Assert.Equal(404,(await admin.Put("/api/admin/notifications/templates/unknown/email",new{body="x"})).Status);Assert.Equal(422,(await admin.Put("/api/admin/notifications/templates/order_placed/push",new{body="x"})).Status);Assert.Equal(422,(await admin.Put("/api/admin/notifications/templates/order_placed/email",new{})).Status);
+        r=await admin.Post("/api/admin/coupons",new{code="SYNTHREAD",kind="flat",value=100,description="Synthetic list",per_user_limit=1});Assert.True(r.Status==201,r.ToString());r=await admin.Get("/api/admin/coupons");Assert.Single(r.Json.AsArray());Assert.Equal("SYNTHREAD",r.Json[0]!["code"]!.GetValue<string>());Assert.Equal("platform",r.Json[0]!["funded_by"]!.GetValue<string>());
+    }
+}
