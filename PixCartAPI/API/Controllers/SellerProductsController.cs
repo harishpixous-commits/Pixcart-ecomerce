@@ -8,6 +8,8 @@ namespace API.Controllers;
 public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,ICurrentUser me) : ControllerBase
 {
     private async Task<Model.DomainModel.SellerModel> Seller()=>await orders.RequireSellerAsync(await me.RequireAsync(),false);
+    [HttpPost("products")] public async Task<IActionResult> Create([FromBody]System.Text.Json.Nodes.JsonObject body)=>StatusCode(201,await bal.SaveAsync(await me.RequireAsync(),await Seller(),null,body));
+    [HttpPut("products/{id:guid}")] public async Task<object> Update(Guid id,[FromBody]System.Text.Json.Nodes.JsonObject body)=>await bal.SaveAsync(await me.RequireAsync(),await Seller(),id,body);
     [HttpGet("products")]
     public async Task<object> List([FromQuery]string? status,[FromQuery]string q="",[FromQuery(Name="low_stock")]bool lowStock=false,[FromQuery]int page=1,[FromQuery(Name="page_size")]int pageSize=20)
     {

@@ -51,4 +51,53 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200,(await u.Patch($"/api/seller/variants/{v}",new { stock=13 })).Status);
         Assert.Equal(422,(await u.Patch($"/api/seller/variants/{v}",new { stock=-1 })).Status);
     }
+    private static JsonObject Payload(string cat,string sku="WRITE-SKU")=>new()
+    {
+        ["category_id"]=cat,["title"]="New Cotton Shirt Listing",["brand"]="Acme",["description"]="A sufficiently long cotton shirt description for review.",
+        ["hsn_code"]="6205",["gst_bps"]=500,["images"]=new JsonArray("/media/products/synthetic.webp"),
+        ["variants"]=new JsonArray(new JsonObject { ["sku"]=sku,["mrp_paise"]=20000,["price_paise"]=10000,["stock"]=5 }),
+    };
+    [Fact]
+    public async Task Product_create_update_review_and_variant_replacement_are_transactional()
+    {
+        var (u,s,p,v,cat)=await Seed();var payload=Payload(cat);
+        var r=await u.Post("/api/seller/products",payload);Assert.True(r.Status==201,r.ToString());
+        var id=r.Json["id"]!.GetValue<string>();var vid=r.Json["variants"]![0]!["id"]!.GetValue<string>();
+        Assert.Equal("draft",r.Json["status"]!.GetValue<string>());Assert.Equal(10000,r.Json["price_from"]!.GetValue<long>());
+        Assert.Equal(0,(await u.Post($"/api/seller/products/{id}/submit")).Json["missing_details"]!.AsArray().Count);
+        await ApiFactory.DbExecAsync("UPDATE products SET status='approved' WHERE id=@id",new {id});
+        payload["details"]=r.Json["details"]!.DeepClone();payload["return_window_days"]=7;
+        payload["variants"]![0]!["id"]=vid;payload["variants"]![0]!["price_paise"]=9000;
+        r=await u.Put($"/api/seller/products/{id}",payload);Assert.True(r.Status==200,r.ToString());Assert.Equal("approved",r.Json["status"]!.GetValue<string>());
+        payload["title"]="New Cotton Shirt Content Changed";
+        r=await u.Put($"/api/seller/products/{id}",payload);Assert.Equal("pending",r.Json["status"]!.GetValue<string>());
+        payload["variants"]![0]!["id"]=v; payload["variants"]![0]!["sku"]="NEW-MISMATCH-SKU"; // unique SKU reaches foreign-variant guard
+        r=await u.Put($"/api/seller/products/{id}",payload);Assert.Equal("variant_mismatch",r.ErrorCode);
+        Assert.Equal(9000,await ApiFactory.DbScalarAsync<long>("SELECT price_from FROM products WHERE id=@id",new {id}));
+        payload["variants"]![0]!.AsObject().Remove("id");payload["variants"]![0]!["sku"]="REPLACEMENT-SKU";
+        r=await u.Put($"/api/seller/products/{id}",payload);Assert.True(r.Status==200,r.ToString());Assert.Single(r.Json["variants"]!.AsArray());
+        Assert.Equal(0,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM variants WHERE id=@vid",new {vid}));
+        await u.Post($"/api/seller/products/{id}/archive");Assert.Equal("archived",(await u.Put($"/api/seller/products/{id}",payload)).ErrorCode);
+        var duplicate=Payload(cat,"UNIQUE-SKU");Assert.Equal("sku_taken",(await u.Post("/api/seller/products",duplicate)).ErrorCode);
+        Assert.Equal(2,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM products WHERE seller_id=@s",new {s}));
+    }
+    [Fact]
+    public async Task Product_payload_category_and_media_validation()
+    {
+        var (u,s,p,v,cat)=await Seed();var b=Payload(cat);
+        b["images"]=new JsonArray("https://outside.invalid/photo.jpg");Assert.Equal(422,(await u.Post("/api/seller/products",b)).Status);
+        b=Payload(cat);b["details"]=new JsonObject{["net_unit"]="invalid"};Assert.Equal(422,(await u.Post("/api/seller/products",b)).Status);
+        b=Payload(cat);b["variants"]![0]!["price_paise"]=30000;Assert.Equal(422,(await u.Post("/api/seller/products",b)).Status);
+        b=Payload(cat);b["variants"]![0]!["options"]=new JsonObject{["Size"]="M"};b["variants"]!.AsArray().Add(b["variants"]![0]!.DeepClone());
+        Assert.Equal(422,(await u.Post("/api/seller/products",b)).Status);
+        b=Payload(cat);b["category_id"]=Guid.NewGuid().ToString();Assert.Equal("invalid_category",(await u.Post("/api/seller/products",b)).ErrorCode);
+        await ApiFactory.DbExecAsync("UPDATE categories SET min_return_window_days=7 WHERE id=@cat",new {cat});
+        b=Payload(cat);b["return_window_days"]=0;Assert.Equal("return_window_too_short",(await u.Post("/api/seller/products",b)).ErrorCode);
+        b=Payload(cat);b["videos"]=new JsonArray(new JsonObject{["url"]="/media/videos/test.mp4"});
+        var admin=await Admin();Assert.Equal(200,(await admin.Put("/api/admin/settings",new {feature_product_videos=false})).Status);
+        Assert.Equal("videos_off",(await u.Post("/api/seller/products",b)).ErrorCode);
+        await ApiFactory.DbExecAsync("UPDATE sellers SET status='suspended' WHERE id=@s",new {s});
+        Assert.Equal("seller_suspended",(await u.Post("/api/seller/products",Payload(cat))).ErrorCode);
+    }
+
 }

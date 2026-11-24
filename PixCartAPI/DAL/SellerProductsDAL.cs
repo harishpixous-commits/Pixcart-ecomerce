@@ -2,7 +2,7 @@ using Model.DomainModel;
 using Utils.Interface;
 namespace DAL;
 /// <summary>Seller-owned catalogue reads and locked lifecycle/variant writes.</summary>
-public class SellerProductsDAL(IMySqlDapperHelper db)
+public partial class SellerProductsDAL(IMySqlDapperHelper db)
 {
     public Task<ProductModel?> OwnedAsync(Guid seller,Guid id,IUnitOfWork? tx=null) => tx is null
         ? db.QueryFirstOrDefaultAsync<ProductModel>("SELECT * FROM products WHERE id=@id AND seller_id=@seller",new { id,seller })

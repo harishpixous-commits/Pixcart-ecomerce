@@ -26,7 +26,7 @@ public class ProductModerationBAL(
             new { actor = user.Id, action, eid = productId.ToString(), detail, id = Guid.NewGuid() });
 
     /// <summary>Reference: product_info.ProductDetails.model_dump() — every field, in model order.</summary>
-    private static JsonObject DetailsDump(ProductInfo.Details d) => new()
+    internal static JsonObject DetailsDump(ProductInfo.Details d) => new()
     {
         ["net_unit"] = d.NetUnit, ["generic_name"] = d.GenericName, ["model_number"] = d.ModelNumber,
         ["manufacturer"] = d.Manufacturer, ["packer"] = d.Packer, ["importer"] = d.Importer,

@@ -3,6 +3,7 @@ using Model.DomainModel;
 namespace BAL.Interface;
 public interface ISellerProductsBAL
 {
+    Task<JsonObject> SaveAsync(UserModel user,SellerModel seller,Guid? id,JsonObject body);
     Task<JsonObject> ListAsync(SellerModel seller,string? status,string q,bool lowStock,int page,int pageSize);
     Task<JsonObject> DetailAsync(SellerModel seller,Guid id);
     Task<JsonObject> RequirementsAsync(SellerModel seller,Guid categoryId);

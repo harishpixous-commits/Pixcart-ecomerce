@@ -6,8 +6,8 @@ using Utils;
 using Utils.Interface;
 namespace BAL;
 /// <summary>Seller catalogue read, lifecycle and variant price/stock paths from seller_products.py.</summary>
-public class SellerProductsBAL(SellerProductsDAL dal,ProductModerationBAL detail,CatalogDAL catalog,DealsDAL deals,
-    IPlatformSettingsBAL platform,IInventoryBAL inventory,IAuditBAL audit,IMySqlDapperHelper db) : ISellerProductsBAL
+public partial class SellerProductsBAL(SellerProductsDAL dal,ProductModerationBAL detail,CatalogDAL catalog,DealsDAL deals,
+    IPlatformSettingsBAL platform,IInventoryBAL inventory,IAuditBAL audit,IMySqlDapperHelper db,AppSettings env) : ISellerProductsBAL
 {
     public async Task<JsonObject> DetailAsync(SellerModel s,Guid id) => await detail.DetailAsync(await dal.OwnedAsync(s.Id,id) ?? throw new NotFoundException("Product"));
     public async Task<JsonObject> RequirementsAsync(SellerModel s,Guid categoryId)
