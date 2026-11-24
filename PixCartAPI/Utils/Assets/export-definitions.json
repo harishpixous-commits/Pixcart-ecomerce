@@ -1,0 +1,1005 @@
+{
+  "filters": {
+    "seller": {
+      "label": "Seller",
+      "kind": "lookup"
+    },
+    "category": {
+      "label": "Category",
+      "kind": "lookup"
+    },
+    "payment_method": {
+      "label": "Payment",
+      "kind": "choice",
+      "options": [
+        {
+          "value": "cod",
+          "label": "Cash on delivery"
+        },
+        {
+          "value": "online",
+          "label": "Paid online"
+        }
+      ]
+    },
+    "q": {
+      "label": "Search",
+      "kind": "text",
+      "placeholder": "Number, name, SKU…"
+    },
+    "low_stock": {
+      "label": "Only stock at or below",
+      "kind": "number",
+      "placeholder": "e.g. 5"
+    }
+  },
+  "specs": [
+    {
+      "name": "orders",
+      "label": "Orders (one row per package)",
+      "description": "Every package with payment, tax, commission, TCS/TDS, payout and shipping details.",
+      "scope": "admin",
+      "permission": "orders",
+      "headers": [
+        "Package",
+        "Order",
+        "Placed (IST)",
+        "Seller",
+        "Seller GSTIN",
+        "Status",
+        "Payment method",
+        "Payment status",
+        "Ship-to state",
+        "Items value",
+        "Delivery fee",
+        "COD fee",
+        "Seller discount",
+        "Platform discount",
+        "Package total",
+        "Taxable value",
+        "Commission",
+        "GST on commission",
+        "TCS",
+        "TDS",
+        "Seller payout",
+        "Refunded/returned value",
+        "Coupon",
+        "Invoice number",
+        "Invoice date",
+        "Courier",
+        "AWB",
+        "Shipped (IST)",
+        "Delivered (IST)",
+        "Cancel reason"
+      ],
+      "date_label": "date the order was placed",
+      "statuses": [
+        [
+          "placed",
+          "Placed"
+        ],
+        [
+          "confirmed",
+          "Confirmed"
+        ],
+        [
+          "packed",
+          "Packed"
+        ],
+        [
+          "shipped",
+          "Shipped"
+        ],
+        [
+          "delivered",
+          "Delivered"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "seller",
+        "payment_method",
+        "q"
+      ],
+      "pdf_columns": [
+        "Package",
+        "Order",
+        "Placed (IST)",
+        "Seller",
+        "Status",
+        "Payment method",
+        "Package total",
+        "Commission",
+        "TCS",
+        "Seller payout",
+        "AWB"
+      ]
+    },
+    {
+      "name": "order-items",
+      "label": "GST line items",
+      "description": "One row per item: HSN, taxable value, CGST/SGST/IGST and place of supply. Use for GST reconciliation.",
+      "scope": "admin",
+      "permission": "reports",
+      "headers": [
+        "Package",
+        "Placed (IST)",
+        "Status",
+        "Invoice number",
+        "Invoice date",
+        "Seller",
+        "Seller GSTIN",
+        "Place of supply",
+        "Inter-state",
+        "SKU",
+        "Product",
+        "Option",
+        "HSN",
+        "Qty",
+        "Unit price",
+        "Line total",
+        "Seller discount",
+        "Platform discount",
+        "Taxable value",
+        "GST rate %",
+        "CGST",
+        "SGST",
+        "IGST",
+        "Returned qty"
+      ],
+      "date_label": "date the order was placed",
+      "statuses": [
+        [
+          "placed",
+          "Placed"
+        ],
+        [
+          "confirmed",
+          "Confirmed"
+        ],
+        [
+          "packed",
+          "Packed"
+        ],
+        [
+          "shipped",
+          "Shipped"
+        ],
+        [
+          "delivered",
+          "Delivered"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "seller",
+        "payment_method",
+        "q"
+      ],
+      "pdf_columns": [
+        "Package",
+        "Invoice number",
+        "Seller GSTIN",
+        "Place of supply",
+        "SKU",
+        "HSN",
+        "Qty",
+        "Taxable value",
+        "GST rate %",
+        "CGST",
+        "SGST",
+        "IGST"
+      ]
+    },
+    {
+      "name": "returns",
+      "label": "Returns",
+      "description": "Every return with reason, refund amount and credit note.",
+      "scope": "admin",
+      "permission": "orders",
+      "headers": [
+        "Return",
+        "Package",
+        "Seller",
+        "Requested (IST)",
+        "Status",
+        "Reason",
+        "Units",
+        "Refund amount",
+        "Credit note",
+        "Received (IST)",
+        "Refunded (IST)",
+        "Seller note"
+      ],
+      "date_label": "date the return was requested",
+      "statuses": [
+        [
+          "requested",
+          "Requested"
+        ],
+        [
+          "approved",
+          "Approved"
+        ],
+        [
+          "picked_up",
+          "Picked up"
+        ],
+        [
+          "received",
+          "Received"
+        ],
+        [
+          "refunded",
+          "Refunded"
+        ],
+        [
+          "rejected",
+          "Rejected"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "seller",
+        "q"
+      ]
+    },
+    {
+      "name": "payouts",
+      "label": "Seller payouts",
+      "description": "Payouts with amount, status and UTR. Full account numbers are only in the bank file.",
+      "scope": "admin",
+      "permission": "payouts",
+      "headers": [
+        "Payout",
+        "Seller",
+        "Legal name",
+        "Created (IST)",
+        "Amount",
+        "Status",
+        "Method",
+        "UTR",
+        "Paid (IST)",
+        "Account (last 4)",
+        "IFSC",
+        "Failure reason"
+      ],
+      "date_label": "date the payout was created",
+      "statuses": [
+        [
+          "pending",
+          "Pending"
+        ],
+        [
+          "processing",
+          "Processing"
+        ],
+        [
+          "paid",
+          "Paid"
+        ],
+        [
+          "failed",
+          "Failed"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "seller",
+        "q"
+      ]
+    },
+    {
+      "name": "ledger",
+      "label": "Seller ledger (all sellers)",
+      "description": "Every sale, deduction, return and payout entry.",
+      "scope": "admin",
+      "permission": "payouts",
+      "headers": [
+        "Date (IST)",
+        "Seller",
+        "Type",
+        "Package",
+        "Description",
+        "Amount",
+        "Available from",
+        "Payout"
+      ],
+      "date_label": "date of the entry",
+      "filters": [
+        "seller"
+      ]
+    },
+    {
+      "name": "tcs",
+      "label": "GST TCS (GSTR-8)",
+      "description": "Supplier-wise net taxable value and TCS for one month, less returns received that month.",
+      "scope": "admin",
+      "permission": "reports",
+      "headers": [
+        "GSTIN of supplier",
+        "Legal name",
+        "Packages",
+        "Returned value",
+        "Net taxable value",
+        "IGST TCS",
+        "CGST TCS",
+        "SGST TCS"
+      ],
+      "needs_month": true
+    },
+    {
+      "name": "products",
+      "label": "Catalogue",
+      "description": "Every product option with seller, category, prices, stock and tax.",
+      "scope": "admin",
+      "permission": "catalog",
+      "headers": [
+        "SKU",
+        "Product",
+        "Option",
+        "Seller",
+        "Category",
+        "Brand",
+        "Status",
+        "MRP",
+        "Price",
+        "Stock",
+        "HSN",
+        "GST rate %",
+        "Return window (days)",
+        "Rating",
+        "Reviews",
+        "Sold",
+        "Created (IST)"
+      ],
+      "date_label": "",
+      "statuses": [
+        [
+          "approved",
+          "Live"
+        ],
+        [
+          "pending",
+          "In review"
+        ],
+        [
+          "rejected",
+          "Rejected"
+        ],
+        [
+          "draft",
+          "Draft"
+        ],
+        [
+          "archived",
+          "Archived"
+        ]
+      ],
+      "filters": [
+        "seller",
+        "category",
+        "q",
+        "low_stock"
+      ],
+      "pdf_columns": [
+        "SKU",
+        "Product",
+        "Option",
+        "Seller",
+        "Category",
+        "Status",
+        "MRP",
+        "Price",
+        "Stock",
+        "Sold"
+      ]
+    },
+    {
+      "name": "stock",
+      "label": "Stock by warehouse",
+      "description": "Units per product option and warehouse, for all sellers.",
+      "scope": "admin",
+      "permission": "catalog",
+      "headers": [
+        "sku",
+        "warehouse_code",
+        "quantity",
+        "title",
+        "option",
+        "seller",
+        "warehouse",
+        "active"
+      ],
+      "filters": [
+        "seller",
+        "category",
+        "q",
+        "low_stock"
+      ]
+    },
+    {
+      "name": "sellers",
+      "label": "Sellers",
+      "description": "Seller businesses with verification status and contact details (no PAN or bank numbers).",
+      "scope": "admin",
+      "permission": "sellers",
+      "headers": [
+        "Store",
+        "Legal name",
+        "Business type",
+        "GSTIN",
+        "Status",
+        "City",
+        "State",
+        "PIN",
+        "Email",
+        "Phone",
+        "Commission override %",
+        "Live listings",
+        "Rating",
+        "Reviews",
+        "Holiday mode",
+        "Joined (IST)",
+        "Approved (IST)"
+      ],
+      "date_label": "date the seller joined",
+      "statuses": [
+        [
+          "approved",
+          "Approved"
+        ],
+        [
+          "submitted",
+          "Waiting for review"
+        ],
+        [
+          "rejected",
+          "Needs changes"
+        ],
+        [
+          "suspended",
+          "Suspended"
+        ],
+        [
+          "draft",
+          "Not submitted"
+        ]
+      ],
+      "contains_personal_data": true,
+      "date_optional": true,
+      "filters": [
+        "q"
+      ],
+      "pdf_columns": [
+        "Store",
+        "Legal name",
+        "GSTIN",
+        "Status",
+        "City",
+        "State",
+        "Phone",
+        "Live listings",
+        "Rating",
+        "Joined (IST)"
+      ]
+    },
+    {
+      "name": "customers",
+      "label": "Customers",
+      "description": "Customer accounts with order count and spend. Contains personal data: share only as the privacy notice allows.",
+      "scope": "admin",
+      "permission": "customers",
+      "headers": [
+        "Name",
+        "Mobile",
+        "Email",
+        "Joined (IST)",
+        "Orders",
+        "Net spend",
+        "Last order (IST)",
+        "Marketing consent",
+        "Active"
+      ],
+      "date_label": "date the account was created",
+      "contains_personal_data": true,
+      "date_optional": true,
+      "filters": [
+        "q"
+      ]
+    },
+    {
+      "name": "tickets",
+      "label": "Support tickets",
+      "description": "Tickets with categories and whether the 48-hour reply and 30-day resolution limits were met.",
+      "scope": "admin",
+      "permission": "support",
+      "headers": [
+        "Ticket",
+        "Opened (IST)",
+        "Category",
+        "Subject",
+        "Order",
+        "Status",
+        "Priority",
+        "Grievance",
+        "Reply due (IST)",
+        "Replied (IST)",
+        "Reply on time",
+        "Resolve due (IST)",
+        "Resolved (IST)",
+        "Resolved on time"
+      ],
+      "date_label": "date the ticket was opened",
+      "statuses": [
+        [
+          "open",
+          "Open"
+        ],
+        [
+          "awaiting_customer",
+          "Waiting for customer"
+        ],
+        [
+          "resolved",
+          "Resolved"
+        ],
+        [
+          "closed",
+          "Closed"
+        ]
+      ],
+      "filters": [
+        "q"
+      ],
+      "pdf_columns": [
+        "Ticket",
+        "Opened (IST)",
+        "Category",
+        "Subject",
+        "Order",
+        "Status",
+        "Priority",
+        "Reply on time",
+        "Resolved (IST)"
+      ]
+    },
+    {
+      "name": "ai-runs",
+      "label": "AI usage",
+      "description": "Every AI draft and assistant answer with tokens, latency and what happened to it, for cost review and audits.",
+      "scope": "admin",
+      "permission": "settings",
+      "headers": [
+        "Time (IST)",
+        "Task",
+        "By",
+        "Status",
+        "Mode",
+        "Model",
+        "Input tokens",
+        "Output tokens",
+        "Cache write tokens",
+        "Cache read tokens",
+        "Latency ms",
+        "Subject",
+        "Error"
+      ],
+      "date_label": "date of the AI run",
+      "statuses": [
+        [
+          "draft",
+          "Draft"
+        ],
+        [
+          "applied",
+          "Used"
+        ],
+        [
+          "sent",
+          "Sent"
+        ],
+        [
+          "discarded",
+          "Discarded"
+        ],
+        [
+          "failed",
+          "Failed"
+        ]
+      ],
+      "pdf_columns": [
+        "Time (IST)",
+        "Task",
+        "By",
+        "Status",
+        "Mode",
+        "Model",
+        "Input tokens",
+        "Output tokens",
+        "Latency ms"
+      ]
+    },
+    {
+      "name": "orders",
+      "label": "Orders",
+      "description": "Your packages with totals, deductions, payout and shipping details.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "Package",
+        "Order",
+        "Placed (IST)",
+        "Seller",
+        "Seller GSTIN",
+        "Status",
+        "Payment method",
+        "Payment status",
+        "Ship-to state",
+        "Items value",
+        "Delivery fee",
+        "COD fee",
+        "Seller discount",
+        "Platform discount",
+        "Package total",
+        "Taxable value",
+        "Commission",
+        "GST on commission",
+        "TCS",
+        "TDS",
+        "Seller payout",
+        "Refunded/returned value",
+        "Coupon",
+        "Invoice number",
+        "Invoice date",
+        "Courier",
+        "AWB",
+        "Shipped (IST)",
+        "Delivered (IST)",
+        "Cancel reason"
+      ],
+      "date_label": "date the order was placed",
+      "statuses": [
+        [
+          "placed",
+          "Placed"
+        ],
+        [
+          "confirmed",
+          "Confirmed"
+        ],
+        [
+          "packed",
+          "Packed"
+        ],
+        [
+          "shipped",
+          "Shipped"
+        ],
+        [
+          "delivered",
+          "Delivered"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "payment_method",
+        "q"
+      ],
+      "pdf_columns": [
+        "Package",
+        "Order",
+        "Placed (IST)",
+        "Seller",
+        "Status",
+        "Payment method",
+        "Package total",
+        "Commission",
+        "TCS",
+        "Seller payout",
+        "AWB"
+      ]
+    },
+    {
+      "name": "order-items",
+      "label": "GST line items",
+      "description": "One row per item with HSN, taxable value and CGST/SGST/IGST, for your GSTR-1.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "Package",
+        "Placed (IST)",
+        "Status",
+        "Invoice number",
+        "Invoice date",
+        "Seller",
+        "Seller GSTIN",
+        "Place of supply",
+        "Inter-state",
+        "SKU",
+        "Product",
+        "Option",
+        "HSN",
+        "Qty",
+        "Unit price",
+        "Line total",
+        "Seller discount",
+        "Platform discount",
+        "Taxable value",
+        "GST rate %",
+        "CGST",
+        "SGST",
+        "IGST",
+        "Returned qty"
+      ],
+      "date_label": "date the order was placed",
+      "statuses": [
+        [
+          "placed",
+          "Placed"
+        ],
+        [
+          "confirmed",
+          "Confirmed"
+        ],
+        [
+          "packed",
+          "Packed"
+        ],
+        [
+          "shipped",
+          "Shipped"
+        ],
+        [
+          "delivered",
+          "Delivered"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "payment_method",
+        "q"
+      ],
+      "pdf_columns": [
+        "Package",
+        "Invoice number",
+        "Seller GSTIN",
+        "Place of supply",
+        "SKU",
+        "HSN",
+        "Qty",
+        "Taxable value",
+        "GST rate %",
+        "CGST",
+        "SGST",
+        "IGST"
+      ]
+    },
+    {
+      "name": "returns",
+      "label": "Returns",
+      "description": "Your returns with reasons, refunds and credit notes.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "Return",
+        "Package",
+        "Seller",
+        "Requested (IST)",
+        "Status",
+        "Reason",
+        "Units",
+        "Refund amount",
+        "Credit note",
+        "Received (IST)",
+        "Refunded (IST)",
+        "Seller note"
+      ],
+      "date_label": "date the return was requested",
+      "statuses": [
+        [
+          "requested",
+          "Requested"
+        ],
+        [
+          "approved",
+          "Approved"
+        ],
+        [
+          "picked_up",
+          "Picked up"
+        ],
+        [
+          "received",
+          "Received"
+        ],
+        [
+          "refunded",
+          "Refunded"
+        ],
+        [
+          "rejected",
+          "Rejected"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "q"
+      ]
+    },
+    {
+      "name": "ledger",
+      "label": "Statement",
+      "description": "Every sale, deduction, return and payout on your account.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "Date (IST)",
+        "Seller",
+        "Type",
+        "Package",
+        "Description",
+        "Amount",
+        "Available from",
+        "Payout"
+      ],
+      "date_label": "date of the entry"
+    },
+    {
+      "name": "payouts",
+      "label": "Payouts",
+      "description": "Payouts to your bank with UTR numbers.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "Payout",
+        "Seller",
+        "Legal name",
+        "Created (IST)",
+        "Amount",
+        "Status",
+        "Method",
+        "UTR",
+        "Paid (IST)",
+        "Account (last 4)",
+        "IFSC",
+        "Failure reason"
+      ],
+      "date_label": "date the payout was created",
+      "statuses": [
+        [
+          "pending",
+          "Pending"
+        ],
+        [
+          "processing",
+          "Processing"
+        ],
+        [
+          "paid",
+          "Paid"
+        ],
+        [
+          "failed",
+          "Failed"
+        ],
+        [
+          "cancelled",
+          "Cancelled"
+        ]
+      ],
+      "filters": [
+        "q"
+      ]
+    },
+    {
+      "name": "stock",
+      "label": "Stock",
+      "description": "Units per product option and warehouse. Edit the quantity column and import it back on the Inventory page.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "sku",
+        "warehouse_code",
+        "quantity",
+        "title",
+        "option",
+        "seller",
+        "warehouse",
+        "active"
+      ],
+      "filters": [
+        "category",
+        "q",
+        "low_stock"
+      ]
+    },
+    {
+      "name": "products",
+      "label": "Products",
+      "description": "Your product options with prices, stock and tax details.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "SKU",
+        "Product",
+        "Option",
+        "Seller",
+        "Category",
+        "Brand",
+        "Status",
+        "MRP",
+        "Price",
+        "Stock",
+        "HSN",
+        "GST rate %",
+        "Return window (days)",
+        "Rating",
+        "Reviews",
+        "Sold",
+        "Created (IST)"
+      ],
+      "date_label": "",
+      "statuses": [
+        [
+          "approved",
+          "Live"
+        ],
+        [
+          "pending",
+          "In review"
+        ],
+        [
+          "rejected",
+          "Rejected"
+        ],
+        [
+          "draft",
+          "Draft"
+        ],
+        [
+          "archived",
+          "Archived"
+        ]
+      ],
+      "filters": [
+        "category",
+        "q",
+        "low_stock"
+      ],
+      "pdf_columns": [
+        "SKU",
+        "Product",
+        "Option",
+        "Seller",
+        "Category",
+        "Status",
+        "MRP",
+        "Price",
+        "Stock",
+        "Sold"
+      ]
+    }
+  ]
+}
