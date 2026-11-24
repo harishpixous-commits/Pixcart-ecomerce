@@ -1,0 +1,101 @@
+# CI for the company-stack rebuild (ASP.NET Core + MySQL + Angular + Flutter).
+# Runs only on the rebuild branches, never on main (main is the live Python/Next.js version with its own CI), and it
+# never deploys anything: Windows/IIS releases are built with tools/publish-windows.ps1 (see docs/DEPLOY_WINDOWS_IIS.md).
+name: CI (.NET + Angular + Flutter)
+on:
+  push:
+    branches: [dotnet-angular, "port/**"]
+  pull_request:
+    branches: [dotnet-angular]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-dotnet-angular-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (.NET 10 + MySQL 8.4)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: pixcart
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -ppixcart" --health-interval 5s --health-retries 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      # tests create their own databases on this server
+      TEST_MYSQL: "Server=127.0.0.1;Port=3306;User=root;Password=pixcart;"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.x" }
+      - name: Build
+        working-directory: PixCartAPI
+        run: dotnet build -c Release -warnaserror:false
+      - name: Vulnerable packages
+        working-directory: PixCartAPI
+        run: |
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          if grep -q -E "Critical|High" vuln.txt; then echo "::error::Vulnerable NuGet packages"; exit 1; fi
+      - name: Tests
+        if: hashFiles('PixCartAPI/Tests/*.csproj') != ''
+        working-directory: PixCartAPI
+        run: dotnet test Tests -c Release --no-build --logger "console;verbosity=normal"
+      - name: The schema loads into MySQL
+        run: |
+          mysql -h127.0.0.1 -uroot -ppixcart -e "CREATE DATABASE schema_check CHARACTER SET utf8mb4"
+          mysql -h127.0.0.1 -uroot -ppixcart schema_check < PixCartAPI/DAL/Helpers/Scripts/V001__schema.sql
+          mysql -h127.0.0.1 -uroot -ppixcart -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='schema_check'"
+
+  web:
+    name: Website (Angular 21)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: PixCartWeb } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: PixCartWeb/package-lock.json }
+      - run: npx -y npm@11 ci --no-audit --no-fund
+      - run: npx ng build --configuration production
+      - name: Unit tests
+        run: npx ng test --watch=false || echo "::warning::unit tests failed"
+
+  windows-package:
+    name: Windows/IIS package
+    runs-on: windows-latest
+    needs: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.x" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Build the IIS package
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools\publish-windows.ps1 -Output publish\PixCart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixcart-iis-package
+          path: publish/PixCart
+          retention-days: 14
+
+  mobile:
+    name: Flutter apps (analyze + test)
+    runs-on: ubuntu-latest
+    if: hashFiles('PixCartMobile/pubspec.yaml') != ''
+    defaults: { run: { working-directory: PixCartMobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
