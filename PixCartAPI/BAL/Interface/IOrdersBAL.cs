@@ -37,6 +37,7 @@ public interface IOrdersBAL
 
     /// <summary>POST /api/orders/{id}/payment-status (reference: payment_status): paid | waiting | failed |
     /// not_paid | unknown, from Razorpay's records, plus the shopper's order view.</summary>
+    Task<JsonObject> CheckWithGatewayAsync(PaymentModel payment,IUnitOfWork uow);
     Task<JsonObject> PaymentStatusAsync(UserModel user, Guid orderId);
 
     /// <summary>A refund in rupees as Razorpay must send it: in the currency the shopper paid, at the order's own

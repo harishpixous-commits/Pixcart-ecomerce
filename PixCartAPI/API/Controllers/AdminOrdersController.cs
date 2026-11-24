@@ -19,4 +19,5 @@ public class AdminOrdersController(IAdminOrdersBAL bal,ICurrentUser me,IInvoices
         [FromQuery,Range(1,int.MaxValue)]int page=1,[FromQuery(Name="page_size"),Range(1,100)]int size=25)=>await bal.ListAsync(await me.RequireAsync(),new(status,q,method,payment,package,seller,customer,Date(from),Date(to,true),page,size));
     [HttpGet("{id:guid}")]public async Task<object> Detail(Guid id)=>await bal.DetailAsync(await me.RequireAsync(),id);
     [HttpGet("{id:guid}/fee-invoice.pdf")]public async Task<IActionResult> FeeInvoice(Guid id){var(pdf,name)=await invoices.AdminFeeInvoicePdfAsync(await me.RequireAsync(),id);Response.Headers.CacheControl="private, no-store";Response.Headers.ContentDisposition=$"inline; filename=\"{name}\"";return File(pdf,"application/pdf");}
+    [HttpPost("{id:guid}/check-payment")]public async Task<object> Check(Guid id)=>await bal.CheckPaymentAsync(await me.RequireAsync(),id);
 }
