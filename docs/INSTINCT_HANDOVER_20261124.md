@@ -66,9 +66,12 @@ and unbuilt in this session.
 
 ## Open items / honest gaps
 
-- Auth and catalog HTTP surface verification is still outstanding.
-- Credit-note numbering collision quirk: preserved as-is (16-char truncation), unresolved
-  by decision - do not change the reference numbering contract without Harish.
+- Customer auth (otp request/verify, login, refresh, me) and the storefront catalog HTTP
+  surface are UNPORTED - no controllers exist for them yet (only cart/checkout/orders on the
+  customer side). This is a missing surface, not merely an unverified one.
+- Credit-note numbering collision quirk: the 16-char truncation collision is preserved
+  temporarily but UNRESOLVED; it is not an accepted defect, and the reference numbering
+  contract stays unchanged unless Harish decides otherwise.
 - Online-return refund (mock provider path) and staff return auto-assign success branch:
   declared earlier, still not exercised with a fixture.
 - run_payouts with actual balances due (nonzero created count) unexercised.
