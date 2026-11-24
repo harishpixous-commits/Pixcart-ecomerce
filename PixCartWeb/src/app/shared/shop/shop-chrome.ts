@@ -6,7 +6,8 @@
  *   footerData() (useFooter), <pc-footer-link [href] [label] linkClass>.
  */
 
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injectable, computed, effect, inject, input, signal, untracked } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injectable, computed, effect, inject, input, signal, untracked, viewChild } from "@angular/core";
+import { Router } from "@angular/router";
 import { Bell, ChevronDown, Globe, Heart, MapPin, ShoppingCart, User as UserIcon, X } from "lucide-angular";
 import { api } from "../../core/api";
 import { PincodeService, isPincode } from "../../core/pincode";
@@ -68,9 +69,8 @@ export function closeOnNavigate(close: () => void) {
 @Component({
   selector: "a[pcLogo]",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  hostDirectives: [PcLink],
-  host: { "[class]": "cls()", "[attr.aria-label]": "site().brand_name + ' home'", "[attr.translate]": "site().logo_url ? null : 'no'" },
-  template: `@if (site().logo_url) {<img [src]="site().logo_url" [alt]="site().brand_name" class="h-9 w-auto max-w-[160px] object-contain" />} @else {{{ parts()[0] }}@if (parts()[1]) {<span class="text-marigold">{{ parts()[1] }}</span>}}`,
+  host: { href: "/", "(click)": "go($event)", "[class]": "cls()", "[attr.aria-label]": "site().brand_name + ' home'", "[attr.translate]": "site().logo_url ? null : 'no'" },
+  template: `@if (site().logo_url) {<img [src]="site().logo_url" [alt]="site().brand_name" class="h-9 w-auto max-w-[160px] object-contain" />} @else {<ng-container>{{ parts()[0] }}</ng-container>@if (parts()[1]) {<span class="text-marigold">{{ parts()[1] }}</span>}}`,
 })
 export class Logo {
   readonly light = input(true);
@@ -78,8 +78,11 @@ export class Logo {
   protected readonly parts = computed(() => splitBrand(this.site().brand_name));
   protected readonly cls = computed(() =>
     this.site().logo_url ? "flex items-center" : cx("flex items-baseline font-display text-2xl font-bold tracking-tight", this.light() ? "text-white" : "text-peacock"));
-  constructor() {
-    inject(PcLink).pcLink = (() => "/") as unknown as PcLink["pcLink"];
+  private readonly router = inject(Router);
+  protected go(e: MouseEvent): void {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    void this.router.navigateByUrl("/");
   }
 }
 
@@ -215,7 +218,7 @@ export class AccountMenu {
   protected readonly session = inject(SessionService);
   private readonly regional = inject(RegionalService);
   protected readonly path = inject(RouteState).pathname;
-  private readonly el = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly box = viewChild<ElementRef<HTMLElement>>("box");
   protected readonly open = signal(false);
   protected readonly regionOpen = signal(false);
   protected readonly UserIcon = UserIcon;
@@ -228,7 +231,7 @@ export class AccountMenu {
   protected readonly linkCls = computed(() => cx("flex h-10 items-center gap-2 rounded-lg px-2", this.t().text, this.t().hover, !this.compact() && "sm:px-3"));
   protected readonly buttonCls = computed(() => cx("flex h-10 items-center gap-1.5 rounded-lg px-2 text-left", this.t().text, this.t().hover, !this.compact() && "sm:px-3"));
   constructor() {
-    closeOnOutside(this.open, () => this.open.set(false), () => this.el.parentElement?.querySelector(":scope > .relative") ?? this.el.nextElementSibling as HTMLElement);
+    closeOnOutside(this.open, () => this.open.set(false), () => this.box()?.nativeElement);
     closeOnNavigate(() => this.open.set(false));
   }
 }

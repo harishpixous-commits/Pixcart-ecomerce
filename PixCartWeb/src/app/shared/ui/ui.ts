@@ -124,6 +124,7 @@ function hasWidth(el: HTMLElement): boolean {
   return /(^|\s)(\S+:)*w-/.test(el.getAttribute("class") ?? "");
 }
 
+@Directive()
 abstract class FieldControl implements OnInit {
   protected readonly el = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly field = inject(FIELD, { optional: true });
@@ -382,7 +383,7 @@ export class Pagination {
   host: { class: "contents" },
   template: `
     <p-dialog [visible]="open()" (visibleChange)="!$event && close.emit()" [modal]="true" [closeOnEscape]="true" [dismissableMask]="true"
-      [blockScroll]="true" [draggable]="false" [resizable]="false" [ariaLabelledBy]="null" appendTo="body"
+      [blockScroll]="true" [draggable]="false" [resizable]="false" appendTo="body"
       [maskStyleClass]="'pc-modal-mask fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-0 sm:items-center sm:p-4'"
       [styleClass]="dialogCls()" [attr.aria-label]="title()">
       <ng-template #headless>

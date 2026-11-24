@@ -18,14 +18,12 @@ export const PIXCART_PT: GlobalPassThrough = {
   },
   // side drawers
   drawer: {
-    mask: { class: "fixed inset-0 z-[60] flex bg-ink/60" },
     root: { class: "relative flex h-full w-[86%] max-w-[365px] flex-col overflow-y-auto bg-white shadow-2xl" },
   },
   select: {
     root: { class: `${FIELD} relative flex items-center pr-8` },
     label: { class: "min-w-0 flex-1 truncate" },
     dropdown: { class: "absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint" },
-    overlay: { class: OVERLAY },
     option: { class: OPTION },
   },
   inputText: { root: { class: FIELD } },
