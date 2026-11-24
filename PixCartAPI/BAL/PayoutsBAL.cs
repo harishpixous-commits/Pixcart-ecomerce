@@ -21,6 +21,16 @@ public class PayoutsBAL(LedgerDAL ledger, IPlatformSettingsBAL platform, IIntegr
         return weekday == (int)cfg.Long("payout_weekday") && weeks % every == 0;
     }
 
+    public JsonObject Schedule(JsonObject cfg,DateTime? at=null)
+    {
+        var now=DateTime.SpecifyKind(at??DateTimeFunctions.UtcNow(),DateTimeKind.Utc);DateTime? next=null;
+        if(cfg.Bool("auto_payouts"))
+        {
+            var today=DateOnly.FromDateTime(now+Ist);
+            for(var n=0;n<15;n++) {var day=today.AddDays(n);var run=DateTime.SpecifyKind(day.ToDateTime(new TimeOnly(10,0))-Ist,DateTimeKind.Utc);if(run>now&&IsPayoutDay(cfg,day)){next=run;break;}}
+        }
+        return new JsonObject{["auto"]=cfg.Bool("auto_payouts"),["weekday"]=cfg.Int("payout_weekday"),["every_weeks"]=cfg.Int("payout_every_weeks"),["min_paise"]=cfg.Long("payout_min_paise"),["next_at"]=next is {} when?DateTimeFunctions.Iso(when):null};
+    }
     /// <summary>Reference: jobs.payouts_job — fires daily at 10:00 IST and only pays out on a payout day.</summary>
     public async Task<int> RunScheduledAsync()
     {

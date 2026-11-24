@@ -14,7 +14,7 @@ public partial interface ISellerHubBAL
     Task<JsonArray> WarehousesAsync(SellerModel seller);
     Task<JsonArray> WarehouseAsync(UserModel user,SellerModel seller,Guid? id,JsonObject body);
 }
-public partial class SellerHubBAL(IMySqlDapperHelper db,IInventoryBAL stock,InventoryDAL inventory,CatalogDAL catalog,IAuditBAL audit,IPlatformSettingsBAL platform):ISellerHubBAL
+public partial class SellerHubBAL(IMySqlDapperHelper db,IInventoryBAL stock,InventoryDAL inventory,CatalogDAL catalog,IAuditBAL audit,IPlatformSettingsBAL platform,OrdersDAL orders,BAL.Interface.IPayoutsBAL payouts):ISellerHubBAL
 {
     public JsonObject Preferences(SellerModel s)=>new(){["dispatch_days"]=s.DispatchDays,["holiday_mode"]=s.HolidayMode,["invoice_prefix"]=s.InvoicePrefix,["dispatch_cutoff"]=s.DispatchCutoff,["rating_avg"]=s.RatingAvg,["rating_count"]=s.RatingCount};
     public async Task<JsonObject> PreferencesAsync(UserModel user,SellerModel s,int days,bool holiday,string prefix,string? cutoff)

@@ -12,5 +12,6 @@ public interface IPayoutsBAL
     Task<List<PayoutModel>> CreatePayoutsAsync(long minAmount);
 
     /// <summary>Reference: ledger.is_payout_day.</summary>
+    JsonObject Schedule(JsonObject cfg,DateTime? now=null);
     bool IsPayoutDay(JsonObject cfg, DateOnly day);
 }
