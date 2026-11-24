@@ -5,7 +5,7 @@ using Model.DomainModel;
 using Utils;
 using Utils.Interface;
 namespace BAL;
-public class CmsAdminBAL(CmsDAL cms,CmsAdminDAL data,ISiteBAL site,IAccessBAL access,IAuditBAL audit,IMySqlDapperHelper db):ICmsAdminBAL
+public partial class CmsAdminBAL(CmsDAL cms,CmsAdminDAL data,ISiteBAL site,IAccessBAL access,IAuditBAL audit,IMySqlDapperHelper db):ICmsAdminBAL
 {
     public async Task<JsonArray> PagesAsync(UserModel user)
     {

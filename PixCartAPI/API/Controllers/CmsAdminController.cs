@@ -4,7 +4,7 @@ using BAL.Interface;
 using Microsoft.AspNetCore.Mvc;
 namespace API.Controllers;
 [ApiController,SignedIn,Route("/api/admin/storefront/pages")]
-public class CmsAdminController(ICmsAdminBAL bal,ICurrentUser me):ControllerBase
+public partial class CmsAdminController(ICmsAdminBAL bal,ICurrentUser me):ControllerBase
 {
     public record PageIn
     {
