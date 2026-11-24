@@ -5,7 +5,7 @@ using Model.DomainModel;
 using Utils;
 using Utils.Interface;
 namespace BAL;
-public class AdminPayoutBAL(AdminPayoutDAL data,IAccessBAL access,IIntegrationBAL integrations,EncryptDecrypt crypto,IMySqlDapperHelper db,AuditDAL audit,INotifyBAL notify,ISiteBAL site,IPayoutsBAL payouts,IPlatformSettingsBAL platform):IAdminPayoutBAL
+public class AdminPayoutBAL(AdminPayoutDAL data,IAccessBAL access,IIntegrationBAL integrations,EncryptDecrypt crypto,IMySqlDapperHelper db,AuditDAL audit,INotifyBAL notify,ISiteBAL site,IPayoutsBAL payouts,IPlatformSettingsBAL platform,IPayoutGatewayBAL gateway):IAdminPayoutBAL
 {
     internal bool BankChanged(PayoutModel p,SellerModel seller)
     {
@@ -44,5 +44,15 @@ public class AdminPayoutBAL(AdminPayoutDAL data,IAccessBAL access,IIntegrationBA
 
     public async Task<JsonObject> RunAsync(UserModel user)
     {await access.RequireAsync(user,"payouts");var cfg=await platform.GetAsync();await using var tx=await db.BeginAsync();var made=await payouts.CreatePayoutsAsync(cfg.Long("payout_min_paise"),tx);await audit.InsertAsync(new(){Id=Guid.NewGuid(),ActorUserId=user.Id,Action="payout.run",EntityType="payout",EntityId="batch",Detail=$"{made.Count} payouts",CreatedAt=DateTime.UtcNow},tx.Transaction);await tx.CommitAsync();return new(){["created"]=made.Count,["items"]=new JsonArray(made.Select(p=>(JsonNode)SellerHubBAL.PayoutOut(p)).ToArray())};}
+
+    public async Task<JsonObject> SendAsync(UserModel user,Guid id)
+    {
+        await access.RequireAsync(user,"payouts");await using var tx=await db.BeginAsync();var p=await data.LockAsync(id,tx)??throw new NotFoundException("Payout");if(p.Status!="pending")throw new AppException($"A {p.Status} payout cannot be sent","invalid_status",409);var cfg=await integrations.GetAsync();var seller=(await data.SellerAsync(p.SellerId))!;if(BankChanged(p,seller))throw new AppException("The seller's bank account changed after this payout was created. Check it with the seller, then confirm the new account on the payout (or cancel it) before sending.","bank_changed",409);if(!(cfg.RazorpayEnabled&&cfg.RazorpayxAccountNumber.Length>0))throw new AppException("RazorpayX is not configured","payout_not_configured");
+        if(seller.PayoutFundAccountId.Length==0)
+        {
+            var contact=await gateway.PostAsync(cfg,"/contacts",new(){["name"]=seller.LegalName[..Math.Min(50,seller.LegalName.Length)],["email"]=seller.ContactEmail,["contact"]=seller.ContactPhone,["type"]="vendor",["reference_id"]=seller.Id.ToString()});var fund=await gateway.PostAsync(cfg,"/fund_accounts",new(){["contact_id"]=contact["id"]!.GetValue<string>(),["account_type"]="bank_account",["bank_account"]=new JsonObject{["name"]=seller.BankHolderName,["ifsc"]=seller.BankIfsc,["account_number"]=crypto.Decrypt(seller.BankAccountEnc)}});seller.PayoutContactId=contact["id"]!.GetValue<string>();seller.PayoutFundAccountId=fund["id"]!.GetValue<string>();await data.SaveGatewayAccountAsync(seller,tx);
+        }
+        var brand=(await site.GetSiteAsync())["brand_name"]!.GetValue<string>();var result=await gateway.PostAsync(cfg,"/payouts",new(){["account_number"]=cfg.RazorpayxAccountNumber,["fund_account_id"]=seller.PayoutFundAccountId,["amount"]=p.Amount,["currency"]="INR",["mode"]=p.Amount<=50000000?"IMPS":"NEFT",["purpose"]="vendor bill",["queue_if_low_balance"]=true,["reference_id"]=p.Number,["narration"]=Narration(brand,p.Number)},p.Id.ToString());p.ProviderPayoutId=result["id"]?.GetValue<string>()??"";p.Status="processing";p.UpdatedAt=DateTime.UtcNow;await data.SaveAsync(p,tx);await audit.InsertAsync(new(){Id=Guid.NewGuid(),ActorUserId=user.Id,Action="payout.send",EntityType="payout",EntityId=p.Id.ToString(),CreatedAt=DateTime.UtcNow},tx.Transaction);await tx.CommitAsync();return SellerHubBAL.PayoutOut(p);
+    }
 
 }

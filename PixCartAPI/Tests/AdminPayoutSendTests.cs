@@ -1,0 +1,31 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json.Nodes;
+using BAL;
+using BAL.Interface;
+using DAL;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Utils;
+using Utils.Interface;
+namespace Tests;
+public class AdminPayoutSendTests(ApiFactory f):ApiTest(f)
+{
+    private sealed class Handler:HttpMessageHandler
+    {
+        public bool Fail;public List<(string Path,JsonObject Body,string? Idem)> Calls=[];
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
+        {Assert.Equal("Basic",request.Headers.Authorization!.Scheme);var path=request.RequestUri!.AbsolutePath;var body=JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();Calls.Add((path,body,request.Headers.TryGetValues("X-Payout-Idempotency",out var values)?values.Single():null));if(Fail&&path.EndsWith("/payouts"))return new(HttpStatusCode.BadRequest){Content=new StringContent("{\"error\":{\"description\":\"Synthetic declined\"}}")};return new(HttpStatusCode.OK){Content=new StringContent(new JsonObject{["id"]=path.EndsWith("/contacts")?"cont_SYNTH":path.EndsWith("/fund_accounts")?"fa_SYNTH":"pout_SYNTH"}.ToJsonString())};}
+    }
+    [Fact]public async Task Send_mock_transport_bank_guard_contacts_idempotency_gateway_failure_and_transaction_rollback()
+    {
+        var admin=await Admin();var user=await LoginPhone("9890000109");var sid=(await user.Post("/api/seller/register",new{display_name="Synthetic Send Store"})).Json["id"]!.GetValue<string>();using var scope=Factory.Services.CreateScope();var crypto=scope.ServiceProvider.GetRequiredService<EncryptDecrypt>();var enc=crypto.Encrypt("123456789012");await ApiFactory.DbExecAsync("UPDATE sellers SET bank_holder_name='Synthetic Holder',bank_account_enc=@enc,bank_ifsc='SYNT0001234',legal_name='Synthetic Legal' WHERE id=@sid",new{sid,enc});var id=Guid.NewGuid();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();await using(var tx=await db.BeginAsync()){await scope.ServiceProvider.GetRequiredService<LedgerDAL>().InsertPayoutAsync(new(){Id=id,SellerId=Guid.Parse(sid),Number="PO-SYNTH-SEND",Amount=50000000,Status="pending",Mode="manual",BankSnapshot=new JsonObject{["holder"]="Synthetic Holder",["ifsc"]="SYNT0001234",["account_enc"]=enc,["account_last4"]="9012"}.ToJsonString(),CreatedAt=DateTime.UtcNow,UpdatedAt=DateTime.UtcNow},tx);await tx.CommitAsync();}
+        var handler=new Handler();using var isolated=Factory.WithWebHostBuilder(b=>b.ConfigureTestServices(s=>s.AddHttpClient(PayoutGatewayBAL.HttpClientName).ConfigurePrimaryHttpMessageHandler(()=>handler)));using var client=isolated.CreateClient();client.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer",admin.Token);async Task<(int Status,JsonNode Json)> Send(Guid? pid=null){var r=await client.PostAsync("/api/admin/payouts/"+(pid??id)+"/send",new StringContent("{}",Encoding.UTF8,"application/json"));return((int)r.StatusCode,JsonNode.Parse(await r.Content.ReadAsStringAsync())!);}
+        Assert.Equal(403,(await user.Post("/api/admin/payouts/"+id+"/send")).Status);Assert.Equal(404,(await Send(Guid.NewGuid())).Status);var r=await Send();Assert.Equal("payout_not_configured",r.Json["error"]!["code"]!.GetValue<string>());Assert.Empty(handler.Calls);
+        var integrations=scope.ServiceProvider.GetRequiredService<IIntegrationBAL>();await integrations.SaveAsync("razorpay",new(){["key_id"]="rzp_test_SYNTHETICONLY",["key_secret"]="synthetic-not-real"},[],true,"Synthetic test");await integrations.SaveAsync("razorpayx",new(){["account_number"]="123456789012",["webhook_secret"]="synthetic-webhook-only"},[],true,"Synthetic test");await ApiFactory.DbExecAsync("UPDATE sellers SET bank_holder_name='Changed' WHERE id=@sid",new{sid});r=await Send();Assert.Equal("bank_changed",r.Json["error"]!["code"]!.GetValue<string>());Assert.Empty(handler.Calls);await ApiFactory.DbExecAsync("UPDATE sellers SET bank_holder_name='Synthetic Holder' WHERE id=@sid",new{sid});
+        handler.Fail=true;r=await Send();Assert.Equal(502,r.Status);Assert.Equal("payout_gateway",r.Json["error"]!["code"]!.GetValue<string>());Assert.Equal(3,handler.Calls.Count);Assert.Equal("pending",await ApiFactory.DbScalarAsync<string>("SELECT status FROM payouts WHERE id=@id",new{id}));Assert.Equal("",await ApiFactory.DbScalarAsync<string>("SELECT payout_fund_account_id FROM sellers WHERE id=@sid",new{sid}));Assert.Equal("123456789012",handler.Calls[1].Body["bank_account"]!["account_number"]!.GetValue<string>());Assert.Equal("IMPS",handler.Calls[2].Body["mode"]!.GetValue<string>());Assert.Equal(id.ToString(),handler.Calls[2].Idem);
+        handler.Fail=false;await ApiFactory.DbExecAsync("CREATE TRIGGER synthetic_send_fail BEFORE INSERT ON audit_logs FOR EACH ROW BEGIN IF NEW.action='payout.send' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Synthetic send rollback'; END IF; END");try{Assert.Equal(500,(await Send()).Status);Assert.Equal("pending",await ApiFactory.DbScalarAsync<string>("SELECT status FROM payouts WHERE id=@id",new{id}));}finally{await ApiFactory.DbExecAsync("DROP TRIGGER synthetic_send_fail");}r=await Send();Assert.Equal(200,r.Status);Assert.Equal("processing",r.Json["status"]!.GetValue<string>());Assert.Equal("pout_SYNTH",await ApiFactory.DbScalarAsync<string>("SELECT provider_payout_id FROM payouts WHERE id=@id",new{id}));Assert.Equal("fa_SYNTH",await ApiFactory.DbScalarAsync<string>("SELECT payout_fund_account_id FROM sellers WHERE id=@sid",new{sid}));var count=handler.Calls.Count;Assert.Equal(409,(await Send()).Status);Assert.Equal(count,handler.Calls.Count);
+        await ApiFactory.DbExecAsync("UPDATE payouts SET status='pending',amount=50000001 WHERE id=@id",new{id});Assert.Equal(200,(await Send()).Status);Assert.Equal(count+1,handler.Calls.Count);Assert.Equal("NEFT",handler.Calls.Last().Body["mode"]!.GetValue<string>());Assert.Equal(id.ToString(),handler.Calls.Last().Idem);Assert.All(handler.Calls.Where(c=>c.Path.EndsWith("/payouts")),c=>{Assert.Equal("INR",c.Body["currency"]!.GetValue<string>());Assert.True(c.Body["queue_if_low_balance"]!.GetValue<bool>());});
+    }
+}
