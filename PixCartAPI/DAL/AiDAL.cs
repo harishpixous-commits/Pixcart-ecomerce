@@ -201,7 +201,7 @@ public class AiDAL(IMySqlDapperHelper db)
         " AND delivered_at >= @a AND delivered_at < @b", new { a, b });
 
     public Task<double?> KpiShipHoursAsync(DateTime a, DateTime b) => db.ExecuteScalarAsync<double?>(
-        "SELECT AVG(TIMESTAMPDIFF(SECOND, created_at, shipped_at) / 3600) FROM sub_orders" +
+        "SELECT AVG(TIMESTAMPDIFF(MICROSECOND, created_at, shipped_at) / 3600000000.0) FROM sub_orders" +
         " WHERE status != 'pending_payment' AND shipped_at >= @a AND shipped_at < @b", new { a, b });
 
     private sealed class ViewsCartsRow
