@@ -19,7 +19,7 @@ public class SellerLedgerTests(ApiFactory f):ApiTest(f)
     {
         // 2026-11-24 is Tuesday, verified by DateOnly.DayOfWeek rather than presumed.
         var day=new DateOnly(2026,11,24);Assert.Equal(DayOfWeek.Tuesday,day.DayOfWeek);
-        var bal=new PayoutsBAL(null!,null!,null!,null!);var cfg=new JsonObject{["auto_payouts"]=true,["payout_weekday"]=1,["payout_every_weeks"]=1,["payout_min_paise"]=100};
+        var bal=new PayoutsBAL(null!,null!,null!,null!,null!);var cfg=new JsonObject{["auto_payouts"]=true,["payout_weekday"]=1,["payout_every_weeks"]=1,["payout_min_paise"]=100};
         var before=new DateTime(2026,11,24,4,29,0,DateTimeKind.Utc);var next=DateTime.Parse(bal.Schedule(cfg,before)["next_at"]!.GetValue<string>()).ToUniversalTime();Assert.Equal(new DateTime(2026,11,24,4,30,0,DateTimeKind.Utc),next);
         next=DateTime.Parse(bal.Schedule(cfg,next)["next_at"]!.GetValue<string>()).ToUniversalTime();Assert.Equal(new DateTime(2026,12,1,4,30,0,DateTimeKind.Utc),next);
         cfg["payout_every_weeks"]=2;next=DateTime.Parse(bal.Schedule(cfg,before)["next_at"]!.GetValue<string>()).ToUniversalTime();Assert.True(bal.IsPayoutDay(cfg,DateOnly.FromDateTime(next.AddHours(5.5))));Assert.InRange((next-before).TotalDays,0,14);

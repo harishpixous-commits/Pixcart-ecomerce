@@ -21,11 +21,11 @@ public class LedgerDAL(IMySqlDapperHelper db)
     }
 
     /// <summary>Reference: ledger.create_payouts balance query (unallocated, available, approved sellers).</summary>
-    public Task<IEnumerable<SellerBalanceRow>> PayoutBalancesAsync(DateTime now) => db.QueryAsync<SellerBalanceRow>(
+    public Task<IEnumerable<SellerBalanceRow>> PayoutBalancesAsync(DateTime now,IUnitOfWork? transaction=null) => transaction is null?db.QueryAsync<SellerBalanceRow>(
         "SELECT CAST(l.seller_id AS CHAR) AS SellerId, SUM(l.amount) AS Balance FROM seller_ledger l" +
         " JOIN sellers s ON s.id = l.seller_id" +
         " WHERE l.payout_id IS NULL AND l.available_at <= @now AND s.status = 'approved' GROUP BY l.seller_id",
-        new { now });
+        new { now }):transaction.QueryAsync<SellerBalanceRow>("SELECT CAST(l.seller_id AS CHAR) AS SellerId,SUM(l.amount) AS Balance FROM seller_ledger l JOIN sellers s ON s.id=l.seller_id WHERE l.payout_id IS NULL AND l.available_at<=@now AND s.status='approved' GROUP BY l.seller_id",new{now});
 
     public Task LockSellerAsync(Guid sellerId, IUnitOfWork uow) => uow.ExecuteAsync(
         "SELECT id FROM sellers WHERE id = @sellerId FOR UPDATE", new { sellerId });

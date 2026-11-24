@@ -2,6 +2,7 @@ namespace BAL.Interface;
 
 using System.Text.Json.Nodes;
 using Model.DomainModel;
+using Utils.Interface;
 
 public interface IPayoutsBAL
 {
@@ -9,7 +10,7 @@ public interface IPayoutsBAL
     Task<int> RunScheduledAsync();
 
     /// <summary>Reference: ledger.create_payouts.</summary>
-    Task<List<PayoutModel>> CreatePayoutsAsync(long minAmount);
+    Task<List<PayoutModel>> CreatePayoutsAsync(long minAmount,IUnitOfWork? transaction=null);
 
     /// <summary>Reference: ledger.is_payout_day.</summary>
     JsonObject Schedule(JsonObject cfg,DateTime? now=null);
