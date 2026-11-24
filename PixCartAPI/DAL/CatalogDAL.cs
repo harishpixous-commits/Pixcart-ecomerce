@@ -350,7 +350,9 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
     /// <summary>Relevance: exact title, title prefix, a word of the title starting with the words, then the full-text score.</summary>
     private static string Rank(ProductFilter f, DynamicParameters p)
     {
-        if (f.Text.Length == 0) return "0";
+        // MySQL reads an integer literal in ORDER BY as a column ordinal ("Unknown column '0'");
+        // the reference emits literal(0.0), a constant expression.
+        if (f.Text.Length == 0) return "0.0";
         p.Add("textPrefix", SqlHelpers.StartsWith(f.Text));
         p.Add("textWord", "% " + SqlHelpers.StartsWith(f.Text));
         var sb = new StringBuilder("((p.title = @text) * 4 + (p.title LIKE @textPrefix) * 2 + (p.title LIKE @textWord)");
