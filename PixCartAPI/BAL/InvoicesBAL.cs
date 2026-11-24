@@ -66,11 +66,13 @@ public class InvoicesBAL(OrdersDAL orders, SellerAccountDAL sellers, ReturnsDAL 
     // ------------------------------------------------------------------------- seller tax invoice
 
     /// <summary>Reference: invoice + services/invoices.py invoice_pdf.</summary>
-    public async Task<(byte[] Pdf, string Filename)> InvoicePdfAsync(Guid userId, Guid subId)
+    public Task<(byte[] Pdf,string Filename)> InvoicePdfAsync(Guid userId,Guid subId)=>InvoiceCoreAsync(userId,null,subId);
+    public Task<(byte[] Pdf,string Filename)> SellerInvoicePdfAsync(Guid sellerId,Guid subId)=>InvoiceCoreAsync(null,sellerId,subId);
+    private async Task<(byte[] Pdf,string Filename)> InvoiceCoreAsync(Guid? userId,Guid? sellerId,Guid subId)
     {
         var sub = await orders.GetSubAsync(subId) ?? throw new NotFoundException("Invoice");
         var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Invoice");
-        if (order.UserId != userId) throw new NotFoundException("Invoice");
+        if (sellerId is not null ? sub.SellerId != sellerId || sub.InvoiceNumber.Length == 0 : order.UserId != userId) throw new NotFoundException("Invoice");
         if (sub.InvoiceNumber.Length == 0)
             throw new AppException("The invoice is issued when the package ships", "invoice_not_ready");
         var seller = await sellers.GetAsync(sub.SellerId) ?? throw new NotFoundException("Invoice");
@@ -216,10 +218,12 @@ public class InvoicesBAL(OrdersDAL orders, SellerAccountDAL sellers, ReturnsDAL 
     // ------------------------------------------------------------------------- credit note
 
     /// <summary>Reference: credit_note + services/invoices.py credit_note_pdf.</summary>
-    public async Task<(byte[] Pdf, string Filename)> CreditNotePdfAsync(Guid userId, Guid returnId)
+    public Task<(byte[] Pdf,string Filename)> CreditNotePdfAsync(Guid userId,Guid returnId)=>CreditNoteCoreAsync(userId,null,returnId);
+    public Task<(byte[] Pdf,string Filename)> SellerCreditNotePdfAsync(Guid sellerId,Guid returnId)=>CreditNoteCoreAsync(null,sellerId,returnId);
+    private async Task<(byte[] Pdf,string Filename)> CreditNoteCoreAsync(Guid? userId,Guid? sellerId,Guid returnId)
     {
         var ret = await returns.ReturnAsync(returnId) ?? throw new NotFoundException("Credit note");
-        if (ret.UserId != userId || ret.CreditNoteNumber.Length == 0) throw new NotFoundException("Credit note");
+        if ((sellerId is not null ? ret.SellerId != sellerId : ret.UserId != userId) || ret.CreditNoteNumber.Length == 0) throw new NotFoundException("Credit note");
         var sub = await orders.GetSubAsync(ret.SubOrderId) ?? throw new NotFoundException("Credit note");
         var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Credit note");
         var seller = await sellers.GetAsync(sub.SellerId) ?? throw new NotFoundException("Credit note");
