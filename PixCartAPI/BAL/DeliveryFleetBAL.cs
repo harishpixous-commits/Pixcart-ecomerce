@@ -954,6 +954,33 @@ public class DeliveryFleetBAL(
         return await TripViewAsync(a.Id, boy);
     }
 
+    /// <summary>Reference: fleet.staff_deliver — staff confirm a hand-over the partner could not record (phone
+    /// switched off, app trouble): the trip ends as delivered with the partner's fee and tip, and any cash due
+    /// counts as collected by the partner. Returns false when the package has no active trip.</summary>
+    public async Task<bool> StaffDeliverForSubAsync(UserModel admin, SubOrderModel sub, IUnitOfWork uow)
+    {
+        var a = await fleet.ActiveForSubAsync(sub.Id, uow);
+        if (a is null) return false;
+        if (a.Kind != "delivery" || a.Status is not ("picked" or "on_the_way" or "reached"))
+            throw new ConflictException("Only a package the partner is carrying can be marked delivered", "invalid_step");
+        var cfg = await deliverySettings.GetAsync();
+        var order = await orders.GetOrderAsync(a.OrderId) ?? throw new NotFoundException("Order");
+        var boy = await delivery.PartnerByIdAsync(a.DeliveryBoyId);
+        var due = await ordersBal.CollectAmountAsync(sub, order, uow);
+        var now = DateTimeFunctions.UtcNow();
+        a.Status = "delivered"; a.DeliveredAt = now; a.StatusAt = now; a.EndedAt = now;
+        a.CodCollected = due > 0 ? due : 0; a.CodMethod = due > 0 ? "cash" : "";
+        a.FeePaise = FeeFor(cfg, a.DistanceKm is not null ? (double)a.DistanceKm.Value : null);
+        a.TipPaise = await IsFeeCarrierAsync(sub, uow) ? order.TipPaise : 0;
+        a.BonusPaise = await WeatherBonusAsync(cfg);
+        await fleet.UpdateAsync(a, uow);
+        await ordersBal.TransitionAsync(sub, "delivered", "admin",
+            $"Delivered by {(boy is not null ? boy.Name : "the partner")} (confirmed by staff)", uow);
+        await LogStatusAsync(uow, a.OrderId, sub.Id, a.Id, "delivered", "admin", admin.Id,
+            "Marked delivered by staff" + (due > 0 ? $"; {Rupees(due)} cash counted as collected by the partner" : ""));
+        return true;
+    }
+
     public async Task<JsonObject> FailAsync(UserModel user, Guid assignmentId, string reason, string note, decimal? lat, decimal? lng)
     {
         if (note.Length > 200) throw new AppException("note must be at most 200 characters", "validation", 422);

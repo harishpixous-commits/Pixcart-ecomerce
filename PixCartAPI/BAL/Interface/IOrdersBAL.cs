@@ -86,6 +86,9 @@ public interface IOrdersBAL
     /// commit when one was created (reference: orders.cancel_sub_order).</summary>
     Task<RefundModel?> CancelSubOrderAsync(SubOrderModel sub, string actor, string reason, IUnitOfWork uow);
 
+    /// <summary>Tells the customer a refund settled by hand has gone through (reference: notify_refund).</summary>
+    Task NotifyRefundProcessedAsync(RefundModel refund);
+
     /// <summary>confirm / pack (reference: _act). ship/deliver arrive with their invoice/payout companions.</summary>
     Task<JsonObject> SellerDashboardAsync(SellerModel seller);
 

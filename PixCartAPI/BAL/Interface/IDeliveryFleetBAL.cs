@@ -87,4 +87,8 @@ public interface IDeliveryFleetBAL
     Task<(byte[] Data, string Media)> ProofStaffAsync(Guid assignmentId);
     Task<List<JsonObject>> CandidatesAsync(SubOrderModel sub, OrderModel order, JsonObject cfg,
         IUnitOfWork uow, bool onlineOnly = true, ReturnRequestModel? ret = null);
+
+    /// <summary>Staff confirm a hand-over the partner could not record (reference: fleet.staff_deliver): closes
+    /// the package's active trip as delivered, or returns false when no active trip exists.</summary>
+    Task<bool> StaffDeliverForSubAsync(UserModel admin, SubOrderModel sub, IUnitOfWork uow);
 }

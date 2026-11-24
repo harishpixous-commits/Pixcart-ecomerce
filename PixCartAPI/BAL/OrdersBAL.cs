@@ -1168,6 +1168,10 @@ public class OrdersBAL(
 
     /// <summary>Tells the customer a refund has gone through (reference: notify_refund; call once, when it becomes
     /// processed).</summary>
+    public async Task NotifyRefundProcessedAsync(RefundModel refund) => await NotifyRefundAsync(refund);
+
+    /// <summary>Tells the customer a refund has gone through (reference: notify_refund; call once, when it becomes
+    /// processed).</summary>
     private async Task NotifyRefundAsync(RefundModel refund)
     {
         var order = await orders.GetOrderAsync(refund.OrderId);
