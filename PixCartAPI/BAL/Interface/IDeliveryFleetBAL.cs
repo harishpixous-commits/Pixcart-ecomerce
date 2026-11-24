@@ -75,6 +75,7 @@ public interface IDeliveryFleetBAL
     Task<JsonObject> PickupToCourierByStaffAsync(UserModel admin, Guid returnId);
 
     Task SweepExpiredAsync();
+    Task<int> StuckCheckAsync();
     Task ReleaseAsync(Guid subOrderId, string why);
     Task<JsonObject> PickupPlaceForAsync(SubOrderModel sub);
     Task<JsonObject> AssignByStaffAsync(UserModel admin, Guid subOrderId, Guid partnerId, bool direct, bool force);

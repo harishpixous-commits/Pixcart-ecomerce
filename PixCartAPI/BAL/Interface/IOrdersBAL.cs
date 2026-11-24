@@ -98,4 +98,8 @@ public interface IOrdersBAL
 
     Task<JsonObject> SellerActAsync(UserModel user, SellerModel seller, Guid subId, string dst, string note = "",
         string? courierName = null, string? trackingNumber = null, string? trackingUrl = null);
+
+    Task<int> ExpireUnpaidOrdersAsync();
+    Task<IReadOnlyList<Guid>> PendingRefundIdsAsync();
+    Task<int> CancelUnconfirmedAsync();
 }

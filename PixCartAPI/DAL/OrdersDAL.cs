@@ -557,4 +557,21 @@ public class OrdersDAL(IMySqlDapperHelper db)
                 fleet_alerted_at = @FleetAlertedAt, updated_at = UTC_TIMESTAMP(6)
             WHERE id = @Id
             """, s);
+
+    /// <summary>Reference: jobs.expire_unpaid_orders — payment window closed and still unpaid.</summary>
+    public Task<IEnumerable<OrderModel>> PendingPaymentExpiredAsync(DateTime now) => db.QueryAsync<OrderModel>(
+        "SELECT * FROM orders WHERE status = 'pending_payment' AND payment_expires_at < @now ORDER BY created_at LIMIT 100",
+        new { now });
+
+    public Task<IEnumerable<PaymentModel>> PaymentsForOrderAsync(Guid orderId) => db.QueryAsync<PaymentModel>(
+        "SELECT * FROM payments WHERE order_id = @orderId ORDER BY created_at", new { orderId });
+
+    /// <summary>Reference: jobs.pending_refund_ids.</summary>
+    public Task<IEnumerable<Guid>> PendingRefundIdsAsync() => db.QueryAsync<Guid>(
+        "SELECT id FROM refunds WHERE status = 'pending' AND provider_refund_id IS NULL ORDER BY created_at LIMIT 50");
+
+    /// <summary>Reference: jobs.cancel_unconfirmed_orders (skip-locked batch).</summary>
+    public Task<IEnumerable<SubOrderModel>> UnconfirmedForUpdateAsync(DateTime cutoff, IUnitOfWork uow) => uow.QueryAsync<SubOrderModel>(
+        "SELECT * FROM sub_orders WHERE status = 'placed' AND created_at < @cutoff ORDER BY created_at LIMIT 50 FOR UPDATE SKIP LOCKED",
+        new { cutoff });
 }

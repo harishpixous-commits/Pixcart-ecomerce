@@ -50,6 +50,8 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["delivery_failed"] = ("Delivery attempt failed", "We could not deliver {{item}}: {{reason}}. We will try again or contact you."),
         ["staff_delivery_unassigned"] = ("No delivery partner took {{order_number}}", "{{reason}} Assign it by hand in Delivery → Queue."),
         ["staff_delivery_ready"] = ("Ready for pickup: {{order_number}}", "{{store}} has a package ready for pickup ({{pickup_area}} to {{drop_area}}). Assign a partner in Delivery → Queue."),
+        ["staff_delivery_stuck"] = ("Delivery stuck: {{order_number}}", "It has been '{{status}}' for {{minutes}} minutes with {{partner}}."),
+        ["low_stock"] = ("Low stock", "{{count}} of your product options have {{threshold}} or fewer units left."),
         ["staff_delivery_failed"] = ("Delivery failed: {{order_number}}", "{{partner}} could not deliver: {{reason}}. Choose to try again or return it to the seller."),
         ["staff_delivery_bank"] = ("Partner payout details changed", "{{name}} ({{phone}}) changed their bank or UPI details. Check them before the next payout."),
         ["order_delivered"] = ("Delivered", "{{item}} was delivered. Tell others what you think by writing a review."),

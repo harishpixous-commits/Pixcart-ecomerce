@@ -1587,4 +1587,83 @@ public class OrdersBAL(
         await uow.CommitAsync();
         return SellerSubJson(s, o, await orders.ItemsAsync([s.Id]), full: true);
     }
+
+    /// <summary>
+    /// Reference: jobs.expire_unpaid_orders. An order whose payment window closed is cancelled unless the gateway
+    /// shows a captured/authorized attempt (then it is confirmed instead); a gateway error skips the order rather
+    /// than cancelling it.
+    /// </summary>
+    public async Task<int> ExpireUnpaidOrdersAsync()
+    {
+        var expired = await orders.PendingPaymentExpiredAsync(DateTimeFunctions.UtcNow());
+        var cancelled = 0;
+        foreach (var order in expired)
+        {
+            var paid = false;
+            PaymentModel? confirmPay = null;
+            string? confirmId = null;
+            foreach (var pay in await orders.PaymentsForOrderAsync(order.Id))
+            {
+                IReadOnlyList<System.Text.Json.Nodes.JsonObject>? attempts;
+                try
+                {
+                    attempts = await razorpay.OrderPaymentsAsync(pay.ProviderOrderId);
+                }
+                catch (Exception e) when (e is RazorpayBAL.GatewayException or HttpRequestException)
+                {
+                    attempts = null; // cannot verify right now: leave the order alone
+                }
+                if (attempts is null) { paid = true; break; }
+                foreach (var a in attempts)
+                {
+                    var st = a["status"]?.GetValue<string>();
+                    if (st is "captured" or "authorized") { confirmPay = pay; confirmId = a["id"]!.GetValue<string>(); break; }
+                }
+                if (confirmId is not null) break;
+            }
+            if (confirmPay is not null && confirmId is not null)
+            {
+                try
+                {
+                    await using var cuow = await db.BeginAsync();
+                    var r = await ConfirmWithGatewayAsync(confirmPay, confirmId, cuow);
+                    await cuow.CommitAsync();
+                    if (r is "paid" or "already") paid = true;
+                }
+                catch (Exception e) when (e is AppException or RazorpayBAL.GatewayException or HttpRequestException)
+                {
+                    paid = true; // gateway rejected the confirm: leave the order alone
+                }
+            }
+            if (paid) continue;
+            await using var uow = await db.BeginAsync();
+            var subs = await orders.SubOrdersForUpdateAsync(order.Id, uow);
+            foreach (var sub in subs.Where(s => s.Status == "pending_payment"))
+                await CancelSubOrderAsync(sub, "system", "Payment not completed in time", uow);
+            await uow.CommitAsync();
+            cancelled++;
+        }
+        return cancelled;
+    }
+
+    /// <summary>Reference: jobs.pending_refund_ids — pending refunds the provider never confirmed, requeued.</summary>
+    public async Task<IReadOnlyList<Guid>> PendingRefundIdsAsync() =>
+        (await orders.PendingRefundIdsAsync()).ToList();
+
+    /// <summary>Reference: jobs.cancel_unconfirmed_orders.</summary>
+    public async Task<int> CancelUnconfirmedAsync()
+    {
+        var hours = (await platform.GetAsync()).Long("auto_cancel_unconfirmed_hours");
+        if (hours == 0) return 0;
+        var cutoff = DateTimeFunctions.UtcNow() - TimeSpan.FromHours(hours);
+        await using var uow = await db.BeginAsync();
+        var n = 0;
+        foreach (var sub in await orders.UnconfirmedForUpdateAsync(cutoff, uow))
+        {
+            await CancelSubOrderAsync(sub, "system", "The seller did not confirm the order in time", uow);
+            n++;
+        }
+        await uow.CommitAsync();
+        return n;
+    }
 }

@@ -31,6 +31,9 @@ public static class ServiceConfiguration
         services.AddSingleton<API.Infrastructure.RefundQueue>();
         services.AddSingleton<BAL.Interface.IRefundQueue>(sp => sp.GetRequiredService<API.Infrastructure.RefundQueue>());
         services.AddHostedService<API.Infrastructure.RefundWorker>();
+        // scheduled jobs worker (reference: jobs.py); same RunJobs gate as the BAL hosted-service scan
+        if (settings.RunJobs && !settings.IsTest)
+            services.AddHostedService<API.Infrastructure.JobsWorker>();
         services.AddSingleton<IMySqlHelper, Utils.MySqlHelper>();
         services.AddSingleton<IMailHelper, MailHelper>();
         services.AddSingleton<ISMSHelper, SMSHelper>();

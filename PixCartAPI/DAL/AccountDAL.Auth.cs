@@ -109,4 +109,8 @@ public partial class AccountDAL
         await db.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM refresh_sessions WHERE user_id = @userId AND user_agent <=> @userAgent AND created_at >= @from AND created_at <= @to",
             new { userId, userAgent, from, to }, tx) > 0;
+
+    /// <summary>Reference: jobs.cleanup_old_rows — OTP challenges older than two days.</summary>
+    public Task<int> DeleteOldOtpsAsync(DateTime cutoff) =>
+        db.ExecuteAsync("DELETE FROM otp_challenges WHERE created_at < @cutoff", new { cutoff });
 }

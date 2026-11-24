@@ -25,4 +25,5 @@ public interface IInventoryBAL
     /// <summary>Direct variants.stock write for a package with no warehouse (reference: the variant.stock += qty in
     /// _release_stock).</summary>
     Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow);
+    Task<int> LowStockNotifyAsync();
 }

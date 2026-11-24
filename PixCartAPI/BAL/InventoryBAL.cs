@@ -6,7 +6,8 @@ using Utils.Interface;
 namespace BAL;
 
 /// <summary>Multi-warehouse stock. Port of the reference services/inventory.py, starting with what checkout needs.</summary>
-public class InventoryBAL(InventoryDAL inventory, IMySqlDapperHelper db) : Interface.IInventoryBAL
+public class InventoryBAL(InventoryDAL inventory, IMySqlDapperHelper db,
+    Interface.IPlatformSettingsBAL platform, Interface.ICatalogNotifyBAL notify) : Interface.IInventoryBAL
 {
     /// <summary>Fewer units are left in the seller's active warehouses than the line asks for (another buyer was
     /// quicker) (reference: InsufficientStock).</summary>
@@ -145,4 +146,18 @@ public class InventoryBAL(InventoryDAL inventory, IMySqlDapperHelper db) : Inter
     /// <summary>Direct variants.stock write for a package with no warehouse.</summary>
     public Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow) =>
         inventory.SetVariantStockAsync(variantId, stock, uow);
+
+    /// <summary>Reference: jobs.low_stock_scan — one in-app note per seller listing their at-or-below-threshold options.</summary>
+    public async Task<int> LowStockNotifyAsync()
+    {
+        var threshold = (await platform.GetAsync()).Long("low_stock_threshold");
+        var rows = (await inventory.LowStockCountsAsync(threshold)).ToList();
+        foreach (var r in rows)
+            await notify.NotifySellerAsync(r.SellerId, "low_stock", new Dictionary<string, string>
+            {
+                ["count"] = r.Count.ToString(),
+                ["threshold"] = threshold.ToString(),
+            }, "/seller/inventory?low_stock=1");
+        return rows.Count;
+    }
 }

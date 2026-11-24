@@ -385,6 +385,30 @@ public class DeliveryFleetDAL(IMySqlDapperHelper db)
             "SELECT delivery_boy_id AS BoyId, COUNT(*) AS Trips, COALESCE(SUM(fee_paise+tip_paise+bonus_paise),0) AS Earned " +
             "FROM delivery_assignments WHERE delivery_boy_id IN @ids AND status='delivered' AND delivered_at>=@since " +
             "GROUP BY delivery_boy_id", new { ids, since });
+    public sealed class StuckTripRow
+    {
+        public Guid Id { get; set; }
+        public string Status { get; set; } = "";
+        public DateTime StatusAt { get; set; }
+        public string PartnerName { get; set; } = "";
+        public string SubNumber { get; set; } = "";
+    }
+
+    /// <summary>Reference: jobs.stuck_check — active trips sitting in one status past the configured limit.</summary>
+    public Task<IEnumerable<StuckTripRow>> StuckTripsAsync(DateTime limit) => db.QueryAsync<StuckTripRow>(
+        "SELECT a.id AS Id, a.status AS Status, a.status_at AS StatusAt, b.name AS PartnerName, s.number AS SubNumber" +
+        " FROM delivery_assignments a JOIN delivery_boys b ON b.id = a.delivery_boy_id JOIN sub_orders s ON s.id = a.sub_order_id" +
+        " WHERE a.status IN ('accepted', 'at_store', 'picked', 'on_the_way', 'reached')" +
+        " AND a.status_at < @limit AND a.stuck_alerted_at IS NULL", new { limit });
+
+    public Task MarkStuckAlertedAsync(Guid id, DateTime now, IUnitOfWork uow) => uow.ExecuteAsync(
+        "UPDATE delivery_assignments SET stuck_alerted_at = @now WHERE id = @id", new { id, now });
+
+    /// <summary>Reference: jobs.stuck_check — fleet packages packed and still waiting for a partner.</summary>
+    public Task<IEnumerable<SubOrderModel>> WaitingPackedAsync(DateTime limit) => db.QueryAsync<SubOrderModel>(
+        "SELECT * FROM sub_orders WHERE shipping_provider = 'fleet' AND status = 'packed'" +
+        " AND ready_for_pickup_at < @limit AND fleet_alerted_at IS NULL", new { limit });
+
 }
 
 public class TryRow

@@ -826,6 +826,21 @@ public class DeliveryAdminBAL(
     public async Task<JsonObject> GeneratePayoutsAsync(UserModel user, DateOnly? weekStart)
     {
         await access.RequireAsync(user, "payouts");
+        return await GenerateCoreAsync(user, weekStart);
+    }
+
+    /// <summary>
+    /// Reference: jobs.delivery_payouts_job — last week's (IST) partner payout run with no staff actor; the staff
+    /// audit row the route writes is skipped for the scheduled run.
+    /// </summary>
+    public async Task<int> GenerateScheduledAsync()
+    {
+        var result = await GenerateCoreAsync(null, null);
+        return result["created"]!.GetValue<int>();
+    }
+
+    private async Task<JsonObject> GenerateCoreAsync(UserModel? user, DateOnly? weekStart)
+    {
         var day = weekStart ?? DateOnly.FromDateTime(DateTimeFunctions.UtcNow() + Ist - TimeSpan.FromDays(7));
         var (start, end) = WeekOfIst(day.ToDateTime(TimeOnly.MinValue));
         var until = (end.ToDateTime(TimeOnly.MinValue) + TimeSpan.FromDays(1)) - Ist; // IST day start of day after end, in UTC
@@ -872,8 +887,9 @@ public class DeliveryAdminBAL(
             }
             await fleet.AssignPayoutAsync(r.BoyId, until, p.Id, uow);
         }
-        await AuditSimpleAsync(user, "delivery.payouts_generate", "delivery_payout",
-            Guid.Empty, $"{start:yyyy-MM-dd} {made}");
+        if (user is not null)
+            await AuditSimpleAsync(user, "delivery.payouts_generate", "delivery_payout",
+                Guid.Empty, $"{start:yyyy-MM-dd} {made}");
         await uow.CommitAsync();
         return new JsonObject { ["created"] = made, ["week_start"] = start.ToString("o") };
     }

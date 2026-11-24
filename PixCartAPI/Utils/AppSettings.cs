@@ -105,4 +105,6 @@ public class AppSettings
     public bool IsProduction => Environment == "production";
     public bool IsTest => Environment == "test";
     public IEnumerable<string> CorsOriginList => CorsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    /// <summary>Run every scheduled job once at startup (local verification; reference fires on the cadence only).</summary>
+    public bool JobsRunAtStartup { get; set; }
 }

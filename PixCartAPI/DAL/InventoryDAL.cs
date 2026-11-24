@@ -104,4 +104,16 @@ public class InventoryDAL(IMySqlDapperHelper db)
     public Task<int> SetWarehouseLocationAsync(Guid id, decimal lat, decimal lng, IUnitOfWork uow) =>
         uow.ExecuteAsync("UPDATE warehouses SET lat = @lat, lng = @lng, updated_at = UTC_TIMESTAMP(6) WHERE id = @id AND lat IS NULL",
             new { id, lat, lng });
+
+    public sealed class LowStockRow
+    {
+        public Guid SellerId { get; set; }
+        public long Count { get; set; }
+    }
+
+    /// <summary>Reference: jobs.low_stock_scan — active variants at or below the threshold on approved products.</summary>
+    public Task<IEnumerable<LowStockRow>> LowStockCountsAsync(long threshold) => db.QueryAsync<LowStockRow>(
+        "SELECT v.seller_id AS SellerId, COUNT(*) AS Count FROM variants v JOIN products p ON p.id = v.product_id" +
+        " WHERE v.is_active = 1 AND v.stock <= @threshold AND p.status = 'approved' GROUP BY v.seller_id",
+        new { threshold });
 }

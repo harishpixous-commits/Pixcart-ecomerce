@@ -1580,4 +1580,40 @@ public class DeliveryFleetBAL(
         };
         return (data, media);
     }
+
+    /// <summary>
+    /// Reference: jobs.stuck_check — one staff ping per trip stuck in a travelling status past the configured
+    /// minutes, and per packed fleet package still waiting for a partner. Each trip alerts once (stuck_alerted_at).
+    /// </summary>
+    public async Task<int> StuckCheckAsync()
+    {
+        var cfg = await deliverySettings.GetAsync();
+        if (!cfg.Bool("enabled")) return 0;
+        var now = DateTimeFunctions.UtcNow();
+        var limit = now - TimeSpan.FromMinutes(cfg.Long("stuck_minutes"));
+        var told = 0;
+        await using var uow = await db.BeginAsync();
+        foreach (var trip in await fleet.StuckTripsAsync(limit))
+        {
+            var minutes = (long)(now - trip.StatusAt).TotalMinutes;
+            await NotifyStaffAsync("delivery", "staff_delivery_stuck", new Dictionary<string, string>
+            {
+                ["order_number"] = trip.SubNumber,
+                ["status"] = StepLabel.GetValueOrDefault(trip.Status, trip.Status),
+                ["minutes"] = minutes.ToString(),
+                ["partner"] = trip.PartnerName,
+            }, "/admin/delivery");
+            await fleet.MarkStuckAlertedAsync(trip.Id, now, uow);
+            told++;
+        }
+        foreach (var sub in await fleet.WaitingPackedAsync(limit))
+        {
+            if (await fleet.ActiveForSubAsync(sub.Id, uow) is not null) continue;
+            var minutes = (long)(now - sub.ReadyForPickupAt!.Value).TotalMinutes;
+            await AlertUnassignedAsync(sub, $"It has waited {minutes} minutes for a delivery partner.", uow);
+            told++;
+        }
+        await uow.CommitAsync();
+        return told;
+    }
 }
