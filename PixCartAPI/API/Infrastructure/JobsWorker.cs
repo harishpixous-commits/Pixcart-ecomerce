@@ -78,6 +78,9 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
             DailyAtUtc(3, 0)),
         new("deals", async sp => await sp.GetRequiredService<IDealSync>().SyncAsync(),
             Every(TimeSpan.FromMinutes(1))),
+        // Reference: jobs.notify_job (every 30 seconds) — the email/SMS/WhatsApp outbox dispatcher.
+        new("notify", async sp => await sp.GetRequiredService<INotifyDispatchBAL>().DispatchPendingAsync(),
+            Every(TimeSpan.FromSeconds(30))),
         // Reference: jobs.ads_billing_job (hourly).
         new("ads_billing", async sp => await sp.GetRequiredService<IAdsBAL>().BillAsync(),
             Every(TimeSpan.FromHours(1))),
