@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using Utils;
 namespace API.Controllers;
 [ApiController,SignedIn,Route("/api/seller")]
-public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,ICurrentUser me) : ControllerBase
+public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,ICurrentUser me,Utils.Interface.IImageUpload storage,AppSettings env,IPlatformSettingsBAL platform) : ControllerBase
 {
     private async Task<Model.DomainModel.SellerModel> Seller()=>await orders.RequireSellerAsync(await me.RequireAsync(),false);
     [HttpPost("products")] public async Task<IActionResult> Create([FromBody]System.Text.Json.Nodes.JsonObject body)=>StatusCode(201,await bal.SaveAsync(await me.RequireAsync(),await Seller(),null,body));
@@ -31,4 +31,23 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
         public bool? IsActive {get;init;}
     }
     [HttpPatch("variants/{id:guid}")] public async Task<object> Patch(Guid id,VariantPatch b)=>await bal.PatchAsync(await Seller(),id,b.PricePaise,b.MrpPaise,b.Stock,b.IsActive);
+    private static async Task<byte[]> ReadBoundedAsync(IFormFile file,long max,CancellationToken ct)
+    {
+        using var output=new MemoryStream();await using var input=file.OpenReadStream();var buffer=new byte[81920];
+        while(output.Length<=max){var count=await input.ReadAsync(buffer.AsMemory(0,(int)Math.Min(buffer.Length,max+1-output.Length)),ct);if(count==0)break;await output.WriteAsync(buffer.AsMemory(0,count),ct);}return output.ToArray();
+    }
+    [HttpPost("images")]
+    public async Task<IActionResult> Image(IFormFile file,CancellationToken ct)
+    {
+        await Seller();var bytes=await ReadBoundedAsync(file,env.MaxImageBytes,ct);
+        return StatusCode(201,new {url=await storage.SaveImageAsync(bytes,"products",ct)});
+    }
+    [HttpPost("videos")]
+    public async Task<IActionResult> Video(IFormFile file,CancellationToken ct)
+    {
+        await Seller();var cfg=await platform.GetAsync();if(!cfg.Bool("feature_product_videos"))throw new AppException("Product videos are switched off on this marketplace","videos_off");
+        var max=cfg.Long("max_video_mb")*1024*1024;var bytes=await ReadBoundedAsync(file,max,ct);
+        return StatusCode(201,new {url=await storage.SaveVideoAsync(bytes,max,ct:ct)});
+    }
+
 }

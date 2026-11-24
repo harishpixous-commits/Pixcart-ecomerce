@@ -100,4 +100,22 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("seller_suspended",(await u.Post("/api/seller/products",Payload(cat))).ErrorCode);
     }
 
+    [Fact]
+    public async Task Seller_media_uploads_use_local_storage_and_feature_gates()
+    {
+        var (u,s,p,v,cat)=await Seed();
+        static MultipartFormDataContent FileBody(byte[] bytes,string name)
+        {var form=new MultipartFormDataContent();form.Add(new ByteArrayContent(bytes),"file",name);return form;}
+        using var bitmap=new SkiaSharp.SKBitmap(200,200);bitmap.Erase(SkiaSharp.SKColors.Blue);
+        using var image=SkiaSharp.SKImage.FromBitmap(bitmap);using var encoded=image.Encode(SkiaSharp.SKEncodedImageFormat.Png,100);
+        var png=encoded.ToArray();
+        var r=await u.Post("/api/seller/images",FileBody(png,"synthetic.png"));Assert.True(r.Status==201,r.ToString());Assert.StartsWith("/media/products/",r.Json["url"]!.GetValue<string>());Assert.EndsWith(".webp",r.Json["url"]!.GetValue<string>());
+        r=await u.Post("/api/seller/images",FileBody([0x4d,0x5a,0,0],"wrong.jpg"));Assert.Equal(400,r.Status);
+        byte[] mp4=[0,0,0,24,0x66,0x74,0x79,0x70,0x69,0x73,0x6f,0x6d,0,0,0,0,0,0,0,0];
+        r=await u.Post("/api/seller/videos",FileBody(mp4,"synthetic.mp4"));Assert.True(r.Status==201,r.ToString());Assert.StartsWith("/media/videos/",r.Json["url"]!.GetValue<string>());
+        var admin=await Admin();await admin.Put("/api/admin/settings",new {feature_product_videos=false});
+        Assert.Equal("videos_off",(await u.Post("/api/seller/videos",FileBody(mp4,"synthetic.mp4"))).ErrorCode);
+        var other=await LoginPhone("9890000003");Assert.Equal(403,(await other.Post("/api/seller/images",FileBody(png,"synthetic.png"))).Status);
+    }
+
 }
