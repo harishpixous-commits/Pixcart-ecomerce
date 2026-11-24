@@ -16,16 +16,17 @@ namespace BAL;
 
 /// <inheritdoc cref="IShopAssistantBAL"/>
 /// <remarks>
-/// Live mode (an AI model answering with the customer tools) is NOT ported: this environment has no live LLM, so
-/// choose_mode always resolves to "guided" exactly as the reference does when no model is connected. The guided
-/// pipeline (multilingual intents + help knowledge + tools + canned sentences) is fully ported, so the customer
-/// always gets an answer. The missing live mode is tracked as a module gap with the other AI surfaces.
+/// Both reply modes are ported: live (an AI model on the shop_assistant route answers with the customer tools) and
+/// guided (multilingual intents + help knowledge + tools + canned sentences). Live mode only engages when an admin
+/// connects a model in Admin → AI providers; with no model the reference's no-model branch (guided) applies, so the
+/// customer always gets an answer.
 /// </remarks>
 public partial class ShopAssistantBAL(
     ShopAssistantDAL dal, OrdersDAL orders, ReturnsDAL returns, SupportTicketDAL tickets, CatalogDAL catalog,
     SettingsDAL settings, IRateLimitBAL rateLimit, PlatformSettingsBAL platform, SiteBAL site, FeesBAL fees,
     ISupportTicketBAL support, OrdersBAL ordersBal, ReturnsBAL returnsBal, CatalogBAL catalogBal, IMySqlDapperHelper db,
-    IAccessBAL access, IAuditBAL audit, ILogger<ShopAssistantBAL> log) : IShopAssistantBAL
+    IAccessBAL access, IAuditBAL audit, BAL.AI.ILlmConfigBAL llmConfig, BAL.AI.ILlmRouterBAL llmRouter,
+    ILogger<ShopAssistantBAL> log) : IShopAssistantBAL
 {
     private const string SettingsKey = "shop_assistant";
     private static readonly TimeSpan ActionTtl = TimeSpan.FromMinutes(30);
@@ -40,7 +41,7 @@ public partial class ShopAssistantBAL(
         ["name"] = "Help assistant",
         ["greeting"] = "Hi! I can track your orders, help with cancellations, returns and refunds, find products, or connect you with our support team.",
         ["allow_guests"] = true,
-        ["ai"] = "auto", // auto = use the AI model when one is connected; guided = rules only. No model is connected here.
+        ["ai"] = "auto", // auto = use the AI model when one is connected; guided = rules only
         ["instructions"] = "",
         ["quick_replies"] = new JsonArray("Track my order", "Return an item", "Refund status", "Find a product", "Talk to support"),
         ["features"] = new JsonObject
@@ -69,10 +70,6 @@ public partial class ShopAssistantBAL(
     };
 
     public async Task<JsonObject> GetSettingsAsync() => SettingsDAL.Merge(Defaults(), await settings.GetAsync(SettingsKey));
-
-    /// <summary>choose_mode: the reference returns "live" only with a connected model on the shop_assistant route.
-    /// No model is connected in this stack, so this always resolves to guided (the reference's no-model branch).</summary>
-    private static string ChooseMode(JsonObject cfg) => "guided";
 
     // ------------------------------------------------------------------ chat ownership (reference: _own_chat)
 
@@ -112,7 +109,7 @@ public partial class ShopAssistantBAL(
             ["greeting"] = cfg.Str("greeting"),
             ["quick_replies"] = cfg["quick_replies"]?.DeepClone(),
             ["voice"] = cfg["voice"]?.DeepClone(),
-            ["mode"] = ChooseMode(cfg),
+            ["mode"] = (await ChooseModeAsync(cfg)).Mode,
         };
     }
 

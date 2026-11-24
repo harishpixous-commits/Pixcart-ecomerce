@@ -330,9 +330,10 @@ public partial class ShopAssistantBAL
         var it = ShopIntents.Detect(text);
         var lastIntent = await dal.LastAssistantIntentAsync(chat.Id) ?? "";
         var now = DateTimeFunctions.UtcNow();
+        var userMsgId = Guid.NewGuid();
         await dal.InsertMessageAsync(new ShopChatMessageModel
         {
-            Id = Guid.NewGuid(), SessionId = chat.Id, Role = "user", Text = text,
+            Id = userMsgId, SessionId = chat.Id, Role = "user", Text = text,
             Blocks = "[]", ModelContent = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = text }).ToJsonString(),
             Intent = it.Name, Voice = voice, Status = "done", CreatedAt = now,
         });
@@ -347,12 +348,12 @@ public partial class ShopAssistantBAL
             }.ToJsonString();
         await dal.UpdateSessionAsync(chat);
 
+        var (mode, chain) = await ChooseModeAsync(cfg);
         var reply = new ShopChatMessageModel
         {
             Id = Guid.NewGuid(), SessionId = chat.Id, Role = "assistant", Intent = it.Name, Voice = voice,
-            Blocks = "[]", ModelContent = "[]", Status = "done", Mode = ChooseMode(cfg), CreatedAt = DateTimeFunctions.UtcNow(),
+            Blocks = "[]", ModelContent = "[]", Status = "done", Mode = mode, CreatedAt = DateTimeFunctions.UtcNow(),
         };
-        var mode = reply.Mode;
         yield return new JsonObject
         {
             ["type"] = "start", ["message_id"] = reply.Id.ToString(), ["session_id"] = chat.Id.ToString(),
@@ -367,45 +368,116 @@ public partial class ShopAssistantBAL
         };
         var blocks = new List<JsonObject>();
         var status = "done";
-        var events = new List<JsonObject>();
-        try
+        var turnMsgs = new List<JsonObject>();
+        var usage = new int[4]; // in, out, cache write, cache read
+        var usedModel = new[] { "" };
+        var streamedText = new[] { false };
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        // Events stream as they happen (reference: agent.run). The catch sits around MoveNextAsync because an
+        // iterator cannot yield inside a try with a catch; on a live->guided fallback the events already sent stay
+        // sent, exactly as in the reference (it also cannot un-send prefetch cards).
+        async IAsyncEnumerable<JsonObject> GuidedEvents()
         {
             var (answer, replyCards) = await GuidedAsync(ctx, it, text, cfg, lastIntent);
             foreach (var c in replyCards)
             {
                 blocks.Add(c);
-                events.Add(new JsonObject { ["type"] = "card", ["card"] = c.DeepClone() });
+                yield return new JsonObject { ["type"] = "card", ["card"] = c.DeepClone() };
             }
             if (answer.Length > 0)
             {
                 blocks.Insert(0, new JsonObject { ["type"] = "text", ["text"] = answer });
-                events.Add(new JsonObject { ["type"] = "text", ["delta"] = answer });
+                yield return new JsonObject { ["type"] = "text", ["delta"] = answer };
             }
-            reply.Text = answer;
+            ctx.ReplyText = answer;
+            turnMsgs.Add(new JsonObject
+            {
+                ["role"] = "assistant",
+                ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = answer.Length > 0 ? answer : "(shown cards)" }),
+            });
         }
-        catch (AppException exc)
+
+        JsonObject? FailureEvent(AppException exc)
         {
             status = "error";
             blocks.Add(new JsonObject { ["type"] = "error", ["text"] = exc.Message });
-            events.Add(new JsonObject { ["type"] = "error", ["message"] = exc.Message, ["code"] = exc.Code });
+            return new JsonObject { ["type"] = "error", ["message"] = exc.Message, ["code"] = exc.Code };
         }
-        catch (Exception e)
+
+        JsonObject? UnexpectedFailureEvent(Exception e)
         {
             log.LogError(e, "shop assistant turn failed");
             status = "error";
             const string msg = "Sorry, something went wrong while answering. Please try again.";
             blocks.Add(new JsonObject { ["type"] = "error", ["text"] = msg });
-            events.Add(new JsonObject { ["type"] = "error", ["message"] = msg });
+            return new JsonObject { ["type"] = "error", ["message"] = msg };
         }
-        foreach (var ev in events) yield return ev;
+
+        var useGuided = mode == "guided";
+        if (!useGuided)
         {
-            reply.Blocks = new JsonArray(blocks.Select(b => (JsonNode)b.DeepClone()).ToArray()).ToJsonString();
-            reply.Status = status;
-            reply.ModelContent = new JsonArray(new JsonObject
+            await using var live = RunLiveEventsAsync(ctx, it, text, cfg, user, voice, page, chat.Id, reply.Id, userMsgId, chain,
+                blocks, turnMsgs, usage, usedModel, streamedText, ct).GetAsyncEnumerator(ct);
+            while (true)
             {
-                ["role"] = "assistant",
-                ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = reply.Text.Length > 0 ? reply.Text : "(shown cards)" }),
-            }).ToJsonString();
+                JsonObject? ev;
+                try
+                {
+                    if (await live.MoveNextAsync()) ev = live.Current;
+                    else break;
+                }
+                catch (AppException exc) when (AiFailures.Contains(exc.Code) && !streamedText[0])
+                {
+                    // the model failed before answering: the customer still gets an answer (reference: agent.run's fallback)
+                    log.LogWarning("shop assistant model unavailable ({Code}); answering in guided mode", exc.Code);
+                    mode = "guided";
+                    reply.Mode = mode;
+                    blocks.Clear(); // the reply record reflects the guided answer; the events already sent stay sent
+                    turnMsgs.Clear();
+                    useGuided = true;
+                    break;
+                }
+                catch (AppException exc) { ev = FailureEvent(exc); }
+                catch (Exception e) { ev = UnexpectedFailureEvent(e); }
+                if (ev is not null) yield return ev;
+                if (status != "done") break;
+            }
+        }
+        if (useGuided)
+        {
+            await using var guided = GuidedEvents().GetAsyncEnumerator(ct);
+            while (true)
+            {
+                JsonObject? ev;
+                try
+                {
+                    if (await guided.MoveNextAsync()) ev = guided.Current;
+                    else break;
+                }
+                catch (AppException exc) { ev = FailureEvent(exc); }
+                catch (Exception e) { ev = UnexpectedFailureEvent(e); }
+                if (ev is not null) yield return ev;
+                if (status != "done") break;
+            }
+        }
+        reply.Text = ctx.ReplyText;
+        {
+            reply.Blocks = new JsonArray(CompactBlocks(blocks).Select(b => (JsonNode)b.DeepClone()).ToArray()).ToJsonString();
+            reply.Status = status;
+            // the model-readable transcript (reference: agent.run's finally + _clean)
+            var content = turnMsgs.Count > 0
+                ? CleanModelMessages([new JsonObject { ["role"] = "user", ["content"] = "x" }, .. turnMsgs]).Skip(1).ToList()
+                : [];
+            if (content.Count == 0 || content[0].Str("role") != "assistant")
+                content.Insert(0, new JsonObject
+                {
+                    ["role"] = "assistant",
+                    ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = reply.Text.Length > 0 ? reply.Text : "(no answer)" }),
+                });
+            reply.ModelContent = new JsonArray(content.Select(c => (JsonNode)c).ToArray()).ToJsonString();
+            reply.InputTokens = usage[0];
+            reply.OutputTokens = usage[1];
             try
             {
                 await dal.InsertMessageAsync(reply);
@@ -414,6 +486,20 @@ public partial class ShopAssistantBAL
                 await dal.UpdateSessionAsync(chat);
                 var ids = ctx.KbHits.Select(h => Guid.TryParse(h, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList();
                 if (ids.Count > 0) await dal.BumpArticleUsesAsync(ids);
+                if (mode == "live")
+                {
+                    // Token accounting only: the customer's words stay in the chat tables (reference: agent._save).
+                    await dal.InsertAiRunAsync(new AiRunModel
+                    {
+                        Id = Guid.NewGuid(), Task = ShopRoute, SubjectType = "shop_chat", SubjectId = chat.Id.ToString(),
+                        Inputs = "{}", Output = new JsonObject { ["blocks"] = JsonNode.Parse(reply.Blocks)!.AsArray().Count }.ToJsonString(),
+                        FinalText = "", Status = status == "done" ? "applied" : "failed", Mode = "live",
+                        Model = usedModel[0][..Math.Min(80, usedModel[0].Length)],
+                        InputTokens = usage[0], OutputTokens = usage[1], CacheCreationTokens = usage[2], CacheReadTokens = usage[3],
+                        LatencyMs = (int)(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds),
+                        Error = status == "done" ? "" : status, CreatedBy = user?.Id, CreatedAt = DateTimeFunctions.UtcNow(),
+                    });
+                }
             }
             catch (Exception e) { log.LogError(e, "could not save shop assistant reply"); }
         }

@@ -50,6 +50,7 @@ public partial class ShopAssistantBAL
         public Dictionary<string, bool> Features = [];
         public List<string> KbHits = [];
         public Dictionary<string, object?> Facts = [];
+        public string ReplyText = "";
     }
 
     private static bool FeatureOn(Ctx ctx, string f) => !ctx.Features.TryGetValue(f, out var on) || on;
@@ -62,15 +63,15 @@ public partial class ShopAssistantBAL
 
     // ------------------------------------------------------------------ tools
 
-    private sealed record ToolOut(JsonObject Data, List<JsonObject> Cards);
+    private sealed record ToolOut(JsonObject Data, List<JsonObject> Cards, bool Err = false);
 
     private async Task<ToolOut> CallToolAsync(Ctx ctx, string name, Dictionary<string, object?> args)
     {
         // Feature and sign-in gates (reference: tools.execute).
         var feature = name switch
         {
-            "search_products" => "product_search",
-            "help_articles" => "help_articles",
+            "search_products" or "product_info" => "product_search",
+            "help_articles" or "store_policies" => "help_articles",
             "my_orders" or "order_details" => "orders",
             "my_returns_and_refunds" => "returns_refunds",
             "my_tickets" or "ticket_details" or "prepare_ticket" => "tickets",
@@ -88,19 +89,62 @@ public partial class ShopAssistantBAL
         if (login && ctx.User is null)
             return new ToolOut(new JsonObject { ["error"] = "sign_in_required", ["message"] = "The customer must sign in first." },
                 [SignInCard(ctx, "Please sign in so I can see your orders, returns and requests.")]);
-        return name switch
+        try
         {
-            "search_products" => await SearchProductsToolAsync(ctx, args),
-            "help_articles" => await HelpArticlesToolAsync(ctx, args),
-            "my_orders" => await MyOrdersToolAsync(ctx, args),
-            "order_details" => await OrderDetailsToolAsync(ctx, args),
-            "my_returns_and_refunds" => await MyReturnsAndRefundsToolAsync(ctx),
-            "my_tickets" => await MyTicketsToolAsync(ctx),
-            "ticket_details" => await TicketDetailsToolAsync(ctx, args),
-            "prepare_ticket" => await PrepareTicketToolAsync(ctx, args),
-            "prepare_cancellation" => await PrepareCancellationToolAsync(ctx, args),
-            _ => new ToolOut(new JsonObject { ["error"] = $"There is no tool called {name}." }, []),
-        };
+            return name switch
+            {
+                "search_products" => await SearchProductsToolAsync(ctx, args),
+                "product_info" => await ProductInfoToolAsync(ctx, args),
+                "help_articles" => await HelpArticlesToolAsync(ctx, args),
+                "store_policies" => StorePoliciesTool(ctx),
+                "my_orders" => await MyOrdersToolAsync(ctx, args),
+                "order_details" => await OrderDetailsToolAsync(ctx, args),
+                "my_returns_and_refunds" => await MyReturnsAndRefundsToolAsync(ctx),
+                "my_tickets" => await MyTicketsToolAsync(ctx),
+                "ticket_details" => await TicketDetailsToolAsync(ctx, args),
+                "prepare_ticket" => await PrepareTicketToolAsync(ctx, args),
+                "prepare_cancellation" => await PrepareCancellationToolAsync(ctx, args),
+                // e.g. a model asking for an admin tool: it does not exist here
+                _ => new ToolOut(new JsonObject { ["error"] = $"There is no tool called {name}." }, [], Err: true),
+            };
+        }
+        catch (Exception e) when (e is ArgumentException or FormatException or InvalidCastException)
+        {
+            return new ToolOut(new JsonObject { ["error"] = e.Message[..Math.Min(300, e.Message.Length)] }, [], Err: true);
+        }
+    }
+
+    /// <summary>product_info (reference: tools.product_info): by slug when given, else the best name match.</summary>
+    private async Task<ToolOut> ProductInfoToolAsync(Ctx ctx, Dictionary<string, object?> a)
+    {
+        ProductModel? p = null;
+        var slug = (AStr(a, "slug") ?? "").Trim().Trim('/');
+        if (slug.StartsWith("p/")) slug = slug[2..];
+        if (slug.Length > 0) p = await dal.FindProductBySlugAsync(slug[..Math.Min(200, slug.Length)]);
+        if (p is null && AStr(a, "name") is { Length: > 0 } name)
+            p = (await FindProductsAsync(name[..Math.Min(100, name.Length)], null, null, "relevance", 1)).FirstOrDefault();
+        if (p is null) return new ToolOut(new JsonObject { ["error"] = "No such product in the store." }, []);
+        var card = ShopCardView((await catalogBal.ProductCardsAsync([p]))[0]);
+        var facts = ctx.Facts;
+        var data = ProductData(card).AsObject();
+        data["highlights"] = new JsonArray(((System.Text.Json.JsonSerializer.Deserialize<string[]>(p.Highlights) ?? [])
+            .Take(6).Select(h => (JsonNode)JsonValue.Create(h)).ToArray()));
+        data["returnable"] = p.ReturnWindowDays > 0;
+        data["return_window_days"] = p.ReturnWindowDays;
+        data["cash_on_delivery"] = facts["cod_enabled"] as bool? ?? false;
+        data["delivery"] = $"{facts["shipping_fee"]} per seller, free when a seller's items reach {facts["free_delivery_amount"]}";
+        return new ToolOut(data, [new JsonObject { ["type"] = "products", ["title"] = "", ["items"] = new JsonArray(card), ["link"] = $"/p/{p.Slug}" }]);
+    }
+
+    /// <summary>store_policies (reference: tools.store_policies): the public fee/delivery/return facts only.</summary>
+    private static ToolOut StorePoliciesTool(Ctx ctx)
+    {
+        string[] keys = ["brand", "shipping_fee", "free_delivery_amount", "cod_text", "fees_text", "transit_same_city", "transit_same_state",
+            "transit_national", "returns_enabled", "return_reasons", "grievance_text"];
+        var data = new JsonObject();
+        foreach (var k in keys)
+            if (ctx.Facts.TryGetValue(k, out var v)) data[k] = v is JsonNode jn ? jn.DeepClone() : System.Text.Json.JsonSerializer.SerializeToNode(v);
+        return new ToolOut(data, []);
     }
 
     private static string? AStr(Dictionary<string, object?> a, string key) =>

@@ -7,7 +7,7 @@ using Utils.Interface;
 namespace DAL;
 
 /// <summary>Shop assistant tables (reference: models/shop_assistant.py). Kept apart from the admin assistant's tables.</summary>
-public class ShopAssistantDAL(IMySqlDapperHelper db)
+public partial class ShopAssistantDAL(IMySqlDapperHelper db)
 {
     // ---- sessions
     public Task<ShopChatSessionModel?> GetSessionAsync(Guid id, IDbTransaction? tx = null) =>
@@ -274,4 +274,23 @@ public static class ShopAssistantDalArticleSql
     public const string Insert =
         "INSERT INTO shop_kb_articles (title, body, keywords, topic, link, is_published, position, uses, created_at, updated_at, id) " +
         "VALUES (@Title, @Body, CAST(@Keywords AS JSON), @Topic, @Link, @IsPublished, @Position, @Uses, @CreatedAt, @UpdatedAt, @Id)";
+}
+
+public partial class ShopAssistantDAL
+{
+    /// <summary>One public product by its slug (reference: tools.product_info's slug lookup).</summary>
+    public async Task<ProductModel?> FindProductBySlugAsync(string slug) => await db.QueryFirstOrDefaultAsync<ProductModel>(
+        $"SELECT p.* FROM products p WHERE {CatalogDAL.PublicFilter} AND p.slug = @slug", new { slug });
+
+    /// <summary>Tokens the shop assistant used this calendar month (reference: agent.choose_mode's budget sum).</summary>
+    public async Task<long> MonthlyShopTokensAsync(DateTime monthStart) => await db.ExecuteScalarAsync<long>(
+        "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM ai_runs WHERE task = 'shop_assistant' AND created_at >= @monthStart",
+        new { monthStart });
+
+    /// <summary>The token-accounting row for one live-mode reply (reference: agent._save's AiRun; no chat text in it).</summary>
+    public Task InsertAiRunAsync(AiRunModel r) => db.ExecuteAsync(
+        "INSERT INTO ai_runs (id, task, subject_type, subject_id, seller_id, inputs, output, final_text, status, mode, model," +
+        " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, latency_ms, error, created_by, reviewed_by, created_at, reviewed_at)" +
+        " VALUES (@Id, @Task, @SubjectType, @SubjectId, @SellerId, CAST(@Inputs AS JSON), CAST(@Output AS JSON), @FinalText, @Status, @Mode, @Model," +
+        " @InputTokens, @OutputTokens, @CacheCreationTokens, @CacheReadTokens, @LatencyMs, @Error, @CreatedBy, @ReviewedBy, @CreatedAt, @ReviewedAt)", r);
 }
