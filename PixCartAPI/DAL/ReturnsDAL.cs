@@ -103,7 +103,32 @@ public class ReturnsDAL(IMySqlDapperHelper db)
     }
 
     /// <summary>The order a package belongs to (reference: the admin_open_return order lookup).</summary>
-    public Task<OrderModel?> OrderForSubAsync(Guid subOrderId) =>
+    /// <summary>Return requests on any of the given packages, oldest first (shop assistant order view).</summary>
+    public async Task<IReadOnlyList<ReturnRequestModel>> ReturnsForSubsAsync(IReadOnlyList<Guid> subOrderIds)
+    {
+        if (subOrderIds.Count == 0) return [];
+        var rows = await db.QueryAsync<ReturnRequestModel>(
+            "SELECT * FROM return_requests WHERE sub_order_id IN @subOrderIds ORDER BY created_at", new { subOrderIds });
+        return rows.ToList();
+    }
+
+    /// <summary>The customer's return requests with their package number and order id, newest first (return list).</summary>
+    public async Task<IReadOnlyList<(ReturnRequestModel Ret, string SubNumber, Guid OrderId)>> ReturnsForUserAsync(Guid userId, int limit)
+    {
+        var rows = await db.QueryAsync<ReturnWithSub>(
+            "SELECT r.*, s.number AS SubNumber, s.order_id AS OrderId FROM return_requests r " +
+            "JOIN sub_orders s ON s.id = r.sub_order_id WHERE r.user_id = @userId ORDER BY r.created_at DESC LIMIT @limit",
+            new { userId, limit });
+        return rows.Select(r => ((ReturnRequestModel)r, r.SubNumber, r.OrderId)).ToList();
+    }
+
+    private sealed class ReturnWithSub : ReturnRequestModel
+    {
+        public string SubNumber { get; set; } = "";
+        public Guid OrderId { get; set; }
+    }
+
+        public Task<OrderModel?> OrderForSubAsync(Guid subOrderId) =>
         db.QueryFirstOrDefaultAsync<OrderModel>(
             "SELECT o.* FROM orders o JOIN sub_orders s ON s.order_id = o.id WHERE s.id = @subOrderId", new { subOrderId });
 

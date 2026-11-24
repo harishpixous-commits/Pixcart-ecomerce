@@ -134,7 +134,38 @@ public class OrdersDAL(IMySqlDapperHelper db)
         return rows.ToList();
     }
 
-    public async Task<IReadOnlyList<OrderItemModel>> ItemsAsync(IReadOnlyList<Guid> subOrderIds)
+    /// <summary>The customer's orders that have at least one package in one of the given statuses, newest first.</summary>
+    public async Task<IReadOnlyList<OrderModel>> OrdersWithSubStatusAsync(Guid userId, IReadOnlyList<string> statuses, int limit)
+    {
+        var rows = await db.QueryAsync<OrderModel>(
+            "SELECT * FROM orders WHERE user_id = @userId AND EXISTS(SELECT 1 FROM sub_orders s WHERE s.order_id = orders.id AND s.status IN @statuses) " +
+            "ORDER BY created_at DESC LIMIT @limit", new { userId, statuses, limit });
+        return rows.ToList();
+    }
+
+    /// <summary>The customer's recent orders, newest first (shop assistant tools).</summary>
+    public async Task<IReadOnlyList<OrderModel>> RecentForUserAsync(Guid userId, int limit)
+    {
+        var rows = await db.QueryAsync<OrderModel>(
+            "SELECT * FROM orders WHERE user_id = @userId ORDER BY created_at DESC LIMIT @limit", new { userId, limit });
+        return rows.ToList();
+    }
+
+    /// <summary>The customer's own order by order number (reference: _own_order; ownership in the query itself).</summary>
+    public Task<OrderModel?> OwnByNumberAsync(Guid userId, string number) =>
+        db.QueryFirstOrDefaultAsync<OrderModel>(
+            "SELECT * FROM orders WHERE user_id = @userId AND number = @number LIMIT 1", new { userId, number });
+
+    /// <summary>The customer's orders with any refunded money, newest first (refund status tool).</summary>
+    public async Task<IReadOnlyList<OrderModel>> RefundedForUserAsync(Guid userId, int limit)
+    {
+        var rows = await db.QueryAsync<OrderModel>(
+            "SELECT * FROM orders WHERE user_id = @userId AND refunded_total > 0 ORDER BY created_at DESC LIMIT @limit",
+            new { userId, limit });
+        return rows.ToList();
+    }
+
+        public async Task<IReadOnlyList<OrderItemModel>> ItemsAsync(IReadOnlyList<Guid> subOrderIds)
     {
         if (subOrderIds.Count == 0) return [];
         var rows = await db.QueryAsync<OrderItemModel>(
