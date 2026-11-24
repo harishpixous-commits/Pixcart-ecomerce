@@ -89,21 +89,21 @@ class ShopHeader extends ConsumerWidget {
       Container(
         color: t.primary,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        child: Column(children: [
+        child: const Column(children: [
           SizedBox(
             height: 40,
             child: Row(children: [
-              const Logo(),
-              const Spacer(),
-              const NotificationBell(),
-              const SizedBox(width: 4),
-              const AccountButton(),
-              const SizedBox(width: 4),
-              const CartButton(),
+              Logo(),
+              Spacer(),
+              NotificationBell(),
+              SizedBox(width: 4),
+              AccountButton(),
+              SizedBox(width: 4),
+              CartButton(),
             ]),
           ),
-          const SizedBox(height: 8),
-          const SearchBox(),
+          SizedBox(height: 8),
+          SearchBox(),
         ]),
       ),
       Container(

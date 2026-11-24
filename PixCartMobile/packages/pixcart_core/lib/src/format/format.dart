@@ -31,15 +31,16 @@ DisplayCurrency displayCurrency() => _display;
 
 const _nbsp = '\u00A0';
 
-/// The narrow symbol of a currency as `Intl.NumberFormat("en-US", {currencyDisplay: "narrowSymbol"})` shows it.
-String narrowSymbol(String code) {
-  try {
-    final s = NumberFormat.simpleCurrency(locale: 'en_US', name: code).currencySymbol;
-    return s.isEmpty ? code : s;
-  } catch (_) {
-    return code;
-  }
-}
+/// `Intl.NumberFormat("en-US", {currencyDisplay: "narrowSymbol"})` symbols, as browsers show them.
+const _narrow = <String, String>{
+  'USD': r'$', 'EUR': '€', 'GBP': '£', 'AED': 'AED', 'SGD': r'$', 'AUD': r'$', 'CAD': r'$', 'JPY': '¥', 'CNY': '¥', 'HKD': r'$',
+  'NZD': r'$', 'CHF': 'CHF', 'MYR': 'RM', 'THB': '฿', 'ZAR': 'R', 'QAR': 'QAR', 'KWD': 'KWD', 'OMR': 'OMR', 'BHD': 'BHD',
+  'SAR': 'SAR', 'LKR': 'Rs', 'NPR': 'Rs', 'BDT': '৳', 'IDR': 'Rp', 'PHP': '₱', 'KRW': '₩', 'SEK': 'kr', 'NOK': 'kr', 'DKK': 'kr',
+  'RUB': '₽', 'BRL': r'R$', 'MXN': r'$', 'TRY': '₺', 'ILS': '₪', 'EGP': 'E£', 'NGN': '₦', 'KES': 'KES', 'PKR': 'Rs', 'INR': '₹',
+};
+
+/// The narrow symbol of a currency as browsers show it (the code when there is none).
+String narrowSymbol(String code) => _narrow[code] ?? code;
 
 String _foreign(double value, String code, int digits) {
   final key = '$code:$digits';
@@ -121,22 +122,25 @@ DateTime? istOf(String? iso) {
 /// "24 Nov 2026".
 String date(String? iso) {
   final d = istOf(iso);
-  return d == null ? '' : DateFormat('d MMM y', 'en').format(d);
+  return d == null ? '' : '${d.day} ${_months[d.month - 1]} ${d.year}';
 }
 
 /// "24 Nov, 3:05 pm".
 String dateTime(String? iso) {
   final d = istOf(iso);
   if (d == null) return '';
-  return '${DateFormat('d MMM', 'en').format(d)}, ${_clock(d)}';
+  return '${d.day} ${_months[d.month - 1]}, ${_clock(d)}';
 }
 
 /// "Tue, 3:05 pm" (deal start times).
 String weekdayTime(String? iso) {
   final d = istOf(iso);
   if (d == null) return '';
-  return '${DateFormat('EEE', 'en').format(d)}, ${_clock(d)}';
+  return '${_days[d.weekday - 1]}, ${_clock(d)}';
 }
+
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 String _clock(DateTime d) {
   final h = d.hour % 12 == 0 ? 12 : d.hour % 12;

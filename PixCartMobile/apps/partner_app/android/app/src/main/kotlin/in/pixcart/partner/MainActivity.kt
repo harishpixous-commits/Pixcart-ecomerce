@@ -1,4 +1,4 @@
-package `in`.pixcart.seller_app
+package `in`.pixcart.partner
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,7 +1,7 @@
 // Display pieces of components/ui.tsx and components/product-parts.tsx: Pill, StatusPill, Rating, TileRating, Price,
 // ProductImage, EmptyState, ErrorNote, ShopPanel, Badge, Divider helpers.
 
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pixcart_core/pixcart_core.dart';
 

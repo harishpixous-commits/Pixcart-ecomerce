@@ -2,7 +2,7 @@
 // while loading it keeps its size and shows a centred spinner over the hidden label. Pressing scales it to 0.97
 // (`pc-press`).
 
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';

@@ -1,7 +1,7 @@
 // Modal (components/ui.tsx) as phones show it: a sheet from the bottom with rounded top corners (rounded-t-2xl),
 // white, p-5, a display-font title and a close button, over ink/50. Also a picker sheet for selects.
 
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'field.dart';

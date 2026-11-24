@@ -1,0 +1,115 @@
+# Builds the native Flutter apps (PixCartMobile/apps: customer, delivery partner, seller) as Android APKs and
+# publishes them as one GitHub release. See PixCartMobile/docs/FLUTTER_GUIDELINES.md.
+#
+# Run it from Actions → Flutter apps → Run workflow, or push a tag: git tag flutter-v1.0.0 && git push origin flutter-v1.0.0
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables), used when a tag starts the build:
+#   PIXCART_API_URL   the API origin the apps talk to, e.g. https://pixcart.in (the site that serves /api)
+#   PIXCART_SITE_URL  the website, for pages the apps open in the browser (defaults to the API origin)
+#   PIXCART_APP_NAME  the name under the icon (defaults to PixCart)
+# Optional secrets: one release keystore for all three apps (without them the APKs are debug-signed, for testing only)
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# Keep the same keystore for every release: Android only installs updates signed with the same key.
+name: Flutter apps
+on:
+  push:
+    tags: ["flutter-v*"]
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "API origin, e.g. https://pixcart.in"
+        required: true
+      site_url:
+        description: "Website origin (leave empty when it is the same as the API)"
+        required: false
+        default: ""
+      app_name:
+        description: "Customer app name under the icon"
+        required: false
+        default: "PixCart"
+      version:
+        description: "Version, e.g. 1.0.0"
+        required: true
+        default: "1.0.0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flutter-apps
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults: { run: { working-directory: PixCartMobile } }
+    env:
+      API_URL: ${{ inputs.api_url || vars.PIXCART_API_URL }}
+      SITE_URL: ${{ inputs.site_url || vars.PIXCART_SITE_URL }}
+      APP_NAME: ${{ inputs.app_name || vars.PIXCART_APP_NAME || 'PixCart' }}
+      INPUT_VERSION: ${{ inputs.version }}
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.50.1
+          cache: true
+
+      - name: Check the inputs
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#flutter-v}}"
+          echo "$VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){2}$' || { echo "::error::version must look like 1.0.0"; exit 1; }
+          case "$API_URL" in https://*) ;; *) echo "::error::api_url (or the PIXCART_API_URL variable) must start with https://"; exit 1;; esac
+          SITE="${SITE_URL:-$API_URL}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "SITE=$SITE" >> "$GITHUB_ENV"
+          echo "SITE_HOST=$(echo "$SITE" | sed -E 's#^https?://([^/:]+).*#\1#')" >> "$GITHUB_ENV"
+
+      - name: Release keystore
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "Signing with the release keystore"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: the APKs are debug-signed (testing only)"
+          fi
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test packages/pixcart_core packages/pixcart_ui apps/customer_app apps/partner_app apps/seller_app
+
+      - name: Build the APKs
+        run: |
+          DEFINES="--dart-define=API_BASE=$API_URL --dart-define=SITE_URL=$SITE --dart-define=SITE_HOST=$SITE_HOST"
+          mkdir -p "$RUNNER_TEMP/apks"
+          for app in customer_app partner_app seller_app; do
+            name="$APP_NAME"
+            [ "$app" = partner_app ] && name="$APP_NAME Partner"
+            [ "$app" = seller_app ] && name="$APP_NAME Seller"
+            (cd "apps/$app" && flutter build apk --release --build-name="$VERSION" --build-number="$GITHUB_RUN_NUMBER" \
+              $DEFINES --dart-define="APP_NAME=$name")
+            cp "apps/$app/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/apks/pixcart-${app%_app}-$VERSION.apk"
+          done
+          ls -l "$RUNNER_TEMP/apks"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="flutter-v$VERSION"
+          [ "$GITHUB_REF_TYPE" = tag ] && TAG="$GITHUB_REF_NAME"
+          NOTES="Flutter apps $VERSION for $API_URL (customer, delivery partner, seller). Build $GITHUB_RUN_NUMBER."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$RUNNER_TEMP"/apks/*.apk --clobber
+          else
+            gh release create "$TAG" "$RUNNER_TEMP"/apks/*.apk --title "Flutter apps $VERSION" --notes "$NOTES" --target "$GITHUB_SHA"
+          fi

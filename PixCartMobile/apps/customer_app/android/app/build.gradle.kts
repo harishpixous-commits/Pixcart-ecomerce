@@ -1,11 +1,30 @@
+import java.util.Base64
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Values given with --dart-define reach Gradle base64-encoded in the "dart-defines" property:
+// APP_NAME sets the name under the icon, SITE_HOST the website whose links open in the app.
+val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String? ?: "")
+    .split(",")
+    .filter { it.isNotBlank() }
+    .map { String(Base64.getDecoder().decode(it)) }
+    .filter { it.contains("=") }
+    .associate { it.substringBefore("=") to it.substringAfter("=") }
+
+// Release signing: android/key.properties (not committed) or the environment variables of the CI.
+val keyProps = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signing(name: String, env: String): String? = keyProps.getProperty(name) ?: System.getenv(env)
+
 android {
-    namespace = "in.pixcart.customer_app"
+    namespace = "in.pixcart.shop"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,25 +34,35 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "in.pixcart.customer_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        applicationId = "in.pixcart.shop"
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appName"] = dartDefines["APP_NAME"] ?: "PixCart"
+        manifestPlaceholders["siteHost"] = dartDefines["SITE_HOST"] ?: "pixcart.in"
+    }
+
+    signingConfigs {
+        create("release") {
+            val store = signing("storeFile", "ANDROID_KEYSTORE_PATH")
+            if (store != null) {
+                storeFile = file(store)
+                storePassword = signing("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = signing("keyAlias", "ANDROID_KEY_ALIAS")
+                keyPassword = signing("keyPassword", "ANDROID_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without a keystore the release build is signed with the debug key (fine for testing, not for the stores).
+            signingConfig = if (signing("storeFile", "ANDROID_KEYSTORE_PATH") != null) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
