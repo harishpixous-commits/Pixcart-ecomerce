@@ -1,0 +1,8 @@
+using Utils.Interface;
+namespace DAL;
+public class TcsReportDAL(IMySqlDapperHelper db)
+{
+    public class Row{public Guid SellerId{get;set;}public string LegalName{get;set;}="";public string Gstin{get;set;}="";public bool Inter{get;set;}public decimal Taxable{get;set;}public long Tcs{get;set;}public int N{get;set;}}
+    public Task<IEnumerable<Row>> SalesAsync(DateTime start,DateTime end)=>db.QueryAsync<Row>("SELECT s.id seller_id,s.legal_name,s.gstin,p.is_interstate inter,SUM(p.taxable_total) taxable,SUM(p.tcs_paise) tcs,COUNT(*) n FROM sub_orders p JOIN orders o ON o.id=p.order_id JOIN sellers s ON s.id=p.seller_id WHERE o.placed_at>=@start AND o.placed_at<@end AND p.status<>'cancelled' GROUP BY s.id,s.legal_name,s.gstin,p.is_interstate ORDER BY s.legal_name",new{start,end});
+    public Task<IEnumerable<Row>> ReturnsAsync(DateTime start,DateTime end)=>db.QueryAsync<Row>("SELECT s.id seller_id,s.legal_name,s.gstin,p.is_interstate inter,-TRUNCATE(COALESCE(v.amount,0),0) taxable,-COALESCE(t.amount,0) tcs,0 n FROM sub_orders p JOIN sellers s ON s.id=p.seller_id LEFT JOIN (SELECT r.sub_order_id,SUM(i.taxable_value*ri.qty/i.qty) amount FROM return_requests r JOIN return_items ri ON ri.return_id=r.id JOIN order_items i ON i.id=ri.order_item_id WHERE r.received_at>=@start AND r.received_at<@end GROUP BY r.sub_order_id) v ON v.sub_order_id=p.id LEFT JOIN (SELECT sub_order_id,SUM(amount) amount FROM seller_ledger WHERE kind='tcs_reversal' AND created_at>=@start AND created_at<@end GROUP BY sub_order_id) t ON t.sub_order_id=p.id WHERE v.sub_order_id IS NOT NULL OR t.sub_order_id IS NOT NULL",new{start,end});
+}
