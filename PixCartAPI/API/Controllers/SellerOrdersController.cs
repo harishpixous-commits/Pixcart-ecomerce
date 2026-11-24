@@ -15,7 +15,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/seller")]
 [SignedIn]
-public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, ICurrentUser current) : ControllerBase
+public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, ICurrentUser current, IShippingBAL shipping) : ControllerBase
 {
     /// <summary>The order queues (reference: GET /api/seller/orders).</summary>
     [HttpGet("orders")]
@@ -55,6 +55,12 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     {
         var user = await current.RequireAsync();
         return await fleet.UseCourierAsync(user, await orders.RequireSellerAsync(user, approved: true), subId);
+    }
+
+    [HttpPost("orders/{subId:guid}/book-courier")]
+    public async Task<JsonObject> BookCourier(Guid subId)
+    {
+        var user=await current.RequireAsync();return await shipping.BookAsync(user,await orders.RequireSellerAsync(user,true),subId);
     }
 
     /// <summary>Accept the order (reference: POST /api/seller/orders/{sub_id}/confirm).</summary>
