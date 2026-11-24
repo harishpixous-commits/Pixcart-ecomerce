@@ -636,7 +636,7 @@ class NavBar extends ConsumerWidget {
             ),
           ),
         const SizedBox(width: 4),
-        if (showPin) const DeliverTo(),
+        if (showPin) const Flexible(child: DeliverTo()),
         Container(width: 1, height: 20, margin: const EdgeInsets.symmetric(horizontal: 8), color: t.line),
         Expanded(
           child: ListView(scrollDirection: Axis.horizontal, children: [
@@ -684,16 +684,16 @@ class DeliverTo extends ConsumerWidget {
       onTap: () => showPinSheet(context, ref),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Row(children: [
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(LucideIcons.mapPin, size: 16, color: t.primary),
           const SizedBox(width: 4),
           if (pin.isNotEmpty)
-            Text.rich(TextSpan(children: [
+            Flexible(child: Text.rich(maxLines: 1, overflow: TextOverflow.ellipsis, TextSpan(children: [
               TextSpan(text: 'Deliver to ', style: Tw.px(14, line: 22.75, color: t.inkSoft)),
               TextSpan(text: pin, style: Tw.px(14, line: 22.75, weight: Tw.semibold, color: t.ink)),
-            ]))
+            ])))
           else
-            Text('Set delivery PIN', style: Tw.px(14, line: 22.75, weight: Tw.semibold, color: t.inkSoft)),
+            Flexible(child: Text('Set delivery PIN', maxLines: 1, overflow: TextOverflow.ellipsis, style: Tw.px(14, line: 22.75, weight: Tw.semibold, color: t.inkSoft))),
           const SizedBox(width: 4),
           Icon(LucideIcons.chevronDown, size: 14, color: t.inkSoft),
         ]),

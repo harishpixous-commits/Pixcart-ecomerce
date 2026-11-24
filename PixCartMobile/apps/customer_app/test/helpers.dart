@@ -2,6 +2,7 @@
 // shared preferences.
 
 import 'dart:convert';
+import 'dart:ui' show Size;
 
 import 'package:customer_app/main.dart';
 import 'package:customer_app/router.dart';
