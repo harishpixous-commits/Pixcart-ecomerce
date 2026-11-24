@@ -1,3 +1,4 @@
+using BAL.Interface;
 using System.Text.Json.Nodes;
 using Model.DomainModel;
 using Utils;
@@ -159,7 +160,7 @@ public partial class ShopAssistantBAL
         var outp = new JsonObject
         {
             ["id"] = t.Id.ToString(), ["number"] = t.Number, ["subject"] = t.Subject,
-            ["category"] = SupportBAL.CategoryLabels.GetValueOrDefault(t.Category, t.Category),
+            ["category"] = SupportTicketBAL.CategoryLabels.GetValueOrDefault(t.Category, t.Category),
             ["status"] = t.Status, ["status_label"] = TicketStatusLabels.GetValueOrDefault(t.Status, t.Status),
             ["is_grievance"] = t.IsGrievance, ["created_at"] = D(t.CreatedAt), ["updated_at"] = D(t.UpdatedAt),
             ["link"] = $"/support/{t.Id}",

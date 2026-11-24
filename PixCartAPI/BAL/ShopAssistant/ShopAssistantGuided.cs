@@ -1,3 +1,4 @@
+using BAL.Interface;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using BAL.ShopAssistant;
@@ -431,14 +432,14 @@ public partial class ShopAssistantBAL
         var full = message.Trim();
         if (transcript.Length > 0)
             full += "\n\n— Chat with the help assistant —\n" + transcript[..Math.Min(4000, transcript.Length)];
-        var t = await support.OpenTicketAsync(user.Id, category, subject, full, orderId, grievance);
-        chat.TicketId = Guid.Parse(t.Str("id"));
+        var t = await support.CreateTicketAsync(user, category, subject, full, orderId, grievance);
+        chat.TicketId = t.Id;
         await dal.UpdateSessionAsync(chat);
-        var v = TicketView((await tickets.GetAsync(Guid.Parse(t.Str("id"))))!);
+        var v = TicketView((await tickets.GetAsync(t.Id))!);
         var m = new ShopChatMessageModel
         {
             Id = Guid.NewGuid(), SessionId = chat.Id, Role = "assistant",
-            Text = $"Your request {t.Str("number")} has been sent to our support team. They will reply within 48 hours; you can follow it under Support.",
+            Text = $"Your request {t.Number} has been sent to our support team. They will reply within 48 hours; you can follow it under Support.",
             Blocks = new JsonArray(
                 new JsonObject { ["type"] = "text", ["text"] = "" },
                 new JsonObject { ["type"] = "tickets", ["title"] = "", ["items"] = new JsonArray(v.DeepClone()), ["link"] = v.Str("link") }).ToJsonString(),
@@ -457,7 +458,7 @@ public partial class ShopAssistantBAL
         chat.UpdatedAt = DateTimeFunctions.UtcNow();
         await dal.UpdateSessionAsync(chat);
         await MarkCardsAsync(chat.Id, b => b.Str("type") == "ticket_form",
-            new JsonObject { ["status"] = "sent", ["ticket_number"] = t.Str("number") });
+            new JsonObject { ["status"] = "sent", ["ticket_number"] = t.Number });
         return new JsonObject { ["ticket"] = v, ["message"] = MessageOut(m) };
     }
 

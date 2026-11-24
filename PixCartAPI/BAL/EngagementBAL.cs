@@ -1,285 +1,196 @@
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using BAL.Interface;
 using DAL;
 using Model.DomainModel;
+using Model.DomainModel.Catalog;
 using Utils;
-using Utils.Interface;
 
 namespace BAL;
 
 /// <summary>
-/// Product Q&A, back-in-stock alerts, comparison and "Frequently bought together" (reference: routers/engagement.py).
-/// Posts with phone numbers, emails or links wait for staff; enough reports hide a post until staff check it.
+/// Questions and answers, alerts, compare and bought together (reference: routers/engagement.py and
+/// services/engagement.py). Switches live in Admin → Product page; Admin → Questions moderates.
 /// </summary>
-public partial class EngagementBAL(
-    EngagementDAL engagement,
-    ICatalogBAL catalog,
+public class EngagementBAL(
+    EngagementDAL qa,
+    CatalogDAL catalog,
+    CatalogSupportDAL support,
     IPlatformSettingsBAL platform,
-    IRateLimitBAL rateLimit,
-    ICatalogNotifyBAL notify,
-    IAccessBAL access,
-    IAuditBAL audit,
-    IMySqlDapperHelper db) : IEngagementBAL
+    ICatalogBAL cards,
+    ICatalogNotifyBAL notify) : IEngagementBAL
 {
-    [GeneratedRegex(@"(https?://|www\.|\b[\w.+-]+@[\w-]+\.[\w.]+\b|(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{9}(?!\d))", RegexOptions.IgnoreCase)]
-    private static partial Regex Contact();
-
-    private static readonly IReadOnlyDictionary<string, string> RoleLabel = new Dictionary<string, string>
+    public static readonly IReadOnlyDictionary<string, string> RoleLabel = new Dictionary<string, string>
     {
         ["seller"] = "Seller", ["buyer"] = "Verified buyer", ["customer"] = "Customer", ["staff"] = "Store team",
     };
 
-    private static string First(string? name) => (name ?? "Customer").Split(' ')[0];
+    private static string First(string? name) => (string.IsNullOrEmpty(name) ? "Customer" : name).Split(' ')[0];
 
-    // ------------------------------------------------------------------ questions
+    private async Task<ProductModel> ProductAsync(string slug) => await catalog.PublicProductBySlugAsync(slug) ?? throw new NotFoundException("Product");
 
-    public async Task<JsonObject> QuestionsAsync(UserModel? user, string slug, string q, string sort, int page)
+    private static string Iso(DateTime t) => DateTimeFunctions.Iso(t);
+
+    // ------------------------------------------------------------------------- shoppers
+
+    public async Task<JsonObject> QuestionsAsync(string slug, UserModel? user, string q, string sort, int page)
     {
         var cfg = await platform.GetAsync();
         var p = await ProductAsync(slug);
         if (!cfg.Bool("feature_qa"))
-        {
             return new JsonObject { ["enabled"] = false, ["items"] = new JsonArray(), ["total"] = 0, ["page"] = page, ["has_more"] = false };
-        }
-        var like = q.Trim().Length > 0 ? $"%{q.Trim()}%" : null;
+        var text = q.Trim();
         var size = cfg.Int("questions_page_size");
-        var (rows, total) = await engagement.QuestionsAsync(p.Id, like, sort, (page - 1) * size, size);
-        var answers = new Dictionary<Guid, List<EngagementDAL.AnswerRow>>();
+        var total = await qa.CountQuestionsAsync(p.Id, text);
+        var rows = (await qa.QuestionsPageAsync(p.Id, text, sort, size, (page - 1) * size)).ToList();
+        var answers = new Dictionary<Guid, List<QaRow>>();
         var voted = new HashSet<Guid>();
         if (rows.Count > 0)
         {
-            foreach (var a in await engagement.AnswersForAsync(rows.Select(r => r.Id).ToList()))
+            foreach (var a in await qa.PublishedAnswersAsync(rows.Select(r => r.Id)))
             {
-                if (!answers.TryGetValue(a.QuestionId, out var lst)) answers[a.QuestionId] = lst = [];
-                lst.Add(a);
+                if (!answers.TryGetValue(a.QuestionId!.Value, out var l)) answers[a.QuestionId.Value] = l = [];
+                l.Add(a);
             }
-            if (user is not null)
-            {
-                voted = await engagement.VotedAsync(user.Id, answers.Values.SelectMany(l => l.Select(a => a.Id)).ToList());
-            }
+            var ids = answers.Values.SelectMany(l => l.Select(a => a.Id)).ToList();
+            if (user != null && ids.Count > 0) voted = await qa.VotedAnswersAsync(user.Id, ids);
         }
-        var seller = await engagement.GetSellerAsync(p.SellerId);
+        var seller = await catalog.GetSellerAsync(p.SellerId);
         var items = new JsonArray();
         foreach (var qn in rows)
         {
-            var arr = new JsonArray();
-            foreach (var a in answers.GetValueOrDefault(qn.Id) ?? [])
-            {
-                arr.Add(new JsonObject
-                {
-                    ["id"] = a.Id.ToString(),
-                    ["text"] = a.Text,
-                    ["author"] = a.Role == "seller" ? seller?.DisplayName ?? "Seller" : First(a.Name),
-                    ["role"] = a.Role,
-                    ["role_label"] = RoleLabel[a.Role],
-                    ["helpful_count"] = a.HelpfulCount,
-                    ["voted"] = voted.Contains(a.Id),
-                    ["created_at"] = a.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
-                });
-            }
+            var list = (answers.GetValueOrDefault(qn.Id) ?? []).OrderBy(a => a.Role != "seller").ThenBy(a => -a.HelpfulCount).ThenBy(a => a.CreatedAt);
             items.Add(new JsonObject
             {
-                ["id"] = qn.Id.ToString(),
-                ["text"] = qn.Text,
-                ["author"] = First(qn.Name),
-                ["created_at"] = qn.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
-                ["answer_count"] = qn.AnswerCount,
-                ["answers"] = arr,
+                ["id"] = qn.Id.ToString(), ["text"] = qn.Text, ["author"] = First(qn.AuthorName), ["created_at"] = Iso(qn.CreatedAt), ["answer_count"] = qn.AnswerCount,
+                ["answers"] = CatalogBAL.Arr(list.Select(a => (JsonNode)new JsonObject
+                {
+                    ["id"] = a.Id.ToString(), ["text"] = a.Text, ["author"] = a.Role == "seller" ? seller?.DisplayName ?? "" : First(a.AuthorName),
+                    ["role"] = a.Role, ["role_label"] = RoleLabel[a.Role], ["helpful_count"] = a.HelpfulCount, ["voted"] = voted.Contains(a.Id),
+                    ["created_at"] = Iso(a.CreatedAt),
+                })),
             });
         }
         return new JsonObject
         {
-            ["enabled"] = true, ["items"] = items, ["total"] = total, ["page"] = page,
-            ["has_more"] = (long)page * size < total, ["can_ask"] = user is not null,
-            ["buyers_answer_only"] = cfg.Bool("qa_buyers_answer_only"),
+            ["enabled"] = true, ["items"] = items, ["total"] = total, ["page"] = page, ["has_more"] = (long)page * size < total,
+            ["can_ask"] = user != null, ["buyers_answer_only"] = cfg.Bool("qa_buyers_answer_only"),
         };
     }
 
-    public async Task<JsonObject> AskAsync(UserModel user, string slug, string text)
+    public async Task<JsonObject> AskAsync(string slug, UserModel user, QuestionIn body)
     {
         var cfg = await platform.GetAsync();
         if (!cfg.Bool("feature_qa")) throw new AppException("Questions are switched off", "qa_off");
         var p = await ProductAsync(slug);
-        await rateLimit.RateLimitAsync($"qa-ask:{user.Id}", 10, 86400);
-        text = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        var held = cfg.Bool("qa_need_approval") || Contact().IsMatch(text);
+        await support.RateLimitAsync($"qa-ask:{user.Id}", 10, 86400);
+        var text = PlatformSettingsBAL.Tidy(body.Text);
+        var held = cfg.Bool("qa_need_approval") || ReviewBAL.Contact().IsMatch(text);
         var qn = new ProductQuestionModel
         {
-            Id = Guid.NewGuid(), ProductId = p.Id, UserId = user.Id, Text = text,
-            Status = held ? "pending" : "published", AnswerCount = 0, ReportCount = 0, CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(), ProductId = p.Id, UserId = user.Id, Text = text, Status = held ? "pending" : "published", CreatedAt = DateTimeFunctions.UtcNow(),
         };
-        await db.ExecuteAsync(
-            "INSERT INTO product_questions (id, product_id, user_id, text, status, answer_count, report_count, created_at) " +
-            "VALUES (@Id, @ProductId, @UserId, @Text, @Status, 0, 0, UTC_TIMESTAMP(6))", qn);
+        await qa.InsertQuestionAsync(qn);
         if (!held)
-        {
             await notify.NotifySellerAsync(p.SellerId, "seller_new_question",
-                new Dictionary<string, string> { ["item"] = p.Title, ["question"] = text[..Math.Min(200, text.Length)] }, "/seller/questions");
-        }
+                new Dictionary<string, string> { ["item"] = p.Title, ["question"] = CatalogText.Cut(text, 200) }, "/seller/questions");
         return new JsonObject { ["ok"] = true, ["id"] = qn.Id.ToString(), ["status"] = qn.Status };
     }
 
-    public async Task<JsonObject> AnswerAsync(UserModel user, Guid questionId, string text)
+    public async Task<JsonObject> AnswerAsync(Guid questionId, UserModel user, AnswerIn body)
     {
         var cfg = await platform.GetAsync();
         if (!cfg.Bool("feature_qa")) throw new AppException("Questions are switched off", "qa_off");
-        var qn = await engagement.GetQuestionAsync(questionId);
+        var qn = await qa.GetQuestionAsync(questionId);
         if (qn is null || qn.Status != "published") throw new NotFoundException("Question");
-        var p = await engagement.GetProductAsync(qn.ProductId) ?? throw new NotFoundException("Product");
-        var seller = await engagement.GetSellerAsync(p.SellerId);
-        var role = seller is not null && seller.UserId == user.Id ? "seller"
-            : await engagement.IsBuyerAsync(user.Id, p.Id) ? "buyer" : "customer";
+        var p = await catalog.GetProductAsync(qn.ProductId) ?? throw new NotFoundException("Question");
+        var seller = await catalog.GetSellerAsync(p.SellerId);
+        var role = seller != null && seller.UserId == user.Id ? "seller" : await qa.IsBuyerAsync(user.Id, p.Id) ? "buyer" : "customer";
         if (role == "customer" && cfg.Bool("qa_buyers_answer_only"))
-        {
             throw new AppException("Only the seller and customers who bought this product can answer", "buyers_only");
-        }
         if (qn.UserId == user.Id && role != "seller")
-        {
             throw new AppException("You asked this question; wait for an answer from the seller or a buyer", "own_question");
-        }
-        await rateLimit.RateLimitAsync($"qa-answer:{user.Id}", 30, 86400);
-        text = text.Trim();
-        var held = cfg.Bool("qa_need_approval") || Contact().IsMatch(text);
+        await support.RateLimitAsync($"qa-answer:{user.Id}", 30, 86400);
+        var text = body.Text.Trim();
+        var held = cfg.Bool("qa_need_approval") || ReviewBAL.Contact().IsMatch(text);
         var a = new ProductAnswerModel
         {
-            Id = Guid.NewGuid(), QuestionId = qn.Id, UserId = user.Id, Role = role, Text = text,
-            Status = held ? "pending" : "published", HelpfulCount = 0, ReportCount = 0, CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(), QuestionId = qn.Id, UserId = user.Id, Role = role, Text = text, Status = held ? "pending" : "published",
+            CreatedAt = DateTimeFunctions.UtcNow(),
         };
-        await db.ExecuteAsync(
-            "INSERT INTO product_answers (id, question_id, user_id, role, text, status, helpful_count, report_count, created_at) " +
-            "VALUES (@Id, @QuestionId, @UserId, @Role, @Text, @Status, 0, 0, UTC_TIMESTAMP(6))", a);
+        await qa.InsertAnswerAsync(a);
         if (!held)
         {
-            await RefreshCountAsync(qn.Id);
-            var asker = qn.UserId is Guid askerId ? await engagement.GetUserAsync(askerId) : null;
-            if (asker is not null && asker.Id != user.Id)
-            {
-                await notify.NotifyUserAsync(asker.Id, "question_answered", new Dictionary<string, string>
+            await qa.RefreshAnswerCountAsync(qn.Id);
+            if (qn.UserId is { } asker && asker != user.Id)
+                await notify.NotifyUserAsync(asker, "question_answered", new Dictionary<string, string>
                 {
-                    ["item"] = p.Title,
-                    ["question"] = qn.Text[..Math.Min(200, qn.Text.Length)],
-                    ["answer"] = text[..Math.Min(300, text.Length)],
-                    ["answerer"] = role == "seller" ? seller?.DisplayName ?? "Seller" : RoleLabel[role],
+                    ["item"] = p.Title, ["question"] = CatalogText.Cut(qn.Text, 200), ["answer"] = CatalogText.Cut(text, 300),
+                    ["answerer"] = role != "seller" ? RoleLabel[role] : seller!.DisplayName,
                 }, $"/p/{p.Slug}#questions");
-            }
         }
         return new JsonObject { ["ok"] = true, ["id"] = a.Id.ToString(), ["status"] = a.Status, ["role"] = role };
     }
 
-    /// <summary>Marks an answer helpful; a second call takes the vote back.</summary>
-    public async Task<JsonObject> AnswerHelpfulAsync(UserModel user, Guid answerId)
+    public async Task<JsonObject> AnswerHelpfulAsync(Guid answerId, UserModel user)
     {
-        var a = await engagement.GetAnswerAsync(answerId);
+        var a = await qa.GetAnswerAsync(answerId);
         if (a is null || a.Status != "published") throw new NotFoundException("Answer");
         if (a.UserId == user.Id) throw new AppException("You cannot vote on your own answer", "own_answer");
-        var delta = 1;
-        if (await engagement.GetVoteAsync(answerId, user.Id) is not null)
-        {
-            await db.ExecuteAsync("DELETE FROM answer_votes WHERE answer_id = @answerId AND user_id = @userId", new { answerId, userId = user.Id });
-            delta = -1;
-        }
-        else
-        {
-            await db.ExecuteAsync("INSERT INTO answer_votes (answer_id, user_id, created_at) VALUES (@answerId, @userId, UTC_TIMESTAMP(6))",
-                new { answerId, userId = user.Id });
-        }
-        await db.ExecuteAsync("UPDATE product_answers SET helpful_count = GREATEST(helpful_count + @delta, 0) WHERE id = @answerId", new { delta, answerId });
-        var count = await db.ExecuteScalarAsync<long>("SELECT helpful_count FROM product_answers WHERE id = @answerId", new { answerId });
-        return new JsonObject { ["voted"] = delta == 1, ["helpful_count"] = count };
+        var (voted, count) = await qa.ToggleAnswerVoteAsync(answerId, user.Id);
+        return new JsonObject { ["voted"] = voted, ["helpful_count"] = count };
     }
 
-    /// <summary>Flags a question or answer; enough different reporters take it off the page until staff check it.</summary>
-    public async Task<JsonObject> ReportAsync(UserModel user, bool question, Guid postId)
+    /// <summary>
+    /// Flags a question or answer. Each person counts once; reports from enough different people (Admin → Product
+    /// page) take it off the product page until staff check it. report_count counts reporters since that check.
+    /// </summary>
+    public async Task<JsonObject> ReportPostAsync(UserModel user, QaReportIn body)
     {
-        await rateLimit.RateLimitAsync($"qa-report:{user.Id}", 30, 86400);
-        var (table, fk) = question ? ("question_reports", "question_id") : ("answer_reports", "answer_id");
-        await using var uow = await db.BeginAsync();
-        var obj = question
-            ? await uow.QueryFirstOrDefaultAsync<ProductQuestionModel>($"SELECT * FROM product_questions WHERE id = @postId FOR UPDATE", new { postId })
-            : null;
-        var ans = !question
-            ? await uow.QueryFirstOrDefaultAsync<ProductAnswerModel>($"SELECT * FROM product_answers WHERE id = @postId FOR UPDATE", new { postId })
-            : null;
-        if (obj is null && ans is null) throw new NotFoundException("Post");
-        var status = obj?.Status ?? ans!.Status;
-        if (status != "published") throw new NotFoundException("Post");
-        var inserted = await uow.ExecuteAsync(
-            $"INSERT IGNORE INTO {table} ({fk}, user_id, created_at) VALUES (@postId, @userId, UTC_TIMESTAMP(6))", new { postId, userId = user.Id });
-        if (inserted == 0)
-        {
-            await uow.CommitAsync();
-            return new JsonObject { ["ok"] = true, ["already"] = true, ["hidden"] = false };
-        }
-        var reportCount = (obj?.ReportCount ?? ans!.ReportCount) + 1;
+        await support.RateLimitAsync($"qa-report:{user.Id}", 30, 86400);
         var hideAt = (await platform.GetAsync()).Int("qa_report_hide_at");
-        var hidden = hideAt > 0 && reportCount >= hideAt;
-        var postTable = question ? "product_questions" : "product_answers";
-        await uow.ExecuteAsync(
-            $"UPDATE {postTable} SET report_count = report_count + 1" + (hidden ? ", status = 'pending'" : "") + " WHERE id = @postId", new { postId });
-        if (hidden && !question)
-        {
-            await RefreshCountAsync(ans!.QuestionId, uow);
-        }
-        await uow.CommitAsync();
-        return new JsonObject { ["ok"] = true, ["already"] = false, ["hidden"] = hidden };
+        var r = await qa.ReportPostAsync(body.Kind == "question", body.Id!.Value, user.Id, hideAt) ?? throw new NotFoundException("Post");
+        return new JsonObject { ["ok"] = true, ["already"] = r.Already, ["hidden"] = r.Hidden };
     }
 
-    // ------------------------------------------------------------------ stock alerts
+    // ------------------------------------------------------------------------- alerts
 
-    public async Task<JsonObject> StockAlertOnAsync(UserModel user, Guid variantId)
+    public async Task<JsonObject> SubscribeStockAlertAsync(UserModel user, Guid variantId)
     {
         var cfg = await platform.GetAsync();
         if (!cfg.Bool("feature_stock_alerts")) throw new AppException("Stock alerts are switched off", "alerts_off");
-        var v = await engagement.GetVariantAsync(variantId);
+        var v = await catalog.GetVariantAsync(variantId);
         if (v is null || !v.IsActive) throw new NotFoundException("Product");
-        var existing = await engagement.GetAlertAsync(user.Id, variantId);
-        if (existing is null)
+        var a = await qa.GetStockAlertAsync(user.Id, v.Id);
+        if (a is null)
         {
-            if (await engagement.ActiveAlertCountAsync(user.Id) >= 100)
-            {
-                throw new AppException("You can follow up to 100 items", "too_many_alerts");
-            }
-            await db.ExecuteAsync(
-                "INSERT INTO stock_alerts (user_id, variant_id, created_at, notified_at, active) VALUES (@userId, @variantId, UTC_TIMESTAMP(6), NULL, 1)",
-                new { userId = user.Id, variantId });
+            if (await qa.ActiveStockAlertCountAsync(user.Id) >= 100) throw new AppException("You can follow up to 100 items", "too_many_alerts");
+            await qa.InsertStockAlertAsync(user.Id, v.Id);
         }
-        else
-        {
-            await db.ExecuteAsync("UPDATE stock_alerts SET active = 1, notified_at = NULL WHERE user_id = @userId AND variant_id = @variantId",
-                new { userId = user.Id, variantId });
-        }
+        else await qa.ReactivateStockAlertAsync(user.Id, v.Id);
         return new JsonObject { ["ok"] = true, ["subscribed"] = true };
     }
 
-    public async Task<JsonObject> StockAlertOffAsync(UserModel user, Guid variantId)
+    public async Task<JsonObject> UnsubscribeStockAlertAsync(UserModel user, Guid variantId)
     {
-        await db.ExecuteAsync("DELETE FROM stock_alerts WHERE user_id = @userId AND variant_id = @variantId", new { userId = user.Id, variantId });
+        await qa.DeleteStockAlertAsync(user.Id, variantId);
         return new JsonObject { ["ok"] = true, ["subscribed"] = false };
     }
 
     public async Task<JsonObject> MyAlertsAsync(UserModel user, Guid? variantId)
     {
-        var rows = await engagement.MyAlertsAsync(user.Id, variantId);
-        var images = await catalog.ImagesForAsync(rows.Select(r => r.ProductId).Distinct());
-        var arr = new JsonArray();
-        foreach (var r in rows)
+        var rows = (await qa.MyStockAlertsAsync(user.Id, variantId)).ToList();
+        var imgs = await catalog.ImagesForAsync(rows.Select(r => r.ProductId));
+        return new JsonObject
         {
-            arr.Add(new JsonObject
+            ["stock"] = CatalogBAL.Arr(rows.Select(r => (JsonNode)new JsonObject
             {
-                ["variant_id"] = r.VariantId.ToString(),
-                ["product"] = r.Title,
-                ["slug"] = r.Slug,
-                ["variant"] = ProductInfo.VariantLabel(r.Options),
-                ["image"] = images.GetValueOrDefault(r.ProductId)?.FirstOrDefault() ?? "",
-                ["in_stock"] = r.Stock > 0,
-                ["created_at"] = r.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
-            });
-        }
-        return new JsonObject { ["stock"] = arr };
+                ["variant_id"] = r.VariantId.ToString(), ["product"] = r.Title, ["slug"] = r.Slug, ["variant"] = ProductInfo.VariantLabel(r.Options),
+                ["image"] = imgs.GetValueOrDefault(r.ProductId)?.FirstOrDefault() ?? "", ["in_stock"] = r.Stock > 0, ["created_at"] = Iso(r.CreatedAt),
+            })),
+        };
     }
 
-    // ------------------------------------------------------------------ compare and bought together
+    // ------------------------------------------------------------------------- compare and bought together
 
     public async Task<JsonObject> CompareAsync(string ids)
     {
@@ -287,51 +198,36 @@ public partial class EngagementBAL(
         if (!cfg.Bool("feature_compare")) throw new AppException("Compare is switched off", "compare_off");
         var want = new List<Guid>();
         foreach (var x in ids.Split(',').Take(cfg.Int("compare_max")))
-        {
-            if (Guid.TryParse(x.Trim(), out var id)) want.Add(id);
-        }
-        var products = await engagement.CompareRowsAsync(want);
-        var cards = await catalog.ProductCardsAsync(products);
+            if (Guid.TryParse(x.Trim(), out var g)) want.Add(g);
+        var products = await cards.PublicProductsAsync(want);
+        var cardList = await cards.ProductCardsAsync(products);
         var specCount = new Dictionary<string, int>();
         foreach (var p in products)
-        {
-            foreach (var k in JsonHelper.Object(p.Specs).Select(kvp => kvp.Key).ToList())
-            {
+            foreach (var (k, _) in JsonHelper.Node(p.Specs) as JsonObject ?? [])
                 specCount[k] = specCount.GetValueOrDefault(k) + 1;
-            }
-        }
         var keys = specCount.Keys.OrderBy(k => -specCount[k]).ThenBy(k => k, StringComparer.Ordinal).ToList();
         var items = new JsonArray();
         var infoKeys = new List<string>();
         for (var i = 0; i < products.Count; i++)
         {
             var p = products[i];
-            var card = cards[i].DeepClone() as JsonObject ?? [];
             var info = new JsonObject();
-            foreach (var r in ProductInfo.InfoRows(ProductInfo.DetailsOf(p.Details), p.Brand, p.CountryOfOrigin))
-            {
-                if (r is not JsonObject row) continue;
-                var label = row["label"]?.GetValue<string>() ?? "";
-                info[label] = row["value"]?.GetValue<string>() ?? "";
-                if (!infoKeys.Contains(label)) infoKeys.Add(label);
-            }
+            foreach (var row in ProductInfo.InfoRows(ProductInfo.DetailsOf(p.Details), p.Brand, p.CountryOfOrigin).OfType<JsonObject>())
+                info[CatalogText.Str(row["label"])] = row["value"]?.DeepClone();
+            foreach (var (k, _) in info)
+                if (!infoKeys.Contains(k)) infoKeys.Add(k);
+            var card = cardList[i];
             card["specs"] = JsonHelper.Node(p.Specs);
             card["info"] = info;
             card["return_window_days"] = p.ReturnWindowDays;
-            var highlights = JsonHelper.Array(p.Highlights);
-            var top = new JsonArray();
-            foreach (var h in highlights.Take(5))
-            {
-                top.Add(h?.GetValue<string>() ?? "");
-            }
-            card["highlights"] = top;
+            card["highlights"] = new JsonArray((JsonHelper.Node(p.Highlights) as JsonArray ?? []).Take(5).Select(h => h?.DeepClone()).ToArray());
             items.Add(card);
         }
         return new JsonObject
         {
             ["items"] = items,
-            ["spec_keys"] = new JsonArray(keys.Select(k => (JsonNode?)JsonValue.Create(k)).ToArray()),
-            ["info_keys"] = new JsonArray(infoKeys.Select(k => (JsonNode?)JsonValue.Create(k)).ToArray()),
+            ["spec_keys"] = new JsonArray(keys.Select(k => (JsonNode)k).ToArray()),
+            ["info_keys"] = new JsonArray(infoKeys.Select(k => (JsonNode)k).ToArray()),
         };
     }
 
@@ -340,169 +236,147 @@ public partial class EngagementBAL(
         var cfg = await platform.GetAsync();
         if (!cfg.Bool("feature_bought_together")) return new JsonObject { ["items"] = new JsonArray() };
         var p = await ProductAsync(slug);
-        var others = (await engagement.BoughtTogetherAsync(p.Id, 3)).ToList();
+        var others = (await catalog.BoughtTogetherAsync(p.Id, DateTimeFunctions.UtcNow().AddDays(-180), 3)).ToList();
         if (others.Count == 0) return new JsonObject { ["items"] = new JsonArray() };
-        var cards = await catalog.ProductCardsAsync(new List<ProductModel> { p }.Concat(others).ToList());
-        var items = new JsonArray();
-        foreach (var card in cards)
-        {
-            items.Add(card);
-        }
-        return new JsonObject { ["items"] = items };
+        return new JsonObject { ["items"] = CatalogBAL.Arr(await cards.ProductCardsAsync([p, .. others])) }; // the product itself first
     }
 
-    // ------------------------------------------------------------------ seller hub
+    // ------------------------------------------------------------------------- seller
 
-    public async Task<JsonObject> SellerQuestionsAsync(UserModel user, bool unanswered, int page)
+    public async Task<JsonObject> SellerQuestionsAsync(SellerModel seller, bool unanswered, int page)
     {
-        var seller = await SellerAsync(user);
-        var (rows, total, waiting) = await engagement.SellerQuestionsAsync(seller.Id, unanswered, page);
-        var answers = new Dictionary<Guid, List<ProductAnswerModel>>();
+        var total = await qa.SellerQuestionCountAsync(seller.Id, unanswered);
+        var rows = (await qa.SellerQuestionsAsync(seller.Id, unanswered, 20, (page - 1) * 20)).ToList();
+        var answers = new Dictionary<Guid, JsonArray>();
         if (rows.Count > 0)
         {
-            foreach (var a in await engagement.SellerAnswersForAsync(rows.Select(r => r.Id).ToList()))
+            foreach (var a in await qa.VisibleAnswersAsync(rows.Select(r => r.Id)))
             {
-                if (!answers.TryGetValue(a.QuestionId, out var lst)) answers[a.QuestionId] = lst = [];
-                lst.Add(a);
-            }
-        }
-        var items = new JsonArray();
-        foreach (var qn in rows)
-        {
-            var mine = answers.GetValueOrDefault(qn.Id) ?? [];
-            var arr = new JsonArray();
-            foreach (var a in mine)
-            {
-                arr.Add(new JsonObject
+                if (!answers.TryGetValue(a.QuestionId, out var l)) answers[a.QuestionId] = l = [];
+                l.Add(new JsonObject
                 {
-                    ["id"] = a.Id.ToString(), ["text"] = a.Text, ["role"] = a.Role, ["role_label"] = RoleLabel[a.Role],
-                    ["status"] = a.Status, ["created_at"] = a.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    ["id"] = a.Id.ToString(), ["text"] = a.Text, ["role"] = a.Role, ["role_label"] = RoleLabel[a.Role], ["status"] = a.Status,
+                    ["created_at"] = Iso(a.CreatedAt),
                 });
             }
-            items.Add(new JsonObject
-            {
-                ["id"] = qn.Id.ToString(), ["text"] = qn.Text, ["product"] = qn.ProductTitle, ["slug"] = qn.ProductSlug,
-                ["created_at"] = qn.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"), ["answers"] = arr,
-                ["answered_by_you"] = mine.Any(a => a.Role == "seller"),
-            });
         }
-        return new JsonObject { ["items"] = items, ["total"] = total, ["page"] = page, ["unanswered"] = waiting };
+        var waiting = await qa.SellerQuestionCountAsync(seller.Id, unanswered: true);
+        return new JsonObject
+        {
+            ["items"] = CatalogBAL.Arr(rows.Select(q =>
+            {
+                var list = answers.GetValueOrDefault(q.Id) ?? [];
+                var byYou = list.Any(a => CatalogText.Str(a!["role"]) == "seller");
+                return (JsonNode)new JsonObject
+                {
+                    ["id"] = q.Id.ToString(), ["text"] = q.Text, ["product"] = q.ProductTitle, ["slug"] = q.ProductSlug, ["created_at"] = Iso(q.CreatedAt),
+                    ["answers"] = list, ["answered_by_you"] = byYou,
+                };
+            })),
+            ["total"] = total, ["page"] = page, ["unanswered"] = waiting,
+        };
     }
 
-    /// <summary>Small counts for the seller hub menu.</summary>
-    public async Task<JsonObject> SellerBadgesAsync(UserModel user)
+    public async Task<JsonObject> SellerBadgesAsync(SellerModel seller)
     {
-        var seller = await SellerAsync(user);
-        var (orders, questions, reports, deals) = await engagement.SellerBadgesAsync(seller.Id);
+        var (orders, reports, deals) = await qa.SellerBadgeCountsAsync(seller.Id);
+        var questions = await qa.SellerQuestionCountAsync(seller.Id, unanswered: true);
         return new JsonObject { ["orders"] = orders, ["questions"] = questions, ["reports"] = reports, ["deals_running"] = deals };
     }
 
-    public async Task<JsonObject> SellerAnswerAsync(UserModel user, Guid questionId, string text)
+    public async Task<JsonObject> SellerAnswerAsync(Guid questionId, SellerModel seller, UserModel user, AnswerIn body)
     {
-        var seller = await SellerAsync(user);
-        var qn = await engagement.GetQuestionAsync(questionId);
-        var p = qn is null ? null : await engagement.GetProductAsync(qn.ProductId);
+        var qn = await qa.GetQuestionAsync(questionId);
+        var p = qn != null ? await catalog.GetProductAsync(qn.ProductId) : null;
         if (qn is null || p is null || p.SellerId != seller.Id) throw new NotFoundException("Question");
-        return await AnswerAsync(user, questionId, text);
+        return await AnswerAsync(questionId, user, body);
     }
 
-    // ------------------------------------------------------------------ admin
+    // ------------------------------------------------------------------------- staff
 
-    /// <summary>Questions and answers in one queue: each row is a post with its context, most reported first.</summary>
-    public async Task<JsonObject> AdminQueueAsync(UserModel admin, string status, string q, int page)
+    /// <summary>Questions and answers in one queue, most reported first, then newest; 30 per page.</summary>
+    public async Task<JsonObject> AdminQuestionsAsync(string status, string q, int page)
     {
-        await access.RequireAsync(admin, "catalog");
-        var like = q.Trim().Length > 0 ? $"%{q.Trim()}%" : null;
-        var qwhere = "q.status = @status" + (like is null ? "" : " AND (q.text LIKE @like OR p.title LIKE @like)");
-        var questions = await db.QueryAsync<dynamic>(
-            $"SELECT q.id, q.text, q.report_count, q.created_at, p.title AS product, p.slug, u.name FROM product_questions q " +
-            $"JOIN products p ON p.id = q.product_id LEFT JOIN users u ON u.id = q.user_id WHERE {qwhere} LIMIT 200",
-            new { status, like });
-        var awhere = "a.status = @status" + (like is null ? "" : " AND (a.text LIKE @like OR p.title LIKE @like)");
-        var answers = await db.QueryAsync<dynamic>(
-            $"SELECT a.id, a.text, a.role, a.report_count, a.created_at, q.text AS question, p.title AS product, p.slug, u.name FROM product_answers a " +
-            $"JOIN product_questions q ON q.id = a.question_id JOIN products p ON p.id = q.product_id LEFT JOIN users u ON u.id = a.user_id WHERE {awhere} LIMIT 200",
-            new { status, like });
-        var rows = new List<JsonObject>();
-        foreach (var x in questions)
-        {
-            rows.Add(new JsonObject
+        var text = q.Trim();
+        var rows = new List<(int Reports, DateTime At, JsonObject Row)>();
+        foreach (var x in await qa.AdminQuestionsAsync(status, text))
+            rows.Add((x.ReportCount, x.CreatedAt, new JsonObject
             {
-                ["kind"] = "question", ["id"] = ((Guid)x.id).ToString(), ["text"] = (string)x.text, ["product"] = (string)x.product,
-                ["slug"] = (string)x.slug, ["author"] = (string?)x.name ?? "Deleted account", ["role"] = "customer",
-                ["report_count"] = (int)x.report_count, ["created_at"] = ((DateTime)x.created_at).ToString("yyyy-MM-ddTHH:mm:ss"), ["question"] = "",
-            });
-        }
-        foreach (var a in answers)
-        {
-            rows.Add(new JsonObject
+                ["kind"] = "question", ["id"] = x.Id.ToString(), ["text"] = x.Text, ["product"] = x.ProductTitle, ["slug"] = x.ProductSlug,
+                ["author"] = x.AuthorName ?? "Deleted account", ["role"] = "customer", ["report_count"] = x.ReportCount, ["created_at"] = Iso(x.CreatedAt), ["question"] = "",
+            }));
+        foreach (var a in await qa.AdminAnswersAsync(status, text))
+            rows.Add((a.ReportCount, a.CreatedAt, new JsonObject
             {
-                ["kind"] = "answer", ["id"] = ((Guid)a.id).ToString(), ["text"] = (string)a.text, ["product"] = (string)a.product,
-                ["slug"] = (string)a.slug, ["author"] = (string?)a.name ?? "Deleted account", ["role"] = (string)a.role,
-                ["report_count"] = (int)a.report_count, ["created_at"] = ((DateTime)a.created_at).ToString("yyyy-MM-ddTHH:mm:ss"),
-                ["question"] = (string)a.question,
-            });
-        }
-        rows = rows.OrderByDescending(r => r["report_count"]!.GetValue<int>()).ThenByDescending(r => r["created_at"]!.GetValue<string>()).ToList();
+                ["kind"] = "answer", ["id"] = a.Id.ToString(), ["text"] = a.Text, ["product"] = a.ProductTitle, ["slug"] = a.ProductSlug,
+                ["author"] = a.AuthorName ?? "Deleted account", ["role"] = a.Role, ["report_count"] = a.ReportCount, ["created_at"] = Iso(a.CreatedAt),
+                ["question"] = a.QuestionText,
+            }));
+        var sorted = rows.OrderByDescending(r => r.Reports).ThenByDescending(r => r.At).Select(r => r.Row).ToList();
         var counts = new JsonObject();
-        foreach (var st in new[] { "pending", "published", "hidden" })
-        {
-            counts[st] = await db.ExecuteScalarAsync<long>("SELECT (SELECT COUNT(*) FROM product_questions WHERE status = @st) + (SELECT COUNT(*) FROM product_answers WHERE status = @st)", new { st });
-        }
+        foreach (var st in new[] { "pending", "published", "hidden" }) counts[st] = await qa.CountPostsAsync(st);
         var start = (page - 1) * 30;
-        var items = new JsonArray();
-        foreach (var r in rows.Skip(start).Take(30))
+        return new JsonObject
         {
-            items.Add(r);
-        }
-        return new JsonObject { ["items"] = items, ["total"] = rows.Count, ["page"] = page, ["page_size"] = 30, ["counts"] = counts };
+            ["items"] = CatalogBAL.Arr(sorted.Skip(start).Take(30)), ["total"] = sorted.Count, ["page"] = page, ["page_size"] = 30, ["counts"] = counts,
+        };
     }
 
-    public async Task<JsonObject> AdminActionAsync(UserModel admin, bool question, Guid postId, bool publish)
+    public async Task<JsonObject> AdminQuestionActionAsync(UserModel admin, string kind, Guid postId, string action)
     {
-        await access.RequireAsync(admin, "catalog");
-        var status = publish ? "published" : "hidden";
+        var question = kind == "question";
+        Guid? parent = null;
         if (question)
         {
-            var obj = await engagement.GetQuestionAsync(postId) ?? throw new NotFoundException("Post");
-            await db.ExecuteAsync("UPDATE product_questions SET status = @status, report_count = 0 WHERE id = @postId", new { status, postId });
+            if (await qa.GetQuestionAsync(postId) is null) throw new NotFoundException("Post");
         }
         else
         {
-            var obj = await engagement.GetAnswerAsync(postId) ?? throw new NotFoundException("Post");
-            await db.ExecuteAsync("UPDATE product_answers SET status = @status, report_count = 0 WHERE id = @postId", new { status, postId });
-            await RefreshCountAsync(obj.QuestionId);
+            var a = await qa.GetAnswerAsync(postId) ?? throw new NotFoundException("Post");
+            parent = a.QuestionId;
         }
-        await audit.AuditAsync(admin, $"qa.{(question ? "question" : "answer")}.{(publish ? "publish" : "hide")}", question ? "question" : "answer", postId);
+        var status = action == "publish" ? "published" : "hidden";
+        await qa.SetPostStatusAsync(question, postId, status);
+        if (parent is { } qid) await qa.RefreshAnswerCountAsync(qid);
+        await support.AuditAsync(admin.Id, $"qa.{kind}.{action}", kind, postId.ToString());
         return new JsonObject { ["ok"] = true, ["status"] = status };
     }
 
-    // ------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------------- jobs
 
-    private async Task<ProductModel> ProductAsync(string slug) =>
-        await engagement.PublicProductBySlugAsync(slug) ?? throw new NotFoundException("Product");
-
-    private async Task<SellerModel> SellerAsync(UserModel user)
+    public async Task<int> SendStockAlertsAsync()
     {
-        var seller = await engagement.SellerByUserAsync(user.Id) ?? throw new ForbiddenException("Register as a seller first");
-        if (seller.Status != "approved") throw new ForbiddenException("Your seller account is not approved yet");
-        return seller;
+        var cfg = await platform.GetAsync();
+        if (!cfg.Bool("feature_stock_alerts")) return 0;
+        var rows = (await qa.DueStockAlertsAsync()).ToList();
+        var now = DateTimeFunctions.UtcNow();
+        foreach (var r in rows)
+        {
+            var label = ProductInfo.VariantLabel(r.Options);
+            await notify.NotifyUserAsync(r.UserId, "back_in_stock", new Dictionary<string, string>
+            {
+                ["item"] = r.Title + (label.Length > 0 ? $" ({label})" : ""), ["price"] = CatalogBAL.Rupees(r.PricePaise),
+            }, $"/p/{r.Slug}");
+            await qa.MarkStockAlertSentAsync(r.UserId, r.VariantId, now);
+        }
+        return rows.Count;
     }
 
-    /// <summary>Reference: _refresh_count — published answers on the question.</summary>
-    private async Task RefreshCountAsync(Guid questionId, IUnitOfWork? uow = null)
+    public async Task<int> SendPriceDropsAsync()
     {
-        const string countSql = "SELECT COUNT(*) FROM product_answers WHERE question_id = @questionId AND status = 'published'";
-        const string updateSql = "UPDATE product_questions SET answer_count = @n WHERE id = @questionId";
-        if (uow is not null)
+        var cfg = await platform.GetAsync();
+        if (!cfg.Bool("feature_price_alerts")) return 0;
+        var rows = (await qa.DuePriceDropsAsync(cfg.Int("price_alert_min_drop_pct"))).ToList();
+        foreach (var r in rows)
         {
-            var n = await uow.QueryFirstOrDefaultAsync<long>(countSql, new { questionId });
-            await uow.ExecuteAsync(updateSql, new { n, questionId });
+            await notify.NotifyUserAsync(r.UserId, "price_drop", new Dictionary<string, string>
+            {
+                ["item"] = r.Title, ["price"] = CatalogBAL.Rupees(r.PriceFrom), ["old_price"] = CatalogBAL.Rupees(r.PriceAtAdd),
+            }, $"/p/{r.Slug}");
+            await qa.MarkPriceAlertedAsync(r.UserId, r.ProductId, r.PriceFrom);
         }
-        else
-        {
-            var n = await db.ExecuteScalarAsync<long>(countSql, new { questionId });
-            await db.ExecuteAsync(updateSql, new { n, questionId });
-        }
+        return rows.Count;
     }
+
+    public Task WishlistPriceOnAddAsync(Guid userId, Guid productId) => qa.RememberWishlistPriceAsync(userId, productId);
 }

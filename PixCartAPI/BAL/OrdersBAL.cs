@@ -239,7 +239,7 @@ public class OrdersBAL(
         };
 
         // The shopper's currency (Admin → Languages and currencies): kept on the order with today's rate.
-        var reg = await regional.GetRegionalAsync();
+        var reg = await regional.GetAsync();
         var shown = (currency ?? RegionalBAL.Base).ToUpperInvariant();
         var shownRate = regional.CurrencyRate(reg, shown);
         if (shownRate is not null)
@@ -631,7 +631,7 @@ public class OrdersBAL(
             },
             ["expires_at"] = order.PaymentExpiresAt?.ToString("o"),
         };
-        var reg = await regional.GetRegionalAsync();
+        var reg = await regional.GetAsync();
         data["methods"] = reg["pay_methods"]?.DeepClone();
         data["card_networks"] = reg["card_networks"]?.DeepClone();
         if (reg["save_cards"]?.GetValue<bool>() == true && (user.Phone.Length > 0 || (user.Email ?? "").Length > 0))

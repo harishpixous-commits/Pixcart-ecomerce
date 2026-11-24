@@ -1,3 +1,4 @@
+using BAL.Interface;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -271,14 +272,14 @@ public partial class ShopAssistantBAL
     private async Task<ToolOut> PrepareTicketToolAsync(Ctx ctx, Dictionary<string, object?> a)
     {
         var cat = AStr(a, "category") ?? "other";
-        if (!SupportBAL.CategoryLabels.ContainsKey(cat)) cat = "other";
+        if (!SupportTicketBAL.CategoryLabels.ContainsKey(cat)) cat = "other";
         var recent = await orders.RecentForUserAsync(ctx.User!.Id, 10);
         OrderModel? order = null;
         if (!string.IsNullOrWhiteSpace(AStr(a, "order_number"))) order = await OwnOrderAsync(ctx, AStr(a, "order_number"));
         var card = new JsonObject
         {
             ["type"] = "ticket_form", ["category"] = cat,
-            ["categories"] = new JsonArray(SupportBAL.CategoryLabels.Select(kv => (JsonNode)new JsonObject { ["code"] = kv.Key, ["label"] = kv.Value }).ToArray()),
+            ["categories"] = new JsonArray(SupportTicketBAL.CategoryLabels.Select(kv => (JsonNode)new JsonObject { ["code"] = kv.Key, ["label"] = kv.Value }).ToArray()),
             ["subject"] = (AStr(a, "subject") ?? "")[..Math.Min(120, (AStr(a, "subject") ?? "").Length)],
             ["message"] = (AStr(a, "message") ?? "")[..Math.Min(3000, (AStr(a, "message") ?? "").Length)],
             ["order_id"] = order?.Id.ToString() ?? "",

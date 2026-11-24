@@ -118,21 +118,4 @@ public partial class AuthSettingsBAL(SettingsDAL settings, IIntegrationBAL integ
     }
 }
 
-/// <summary>Reading values from settings documents (JSON objects merged over defaults).</summary>
-public static class JsonSettingsExtensions
-{
-    public static int Int(this JsonObject o, string key) => o[key] is JsonValue v && v.TryGetValue<int>(out var n) ? n : Convert.ToInt32(o[key]?.GetValue<double>() ?? 0);
-
-    public static long Long(this JsonObject o, string key)
-    {
-        if (o[key] is not JsonValue v) return 0;
-        if (v.TryGetValue<long>(out var n)) return n;
-        if (v.TryGetValue<int>(out var i)) return i;
-        if (v.TryGetValue<double>(out var d)) return Convert.ToInt64(d);
-        return 0;
-    }
-
-    public static bool Bool(this JsonObject o, string key) => o[key] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
-
-    public static string Str(this JsonObject o, string key) => o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : o[key]?.ToJsonString() ?? "";
-}
+// JSON settings helpers (Int, Bool, Str, Long ...) live in BAL.Interface.SettingsJson, shared by every module.

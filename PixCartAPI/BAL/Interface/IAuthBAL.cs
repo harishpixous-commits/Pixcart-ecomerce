@@ -1,52 +1,66 @@
-using System.Text.Json.Nodes;
 using Model.DomainModel;
+using Model.DomainModel.Auth;
 
 namespace BAL.Interface;
 
-/// <summary>Sign-in and account security (reference: routers/auth.py).</summary>
+/// <summary>
+/// A started (or renewed) session: the controller sets <see cref="RefreshToken"/> as the HttpOnly cookie for
+/// <see cref="Days"/> days and answers with an access token and <see cref="UserPayload"/>.
+/// </summary>
+public record IssuedSession(UserModel User, string RefreshToken, int Days, Dictionary<string, object?> UserPayload);
+
+/// <summary>A refused refresh: the error to answer with, and whether the browser's refresh cookie must be removed.</summary>
+public sealed class RefreshRefusedException(string message, bool deleteCookie) : Utils.AppException(message, "unauthorized", 401)
+{
+    public bool DeleteCookie { get; } = deleteCookie;
+}
+
+/// <summary>
+/// Sign-in (the reference version's routers/auth.py): one-time codes by SMS for customers, sellers and partners;
+/// email and password with optional two-step sign-in for staff; refresh sessions (one per device, rotated on every use,
+/// with theft detection and a 60-second grace for the same browser racing itself); signed-in devices; the profile.
+/// </summary>
 public interface IAuthBAL
 {
-    /// <summary>Reference: user_payload.</summary>
-    Task<JsonObject> UserPayloadAsync(UserModel user);
+    /// <summary>POST /api/auth/otp/request: rate-limited per network and number, with a resend wait; sends the code.</summary>
+    Task<Dictionary<string, object?>> RequestOtpAsync(OtpRequestIn body);
 
-    /// <summary>Reference: request_otp. Returns the response body; the dev code is included only on test installs.</summary>
-    Task<JsonObject> RequestOtpAsync(string phone, string purpose, bool forSeller, string ip);
+    /// <summary>GET /api/auth/options: what the sign-in and create-account screens should offer.</summary>
+    Task<Dictionary<string, object?>> OptionsAsync();
 
-    /// <summary>Reference: auth_options.</summary>
-    Task<JsonObject> OptionsAsync();
+    /// <summary>POST /api/auth/otp/verify: checks the code, creates the account when allowed, starts a session.</summary>
+    Task<(IssuedSession Session, bool IsNew)> VerifyOtpAsync(OtpVerifyIn body);
 
-    /// <summary>Reference: verify_otp. The controller adds the access token to the body.</summary>
-    Task<(UserModel User, string RefreshToken, int Days, bool IsNew)> VerifyOtpAsync(string phone, string code, string purpose,
-        string name, string? email, bool acceptTerms, bool marketingOptIn, bool forSeller, string userAgent);
+    /// <summary>POST /api/auth/login: staff sign-in with email, password and (when on) the authenticator code.</summary>
+    Task<IssuedSession> PasswordLoginAsync(PasswordLoginIn body);
 
-    /// <summary>Reference: password_login. The controller adds the access token to the body.</summary>
-    Task<(UserModel User, string RefreshToken, int Days)> PasswordLoginAsync(string email, string password,
-        string totp, string ip, string userAgent);
+    /// <summary>POST /api/auth/password: changes the password (owner's policy) and ends every refresh session.</summary>
+    Task ChangePasswordAsync(UserModel user, PasswordChangeIn body);
 
-    /// <summary>Reference: change_password.</summary>
-    Task ChangePasswordAsync(UserModel user, string currentPassword, string newPassword);
+    /// <summary>POST /api/auth/totp/setup: a new authenticator secret and its otpauth:// address.</summary>
+    Task<object> TotpSetupAsync(UserModel user);
 
-    /// <summary>Reference: totp_setup.</summary>
-    Task<JsonObject> TotpSetupAsync(UserModel user);
+    /// <summary>POST /api/auth/totp/enable.</summary>
+    Task TotpEnableAsync(UserModel user, TotpCodeIn body);
 
-    /// <summary>Reference: totp_enable.</summary>
-    Task TotpEnableAsync(UserModel user, string code);
+    /// <summary>POST /api/auth/totp/disable: needs the code and (for password accounts) the password; the holder is told.</summary>
+    Task TotpDisableAsync(UserModel user, TotpCodeIn body);
 
-    /// <summary>Reference: totp_disable.</summary>
-    Task TotpDisableAsync(UserModel user, string code, string password);
+    /// <summary>POST /api/auth/refresh with the refresh cookie's value. Throws <see cref="RefreshRefusedException"/>.</summary>
+    Task<IssuedSession> RefreshAsync(string? cookieToken);
 
-    /// <summary>Reference: refresh. Renewed session for the raw cookie token.</summary>
-    Task<(UserModel User, string RefreshToken, int Days)> RefreshAsync(string rawToken, string userAgent);
+    /// <summary>POST /api/auth/logout: ends this device's refresh session.</summary>
+    Task LogoutAsync(string? cookieToken);
 
-    /// <summary>Reference: logout.</summary>
-    Task LogoutAsync(string? rawToken);
+    /// <summary>GET /api/auth/sessions: the signed-in devices ("Chrome on Android", never the raw header).</summary>
+    Task<object> SessionsAsync(UserModel user, string? cookieToken);
 
-    /// <summary>Reference: list_sessions.</summary>
-    Task<JsonObject> SessionsAsync(UserModel user, string? rawToken);
+    /// <summary>POST /api/auth/sessions/sign-out-others: every other device is signed out; returns how many.</summary>
+    Task<int> SignOutOthersAsync(UserModel user, string? cookieToken);
 
-    /// <summary>Reference: sign_out_others.</summary>
-    Task<JsonObject> SignOutOthersAsync(UserModel user, string? rawToken);
+    /// <summary>The signed-in user as the web app reads it (also the "user" of sign-in answers).</summary>
+    Task<Dictionary<string, object?>> UserPayloadAsync(UserModel user);
 
-    /// <summary>Reference: update_me.</summary>
-    Task<JsonObject> UpdateMeAsync(UserModel user, string? name, string? email);
+    /// <summary>PATCH /api/auth/me: name and email.</summary>
+    Task<Dictionary<string, object?>> UpdateMeAsync(UserModel user, ProfileUpdateIn body);
 }

@@ -5,6 +5,7 @@
  * night) include GST at fees_gst_bps; delivery and COD fees belong to the seller's package.
  */
 
+using BAL.Interface;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using DAL;

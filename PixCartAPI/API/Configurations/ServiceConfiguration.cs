@@ -50,6 +50,7 @@ public static class ServiceConfiguration
         RegisterByName(services, typeof(BAL.AccessBAL).Assembly, "BAL");
         // The storefront's optional deal-timer hook is the same DealsBAL instance as IDealsBAL.
         services.AddScoped<BAL.Interface.IDealSync>(sp => sp.GetRequiredService<BAL.DealsBAL>());
+        services.AddScoped<IRazorpayClient, BAL.RazorpayClient>(); // customers and saved-card tokens (payments may replace it)
 
         // background workers (BAL/BackgroundWorkerService): scheduled jobs, notifications, refunds ...
         if (settings.RunJobs && !settings.IsTest)

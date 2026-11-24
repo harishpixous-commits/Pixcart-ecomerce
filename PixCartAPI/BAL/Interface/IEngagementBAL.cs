@@ -1,30 +1,42 @@
 using System.Text.Json.Nodes;
 using Model.DomainModel;
+using Model.DomainModel.Catalog;
 
 namespace BAL.Interface;
 
-/// <summary>Product Q&A, stock alerts, comparison and bought-together (reference: routers/engagement.py).</summary>
+/// <summary>
+/// Product questions and answers (shoppers ask; the seller, verified buyers and other shoppers answer; posts with
+/// contact details wait for staff; reports from enough people hide a post), back-in-stock and wishlist price-drop
+/// alerts, compare and "Frequently bought together".
+/// </summary>
 public interface IEngagementBAL
 {
-    Task<JsonObject> QuestionsAsync(UserModel? user, string slug, string q, string sort, int page);
-    Task<JsonObject> AskAsync(UserModel user, string slug, string text);
-    Task<JsonObject> AnswerAsync(UserModel user, Guid questionId, string text);
-    Task<JsonObject> AnswerHelpfulAsync(UserModel user, Guid answerId);
-    Task<JsonObject> ReportAsync(UserModel user, bool question, Guid postId);
-    Task<JsonObject> StockAlertOnAsync(UserModel user, Guid variantId);
-    Task<JsonObject> StockAlertOffAsync(UserModel user, Guid variantId);
+    Task<JsonObject> QuestionsAsync(string slug, UserModel? user, string q, string sort, int page);
+    Task<JsonObject> AskAsync(string slug, UserModel user, QuestionIn body);
+    Task<JsonObject> AnswerAsync(Guid questionId, UserModel user, AnswerIn body);
+    Task<JsonObject> AnswerHelpfulAsync(Guid answerId, UserModel user);
+    Task<JsonObject> ReportPostAsync(UserModel user, QaReportIn body);
+
+    Task<JsonObject> SubscribeStockAlertAsync(UserModel user, Guid variantId);
+    Task<JsonObject> UnsubscribeStockAlertAsync(UserModel user, Guid variantId);
     Task<JsonObject> MyAlertsAsync(UserModel user, Guid? variantId);
+
     Task<JsonObject> CompareAsync(string ids);
     Task<JsonObject> BoughtTogetherAsync(string slug);
-    Task<JsonObject> SellerQuestionsAsync(UserModel user, bool unanswered, int page);
-    Task<JsonObject> SellerBadgesAsync(UserModel user);
-    Task<JsonObject> SellerAnswerAsync(UserModel user, Guid questionId, string text);
-    Task<JsonObject> AdminQueueAsync(UserModel admin, string status, string q, int page);
-    Task<JsonObject> AdminActionAsync(UserModel admin, bool question, Guid postId, bool publish);
-    /// <summary>Reference: send_stock_alerts (alerts job) — one notification per subscription when the version is back.</summary>
+
+    Task<JsonObject> SellerQuestionsAsync(SellerModel seller, bool unanswered, int page);
+    Task<JsonObject> SellerBadgesAsync(SellerModel seller);
+    Task<JsonObject> SellerAnswerAsync(Guid questionId, SellerModel seller, UserModel user, AnswerIn body);
+
+    Task<JsonObject> AdminQuestionsAsync(string status, string q, int page);
+    Task<JsonObject> AdminQuestionActionAsync(UserModel admin, string kind, Guid postId, string action);
+
+    /// <summary>Job: tells shoppers a version is back in stock (once per request). Returns how many were told.</summary>
     Task<int> SendStockAlertsAsync();
 
-    /// <summary>Reference: send_price_drops (alerts job) — one notification per new lower price on a wishlisted product.</summary>
+    /// <summary>Job: tells shoppers a wishlist product is cheaper by the set percentage. Returns how many were told.</summary>
     Task<int> SendPriceDropsAsync();
-}
 
+    /// <summary>Remembers the price when a product is saved to the wishlist (call after adding it), for price-drop alerts.</summary>
+    Task WishlistPriceOnAddAsync(Guid userId, Guid productId);
+}
