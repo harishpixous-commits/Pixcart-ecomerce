@@ -274,4 +274,83 @@ public class AiDAL(IMySqlDapperHelper db, SettingsDAL settings)
 
     public Task<int> ExpireStaleActionsAsync() =>
         db.ExecuteAsync("UPDATE assistant_actions SET status = 'expired' WHERE status = 'pending' AND created_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 HOUR)");
+    // ---------------------------------------------------------------- cancelling a package (shared by the assistant and the shop assistant)
+
+    public Task<SubOrderModel?> LockSubAsync(IUnitOfWork uow, Guid id) =>
+        uow.QueryFirstOrDefaultAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE id = @id FOR UPDATE", new { id });
+
+    public async Task<List<SubOrderModel>> LockOrderSubsAsync(IUnitOfWork uow, Guid orderId) =>
+        (await uow.QueryAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE order_id = @orderId ORDER BY number FOR UPDATE", new { orderId })).ToList();
+
+    public Task<OrderModel?> LockOrderAsync(IUnitOfWork uow, Guid id) =>
+        uow.QueryFirstOrDefaultAsync<OrderModel>("SELECT * FROM orders WHERE id = @id FOR UPDATE", new { id });
+
+    /// <summary>
+    /// The database side of cancelling one package: status, event, stock back on sale, the refund of an online payment
+    /// (left pending for the refunds job), and the order closed (coupon use released) when nothing is left.
+    /// Returns the refund id and the amount refunded (0 when nothing was charged).
+    /// </summary>
+    public async Task<(Guid? RefundId, long Refunded)> CancelSubOrderAsync(IUnitOfWork uow, SubOrderModel sub, OrderModel order, string actor, string reason, bool feesBack)
+    {
+        var now = DateTimeFunctions.UtcNow();
+        var src = sub.Status;
+        reason ??= "";
+        await uow.ExecuteAsync("UPDATE sub_orders SET status = 'cancelled', cancelled_at = @now, cancelled_by = @actor, cancel_reason = @reason, settlement_status = 'void', " +
+                               "updated_at = @now WHERE id = @id", new { id = sub.Id, now, actor, reason = reason.Length > 300 ? reason[..300] : reason });
+        await uow.ExecuteAsync("INSERT INTO order_events (id, order_id, sub_order_id, from_status, to_status, actor, note, created_at) VALUES (@eid, @orderId, @subId, @src, 'cancelled', @actor, @note, @now)",
+            new { eid = Guid.NewGuid(), orderId = order.Id, subId = sub.Id, src, actor, note = reason.Length > 1000 ? reason[..1000] : reason, now });
+        var items = (await uow.QueryAsync<OrderItemModel>("SELECT * FROM order_items WHERE sub_order_id = @id ORDER BY variant_id", new { id = sub.Id })).ToList();
+        foreach (var it in items)
+        {
+            var qty = it.Qty - it.ReturnedQty;
+            if (qty <= 0) continue;
+            if (sub.WarehouseId is { } wh)
+                await uow.ExecuteAsync("INSERT INTO inventory_levels (variant_id, warehouse_id, quantity, updated_at) VALUES (@v, @wh, @qty, @now) " +
+                                       "ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), updated_at = VALUES(updated_at)", new { v = it.VariantId, wh, qty, now });
+            await uow.ExecuteAsync("UPDATE variants SET stock = stock + @qty WHERE id = @v", new { v = it.VariantId, qty });
+            await uow.ExecuteAsync("UPDATE products SET sold_count = GREATEST(sold_count - @qty, 0), in_stock = 1 WHERE id = @p", new { p = it.ProductId, qty });
+        }
+        var othersLive = await uow.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM sub_orders WHERE order_id = @o AND status <> 'cancelled' AND id <> @id", new { o = order.Id, id = sub.Id });
+        Guid? refundId = null;
+        long refunded = 0;
+        if (order.PaymentMethod == "online" && order.PaymentStatus is "paid" or "partially_refunded")
+        {
+            var paymentId = await uow.ExecuteScalarAsync<Guid?>("SELECT id FROM payments WHERE order_id = @o AND status = 'captured' ORDER BY created_at LIMIT 1", new { o = order.Id });
+            var share = sub.Total - sub.PlatformDiscount + (othersLive == 0 ? order.TipPaise + (feesBack ? order.FeesTotal : 0) : 0);
+            if (paymentId is { } pid && share > 0)
+            {
+                refundId = Guid.NewGuid();
+                refunded = share;
+                await uow.ExecuteAsync("INSERT INTO refunds (id, order_id, payment_id, sub_order_id, amount_paise, status, reason, attempts, last_error) " +
+                                       "VALUES (@rid, @o, @pid, @sid, @amount, 'pending', @reason, 0, '')",
+                    new { rid = refundId, o = order.Id, pid, sid = sub.Id, amount = share, reason = reason.Length > 300 ? reason[..300] : reason });
+                var total = order.RefundedTotal + share;
+                await uow.ExecuteAsync("UPDATE orders SET refunded_total = @total, payment_status = @ps WHERE id = @o",
+                    new { o = order.Id, total, ps = total >= order.GrandTotal ? "refunded" : "partially_refunded" });
+            }
+        }
+        if (order.PaymentMethod == "cod")
+        {
+            var live = (await uow.QueryAsync<string>("SELECT status FROM sub_orders WHERE order_id = @o AND status <> 'cancelled'", new { o = order.Id })).ToList();
+            if (live.Count > 0 && live.All(x => x == "delivered")) await uow.ExecuteAsync("UPDATE orders SET payment_status = 'paid' WHERE id = @o", new { o = order.Id });
+        }
+        if (othersLive == 0)
+        {
+            await uow.ExecuteAsync("UPDATE orders SET status = 'cancelled', cancelled_at = @now, payment_status = CASE WHEN payment_method = 'online' AND payment_status = 'pending' " +
+                                   "THEN 'failed' ELSE payment_status END WHERE id = @o", new { o = order.Id, now });
+            var red = await uow.QueryFirstOrDefaultAsync<CouponRedemptionModel>("SELECT * FROM coupon_redemptions WHERE order_id = @o AND released = 0", new { o = order.Id });
+            if (red != null)
+            {
+                await uow.ExecuteAsync("UPDATE coupon_redemptions SET released = 1 WHERE id = @id", new { id = red.Id });
+                await uow.ExecuteAsync("UPDATE coupons SET used_count = GREATEST(used_count - 1, 0) WHERE id = @c", new { c = red.CouponId });
+            }
+        }
+        return (refundId, refunded);
+    }
+
+    public async Task<string> FirstTitleAsync(Guid subId, string fallback)
+    {
+        var titles = (await db.QueryAsync<string>("SELECT title FROM order_items WHERE sub_order_id = @subId", new { subId })).ToList();
+        return titles.Count == 0 ? fallback : titles[0] + (titles.Count > 1 ? $" and {titles.Count - 1} more" : "");
+    }
 }
