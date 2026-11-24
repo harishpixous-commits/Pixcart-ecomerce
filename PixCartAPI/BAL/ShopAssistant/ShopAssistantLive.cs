@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BAL.AI;
@@ -130,8 +132,7 @@ public partial class ShopAssistantBAL
             ? [(it.Name == "tickets" ? "my_tickets" : "my_returns_and_refunds", new Dictionary<string, object?>())] : [];
 
     /// <summary>The live branch of agent.run: prefetch, then tool-calling steps until the model answers in text.
-    /// Streams tool/card events as they happen like the reference; the model's own text deltas are collected per turn
-    /// (the router callback cannot yield) and emitted before that turn's tool cards, preserving the reference order.
+    /// Streams model deltas and tool/card events as they arrive through a bounded callback bridge.
     /// The caller falls back to guided when the model fails before any text.</summary>
     private async IAsyncEnumerable<JsonObject> RunLiveEventsAsync(Ctx ctx, ShopIntents.Intent it, string text, JsonObject cfg, UserModel? user,
         bool voice, JsonObject? page, Guid chatId, Guid replyId, Guid userMsgId, List<LlmTarget> chain,
@@ -175,29 +176,50 @@ public partial class ShopAssistantBAL
         {
             LlmTurn? turn = null;
             var stepText = new System.Text.StringBuilder();
-            var pending = new List<JsonObject>(); // this turn's deltas/tool notices, in the reference's order
-            await llmRouter.StreamAsync(ShopRoute, system, messages, specs, cfg.Int("max_output_tokens"), ev =>
+            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var events = Channel.CreateBounded<LlmEvent>(new BoundedChannelOptions(1)
             {
-                switch (ev.Kind)
+                SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait,
+            });
+            Exception? failure = null;
+            async Task ProduceAsync()
+            {
+                try
                 {
-                    case "text":
-                        stepText.Append(ev.Text);
-                        streamedText[0] = true;
-                        pending.Add(new JsonObject { ["type"] = "text", ["delta"] = ev.Text });
-                        break;
-                    case "tool":
-                        pending.Add(new JsonObject { ["type"] = "tool", ["name"] = ev.ToolName, ["label"] = ShopToolSpecs.LabelOf(ev.ToolName ?? "") });
-                        break;
-                    case "turn":
-                        turn = ev.Turn;
-                        break;
-                    case "used":
-                        usedModel[0] = $"{ev.Used!.Model} via {ev.Used.ConnectionName}";
-                        break;
+                    await llmRouter.StreamAsync(ShopRoute, system, messages, specs, cfg.Int("max_output_tokens"),
+                        ev => events.Writer.WriteAsync(ev, lifetime.Token).AsTask(), chain, lifetime.Token);
                 }
-                return Task.CompletedTask;
-            }, chain, ct);
-            foreach (var p in pending) yield return p;
+                catch (Exception e) { failure = e; }
+                finally { events.Writer.TryComplete(); }
+            }
+            var producer = ProduceAsync();
+            try
+            {
+                await foreach (var ev in events.Reader.ReadAllAsync(ct))
+                {
+                    switch (ev.Kind)
+                    {
+                        case "text":
+                            stepText.Append(ev.Text);
+                            streamedText[0] = true;
+                            yield return new JsonObject { ["type"] = "text", ["delta"] = ev.Text };
+                            break;
+                        case "tool":
+                            yield return new JsonObject { ["type"] = "tool", ["name"] = ev.ToolName, ["label"] = ShopToolSpecs.LabelOf(ev.ToolName ?? "") };
+                            break;
+                        case "turn": turn = ev.Turn; break;
+                        case "used": usedModel[0] = $"{ev.Used!.Model} via {ev.Used.ConnectionName}"; break;
+                    }
+                }
+                await producer;
+                if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+            }
+            finally
+            {
+                // Consumer disposal or cancellation must not leave a blocked producer behind.
+                await lifetime.CancelAsync();
+                await producer;
+            }
             if (turn is null) throw new AppException("The AI did not answer.", "ai_unavailable", 502);
             usage[0] += turn.InputTokens;
             usage[1] += turn.OutputTokens;

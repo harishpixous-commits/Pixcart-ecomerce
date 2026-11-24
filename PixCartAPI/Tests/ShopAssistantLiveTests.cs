@@ -116,6 +116,10 @@ public class ShopAssistantLiveTests(ApiFactory f) : ApiTest(f)
             Assert.Equal("live", done["mode"]!.GetValue<string>());
             Assert.Equal("Here are some shoes.", done["message"]!["text"]!.GetValue<string>());
             Assert.Contains(done["message"]!["blocks"]!.AsArray().OfType<JsonObject>(), b => b["type"]!.GetValue<string>() == "article");
+            var kinds = events.Select(e => e["type"]!.GetValue<string>()).ToList();
+            Assert.True(kinds.IndexOf("tool") < kinds.IndexOf("card"));
+            Assert.True(kinds.IndexOf("card") < kinds.IndexOf("text"));
+            Assert.Equal("done", kinds[^1]);
             Assert.Equal(2, calls); // tool answer went back to the model for the final text
         }
         finally { LlmTransport.TestHandler = null; }
@@ -174,4 +178,159 @@ public class ShopAssistantLiveTests(ApiFactory f) : ApiTest(f)
         }
         finally { LlmTransport.TestHandler = null; }
     }
+    // The upstream stream exposes one prefix, then waits for an explicit release. No clock-based sleeps.
+    private sealed class GatedStream(string prefix, string suffix) : Stream
+    {
+        private readonly MemoryStream first = new(Encoding.UTF8.GetBytes(prefix));
+        private readonly MemoryStream last = new(Encoding.UTF8.GetBytes(suffix));
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Stopped { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Finished { get; private set; }
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            var n = await first.ReadAsync(buffer, ct);
+            if (n > 0) return n;
+            try { await Release.Task.WaitAsync(ct); }
+            catch (OperationCanceledException) { Stopped.TrySetResult(); throw; }
+            n = await last.ReadAsync(buffer, ct);
+            if (n == 0) Finished = true;
+            return n;
+        }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] b, int o, int c) => throw new NotSupportedException();
+        public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException();
+        public override void SetLength(long v) => throw new NotSupportedException();
+        public override void Write(byte[] b, int o, int c) => throw new NotSupportedException();
+        public override void Flush() { }
+        protected override void Dispose(bool disposing) { Stopped.TrySetResult(); base.Dispose(disposing); }
+    }
+
+    private static (string Prefix, string Suffix) SplitText()
+    {
+        var wire = TextStream("First words.");
+        var split = wire.IndexOf("data: {\"type\":\"content_block_stop\"", StringComparison.Ordinal);
+        return (wire[..split], wire[split..]);
+    }
+
+    [Fact]
+    public async Task Http_first_text_is_visible_before_upstream_completion()
+    {
+        var (_, customer, chatId) = await LiveChat();
+        var (prefix, suffix) = SplitText();
+        var upstream = new GatedStream(prefix, suffix);
+        LlmTransport.TestHandler = new StubHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StreamContent(upstream) }));
+        try
+        {
+            using var client = Factory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/shop-assistant/sessions/{chatId}/messages")
+                { Content = System.Net.Http.Json.JsonContent.Create(new { text = "hello" }) };
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", customer.Token);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).WaitAsync(TimeSpan.FromSeconds(10));
+            response.EnsureSuccessStatusCode();
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync());
+            var types = new List<string>();
+            while (true)
+            {
+                var line = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.NotNull(line);
+                if (!line.StartsWith("data: ")) continue;
+                var ev = JsonNode.Parse(line[6..])!;
+                types.Add(ev["type"]!.GetValue<string>());
+                if (types[^1] == "text") { Assert.Equal("First words.", ev["delta"]!.GetValue<string>()); break; }
+            }
+            Assert.Equal(new[] { "start", "text" }, types);
+            Assert.False(upstream.Finished);
+            Assert.False(upstream.Release.Task.IsCompleted);
+            upstream.Release.TrySetResult();
+            var tail = await reader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            var done = Assert.Single(Events(tail.TrimStart()).Where(e => e["type"]!.GetValue<string>() == "done"));
+            Assert.Equal("First words.", done["message"]!["text"]!.GetValue<string>());
+        }
+        finally { upstream.Release.TrySetResult(); LlmTransport.TestHandler = null; }
+    }
+
+    [Fact]
+    public async Task Midstream_provider_error_keeps_text_once_without_guided_fallback_or_retry()
+    {
+        var (_, customer, chatId) = await LiveChat();
+        var (prefix, _) = SplitText();
+        var calls = 0;
+        LlmTransport.TestHandler = new StubHandler(_ =>
+        {
+            calls++;
+            return Task.FromResult(Sse(prefix + "data: {\"type\":\"error\",\"error\":{\"message\":\"synthetic interruption\"}}\n\n"));
+        });
+        try
+        {
+            var r = await customer.Post($"/api/shop-assistant/sessions/{chatId}/messages", new { text = "hello" });
+            var events = Events(r.Text);
+            Assert.Equal(new[] { "start", "text", "error" }, events.Select(e => e["type"]!.GetValue<string>()));
+            Assert.Equal("First words.", events[1]["delta"]!.GetValue<string>());
+            Assert.Equal("ai_interrupted", events[2]["code"]!.GetValue<string>());
+            Assert.Equal(1, calls);
+        }
+        finally { LlmTransport.TestHandler = null; }
+    }
+
+    [Fact]
+    public async Task Cancellation_after_text_stops_producer_and_saves_stopped_without_fallback()
+    {
+        var (_, customer, chatId) = await LiveChat();
+        var (prefix, suffix) = SplitText();
+        var upstream = new GatedStream(prefix, suffix);
+        LlmTransport.TestHandler = new StubHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StreamContent(upstream) }));
+        try
+        {
+            await using var scope = Factory.Services.CreateAsyncScope();
+            using var ct = new CancellationTokenSource();
+            var bal = scope.ServiceProvider.GetRequiredService<BAL.Interface.IShopAssistantBAL>();
+            var user = new Model.DomainModel.UserModel { Id = Guid.Parse(customer.Id), Name = "Meena", IsActive = true };
+            await using var events = bal.SendAsync(user, Guid.Parse(chatId), "", "hello", false, null, "127.0.0.1", ct.Token).GetAsyncEnumerator();
+            Assert.True(await events.MoveNextAsync());
+            Assert.Equal("start", events.Current["type"]!.GetValue<string>());
+            Assert.True(await events.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal("text", events.Current["type"]!.GetValue<string>());
+            ct.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => events.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+            await upstream.Stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var rows = await scope.ServiceProvider.GetRequiredService<DAL.ShopAssistantDAL>().MessagesAsync(Guid.Parse(chatId));
+            var reply = Assert.Single(rows.Where(m => m.Role == "assistant"));
+            Assert.Equal("stopped", reply.Status);
+            Assert.Equal("live", reply.Mode);
+        }
+        finally { upstream.Release.TrySetResult(); LlmTransport.TestHandler = null; }
+    }
+
+    [Fact]
+    public async Task Disposing_after_text_joins_producer_and_persists_stopped()
+    {
+        var (_, customer, chatId) = await LiveChat();
+        var (prefix, suffix) = SplitText();
+        var upstream = new GatedStream(prefix, suffix);
+        LlmTransport.TestHandler = new StubHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StreamContent(upstream) }));
+        try
+        {
+            await using var scope = Factory.Services.CreateAsyncScope();
+            var bal = scope.ServiceProvider.GetRequiredService<BAL.Interface.IShopAssistantBAL>();
+            var user = new Model.DomainModel.UserModel { Id = Guid.Parse(customer.Id), Name = "Meena", IsActive = true };
+            var events = bal.SendAsync(user, Guid.Parse(chatId), "", "hello", false, null, "127.0.0.1").GetAsyncEnumerator();
+            Assert.True(await events.MoveNextAsync());
+            Assert.True(await events.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal("text", events.Current["type"]!.GetValue<string>());
+            await events.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await upstream.Stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var rows = await scope.ServiceProvider.GetRequiredService<DAL.ShopAssistantDAL>().MessagesAsync(Guid.Parse(chatId));
+            Assert.Equal("stopped", Assert.Single(rows, m => m.Role == "assistant").Status);
+            Assert.False(upstream.Release.Task.IsCompleted);
+        }
+        finally { upstream.Release.TrySetResult(); LlmTransport.TestHandler = null; }
+    }
+
 }

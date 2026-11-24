@@ -414,95 +414,108 @@ public partial class ShopAssistantBAL
             return new JsonObject { ["type"] = "error", ["message"] = msg };
         }
 
-        var useGuided = mode == "guided";
-        if (!useGuided)
+        var finishedIteration = false;
+        try
         {
-            await using var live = RunLiveEventsAsync(ctx, it, text, cfg, user, voice, page, chat.Id, reply.Id, userMsgId, chain,
-                blocks, turnMsgs, usage, usedModel, streamedText, ct).GetAsyncEnumerator(ct);
-            while (true)
+            var useGuided = mode == "guided";
+            if (!useGuided)
             {
-                JsonObject? ev;
-                try
+                await using var live = RunLiveEventsAsync(ctx, it, text, cfg, user, voice, page, chat.Id, reply.Id, userMsgId, chain,
+                    blocks, turnMsgs, usage, usedModel, streamedText, ct).GetAsyncEnumerator(ct);
+                while (true)
                 {
-                    if (await live.MoveNextAsync()) ev = live.Current;
-                    else break;
-                }
-                catch (AppException exc) when (AiFailures.Contains(exc.Code) && !streamedText[0])
-                {
-                    // the model failed before answering: the customer still gets an answer (reference: agent.run's fallback)
-                    log.LogWarning("shop assistant model unavailable ({Code}); answering in guided mode", exc.Code);
-                    mode = "guided";
-                    reply.Mode = mode;
-                    blocks.Clear(); // the reply record reflects the guided answer; the events already sent stay sent
-                    turnMsgs.Clear();
-                    useGuided = true;
-                    break;
-                }
-                catch (AppException exc) { ev = FailureEvent(exc); }
-                catch (Exception e) { ev = UnexpectedFailureEvent(e); }
-                if (ev is not null) yield return ev;
-                if (status != "done") break;
-            }
-        }
-        if (useGuided)
-        {
-            await using var guided = GuidedEvents().GetAsyncEnumerator(ct);
-            while (true)
-            {
-                JsonObject? ev;
-                try
-                {
-                    if (await guided.MoveNextAsync()) ev = guided.Current;
-                    else break;
-                }
-                catch (AppException exc) { ev = FailureEvent(exc); }
-                catch (Exception e) { ev = UnexpectedFailureEvent(e); }
-                if (ev is not null) yield return ev;
-                if (status != "done") break;
-            }
-        }
-        reply.Text = ctx.ReplyText;
-        {
-            reply.Blocks = new JsonArray(CompactBlocks(blocks).Select(b => (JsonNode)b.DeepClone()).ToArray()).ToJsonString();
-            reply.Status = status;
-            // the model-readable transcript (reference: agent.run's finally + _clean)
-            var content = turnMsgs.Count > 0
-                ? CleanModelMessages([new JsonObject { ["role"] = "user", ["content"] = "x" }, .. turnMsgs]).Skip(1).ToList()
-                : [];
-            if (content.Count == 0 || content[0].Str("role") != "assistant")
-                content.Insert(0, new JsonObject
-                {
-                    ["role"] = "assistant",
-                    ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = reply.Text.Length > 0 ? reply.Text : "(no answer)" }),
-                });
-            reply.ModelContent = new JsonArray(content.Select(c => (JsonNode)c).ToArray()).ToJsonString();
-            reply.InputTokens = usage[0];
-            reply.OutputTokens = usage[1];
-            try
-            {
-                await dal.InsertMessageAsync(reply);
-                chat.MessageCount += 2;
-                chat.UpdatedAt = DateTimeFunctions.UtcNow();
-                await dal.UpdateSessionAsync(chat);
-                var ids = ctx.KbHits.Select(h => Guid.TryParse(h, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList();
-                if (ids.Count > 0) await dal.BumpArticleUsesAsync(ids);
-                if (mode == "live")
-                {
-                    // Token accounting only: the customer's words stay in the chat tables (reference: agent._save).
-                    await dal.InsertAiRunAsync(new AiRunModel
+                    JsonObject? ev;
+                    try
                     {
-                        Id = Guid.NewGuid(), Task = ShopRoute, SubjectType = "shop_chat", SubjectId = chat.Id.ToString(),
-                        Inputs = "{}", Output = new JsonObject { ["blocks"] = JsonNode.Parse(reply.Blocks)!.AsArray().Count }.ToJsonString(),
-                        FinalText = "", Status = status == "done" ? "applied" : "failed", Mode = "live",
-                        Model = usedModel[0][..Math.Min(80, usedModel[0].Length)],
-                        InputTokens = usage[0], OutputTokens = usage[1], CacheCreationTokens = usage[2], CacheReadTokens = usage[3],
-                        LatencyMs = (int)(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds),
-                        Error = status == "done" ? "" : status, CreatedBy = user?.Id, CreatedAt = DateTimeFunctions.UtcNow(),
-                    });
+                        if (await live.MoveNextAsync()) ev = live.Current;
+                        else break;
+                    }
+                    catch (AppException exc) when (AiFailures.Contains(exc.Code) && !streamedText[0])
+                    {
+                        // the model failed before answering: the customer still gets an answer (reference: agent.run's fallback)
+                        log.LogWarning("shop assistant model unavailable ({Code}); answering in guided mode", exc.Code);
+                        mode = "guided";
+                        reply.Mode = mode;
+                        blocks.Clear(); // the reply record reflects the guided answer; the events already sent stay sent
+                        turnMsgs.Clear();
+                        useGuided = true;
+                        break;
+                    }
+                    catch (OperationCanceledException) { status = "stopped"; break; }
+                    catch (AppException exc) { ev = FailureEvent(exc); }
+                    catch (Exception e) { ev = UnexpectedFailureEvent(e); }
+                    if (ev is not null) yield return ev;
+                    if (status != "done") break;
                 }
             }
-            catch (Exception e) { log.LogError(e, "could not save shop assistant reply"); }
+            if (useGuided)
+            {
+                await using var guided = GuidedEvents().GetAsyncEnumerator(ct);
+                while (true)
+                {
+                    JsonObject? ev;
+                    try
+                    {
+                        if (await guided.MoveNextAsync()) ev = guided.Current;
+                        else break;
+                    }
+                    catch (OperationCanceledException) { status = "stopped"; break; }
+                    catch (AppException exc) { ev = FailureEvent(exc); }
+                    catch (Exception e) { ev = UnexpectedFailureEvent(e); }
+                    if (ev is not null) yield return ev;
+                    if (status != "done") break;
+                }
+            }
+            finishedIteration = true;
         }
+        finally
+        {
+            // Async iterator disposal is the C# equivalent of the reference GeneratorExit.
+            if (!finishedIteration && status == "done") status = "stopped";
+            reply.Text = ctx.ReplyText;
+            {
+                reply.Blocks = new JsonArray(CompactBlocks(blocks).Select(b => (JsonNode)b.DeepClone()).ToArray()).ToJsonString();
+                reply.Status = status;
+                // the model-readable transcript (reference: agent.run's finally + _clean)
+                var content = turnMsgs.Count > 0
+                    ? CleanModelMessages([new JsonObject { ["role"] = "user", ["content"] = "x" }, .. turnMsgs]).Skip(1).ToList()
+                    : [];
+                if (content.Count == 0 || content[0].Str("role") != "assistant")
+                    content.Insert(0, new JsonObject
+                    {
+                        ["role"] = "assistant",
+                        ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = reply.Text.Length > 0 ? reply.Text : "(no answer)" }),
+                    });
+                reply.ModelContent = new JsonArray(content.Select(c => (JsonNode)c).ToArray()).ToJsonString();
+                reply.InputTokens = usage[0];
+                reply.OutputTokens = usage[1];
+                try
+                {
+                    await dal.InsertMessageAsync(reply);
+                    chat.MessageCount += 2;
+                    chat.UpdatedAt = DateTimeFunctions.UtcNow();
+                    await dal.UpdateSessionAsync(chat);
+                    var ids = ctx.KbHits.Select(h => Guid.TryParse(h, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList();
+                    if (ids.Count > 0) await dal.BumpArticleUsesAsync(ids);
+                    if (mode == "live")
+                    {
+                        // Token accounting only: the customer's words stay in the chat tables (reference: agent._save).
+                        await dal.InsertAiRunAsync(new AiRunModel
+                        {
+                            Id = Guid.NewGuid(), Task = ShopRoute, SubjectType = "shop_chat", SubjectId = chat.Id.ToString(),
+                            Inputs = "{}", Output = new JsonObject { ["blocks"] = JsonNode.Parse(reply.Blocks)!.AsArray().Count }.ToJsonString(),
+                            FinalText = "", Status = status == "done" ? "applied" : "failed", Mode = "live",
+                            Model = usedModel[0][..Math.Min(80, usedModel[0].Length)],
+                            InputTokens = usage[0], OutputTokens = usage[1], CacheCreationTokens = usage[2], CacheReadTokens = usage[3],
+                            LatencyMs = (int)(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds),
+                            Error = status == "done" ? "" : status, CreatedBy = user?.Id, CreatedAt = DateTimeFunctions.UtcNow(),
+                        });
+                    }
+                }
+                catch (Exception e) { log.LogError(e, "could not save shop assistant reply"); }
+            }
+        }
+        if (status == "stopped") throw new OperationCanceledException(ct);
         if (status == "done")
             yield return new JsonObject { ["type"] = "done", ["message"] = MessageOut(reply), ["mode"] = mode };
     }
