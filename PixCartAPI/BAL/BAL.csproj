@@ -16,4 +16,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- texts, keyword lists, tool schemas and defaults of the AI module, copied from the reference version -->
+    <EmbeddedResource Include="AI/Data/reference.json" />
+  </ItemGroup>
+
 </Project>
