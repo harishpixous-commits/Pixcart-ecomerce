@@ -16,7 +16,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/admin")]
 [SignedIn]
-public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access, ICurrentUser current) : ControllerBase
+public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access, ICurrentUser current, BAL.AssistantAskBAL ask, BAL.Interface.IRateLimitBAL rateLimit) : ControllerBase
 {
     private async Task<UserModel> RequireAsync(string permission)
     {
@@ -87,7 +87,54 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
     [HttpGet("assistant/conversations/{convId:guid}")]
     public async Task<JsonObject> GetConversation(Guid convId) =>
         await assistant.GetConversationAsync(await RequireAsync("assistant"), convId);
+
+    /// <summary>
+    /// Ask the assistant; the answer streams back as server-sent events (reference: POST
+    /// /api/admin/assistant/conversations/{conv_id}/messages). Sandbox mode only: no external model is ever called.
+    /// </summary>
+    [HttpPost("assistant/conversations/{convId:guid}/messages")]
+    public async Task Ask(Guid convId, AssistantAskIn body, CancellationToken cancellationToken)
+    {
+        var user = await RequireAsync("assistant");
+        var cfg = await assistant.ConfigForRunAsync();
+        if (cfg["enabled"]?.GetValue<bool>() != true)
+            throw new AppException("The AI assistant is switched off. An admin can turn it on in Admin → AI assistant.", "assistant_off", 409);
+        var perms = await access.PermissionsForAsync(user);
+        if (body.UploadIds is { Count: > 0 } && !perms.Contains("assistant_files"))
+            throw new ForbiddenException("Your role cannot share files with the assistant (assistant_files)");
+        if (body.Voice && !perms.Contains("assistant_voice"))
+            throw new ForbiddenException("Your role cannot use voice (assistant_voice)");
+        await rateLimit.RateLimitAsync($"assistant:{user.Id}", 120, 3600);
+        JsonObject? page = null;
+        if (body.Page is not null)
+        {
+            page = new JsonObject();
+            foreach (var key in new[] { "path", "title", "filters" })
+                if (body.Page[key]?.GetValue<string>() is { } v)
+                    page[key] = v.Length > 300 ? v[..300] : v;
+            if (page.Count == 0) page = null;
+        }
+        Response.StatusCode = 200;
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        await Response.Body.FlushAsync(cancellationToken);
+        await foreach (var ev in ask.AskEventsAsync(user, convId, body.Text.Trim(), page, body.Voice, cancellationToken))
+        {
+            var line = "data: " + ev.ToJsonString() + "\n\n";
+            await Response.Body.WriteAsync(System.Text.Encoding.UTF8.GetBytes(line), cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+        }
+    }
 }
+
+/// <summary>Reference: routers/assistant.py AskIn.</summary>
+public sealed record AssistantAskIn(
+    [param: MinLength(1), MaxLength(8000)] string Text,
+    [param: MaxLength(5)] List<string>? UploadIds = null,
+    JsonObject? Page = null,
+    bool Voice = false);
 
 /// <summary>Reference: routers/assistant.py ConvIn.</summary>
 public sealed record AssistantConvIn([param: MaxLength(120)] string Title = "New chat", JsonObject? Context = null);

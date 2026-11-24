@@ -4,7 +4,7 @@ using Model.DomainModel;
 using Utils.Interface;
 
 /// <summary>Staff assistant conversations and messages (reference: routers/assistant.py queries).</summary>
-public class AssistantDAL(IMySqlDapperHelper db)
+public partial class AssistantDAL(IMySqlDapperHelper db)
 {
     public Task<AssistantConversationModel?> ConversationAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<AssistantConversationModel>("SELECT * FROM assistant_conversations WHERE id = @id", new { id });

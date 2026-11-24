@@ -259,6 +259,9 @@ public class AssistantBAL(
 
     private async Task<JsonObject> StoredAsync() => Merge(await settings.GetAsync(SettingsKey));
 
+    /// <summary>Merged runtime settings for the ask path (reference: settings.get with reveal).</summary>
+    public async Task<JsonObject> ConfigForRunAsync() => await StoredAsync();
+
     private async Task<JsonObject> GetAsync()
     {
         var cfg = await StoredAsync();
@@ -380,6 +383,21 @@ public class AssistantBAL(
         var cleaned = notes.Select(n => Clean(n?.GetValue<string>(), 300)).Where(n => n.Length > 0).TakeLast(MaxNotes).ToArray();
         await settings.SaveAsync(MemKey(user.Id), new JsonObject { ["notes"] = new JsonArray(cleaned.Select(n => (JsonNode)JsonValue.Create(n)!).ToArray()) });
         return new JsonObject { ["notes"] = new JsonArray(cleaned.Select(n => (JsonNode)JsonValue.Create(n)!).ToArray()) };
+    }
+
+    /// <summary>User-id keyed memory notes for the assistant's remember tool (reference: settings.memories).</summary>
+    public async Task<List<string>> GetMemoryNotesAsync(Guid userId)
+    {
+        var row = await settings.GetAsync(MemKey(userId));
+        return row["notes"] is JsonArray arr ? arr.Select(n => n!.GetValue<string>()).ToList() : [];
+    }
+
+    /// <summary>Reference: settings.set_memories.</summary>
+    public async Task<List<string>> SetMemoryNotesAsync(Guid userId, List<string> notes)
+    {
+        var cleaned = notes.Select(n => Clean(n, 300)).Where(n => n.Length > 0).TakeLast(MaxNotes).ToList();
+        await settings.SaveAsync(MemKey(userId), new JsonObject { ["notes"] = new JsonArray(cleaned.Select(n => (JsonNode)JsonValue.Create(n)!).ToArray()) });
+        return cleaned;
     }
 
     // ---------------------------------------------------------------- conversations (reference: routers/assistant.py)
