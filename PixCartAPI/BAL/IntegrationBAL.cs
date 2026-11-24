@@ -627,7 +627,7 @@ public class IntegrationBAL(
         try
         {
             FcmClient.Reset(); // always ask Google again
-            await FcmClient.AccessTokenAsync(http.CreateClient(HttpClientName), cfg);
+            await FcmClient.AccessTokenAsync(http.CreateClient(PushBAL.HttpClientName), cfg);
         }
         catch (FormatException ex)
         {
