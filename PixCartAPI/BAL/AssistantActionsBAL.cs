@@ -31,6 +31,7 @@ public class AssistantActionsBAL(
     ISellerModerationBAL sellers,
     ProductModerationDAL productsDal,
     IProductModerationBAL products,
+    ICouponAdminBAL coupons,
     IMySqlDapperHelper db)
 {
     private static readonly TimeSpan ExpiresAfter = TimeSpan.FromMinutes(30);
@@ -52,6 +53,8 @@ public class AssistantActionsBAL(
         ["reject_seller"] = ("Ask a seller to fix their application", "sellers", ["seller", "reason"]),
         ["suspend_seller"] = ("Suspend a seller", "sellers", ["seller", "reason"]),
         ["set_seller_commission"] = ("Change a seller's commission", "sellers", ["seller"]),
+        ["create_coupon"] = ("Create a coupon", "marketing", ["code", "description", "kind", "value"]),
+        ["set_coupon_active"] = ("Switch a coupon on or off", "marketing", ["coupon_id"]),
     };
 
     private static string Str(JsonObject p, string key) =>
@@ -228,6 +231,43 @@ public class AssistantActionsBAL(
                 }
                 break;
             }
+            case "create_coupon":
+            case "set_coupon_active":
+            {
+                // Reference: prepare create_coupon / set_coupon_active (permission "marketing").
+                if (kind == "create_coupon")
+                {
+                    var code = Str(prms, "code").Trim().ToUpperInvariant();
+                    var ck = Str(prms, "kind").Trim().ToLowerInvariant();
+                    if (ck is not ("percent" or "flat"))
+                        throw new AssistantActionException("Coupon kind must be percent or flat.");
+                    if (!int.TryParse(Str(prms, "value"), out var cval) || cval <= 0)
+                        throw new AssistantActionException("Coupon value must be a positive number.");
+                    if (ck == "percent" && cval is < 100 or > 9000)
+                        throw new AssistantActionException("A percentage coupon must be between 1% and 90%");
+                    if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM coupons WHERE UPPER(code) = @code", new { code }) > 0)
+                        throw new AssistantActionException("This code is already used");
+                    clean["code"] = code; clean["kind"] = ck; clean["value"] = cval;
+                    var desc = Str(prms, "description").Trim();
+                    clean["description"] = desc[..Math.Min(200, desc.Length)];
+                    Detail("Code", code); Detail("Kind", ck); Detail("Value", ck == "percent" ? $"{cval / 100m:0.##}%" : Money.Rupees(cval));
+                    summary = $"Create coupon {code}";
+                }
+                else
+                {
+                    var cid = Str(prms, "coupon_id");
+                    if (!Guid.TryParse(cid, out var cguid))
+                        throw new AssistantActionException("I need the coupon's id.");
+                    var found = await db.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE id = @cguid", new { cguid })
+                        ?? throw new AssistantActionException("I could not find a coupon with that id.");
+                    clean["coupon_id"] = cguid.ToString();
+                    var active = Str(prms, "active") is not ("false" or "False" or "0" or "no");
+                    clean["active"] = active;
+                    Detail("Coupon", found.Code); Detail("Switch", active ? "on" : "off");
+                    summary = $"Switch coupon {found.Code} {(active ? "on" : "off")}";
+                }
+                break;
+            }
             default:
                 throw new AssistantActionException("Not supported");
         }
@@ -330,6 +370,10 @@ public class AssistantActionsBAL(
             "suspend_seller" => await sellers.SuspendAsync(user, Guid.Parse(Str(p, "seller_id")), Str(p, "reason")),
             "set_seller_commission" => await sellers.CommissionAsync(user, Guid.Parse(Str(p, "seller_id")),
                 p["bps"] is JsonValue bv && bv.TryGetValue<int>(out var b) ? b : null),
+            "create_coupon" => await coupons.CreateAsync(user, Str(p, "code"), Str(p, "description"), Str(p, "kind"),
+                int.Parse(Str(p, "value")), null, 0, null, null, null, 1, true, null, false, true),
+            "set_coupon_active" => await coupons.SetActiveAsync(user, Guid.Parse(Str(p, "coupon_id")),
+                p["active"] is JsonValue av && av.TryGetValue<bool>(out var a) && a),
             _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
                 "action_unavailable", 400),
         };
