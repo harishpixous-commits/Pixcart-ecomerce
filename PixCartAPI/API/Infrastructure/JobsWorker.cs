@@ -60,7 +60,15 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
         new("cleanup", async sp =>
         {
             await sp.GetRequiredService<RateLimitBAL>().PruneRateLimitsAsync();
-            return await sp.GetRequiredService<AccountDAL>().DeleteOldOtpsAsync(DateTimeFunctions.UtcNow().AddDays(-2));
+            var n = await sp.GetRequiredService<AccountDAL>().DeleteOldOtpsAsync(DateTimeFunctions.UtcNow().AddDays(-2));
+            // Reference: cleanup_job — sponsored-product impressions whose click links have expired (48h),
+            // AI assistant uploads kept 7 days, stale pending action proposals expire after an hour.
+            var db = sp.GetRequiredService<IMySqlDapperHelper>();
+            await db.ExecuteAsync("DELETE FROM ad_impressions WHERE created_at < UTC_TIMESTAMP(6) - INTERVAL 48 HOUR");
+            await db.ExecuteAsync("DELETE FROM assistant_uploads WHERE expires_at < UTC_TIMESTAMP(6)");
+            n += await db.ExecuteAsync(
+                "UPDATE assistant_actions SET status = 'expired' WHERE status = 'pending' AND created_at < UTC_TIMESTAMP(6) - INTERVAL 1 HOUR");
+            return n;
         }, Every(TimeSpan.FromHours(6))),
         new("unconfirmed", async sp => await sp.GetRequiredService<IOrdersBAL>().CancelUnconfirmedAsync(),
             Every(TimeSpan.FromMinutes(30))),
@@ -70,6 +78,14 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
             DailyAtUtc(3, 0)),
         new("deals", async sp => await sp.GetRequiredService<IDealSync>().SyncAsync(),
             Every(TimeSpan.FromMinutes(1))),
+        // Reference: jobs.ads_billing_job (hourly).
+        new("ads_billing", async sp => await sp.GetRequiredService<IAdsBAL>().BillAsync(),
+            Every(TimeSpan.FromHours(1))),
+        // Reference: jobs.alerts_job (every 10 minutes) — back-in-stock and wishlist price-drop alerts.
+        new("alerts", async sp =>
+            await sp.GetRequiredService<IEngagementBAL>().SendStockAlertsAsync() +
+            await sp.GetRequiredService<IEngagementBAL>().SendPriceDropsAsync(),
+            Every(TimeSpan.FromMinutes(10))),
         new("delivery_payouts", async sp => await sp.GetRequiredService<DeliveryAdminBAL>().GenerateScheduledAsync(),
             WeeklyAtIst(DayOfWeek.Monday, 10, 15)),
         // Reference: jobs.review_summary_job (hourly). Summaries are published on product pages, so they are written

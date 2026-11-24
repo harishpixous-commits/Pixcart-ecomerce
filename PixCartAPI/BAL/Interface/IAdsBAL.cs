@@ -37,6 +37,9 @@ public interface IAdsBAL
     /// <summary>Reference: admin_ads — all campaigns with stats, counts, rules and 30-day revenue.</summary>
     Task<JsonObject> AdminListAsync(UserModel admin, string? status, string q, int page);
 
+    /// <summary>Reference: ads.bill (ads_billing job) — post finished days' spend plus GST to seller ledgers.</summary>
+    Task<int> BillAsync();
+
     /// <summary>Reference: admin_ads_bill — post finished days' spend to seller ledgers.</summary>
     Task<JsonObject> AdminBillAsync(UserModel admin);
 

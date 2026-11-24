@@ -21,4 +21,10 @@ public interface IEngagementBAL
     Task<JsonObject> SellerAnswerAsync(UserModel user, Guid questionId, string text);
     Task<JsonObject> AdminQueueAsync(UserModel admin, string status, string q, int page);
     Task<JsonObject> AdminActionAsync(UserModel admin, bool question, Guid postId, bool publish);
+    /// <summary>Reference: send_stock_alerts (alerts job) — one notification per subscription when the version is back.</summary>
+    Task<int> SendStockAlertsAsync();
+
+    /// <summary>Reference: send_price_drops (alerts job) — one notification per new lower price on a wishlisted product.</summary>
+    Task<int> SendPriceDropsAsync();
 }
+
