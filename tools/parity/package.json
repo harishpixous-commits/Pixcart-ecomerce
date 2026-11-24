@@ -1,0 +1,9 @@
+{
+  "name": "pixcart-parity",
+  "private": true,
+  "description": "Pixel parity between the reference site and the Angular app (compare.cjs)",
+  "dependencies": {
+    "pixelmatch": "^5.3.0",
+    "pngjs": "^7.0.0"
+  }
+}
