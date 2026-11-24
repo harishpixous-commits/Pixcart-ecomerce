@@ -9,6 +9,8 @@ namespace BAL.Interface;
 /// and the admin queue come with later slices.</summary>
 public interface IDeliveryFleetBAL
 {
+    Task<JsonObject> EarningsAsync(UserModel user);
+    Task<JsonObject> HistoryAsync(UserModel user,DateOnly? from,DateOnly? to,string status,int page);
     /// <summary>Rate-limited live position update (reference: POST /api/delivery/me/location).</summary>
     Task<JsonObject> SetLocationAsync(UserModel user, decimal lat, decimal lng);
 

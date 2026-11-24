@@ -15,7 +15,7 @@ namespace BAL;
 /// trips). Every step writes order_status_logs. Return pickups (kind 'pickup'), payouts, the stuck-check job and
 /// the admin queue are later slices; customer tracking comes with the order-view slice.
 /// </summary>
-public class DeliveryFleetBAL(
+public partial class DeliveryFleetBAL(
     DeliveryFleetDAL fleet,
     ReturnsDAL returnsDal,
     DeliveryDAL delivery,

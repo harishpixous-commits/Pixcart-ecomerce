@@ -5,7 +5,7 @@ namespace DAL;
 
 /// <summary>delivery_assignments + order_status_logs + delivery_cash_deposits (reference: services/fleet.py queries).
 /// Trip steps run inside a unit of work like the order transitions they drive.</summary>
-public class DeliveryFleetDAL(IMySqlDapperHelper db)
+public partial class DeliveryFleetDAL(IMySqlDapperHelper db)
 {
     public static readonly string[] Active = ["offered", "accepted", "at_store", "picked", "on_the_way", "reached"];
     public static readonly string[] OnTrip = ["accepted", "at_store", "picked", "on_the_way", "reached"];

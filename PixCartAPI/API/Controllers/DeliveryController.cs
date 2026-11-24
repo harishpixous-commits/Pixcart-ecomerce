@@ -83,6 +83,13 @@ public class DeliveryController(
     public async Task<JsonObject> SetOnline(OnlineIn body) =>
         await delivery.SetOnlineAsync(await current.RequireAsync(), body.Online);
 
+    [HttpGet("earnings"),SignedIn]
+    public async Task<JsonObject> Earnings()=>await fleet.EarningsAsync(await current.RequireAsync());
+    [HttpGet("history"),SignedIn]
+    public async Task<JsonObject> History([FromQuery(Name="from")]DateOnly? from,[FromQuery(Name="to")]DateOnly? to,
+        [FromQuery,RegularExpression("^(|delivered|failed|rejected|expired|cancelled)$")]string status="",[FromQuery,Range(1,int.MaxValue)]int page=1)
+        =>await fleet.HistoryAsync(await current.RequireAsync(),from,to,status,page);
+
     private static DeliveryProfile Body(ProfileIn b) => new(
         b.Name, b.City, b.Address, b.ZoneId, b.VehicleType, b.VehicleNo, b.LicenseNo, b.IdProofType, b.IdProofNo);
 
