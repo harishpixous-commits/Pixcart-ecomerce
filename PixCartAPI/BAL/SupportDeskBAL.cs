@@ -20,7 +20,7 @@ public class SupportDeskBAL(IAccessBAL access, ICatalogNotifyBAL notify, IAiBAL 
     };
 
     /// <summary>Reference: ticket_out (staff view, with messages).</summary>
-    private static JsonObject TicketOut(SupportTicketModel t, List<TicketMessageModel>? msgs)
+    internal static JsonObject TicketOut(SupportTicketModel t, List<TicketMessageModel>? msgs)
     {
         var now = DateTimeFunctions.UtcNow();
         var data = new JsonObject
