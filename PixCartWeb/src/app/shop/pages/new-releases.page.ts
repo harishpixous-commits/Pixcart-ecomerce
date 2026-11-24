@@ -1,15 +1,11 @@
-/* Placeholder for frontend/src/app/(shop)/new-releases/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
-
 import { ChangeDetectionStrategy, Component } from "@angular/core";
+import { TopList } from "./top-list";
 
 @Component({
   selector: "pc-shop-new-releases-page",
-  imports: [],
+  imports: [TopList],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
-  template: `
-    <h1 class="font-display text-2xl font-semibold sm:text-3xl">New releases</h1>
-    <p class="mt-2 text-ink-soft" data-testid="placeholder-page">This page is ported by its module. Reference: frontend/src/app/(shop)/new-releases/page.tsx</p>
-  `,
+  template: `<pc-top-list list="new" />`,
 })
 export class ShopNewReleasesPage {}
