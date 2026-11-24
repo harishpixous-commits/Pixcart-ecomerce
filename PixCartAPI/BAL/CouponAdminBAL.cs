@@ -20,7 +20,7 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
             new { actor = user.Id, action, eid = code, detail, id = Guid.NewGuid() });
 
     /// <summary>Reference: _check_coupon_values.</summary>
-    private static void CheckValues(string kind, int value)
+    internal static void CheckValues(string kind, int value)
     {
         if (kind == "percent" && value is < 100 or > 9000)
             throw new AppException("A percentage coupon must be between 1% and 90%", "invalid_value");
