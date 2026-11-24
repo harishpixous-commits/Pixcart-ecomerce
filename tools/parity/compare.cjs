@@ -77,7 +77,8 @@ async function shoot(browser, base, theme, [w, h], route) {
   await signIn(ctx, base);
   const page = await ctx.newPage();
   // the same theme on both sites, through each site's own preview link
-  await page.goto(`${base}/theme-preview?theme=${theme === "live" ? "off" : theme}&to=${encodeURIComponent(route)}`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${base}/theme-preview?theme=${theme === "live" ? "off" : theme}&to=${encodeURIComponent(route)}`, { waitUntil: "networkidle" });
+  await page.waitForURL((u) => !u.pathname.startsWith("/theme-preview"), { timeout: 15000 }).catch(() => {});
   if (new URL(page.url()).pathname !== route.split("?")[0]) await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
   await settle(page);
   // hide what can never match: the Next dev overlay and the caret
