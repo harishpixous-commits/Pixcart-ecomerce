@@ -39,7 +39,7 @@ public class ProductModerationBAL(
     };
 
     /// <summary>Reference: seller_products.variant_out.</summary>
-    private static JsonObject VariantOut(VariantModel v) => new()
+    internal static JsonObject VariantOut(VariantModel v) => new()
     {
         ["id"] = v.Id.ToString(),
         ["sku"] = v.Sku,
