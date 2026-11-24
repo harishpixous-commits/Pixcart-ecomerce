@@ -29,7 +29,7 @@ public class SellerModerationBAL(
             new { actor = user.Id, action, eid = sellerId.ToString(), detail, id = Guid.NewGuid() });
 
     /// <summary>Reference: seller_onboarding.checklist.</summary>
-    private static JsonArray Checklist(SellerModel s, HashSet<string> docKinds)
+    internal static JsonArray Checklist(SellerModel s, HashSet<string> docKinds)
     {
         var items = new JsonArray();
         void Item(string key, string label, bool done) =>
@@ -47,7 +47,7 @@ public class SellerModerationBAL(
     }
 
     /// <summary>Reference: seller_onboarding.seller_profile.</summary>
-    private async Task<JsonObject> ProfileAsync(SellerModel s, bool reveal)
+    internal async Task<JsonObject> ProfileAsync(SellerModel s, bool reveal)
     {
         var docs = await sellersDal.DocsAsync(s.Id);
         var pan = crypto.Decrypt(s.PanEnc);

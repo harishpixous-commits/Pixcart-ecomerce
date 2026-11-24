@@ -5,7 +5,7 @@ using Utils.Interface;
 namespace DAL;
 
 /// <summary>Seller accounts opened and corrected by staff (Admin → Sellers), and their default warehouse.</summary>
-public class SellerAccountDAL(IMySqlDapperHelper db)
+public partial class SellerAccountDAL(IMySqlDapperHelper db)
 {
     public Task<SellerModel?> GetForUpdateAsync(Guid id, IDbTransaction tx) =>
         db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE id = @id FOR UPDATE", new { id }, tx);
