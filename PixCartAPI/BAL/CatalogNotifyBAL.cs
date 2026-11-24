@@ -55,6 +55,8 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["staff_delivery_failed"] = ("Delivery failed: {{order_number}}", "{{partner}} could not deliver: {{reason}}. Choose to try again or return it to the seller."),
         ["staff_delivery_bank"] = ("Partner payout details changed", "{{name}} ({{phone}}) changed their bank or UPI details. Check them before the next payout."),
         ["order_delivered"] = ("Delivered", "{{item}} was delivered. Tell others what you think by writing a review."),
+        // Reference also sends this by email; the email channel is not ported, so the message goes in-app only.
+        ["staff_message"] = ("{{subject}}", "{{message}}"),
     };
 
     [GeneratedRegex(@"\{\{\s*(\w+)\s*\}\}")]

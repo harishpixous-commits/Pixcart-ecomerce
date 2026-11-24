@@ -72,6 +72,10 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
             Every(TimeSpan.FromMinutes(1))),
         new("delivery_payouts", async sp => await sp.GetRequiredService<DeliveryAdminBAL>().GenerateScheduledAsync(),
             WeeklyAtIst(DayOfWeek.Monday, 10, 15)),
+        // Reference: jobs.review_summary_job (hourly). Summaries are published on product pages, so they are written
+        // only by the real model — ReviewSummariesAsync is a no-op while the AI mode is "sandbox" (always, here).
+        new("review_summaries", async sp => await sp.GetRequiredService<IAiBAL>().ReviewSummariesAsync(),
+            Every(TimeSpan.FromHours(1))),
     ];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
