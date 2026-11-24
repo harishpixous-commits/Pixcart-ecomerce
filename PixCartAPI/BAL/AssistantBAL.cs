@@ -358,6 +358,13 @@ public class AssistantBAL(
         };
     }
 
+    /// <summary>Reference: routers/assistant.py decision_test — runs the decision layer over every tool name.</summary>
+    public async Task<JsonObject> DecisionTestAsync(string text)
+    {
+        var cfg = (await StoredAsync())["decision"] as JsonObject ?? new JsonObject();
+        return AssistantDecision.Decide(text, cfg, AssistantTools.ByName.Keys.ToHashSet(), false).AsDict();
+    }
+
     // ---------------------------------------------------------------- memory notes (reference: settings.memories, set_memories)
 
     private static string MemKey(Guid userId) => $"asst_mem:{userId}";

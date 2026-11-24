@@ -14,6 +14,9 @@ public interface IAssistantBAL
     /// <summary>Reference: routers/assistant.py status — what the signed-in staff member's assistant can do.</summary>
     Task<JsonObject> StatusAsync(UserModel user);
 
+    /// <summary>Reference: routers/assistant.py decision_test — dry-run of the decision layer.</summary>
+    Task<JsonObject> DecisionTestAsync(string text);
+
     /// <summary>Reference: routers/assistant.py get_memory / put_memory.</summary>
     Task<JsonObject> GetMemoryAsync(UserModel user);
     Task<JsonObject> PutMemoryAsync(UserModel user, JsonArray notes);

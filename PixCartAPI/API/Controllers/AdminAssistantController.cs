@@ -42,6 +42,14 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
     public async Task<JsonObject> PutSettings([FromBody] JsonObject body) =>
         await assistant.SaveSettingsAsync(await RequireAsync("settings"), body ?? new JsonObject());
 
+    /// <summary>Dry-run the decision layer (reference: POST /api/admin/assistant/decision-test).</summary>
+    [HttpPost("assistant/decision-test")]
+    public async Task<JsonObject> DecisionTest(AssistantDecisionTestIn body)
+    {
+        await RequireAsync("settings");
+        return await assistant.DecisionTestAsync(body.Text);
+    }
+
     /// <summary>The staff member's memory notes (reference: GET /api/admin/assistant/memory).</summary>
     [HttpGet("assistant/memory")]
     public async Task<JsonObject> GetMemory() => await assistant.GetMemoryAsync(await RequireAsync("assistant"));
@@ -86,6 +94,9 @@ public sealed record AssistantConvIn([param: MaxLength(120)] string Title = "New
 
 /// <summary>Reference: routers/assistant.py ConvPatch.</summary>
 public sealed record AssistantConvPatch([param: MinLength(1), MaxLength(120)] string? Title = null, bool? Archived = null);
+
+/// <summary>Reference: routers/assistant.py DecisionTest.</summary>
+public sealed record AssistantDecisionTestIn([param: MinLength(1), MaxLength(2000)] string Text);
 
 /// <summary>Reference: routers/assistant.py MemoryIn.</summary>
 public sealed record AssistantMemoryIn(JsonArray? Notes = null);
