@@ -28,9 +28,9 @@ public class InventoryDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync(
             """
             INSERT INTO warehouses (id, seller_id, code, name, line1, line2, city, state_code, pincode,
-                contact_name, contact_phone, gstin, is_default, is_active)
+                contact_name, contact_phone, gstin, is_default, is_active, shiprocket_pickup_name)
             VALUES (@Id, @SellerId, @Code, @Name, @Line1, @Line2, @City, @StateCode, @Pincode,
-                @ContactName, @ContactPhone, @Gstin, @IsDefault, @IsActive)
+                @ContactName, @ContactPhone, @Gstin, @IsDefault, @IsActive, @ShiprocketPickupName)
             """, w);
 
     /// <summary>The levels of the given versions in the given warehouses, locked in a fixed order so concurrent
