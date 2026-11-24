@@ -80,10 +80,11 @@ public class ImageUpload(AppSettings settings, IFTPHelpers ftp) : IImageUpload
     /// <summary>MP4 (ftyp box that is not a still-picture brand like HEIC/AVIF) or WebM (EBML header).</summary>
     public static (string ContentType, string Ext) SniffVideo(byte[] data)
     {
-        if (data.Length >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3) return ("video/webm", "webm");
-        if (data.Length >= 12 && data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p')
+        if (data.Length >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3 && data.AsSpan(0, Math.Min(data.Length, 64)).IndexOf("webm"u8) >= 0) return ("video/webm", "webm");
+        if (data.Length > 12 && data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p')
         {
             var brand = System.Text.Encoding.ASCII.GetString(data, 8, 4);
+            if (brand == "qt  ") throw new AppException("QuickTime .mov files do not play in every browser. Export the video as MP4 (H.264).", "invalid_video");
             string[] still = ["avif", "avis", "heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"];
             if (!still.Contains(brand)) return ("video/mp4", "mp4");
         }
