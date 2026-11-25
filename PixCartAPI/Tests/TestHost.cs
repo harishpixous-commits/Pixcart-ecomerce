@@ -20,14 +20,21 @@ namespace Tests;
 /// DatabaseMigrator; every test starts from empty tables (the reference conftest's clean_db). Outbound calls to Firebase and
 /// the integration checks go to <see cref="Fakes"/>.
 /// </summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>
+/// <summary>
+/// The MySQL server for tests: TEST_MYSQL (CI) or the local development server on port 3307. A class of its own, with
+/// no side effects: reading it must not run a factory's static constructor (each one sets App__ConnectionString).
+/// </summary>
+public static class TestMySql
 {
-    public const string Database = "pixcart_test_auth";
-    /// <summary>The MySQL server for tests: TEST_MYSQL (CI) or the local development server on port 3307.</summary>
     public static readonly string Server = Environment.GetEnvironmentVariable("TEST_MYSQL") is { Length: > 0 } t
         ? t.TrimEnd(';') + ";"
         : "Server=127.0.0.1;Port=3307;User=root;Password=pixcart;";
-    public static readonly string ConnectionString = $"{Server}Database={Database};";
+}
+
+public sealed class ApiFactory : WebApplicationFactory<Program>
+{
+    public const string Database = "pixcart_test_auth";
+    public static readonly string ConnectionString = $"{TestMySql.Server}Database={Database};";
     private static bool _migrated;
     private static readonly SemaphoreSlim Gate = new(1, 1);
 

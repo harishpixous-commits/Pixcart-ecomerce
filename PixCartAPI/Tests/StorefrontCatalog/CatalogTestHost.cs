@@ -26,7 +26,7 @@ namespace Tests.StorefrontCatalog;
 public sealed class CatalogFactory : WebApplicationFactory<Program>
 {
     public const string Database = "pixcart_test_catalog";
-    public static readonly string Server = Tests.ApiFactory.Server; // TEST_MYSQL (CI) or the local server on 3307
+    public static readonly string Server = Tests.TestMySql.Server; // TEST_MYSQL (CI) or the local server on 3307
     public static string ConnectionString => Server + $"Database={Database};";
     public static readonly string MediaRoot = Path.Combine(Path.GetTempPath(), "pixcart-test-catalog", "media");
 

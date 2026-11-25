@@ -65,8 +65,8 @@ jobs:
         with: { node-version: 22, cache: npm, cache-dependency-path: PixCartWeb/package-lock.json }
       - run: npx -y npm@11 ci --no-audit --no-fund
       - run: npx ng build --configuration production
-      - name: Unit tests
-        run: npx ng test --watch=false || echo "::warning::unit tests failed"
+      - name: Screen contract tests
+        run: npm run test:shop-contracts
 
   windows-package:
     name: Windows/IIS package

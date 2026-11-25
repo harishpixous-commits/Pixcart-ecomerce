@@ -85,7 +85,12 @@ jobs:
 
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test packages/pixcart_core packages/pixcart_ui apps/customer_app apps/partner_app apps/seller_app
+      - name: Tests (each package from its own folder: fonts and golden images are found relative to it)
+        run: |
+          set -e
+          for d in packages/pixcart_core apps/customer_app apps/partner_app apps/seller_app; do
+            echo "== $d"; (cd "$d" && flutter test)
+          done
 
       - name: Build the APKs
         run: |
