@@ -1,15 +1,16 @@
-/* Placeholder for frontend/src/app/(shop)/help/returns/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* /help/returns sends shoppers to the returns policy (edited in Admin → Storefront → Pages). Port of frontend/src/app/(shop)/help/returns/page.tsx. */
 
-import { ChangeDetectionStrategy, Component } from "@angular/core";
+import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { Router } from "@angular/router";
 
 @Component({
   selector: "pc-shop-help-returns-page",
-  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: "block" },
-  template: `
-    <h1 class="font-display text-2xl font-semibold sm:text-3xl">Help returns</h1>
-    <p class="mt-2 text-ink-soft" data-testid="placeholder-page">This page is ported by its module. Reference: frontend/src/app/(shop)/help/returns/page.tsx</p>
-  `,
+  host: { class: "contents" },
+  template: ``,
 })
-export class ShopHelpReturnsPage {}
+export class ShopHelpReturnsPage {
+  constructor() {
+    void inject(Router).navigateByUrl("/pages/returns-policy", { replaceUrl: true });
+  }
+}
