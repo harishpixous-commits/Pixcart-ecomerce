@@ -1,15 +1,13 @@
-/* Placeholder for frontend/src/app/(shop)/search/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* Search results. Port of frontend/src/app/(shop)/search/page.tsx (the title "Search" is set on the route). */
 
 import { ChangeDetectionStrategy, Component } from "@angular/core";
+import { SearchView } from "../browse/search-view";
 
 @Component({
   selector: "pc-shop-search-page",
-  imports: [],
+  imports: [SearchView],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: "block" },
-  template: `
-    <h1 class="font-display text-2xl font-semibold sm:text-3xl">Search</h1>
-    <p class="mt-2 text-ink-soft" data-testid="placeholder-page">This page is ported by its module. Reference: frontend/src/app/(shop)/search/page.tsx</p>
-  `,
+  host: { class: "contents" },
+  template: `<pc-search-view />`,
 })
 export class ShopSearchPage {}
