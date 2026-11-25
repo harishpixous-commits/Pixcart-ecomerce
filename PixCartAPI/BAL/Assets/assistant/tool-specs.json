@@ -1,0 +1,946 @@
+[
+ {
+  "name": "business_overview",
+  "description": "Sales, orders, average order value, cancellations, returns, commission, COD vs online and new customers for a period. Use for 'how much did we sell', 'today's orders', 'this month's revenue'. Optional filters narrow it to one seller, category, payment method or state.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "compare": {
+     "type": "boolean",
+     "description": "Also return the previous period of the same length"
+    },
+    "seller": {
+     "type": "string",
+     "description": "store name, GSTIN or id"
+    },
+    "category": {
+     "type": "string"
+    },
+    "payment_method": {
+     "type": "string",
+     "enum": [
+      "cod",
+      "online"
+     ]
+    },
+    "state_code": {
+     "type": "string",
+     "description": "2-digit GST state code, e.g. 33 for Tamil Nadu"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "sales_breakdown",
+  "description": "Sales and orders grouped by day, week, month, hour of day, seller, category, product, state, payment method or package status. Use for trends, charts, comparisons and top-N lists.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "by": {
+     "type": "string",
+     "enum": [
+      "day",
+      "week",
+      "month",
+      "hour",
+      "seller",
+      "category",
+      "product",
+      "state",
+      "payment_method",
+      "status"
+     ]
+    },
+    "seller": {
+     "type": "string"
+    },
+    "category": {
+     "type": "string"
+    },
+    "payment_method": {
+     "type": "string",
+     "enum": [
+      "cod",
+      "online"
+     ]
+    },
+    "limit": {
+     "type": "integer",
+     "description": "top N for seller/category/product/state (default 10)"
+    }
+   },
+   "required": [
+    "by"
+   ]
+  }
+ },
+ {
+  "name": "work_queue",
+  "description": "Counts of everything waiting for staff: sellers and listings to review, late packages, returns, failed refunds, overdue tickets, reviews to moderate, failed payouts, out-of-stock options.",
+  "input_schema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  }
+ },
+ {
+  "name": "find_orders",
+  "description": "Lists packages (one seller's part of an order) with filters: status, search text (order or package number, customer name or phone, AWB), seller, payment method, period, or packages not shipped after N hours.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "placed",
+      "confirmed",
+      "packed",
+      "shipped",
+      "delivered",
+      "cancelled"
+     ]
+    },
+    "q": {
+     "type": "string"
+    },
+    "seller": {
+     "type": "string"
+    },
+    "payment_method": {
+     "type": "string",
+     "enum": [
+      "cod",
+      "online"
+     ]
+    },
+    "late_to_ship_hours": {
+     "type": "integer"
+    },
+    "limit": {
+     "type": "integer"
+    },
+    "all_time": {
+     "type": "boolean",
+     "description": "ignore the period"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "order_details",
+  "description": "Everything about one order: items, packages, payment, refunds, returns and timeline. Give an order number, package number or AWB.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "reference": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "reference"
+   ]
+  }
+ },
+ {
+  "name": "find_customers",
+  "description": "Search customers by name, phone or email, or list top spenders for a period.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "q": {
+     "type": "string"
+    },
+    "sort": {
+     "type": "string",
+     "enum": [
+      "recent",
+      "top_spenders"
+     ]
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "customer_profile",
+  "description": "One customer's profile: orders, spend, returns, cancellations, tickets and recent orders. Give a mobile number, email, id or exact name.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "reference": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "reference"
+   ]
+  }
+ },
+ {
+  "name": "find_products",
+  "description": "Search listings by title, brand or SKU, filter by status, seller, category or stock, sort by best selling, rating, price or stock.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "q": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "approved",
+      "pending",
+      "rejected",
+      "draft",
+      "archived"
+     ]
+    },
+    "seller": {
+     "type": "string"
+    },
+    "category": {
+     "type": "string"
+    },
+    "max_stock": {
+     "type": "integer"
+    },
+    "sort": {
+     "type": "string",
+     "enum": [
+      "recent",
+      "best_selling",
+      "rating",
+      "price_high",
+      "price_low",
+      "stock_low"
+     ]
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "stock_alerts",
+  "description": "Live product options with stock at or below a threshold (default 5), lowest first.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "threshold": {
+     "type": "integer"
+    },
+    "seller": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "find_sellers",
+  "description": "Search sellers by name, GSTIN or city, filter by status, ranked by sales in a period.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "q": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "approved",
+      "submitted",
+      "rejected",
+      "suspended",
+      "draft"
+     ]
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "seller_profile",
+  "description": "One seller's status, sales for a period, payouts due, listings, late packages and health score with reasons.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "seller": {
+     "type": "string",
+     "description": "store name, GSTIN or id"
+    }
+   },
+   "required": [
+    "seller"
+   ]
+  }
+ },
+ {
+  "name": "returns_report",
+  "description": "Returns with counts by status and reason; filter by period, status or seller.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "requested",
+      "approved",
+      "picked_up",
+      "received",
+      "refunded",
+      "rejected",
+      "cancelled"
+     ]
+    },
+    "seller": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "refunds_report",
+  "description": "Refunds by status (pending, processed, failed) with amounts and errors.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "pending",
+      "processed",
+      "failed"
+     ]
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "support_tickets",
+  "description": "Support tickets by status, overdue ones (past the 48-hour reply or 30-day resolution limit) or matching text.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "awaiting_customer",
+      "resolved",
+      "closed"
+     ]
+    },
+    "overdue_only": {
+     "type": "boolean"
+    },
+    "q": {
+     "type": "string"
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "payouts_report",
+  "description": "Money due to sellers now, money on hold in the return window, and recent payouts by status.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "status": {
+     "type": "string",
+     "enum": [
+      "pending",
+      "processing",
+      "paid",
+      "failed",
+      "cancelled"
+     ]
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "coupons",
+  "description": "Coupons with value, limits, usage and status.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "active_only": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "gst_tcs_report",
+  "description": "GST TCS (GSTR-8) for one month: supplier-wise net taxable value and TCS after returns.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "month": {
+     "type": "string",
+     "description": "YYYY-MM"
+    }
+   },
+   "required": [
+    "month"
+   ]
+  }
+ },
+ {
+  "name": "marketplace_settings",
+  "description": "Current marketplace settings (fees, COD, tax rates, features, payouts), which integrations are connected (never their keys) and the go-live checklist.",
+  "input_schema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  }
+ },
+ {
+  "name": "prepare_export",
+  "description": "Makes a download button for a data export in CSV, Excel (xlsx) or PDF with filters. Exports: orders, order-items, returns, payouts, ledger, tcs, products, stock, sellers, customers, tickets, ai-runs.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "period": {
+     "type": "string",
+     "enum": [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "this_month",
+      "last_month",
+      "last_7_days",
+      "last_30_days",
+      "last_90_days",
+      "this_quarter",
+      "this_year",
+      "this_financial_year",
+      "last_financial_year",
+      "custom"
+     ],
+     "description": "Time range in India time. Use custom with date_from/date_to for other dates."
+    },
+    "date_from": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "date_to": {
+     "type": "string",
+     "description": "YYYY-MM-DD, only with period=custom"
+    },
+    "name": {
+     "type": "string"
+    },
+    "format": {
+     "type": "string",
+     "enum": [
+      "csv",
+      "xlsx",
+      "pdf"
+     ]
+    },
+    "status": {
+     "type": "string"
+    },
+    "month": {
+     "type": "string",
+     "description": "YYYY-MM for tcs"
+    },
+    "q": {
+     "type": "string"
+    },
+    "payment_method": {
+     "type": "string",
+     "enum": [
+      "cod",
+      "online"
+     ]
+    },
+    "seller": {
+     "type": "string"
+    },
+    "low_stock": {
+     "type": "integer"
+    },
+    "columns": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "file_overview",
+  "description": "Columns, types, totals and first rows of a file the person uploaded (defaults to the latest one).",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "file_id": {
+     "type": "string"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "file_query",
+  "description": "Exact counts, sums, averages, min or max over the uploaded file, optionally filtered and grouped.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "file_id": {
+     "type": "string"
+    },
+    "filters": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "column": {
+        "type": "string"
+       },
+       "op": {
+        "type": "string",
+        "enum": [
+         "equals",
+         "not_equals",
+         "contains",
+         "greater_than",
+         "less_than",
+         "is_empty",
+         "not_empty"
+        ]
+       },
+       "value": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    "group_by": {
+     "type": "string"
+    },
+    "metric": {
+     "type": "string",
+     "enum": [
+      "count",
+      "sum",
+      "average",
+      "min",
+      "max"
+     ]
+    },
+    "value_column": {
+     "type": "string"
+    },
+    "sort": {
+     "type": "string",
+     "enum": [
+      "desc",
+      "asc"
+     ]
+    },
+    "limit": {
+     "type": "integer"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "file_compare",
+  "description": "Matches each row of the uploaded file to live orders, packages, products (SKU), payouts, customers or sellers and lists missing records and differences (amounts in rupees, stock, status). Columns are detected from the headers unless given.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "file_id": {
+     "type": "string"
+    },
+    "entity": {
+     "type": "string",
+     "enum": [
+      "orders",
+      "packages",
+      "products",
+      "payouts",
+      "customers",
+      "sellers"
+     ]
+    },
+    "key_column": {
+     "type": "string"
+    },
+    "columns": {
+     "type": "object",
+     "description": "live field -> file column, e.g. {\"total\": \"Amount\"}",
+     "additionalProperties": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "entity"
+   ]
+  }
+ },
+ {
+  "name": "propose_action",
+  "description": "Prepares a change for the person to confirm with a button. Nothing changes until they press Confirm. kinds: approve_product, reject_product, approve_seller, reject_seller, suspend_seller, set_seller_commission, cancel_package, mark_delivered, retry_refund, return_decision, block_customer, unblock_customer, create_coupon, set_coupon_active, reply_ticket, moderate_review, update_setting, set_announcement, run_payouts. Look records up first so the params are exact.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "kind": {
+     "type": "string",
+     "enum": [
+      "approve_product",
+      "reject_product",
+      "approve_seller",
+      "reject_seller",
+      "suspend_seller",
+      "set_seller_commission",
+      "cancel_package",
+      "mark_delivered",
+      "retry_refund",
+      "return_decision",
+      "block_customer",
+      "unblock_customer",
+      "create_coupon",
+      "set_coupon_active",
+      "reply_ticket",
+      "moderate_review",
+      "update_setting",
+      "set_announcement",
+      "run_payouts"
+     ]
+    },
+    "params": {
+     "type": "object",
+     "description": "see each kind; e.g. {\"package\": \"PC123-1\", \"reason\": \"...\"}"
+    }
+   },
+   "required": [
+    "kind",
+    "params"
+   ]
+  }
+ },
+ {
+  "name": "open_page",
+  "description": "Gives a link to an admin page. Pages: overview, orders, returns, refunds, sellers, products, categories, reviews, customers, support, payouts, coupons, storefront, notifications, reports, exports, settings, ai_studio, assistant_settings, ai_providers, integrations, go_live, staff, audit",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "page": {
+     "type": "string",
+     "enum": [
+      "overview",
+      "orders",
+      "returns",
+      "refunds",
+      "sellers",
+      "products",
+      "categories",
+      "reviews",
+      "customers",
+      "support",
+      "payouts",
+      "coupons",
+      "storefront",
+      "notifications",
+      "reports",
+      "exports",
+      "settings",
+      "ai_studio",
+      "assistant_settings",
+      "ai_providers",
+      "integrations",
+      "go_live",
+      "staff",
+      "audit"
+     ]
+    }
+   },
+   "required": [
+    "page"
+   ]
+  }
+ },
+ {
+  "name": "remember",
+  "description": "Saves a short note the person asked you to remember for future chats (preferences, standing instructions). Use forget with the note's number to remove one.",
+  "input_schema": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string"
+    },
+    "forget": {
+     "type": "integer",
+     "description": "1-based number of a saved note to delete"
+    }
+   },
+   "required": []
+  }
+ }
+]
