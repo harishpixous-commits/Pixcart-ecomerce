@@ -267,7 +267,8 @@ const STATUS_TEXT: Record<string, string> = {
         }
       </div>
     </div>
-    <pc-modal [open]="aiOpen()" (close)="aiOpen.set(false)" title="Write the listing with AI" [wide]="true">
+    <!-- only while open: a closed dialog still leaves an element in this flex column (an extra gap) -->
+    @if (aiOpen()) {<pc-modal [open]="true" (close)="aiOpen.set(false)" title="Write the listing with AI" [wide]="true">
       <div class="flex flex-col gap-3">
         <p class="text-ink-soft">Describe the product in your own words, in English or Tanglish: material, size, colours, what is in the box, who it is for. The assistant drafts a title, description, highlights and specifications. It only uses what you write.</p>
         <textarea pcTextarea [value]="aiNotes()" (input)="aiNotes.set($any($event.target).value)" rows="5" maxlength="4000" aria-label="Product notes" placeholder="e.g. Pure cotton kurta for men, regular fit, sizes S to XXL, colours white and sky blue, machine washable, made in Tiruppur"></textarea>
@@ -286,7 +287,7 @@ const STATUS_TEXT: Record<string, string> = {
           </div>
         }
       </div>
-    </pc-modal>
+    </pc-modal>}
   `,
 })
 export class ProductEditor implements OnInit {
