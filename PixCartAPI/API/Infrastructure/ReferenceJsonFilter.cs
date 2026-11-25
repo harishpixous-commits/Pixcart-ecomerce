@@ -26,6 +26,7 @@ public sealed partial class ReferenceJsonFilter : IAsyncResultFilter
 
     public Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
+        if (context.Result is JsonResult { Value: JsonNode jsonNode }) Normalise(jsonNode);
         if (context.Result is ObjectResult result)
         {
             switch (result.Value)

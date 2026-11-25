@@ -1,15 +1,19 @@
-/* Placeholder for frontend/src/app/(shop)/c/[slug]/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* A category's products: the search view for one category. Port of frontend/src/app/(shop)/c/[slug]/page.tsx. */
 
-import { ChangeDetectionStrategy, Component } from "@angular/core";
+import { ChangeDetectionStrategy, Component, input } from "@angular/core";
+import { keepPageTitle } from "../browse/page-title";
+import { SearchView } from "../browse/search-view";
 
 @Component({
   selector: "pc-shop-c-slug-page",
-  imports: [],
+  imports: [SearchView],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: "block" },
-  template: `
-    <h1 class="font-display text-2xl font-semibold sm:text-3xl">C details</h1>
-    <p class="mt-2 text-ink-soft" data-testid="placeholder-page">This page is ported by its module. Reference: frontend/src/app/(shop)/c/[slug]/page.tsx</p>
-  `,
+  host: { class: "contents" },
+  template: `<pc-search-view [category]="slug()" />`,
 })
-export class ShopCSlugPage {}
+export class ShopCSlugPage {
+  readonly slug = input.required<string>();
+  constructor() {
+    keepPageTitle(() => `${this.slug().replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} online`);
+  }
+}

@@ -382,7 +382,7 @@ export class Pagination {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
-    <p-dialog [visible]="open()" (visibleChange)="!$event && close.emit()" [modal]="true" [closeOnEscape]="true" [dismissableMask]="true"
+    <p-dialog class="contents" [visible]="open()" (visibleChange)="!$event && close.emit()" [modal]="true" [closeOnEscape]="true" [dismissableMask]="true"
       [blockScroll]="true" [draggable]="false" [resizable]="false" appendTo="body"
       [maskStyleClass]="'pc-modal-mask fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-0 sm:items-center sm:p-4'"
       [styleClass]="dialogCls()" [attr.aria-label]="title()">

@@ -22,6 +22,8 @@
     <EmbeddedResource Include="Infrastructure/route-guards.json" LogicalName="API.Infrastructure.route-guards.json" />
     <!-- the reference API's query-string rules per route (tools/schema/query_rules.py) -->
     <EmbeddedResource Include="Infrastructure/query-rules.json" LogicalName="API.Infrastructure.query-rules.json" />
+    <!-- the reference API's JSON body schemas per route (tools/schema/body_rules.py) -->
+    <EmbeddedResource Include="Infrastructure/body-rules.json" LogicalName="API.Infrastructure.body-rules.json" />
   </ItemGroup>
 
 </Project>
