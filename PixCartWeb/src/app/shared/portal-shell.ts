@@ -128,9 +128,7 @@ export class PageHeader {
     @for (t of items(); track t.value) {
       <button role="tab" [attr.aria-selected]="value() === t.value" (click)="valueChange.emit(t.value)"
         [class]="value() === t.value ? '-mb-px shrink-0 border-b-2 px-3 py-2 font-medium border-peacock text-peacock' : '-mb-px shrink-0 border-b-2 px-3 py-2 font-medium border-transparent text-ink-soft hover:text-ink'">
-        {{ t.label }}
-        @if (t.count !== undefined) {<span class="ml-1.5 text-sm text-ink-faint">{{ t.count }}</span>}
-      </button>
+{{ t.label }}@if (t.count !== undefined) {<span class="ml-1.5 text-sm text-ink-faint">{{ t.count }}</span>}</button>
     }
   `,
 })

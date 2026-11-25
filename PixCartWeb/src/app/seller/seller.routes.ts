@@ -44,9 +44,10 @@ export const SELLER_ROUTES: Routes = [
   { path: "payouts", component: SellerPayoutsPage },
   { path: "product-reports", component: SellerProductReportsPage },
   { path: "products", component: SellerProductsPage },
-  { path: "products/:id", component: SellerProductsIdPage },
+  // the fixed paths before products/:id: the router takes the first route that matches
   { path: "products/import", component: SellerProductsImportPage },
   { path: "products/new", component: SellerProductsNewPage },
+  { path: "products/:id", component: SellerProductsIdPage },
   { path: "questions", component: SellerQuestionsPage },
   { path: "returns", component: SellerReturnsPage },
   { path: "reviews", component: SellerReviewsPage },

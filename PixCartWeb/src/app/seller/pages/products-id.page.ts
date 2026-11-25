@@ -1,16 +1,38 @@
-/* Placeholder for frontend/src/app/seller/products/[id]/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* Edit a listing. Port of frontend/src/app/seller/products/[id]/page.tsx. */
 
-import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { PageHeader } from "../../shared/portal-shell";
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from "@angular/core";
+import { api } from "../../core/api";
+import type { SellerProduct } from "../../core/types";
+import { PageLoader } from "../../shared/ui/page-loader";
+import { ErrorNote } from "../../shared/ui/ui";
+import { ProductEditor } from "../shared/product-editor";
 
 @Component({
   selector: "pc-seller-products-id-page",
-  imports: [PageHeader],
+  imports: [PageLoader, ErrorNote, ProductEditor],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
   template: `
-    <pc-page-header title="Products details" sub="Reference: frontend/src/app/seller/products/[id]/page.tsx" />
-    <div class="rounded-xl bg-white p-6 text-ink-soft" data-testid="placeholder-page">This page is ported by its module.</div>
+    @if (error()) {
+      <pc-error-note [message]="error()" />
+    } @else if (!p()) {
+      <pc-page-loader />
+    } @else {
+      <!-- a new editor after each save (status or time changed), like the reference's key -->
+      @for (x of keyed(); track x.updated_at + "-" + x.status) {<pc-product-editor [product]="x" (saved)="p.set($event)" />}
+    }
   `,
 })
-export class SellerProductsIdPage {}
+export class SellerProductsIdPage {
+  readonly id = input.required<string>();
+  protected readonly p = signal<SellerProduct | null>(null);
+  protected readonly error = signal<string | null>(null);
+  protected readonly keyed = computed(() => (this.p() ? [this.p()!] : []));
+
+  constructor() {
+    effect(() => {
+      const id = this.id();
+      api<SellerProduct>(`/api/seller/products/${id}`).then((p) => this.p.set(p)).catch((e: Error) => this.error.set(e.message));
+    });
+  }
+}

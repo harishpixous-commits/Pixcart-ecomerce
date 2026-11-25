@@ -1,16 +1,13 @@
-/* Placeholder for frontend/src/app/seller/products/new/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* A new listing. Port of frontend/src/app/seller/products/new/page.tsx. */
 
 import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { PageHeader } from "../../shared/portal-shell";
+import { ProductEditor } from "../shared/product-editor";
 
 @Component({
   selector: "pc-seller-products-new-page",
-  imports: [PageHeader],
+  imports: [ProductEditor],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
-  template: `
-    <pc-page-header title="Products new" sub="Reference: frontend/src/app/seller/products/new/page.tsx" />
-    <div class="rounded-xl bg-white p-6 text-ink-soft" data-testid="placeholder-page">This page is ported by its module.</div>
-  `,
+  template: `<pc-product-editor />`,
 })
 export class SellerProductsNewPage {}
