@@ -293,7 +293,7 @@ export class CashDeposit {
             <ul class="divide-y divide-line text-sm">
               @for (r of d()!.recent; track $index) {
                 <li class="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span><b>{{ r.partner }}</b> · {{ method[r.method] ?? r.method }}{{ r.reference ? " · " + r.reference : "" }}{{ r.note ? " · " + r.note : "" }}</span>
+                  <span><b>{{ r.partner }}</b> · {{ method[r.method] || r.method }}{{ r.reference ? " · " + r.reference : "" }}{{ r.note ? " · " + r.note : "" }}</span>
                   <span class="text-ink-soft">{{ rupees(r.amount) }} · {{ dateTime(r.at) }}</span>
                 </li>
               }

@@ -48,10 +48,9 @@ const RULE_FIELDS: SettingField[] = [
         <div class="flex flex-col gap-3">
           @for (x of d()!.items; track x.id) {
             <pc-deal-item [d]="x" [showSeller]="true" [withActions]="x.status === 'pending' || x.status === 'approved' || x.status === 'active'">
-              @if (x.status === "pending") {
-                <button actions pcButton size="sm" [loading]="busy() === x.id + 'approve'" (click)="run({ d: x, action: 'approve' }, '')">Approve</button>
-                <button actions pcButton size="sm" variant="danger" (click)="ask(x, 'reject')">Reject</button>
-              } @else if (x.status === "approved" || x.status === "active") {
+              @if (x.status === "pending") {<button actions pcButton size="sm" [loading]="busy() === x.id + 'approve'" (click)="run({ d: x, action: 'approve' }, '')">Approve</button>}
+              @if (x.status === "pending") {<button actions pcButton size="sm" variant="danger" (click)="ask(x, 'reject')">Reject</button>}
+              @if (x.status === "approved" || x.status === "active") {
                 <button actions pcButton size="sm" variant="danger" (click)="ask(x, 'cancel')">{{ x.status === "active" ? "Stop deal" : "Cancel deal" }}</button>
               }
             </pc-deal-item>

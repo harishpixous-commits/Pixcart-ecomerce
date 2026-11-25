@@ -41,7 +41,7 @@ function returnPolicy(c: Cat): string {
               <td class="px-4 py-2.5">{{ pct(row.c.commission_bps) }}</td>
               <td class="px-4 py-2.5">{{ pct(row.c.default_gst_bps) }}</td>
               <td class="px-4 py-2.5 text-sm">{{ policy(row.c) }}</td>
-              <td class="px-4 py-2.5 text-sm text-ink-soft">{{ row.c.required_details?.length ? row.c.required_details.length + " items" : "—" }}</td>
+              <td class="px-4 py-2.5 text-sm text-ink-soft">{{ row.c.required_details.length ? row.c.required_details.length + " items" : "—" }}</td>
               <td class="px-4 py-2.5">{{ row.c.position }}</td>
               <td class="px-4 py-2.5">@if (row.c.is_active) {<pc-pill tone="green">Active</pc-pill>} @else {<pc-pill>Hidden</pc-pill>}</td>
               <td class="px-4 py-2.5"><button pcButton size="sm" variant="ghost" (click)="open(row.c)">Edit</button></td>

@@ -155,7 +155,7 @@ export class CustomerCard {
           @if (d()!.history.length) {
             <ul class="divide-y divide-line text-sm">@for (h of d()!.history; track $index) {
               <li class="flex justify-between gap-2 py-1.5">
-                <span><b>{{ actions[h.action] ?? h.action }}</b>@if (h.detail) {<span class="text-ink-soft"> · {{ h.detail }}</span>}@if (h.by) {<span class="text-ink-faint"> · by {{ h.by }}</span>}</span>
+                <span><b>{{ actions[h.action] || h.action }}</b>@if (h.detail) {<span class="text-ink-soft"> · {{ h.detail }}</span>}@if (h.by) {<span class="text-ink-faint"> · by {{ h.by }}</span>}</span>
                 <span class="shrink-0 text-ink-faint">{{ date(h.at) }}</span>
               </li>
             }</ul>
