@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using API.Infrastructure;
 using BAL;
@@ -36,21 +37,19 @@ public class ReturnsController(IReturnsBAL returns, ICurrentUser current) : Cont
 
     public sealed record CreateIn(
         [param: Required] Guid SubOrderId,
-        [param: Required, MinLength(1), MaxLength(50)] List<CreateLine> Items,
-        [param: Required, MaxLength(60)] string Reason,
+        [param: Required, MinLength(1), MaxLength(50)] List<JsonElement> Items, // free-form objects, like the reference's list[dict]
+        [param: Required] string Reason, // checked against the return reasons by the business layer, like the reference
         [param: MaxLength(2000)] string Comment = "",
         [param: MaxLength(60)] string RefundUpi = "");
-
-    public sealed record CreateLine([param: Required] Guid OrderItemId, [param: Range(1, 1000)] int Qty);
 
     /// <summary>Ask to return items of a delivered package (reference: POST /api/returns).</summary>
     [HttpPost("/api/returns")]
     [SignedIn]
     public async Task<JsonObject> Create(CreateIn body)
     {
-        var lines = body.Items.Select(i => (i.OrderItemId, i.Qty)).ToList();
+        var lines = API.Helpers.ReturnLines.Parse(body.Items); // the reference's ReturnIn.lines()
         var ret = await returns.CreateAsync(await current.RequireAsync(), body.SubOrderId, lines,
-            body.Reason.Trim(), body.Comment.Trim(), body.RefundUpi.Trim());
+            body.Reason, body.Comment, body.RefundUpi.Trim());
         Response.StatusCode = StatusCodes.Status201Created;
         return await returns.ReturnOutAsync(ret);
     }
