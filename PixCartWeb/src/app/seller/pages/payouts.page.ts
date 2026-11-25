@@ -15,7 +15,7 @@ type P = { id: string; number: string; amount: number; status: string; mode: str
 type L = { at: string; kind: string; amount: number; description: string; order: string | null; available_at: string; available: boolean; payout: string | null };
 type D = { balances: { available: number; upcoming: number; paid_out: number }; payouts: P[]; schedule: Schedule };
 
-const KIND: Record<string, string> = {
+const KIND: Record<string, string | undefined> = {
   sale: "Sale", commission: "Commission", commission_gst: "GST on commission", tcs: "GST TCS", tds: "Income-tax TDS",
   return: "Return", commission_reversal: "Commission returned", commission_gst_reversal: "GST on commission returned",
   tcs_reversal: "TCS returned", tds_reversal: "TDS returned", adjustment: "Adjustment", payout_reversal: "Payout reversed",

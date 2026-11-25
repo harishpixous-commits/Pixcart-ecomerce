@@ -36,14 +36,14 @@ type DimKey = "length_cm" | "width_cm" | "height_cm";
       <pc-field [label]="o.label" [hint]="o.hint">
         @if (req(o.reqKey ?? o.key)) {<span label class="text-vermilion"> *</span>}
         @if (o.rows) {
-          <textarea pcTextarea [rows]="o.rows" [attr.maxlength]="o.max ?? 2000" [value]="details()[o.key]" [attr.placeholder]="o.placeholder ?? null" (input)="set(o.key, $any($event.target).value)" [attr.aria-label]="o.label"></textarea>
+          <textarea pcTextarea [rows]="o.rows" [attr.maxlength]="o.max ?? 2000" [value]="val(o.key)" [attr.placeholder]="o.placeholder ?? null" (input)="set(o.key, $any($event.target).value)" [attr.aria-label]="o.label"></textarea>
         } @else {
-          <input pcInput [attr.maxlength]="o.max ?? 400" [value]="details()[o.key]" [attr.placeholder]="o.placeholder ?? null" (input)="set(o.key, $any($event.target).value)" [attr.aria-label]="o.label" />
+          <input pcInput [attr.maxlength]="o.max ?? 400" [value]="val(o.key)" [attr.placeholder]="o.placeholder ?? null" (input)="set(o.key, $any($event.target).value)" [attr.aria-label]="o.label" />
         }
       </pc-field>
     </ng-template>
     <ng-template #dim let-k let-label="label">
-      <input pcInput inputmode="decimal" [placeholder]="label" [attr.aria-label]="label + ' in cm'" [value]="details()[$any(k)] ?? ''" (input)="setDim($any(k), $event)" />
+      <input pcInput inputmode="decimal" [placeholder]="label" [attr.aria-label]="label + ' in cm'" [value]="val(k) ?? ''" (input)="setDim($any(k), $event)" />
     </ng-template>
 
     <section class="flex flex-col gap-4 rounded-xl bg-white p-5" id="product-information">
@@ -137,9 +137,18 @@ export class ProductInfoSection {
     this.detailsChange.emit({ ...this.details(), [k]: v });
   }
 
+  /** a field's current value (template contexts are untyped) */
+  protected val(k: string): string | number | null {
+    return this.details()[k as TextKey | DimKey];
+  }
+
   protected setDim(k: DimKey, e: Event): void {
-    const v = (e.target as HTMLInputElement).value.replace(/[^\d.]/g, "");
-    this.set(k, v ? Number(v) : null);
+    const el = e.target as HTMLInputElement;
+    const v = el.value.replace(/[^\d.]/g, "");
+    const n = v ? Number(v) : null;
+    // a controlled input: the box shows the stored number, as in the reference
+    el.value = n === null ? "" : String(n);
+    this.set(k, n);
   }
 
   protected addBox(): void {

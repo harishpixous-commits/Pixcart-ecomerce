@@ -80,7 +80,7 @@ export class SellerQuestionsPage {
   protected readonly page = signal(1);
   protected readonly d = signal<Data | null>(null);
   protected readonly error = signal<string | null>(null);
-  protected readonly draft = signal<Record<string, string>>({});
+  protected readonly draft = signal<Record<string, string | undefined>>({});
   protected readonly open = signal<Record<string, boolean>>({});
   protected readonly busy = signal<string | null>(null);
   private readonly track = latestOnly();

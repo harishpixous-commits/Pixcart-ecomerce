@@ -67,7 +67,7 @@ export class SellerProductReportsPage {
   protected readonly status = signal("open");
   protected readonly page = signal(1);
   protected readonly d = signal<D | null>(null);
-  protected readonly answer = signal<Record<string, string>>({});
+  protected readonly answer = signal<Record<string, string | undefined>>({});
   private readonly track = latestOnly();
 
   constructor() {

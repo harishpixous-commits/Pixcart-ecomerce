@@ -161,7 +161,7 @@ export class SellerReviewsPage {
   protected readonly media = signal(false);
   protected readonly q = signal("");
   protected readonly page = signal(1);
-  protected readonly draft = signal<Record<string, string>>({});
+  protected readonly draft = signal<Record<string, string | undefined>>({});
   protected readonly open = signal<string | null>(null);
   protected readonly runs = signal<Record<string, AiRun>>({});
   protected readonly reporting = signal<R | null>(null);

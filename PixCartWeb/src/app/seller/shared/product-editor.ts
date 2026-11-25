@@ -326,7 +326,7 @@ export class ProductEditor implements OnInit {
   protected readonly required = signal<string[]>([]);
   protected readonly axes = signal<string[]>([]);
   protected readonly rows = signal<VRow[]>([]);
-  protected readonly bulk = signal<Record<string, string>>({});
+  protected readonly bulk = signal<Record<string, string | undefined>>({});
   protected readonly uploading = signal(false);
   protected readonly busy = signal<"save" | "submit" | null>(null);
   protected readonly error = signal<string | null>(null);
