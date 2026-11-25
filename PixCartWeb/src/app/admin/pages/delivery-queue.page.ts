@@ -23,7 +23,7 @@ import { PartnerAvatar } from "../shared/delivery-admin";
 type Tab = "waiting" | "offered" | "failed" | "returns";
 type Data = { items: QueuePackage[]; counts: Record<Tab, number> };
 
-const TRY_LABEL: Record<string, string> = { rejected: "declined", expired: "did not answer", cancelled: "taken back", failed: "could not deliver", delivered: "delivered" };
+const TRY_LABEL: Record<string, string | undefined> = { rejected: "declined", expired: "did not answer", cancelled: "taken back", failed: "could not deliver", delivered: "delivered" };
 
 @Component({
   selector: "pc-queue-package-card",
