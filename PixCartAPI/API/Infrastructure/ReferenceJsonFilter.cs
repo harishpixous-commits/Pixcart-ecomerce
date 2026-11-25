@@ -26,7 +26,30 @@ public sealed partial class ReferenceJsonFilter : IAsyncResultFilter
 
     public Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
-        if (context.Result is ObjectResult { Value: JsonNode node }) Normalise(node);
+        if (context.Result is ObjectResult result)
+        {
+            switch (result.Value)
+            {
+                case JsonNode node:
+                    Normalise(node);
+                    break;
+                case null or string or Stream or byte[] or ProblemDetails:
+                    break;
+                default:
+                    // a plain object (often wrapping JsonObjects built with ToString("o") times): written to a JSON tree
+                    // with the API's own settings, then normalised like the rest
+                    var options = context.HttpContext.RequestServices
+                        .GetRequiredService<Microsoft.Extensions.Options.IOptions<JsonOptions>>().Value.JsonSerializerOptions;
+                    var tree = JsonSerializer.SerializeToNode(result.Value, result.Value.GetType(), options);
+                    if (tree is not null)
+                    {
+                        Normalise(tree);
+                        result.Value = tree;
+                        result.DeclaredType = typeof(JsonNode);
+                    }
+                    break;
+            }
+        }
         return next();
     }
 

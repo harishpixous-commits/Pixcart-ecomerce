@@ -33,7 +33,7 @@ public class CustomerAccountDAL(IMySqlDapperHelper db)
         db.QueryAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE order_id IN @orderIds ORDER BY number", new { orderIds });
 
     public Task<IEnumerable<OrderItemModel>> ItemsAsync(IEnumerable<Guid> subOrderIds) =>
-        db.QueryAsync<OrderItemModel>("SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds", new { subOrderIds });
+        db.QueryAsync<OrderItemModel>("SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds ORDER BY seq", new { subOrderIds });
 
     public Task<IEnumerable<ReturnRequestModel>> RecentReturnsAsync(Guid userId, int limit) =>
         db.QueryAsync<ReturnRequestModel>("SELECT * FROM return_requests WHERE user_id = @userId ORDER BY created_at DESC LIMIT @limit", new { userId, limit });
@@ -45,7 +45,7 @@ public class CustomerAccountDAL(IMySqlDapperHelper db)
         db.QueryAsync<ReturnItemModel>("SELECT ri.* FROM return_items ri JOIN order_items oi ON oi.id = ri.order_item_id WHERE ri.return_id = @returnId", new { returnId });
 
     public Task<IEnumerable<OrderItemModel>> OrderItemsByIdAsync(IEnumerable<Guid> ids) =>
-        db.QueryAsync<OrderItemModel>("SELECT * FROM order_items WHERE id IN @ids", new { ids });
+        db.QueryAsync<OrderItemModel>("SELECT * FROM order_items WHERE id IN @ids ORDER BY seq", new { ids });
 
     public Task<SubOrderModel?> SubOrderAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<SubOrderModel>("SELECT * FROM sub_orders WHERE id = @id", new { id });

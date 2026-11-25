@@ -134,7 +134,7 @@ public partial class AssistantQueriesDAL
         if (subIds.Count > 0)
             foreach (var i in await db.QueryAsync<ItemRow>(
                 "SELECT sku AS Sku, title AS Title, variant_label AS VariantLabel, qty AS Qty, unit_price AS UnitPrice, line_total AS LineTotal, returned_qty AS ReturnedQty" +
-                " FROM order_items WHERE sub_order_id IN @Ids", new { Ids = subIds }))
+                " FROM order_items WHERE sub_order_id IN @Ids ORDER BY seq", new { Ids = subIds }))
                 items.Add(new JsonObject
                 {
                     ["sku"] = i.Sku, ["title"] = i.Title, ["option"] = i.VariantLabel, ["qty"] = i.Qty,

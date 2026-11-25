@@ -169,7 +169,7 @@ public class OrdersDAL(IMySqlDapperHelper db)
     {
         if (subOrderIds.Count == 0) return [];
         var rows = await db.QueryAsync<OrderItemModel>(
-            "SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds", new { subOrderIds });
+            "SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds ORDER BY seq", new { subOrderIds });
         return rows.ToList();
     }
 
@@ -491,7 +491,7 @@ public class OrdersDAL(IMySqlDapperHelper db)
     {
         if (subOrderIds.Count == 0) return [];
         var rows = await uow.QueryAsync<OrderItemModel>(
-            "SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds", new { subOrderIds });
+            "SELECT * FROM order_items WHERE sub_order_id IN @subOrderIds ORDER BY seq", new { subOrderIds });
         return rows.ToList();
     }
 

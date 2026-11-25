@@ -175,7 +175,7 @@ public class ReturnsDAL(IMySqlDapperHelper db)
     {
         if (ids.Count == 0) return [];
         var rows = await uow.QueryAsync<OrderItemModel>(
-            "SELECT * FROM order_items WHERE id IN @ids", new { ids });
+            "SELECT * FROM order_items WHERE id IN @ids ORDER BY seq", new { ids });
         return rows.ToList();
     }
 
