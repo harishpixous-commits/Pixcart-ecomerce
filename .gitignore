@@ -27,3 +27,7 @@ e2e/playwright-report/
 
 # publish output for Windows hosting
 publish/
+
+# parity tools: cached sign-in tokens and outputs
+tools/parity/token-cache.json
+parity-out/
