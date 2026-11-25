@@ -17,13 +17,13 @@ public interface ISiteBAL
     /// Checks and saves the whole site document; returns what was saved. 400 "invalid_site" with the reference message
     /// (e.g. "Colour 'primary' must be a hex value like #0B5563") when something is not allowed.
     /// </summary>
-    Task<JsonObject> SaveSiteAsync(JsonObject data);
+    Task<JsonObject> SaveSiteAsync(JsonObject data, System.Data.IDbTransaction? tx = null);
 
     /// <summary>
     /// Switches the theme and merges per-theme presets, colours and layout over the saved ones, leaving every other site
     /// setting as it is. Returns {"theme", "theme_settings"}; 400 "invalid_theme" for unknown themes or bad values.
     /// </summary>
-    Task<JsonObject> SaveThemeAsync(string theme, JsonObject? settings);
+    Task<JsonObject> SaveThemeAsync(string theme, JsonObject? settings, System.Data.IDbTransaction? tx = null);
 
     /// <summary>The operator details other modules need: brand, legal name, GSTIN, CIN, address, grievance, support email and phone.</summary>
     JsonObject PublicBusiness(JsonObject site);

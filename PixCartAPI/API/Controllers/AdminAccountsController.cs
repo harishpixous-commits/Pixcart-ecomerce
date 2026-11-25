@@ -123,6 +123,9 @@ public class WebhooksController(IWebhookBAL webhooks) : ControllerBase
         return ms.ToArray();
     }
 
+    [HttpPost("/api/payments/razorpay/webhook")]
+    public async Task<object> Razorpay() => await webhooks.RazorpayAsync(await BodyAsync(),Request.Headers["x-razorpay-signature"].ToString(),Request.Headers["x-razorpay-event-id"].ToString());
+
     [HttpPost("/api/webhooks/razorpayx")]
     public async Task<object> Razorpayx() =>
         await webhooks.RazorpayxAsync(await BodyAsync(), Request.Headers["x-razorpay-signature"].ToString(), Request.Headers["x-razorpay-event-id"].ToString());

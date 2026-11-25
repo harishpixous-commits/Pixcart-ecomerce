@@ -12,7 +12,7 @@ public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISu
 {
     public const int MaxOpen = 10;
 
-    private static readonly Dictionary<string, string> CategoryLabels = new()
+    public static readonly Dictionary<string, string> CategoryLabels = new()
     {
         ["order"] = "A problem with an order",
         ["delivery"] = "Delivery or tracking",

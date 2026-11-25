@@ -16,6 +16,10 @@ public interface IImageUpload
     /// <summary>Saves a file under a fixed public name (app packages: /media/apps/pixcart-shop.apk).</summary>
     Task<string> SavePublicFileAsync(byte[] data, string relativePath, CancellationToken ct = default);
 
+    /// <summary>Stores the partner Android app publicly (checked ZIP with a manifest and compiled code);
+    /// returns its public URL (reference: storage.save_app_package).</summary>
+    Task<string> SaveAppPackageAsync(byte[] data, long maxBytes, string name, CancellationToken ct = default);
+
     /// <summary>Saves a PDF/JPEG/PNG document privately; returns (key, content type). Never served publicly.</summary>
     Task<(string Key, string ContentType)> SavePrivateAsync(byte[] data, string folder, CancellationToken ct = default);
 

@@ -1,0 +1,10 @@
+namespace Tests;
+public class AdminSellerListTests(ApiFactory f):ApiTest(f)
+{
+    [Fact]public async Task Admin_sellers_filters_submitted_null_last_counts_and_pagination()
+    {
+        var admin=await Admin();var ids=new List<string>();for(var i=0;i<3;i++){var user=await LoginPhone("989000008"+i);var r=await user.Post("/api/seller/register",new{display_name="Synthetic Seller "+i});Assert.True(r.Status==201,r.ToString());ids.Add(r.Json["id"]!.GetValue<string>());await ApiFactory.DbExecAsync("UPDATE sellers SET status='submitted',submitted_at=@at,pickup_city='Coimbatore',pickup_state_code='33',legal_name=@name,contact_phone=@phone WHERE id=@id",new{id=ids[i],at=i==0?(DateTime?)null:DateTime.UtcNow.AddHours(-i),name="Synthetic Legal "+i,phone="989000008"+i});Assert.Equal(403,(await user.Get("/api/admin/sellers")).Status);}
+        var x=await admin.Get("/api/admin/sellers?status=submitted");Assert.True(x.Status==200,x.ToString());Assert.Equal(ids[2],x.Json["items"]![0]!["id"]!.GetValue<string>());Assert.Equal(ids[0],x.Json["items"]![2]!["id"]!.GetValue<string>());Assert.Equal("Tamil Nadu",x.Json["items"]![0]!["state"]!.GetValue<string>());Assert.Equal(3,x.Json["status_counts"]!["submitted"]!.GetValue<int>());
+        x=await admin.Get("/api/admin/sellers?q=%20Legal%201%20");Assert.Single(x.Json["items"]!.AsArray());Assert.Equal(3,x.Json["status_counts"]!["submitted"]!.GetValue<int>());Assert.Single((await admin.Get("/api/admin/sellers?q=9890000082")).Json["items"]!.AsArray());Assert.Single((await admin.Get("/api/admin/sellers?page_size=2&page=2")).Json["items"]!.AsArray());await ApiFactory.DbExecAsync("UPDATE sellers SET status='approved' WHERE id=@id",new{id=ids[0]});Assert.Single((await admin.Get("/api/admin/sellers?status=approved")).Json["items"]!.AsArray());Assert.Equal(3,(await admin.Get("/api/admin/sellers")).Json["total"]!.GetValue<int>());Assert.Equal(422,(await admin.Get("/api/admin/sellers?status=bad")).Status);Assert.Equal(422,(await admin.Get("/api/admin/sellers?page_size=101")).Status);
+    }
+}

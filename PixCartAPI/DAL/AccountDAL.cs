@@ -9,6 +9,9 @@ public partial class AccountDAL(IMySqlDapperHelper db)
     public Task<UserModel?> GetUserAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<UserModel>("SELECT * FROM users WHERE id = @id", new { id });
 
+    public Task<int> UpdateUserNameAsync(Guid userId, string name) =>
+        db.ExecuteAsync("UPDATE users SET name = @name, updated_at = UTC_TIMESTAMP(6) WHERE id = @userId", new { userId, name });
+
     public Task<SellerModel?> GetSellerByUserAsync(Guid userId) =>
         db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE user_id = @userId", new { userId });
 

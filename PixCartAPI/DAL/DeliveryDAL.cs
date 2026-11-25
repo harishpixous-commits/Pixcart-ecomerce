@@ -1,0 +1,137 @@
+using Model.DomainModel;
+using Utils.Interface;
+
+namespace DAL;
+
+/// <summary>delivery_boys + delivery_zones reads/writes (reference: the fleet service's partner queries).</summary>
+public class DeliveryDAL(IMySqlDapperHelper db)
+{
+    public Task<DeliveryBoyModel?> PartnerForUserAsync(Guid userId) =>
+        db.QueryFirstOrDefaultAsync<DeliveryBoyModel>("SELECT * FROM delivery_boys WHERE user_id = @userId", new { userId });
+
+    public Task<DeliveryBoyModel?> PartnerByIdAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<DeliveryBoyModel>("SELECT * FROM delivery_boys WHERE id = @id", new { id });
+
+    /// <summary>Approved, active partners (optionally only the online ones) — the fleet's candidate pool.</summary>
+    public Task<IEnumerable<DeliveryBoyModel>> ApprovedPartnersAsync(bool onlineOnly) =>
+        db.QueryAsync<DeliveryBoyModel>(
+            "SELECT * FROM delivery_boys WHERE kyc_status = 'approved' AND is_active = 1" +
+            (onlineOnly ? " AND is_online = 1" : ""));
+
+    public Task<DeliveryZoneModel?> ZoneAsync(Guid id) =>
+        db.QueryFirstOrDefaultAsync<DeliveryZoneModel>("SELECT * FROM delivery_zones WHERE id = @id", new { id });
+
+    public async Task<IReadOnlyList<DeliveryZoneModel>> ActiveZonesAsync()
+    {
+        var rows = await db.QueryAsync<DeliveryZoneModel>(
+            "SELECT * FROM delivery_zones WHERE is_active = 1 ORDER BY city, name");
+        return rows.ToList();
+    }
+
+    public Task<int> InsertPartnerAsync(DeliveryBoyModel b) =>
+        db.ExecuteAsync(
+            """
+            INSERT INTO delivery_boys
+                (id, user_id, name, phone, photo, city, address, license_no, license_doc, id_proof_type,
+                 id_proof_last4, id_proof_enc, id_proof_doc, vehicle_type, vehicle_no, vehicle_doc, zone_id,
+                 is_online, is_active, kyc_status, kyc_note, approved_at, lat, lng, location_at, online_since,
+                 bank_details, rating_avg, rating_count, created_at, updated_at)
+            VALUES
+                (@Id, @UserId, @Name, @Phone, @Photo, @City, @Address, @LicenseNo, @LicenseDoc, @IdProofType,
+                 @IdProofLast4, @IdProofEnc, @IdProofDoc, @VehicleType, @VehicleNo, @VehicleDoc, @ZoneId,
+                 @IsOnline, @IsActive, @KycStatus, @KycNote, @ApprovedAt, @Lat, @Lng, @LocationAt, @OnlineSince,
+                 @BankDetails, @RatingAvg, @RatingCount, @CreatedAt, @UpdatedAt)
+            """, b);
+
+    public Task<int> UpdatePartnerAsync(DeliveryBoyModel b) =>
+        db.ExecuteAsync(
+            """
+            UPDATE delivery_boys SET name = @Name, phone = @Phone, photo = @Photo, city = @City, address = @Address,
+                license_no = @LicenseNo, license_doc = @LicenseDoc, id_proof_type = @IdProofType,
+                id_proof_last4 = @IdProofLast4, id_proof_enc = @IdProofEnc, id_proof_doc = @IdProofDoc,
+                vehicle_type = @VehicleType, vehicle_no = @VehicleNo, vehicle_doc = @VehicleDoc, zone_id = @ZoneId,
+                is_online = @IsOnline, is_active = @IsActive, kyc_status = @KycStatus, kyc_note = @KycNote,
+                approved_at = @ApprovedAt, lat = @Lat, lng = @Lng, location_at = @LocationAt,
+                online_since = @OnlineSince, bank_details = @BankDetails, updated_at = UTC_TIMESTAMP(6)
+            WHERE id = @Id
+            """, b);
+
+    public Task<IEnumerable<DeliveryZoneModel>> AllZonesAsync() =>
+        db.QueryAsync<DeliveryZoneModel>("SELECT * FROM delivery_zones ORDER BY city, name");
+
+    public Task<IEnumerable<KycCountRow>> KycCountsAsync() =>
+        db.QueryAsync<KycCountRow>("SELECT kyc_status AS KycStatus, COUNT(*) AS Count FROM delivery_boys GROUP BY kyc_status");
+
+    public Task<long> OnlineApprovedCountAsync() =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_boys WHERE is_online=1 AND is_active=1 AND kyc_status='approved'");
+
+    public Task<long> ActiveZoneCountAsync() =>
+        db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM delivery_zones WHERE is_active=1");
+
+    public Task<long> InactivePartnerCountAsync() =>
+        db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM delivery_boys WHERE is_active=0");
+
+    // ------------------------------------------------------------------ staff operations (reference: delivery_admin.py)
+
+    public Task<IEnumerable<DeliveryBoyModel>> PartnersPageAsync(string status, string like, Guid? zoneId, bool? online, int offset) =>
+        db.QueryAsync<DeliveryBoyModel>(
+            "SELECT * FROM delivery_boys WHERE (@status='' OR (@status='inactive' AND is_active=0) " +
+            "  OR (@status<>'inactive' AND kyc_status=@status)) " +
+            "AND (@like='' OR name LIKE @like OR phone LIKE @like OR vehicle_no LIKE @like) " +
+            "AND (@zone IS NULL OR zone_id=@zone) AND (@online IS NULL OR is_online=@online) " +
+            "ORDER BY (kyc_status='submitted') DESC, created_at DESC LIMIT 30 OFFSET @offset",
+            new { status, like, zone = zoneId, online, offset });
+
+    public Task<long> PartnersCountAsync(string status, string like, Guid? zoneId, bool? online) =>
+        db.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM delivery_boys WHERE (@status='' OR (@status='inactive' AND is_active=0) " +
+            "  OR (@status<>'inactive' AND kyc_status=@status)) " +
+            "AND (@like='' OR name LIKE @like OR phone LIKE @like OR vehicle_no LIKE @like) " +
+            "AND (@zone IS NULL OR zone_id=@zone) AND (@online IS NULL OR is_online=@online)",
+            new { status, like, zone = zoneId, online });
+
+    public Task<IEnumerable<ZoneStatRow>> ZoneStatsAsync(IReadOnlyCollection<Guid> zoneIds) =>
+        db.QueryAsync<ZoneStatRow>(
+            "SELECT zone_id AS ZoneId, kyc_status AS KycStatus, is_online AS Online, COUNT(*) AS Count " +
+            "FROM delivery_boys WHERE zone_id IN @ids AND is_active=1 GROUP BY zone_id, kyc_status, is_online",
+            new { ids = zoneIds });
+
+    public Task<long> PartnersInZoneCountAsync(Guid zoneId) =>
+        db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM delivery_boys WHERE zone_id=@zoneId", new { zoneId });
+
+    public Task<int> InsertZoneAsync(DeliveryZoneModel z) =>
+        db.ExecuteAsync(
+            "INSERT INTO delivery_zones (id, name, city, pincodes, is_active, center_lat, center_lng, created_at) " +
+            "VALUES (@Id, @Name, @City, @Pincodes, @IsActive, @CenterLat, @CenterLng, UTC_TIMESTAMP(6))", z);
+
+    public Task<int> UpdateZoneAsync(DeliveryZoneModel z) =>
+        db.ExecuteAsync(
+            "UPDATE delivery_zones SET name=@Name, city=@City, pincodes=@Pincodes, is_active=@IsActive, " +
+            "center_lat=@CenterLat, center_lng=@CenterLng WHERE id=@Id", z);
+
+    public Task<int> DeleteZoneAsync(Guid zoneId) =>
+        db.ExecuteAsync("DELETE FROM delivery_zones WHERE id=@zoneId", new { zoneId });
+
+    public Task<int> SetOfflineInZoneAsync(Guid zoneId) =>
+        db.ExecuteAsync("UPDATE delivery_boys SET is_online=0 WHERE zone_id=@zoneId AND is_online=1", new { zoneId });
+
+    public Task<int> MovePartnersToZoneAsync(IReadOnlyCollection<Guid> partnerIds, Guid zoneId) =>
+        db.ExecuteAsync("UPDATE delivery_boys SET zone_id=@zoneId WHERE id IN @partnerIds", new { partnerIds, zoneId });
+}
+
+
+public class KycCountRow
+{
+    public string KycStatus { get; set; } = "";
+    public long Count { get; set; }
+
+}
+
+public class ZoneStatRow
+{
+    public Guid ZoneId { get; set; }
+    public string KycStatus { get; set; } = "";
+    public bool Online { get; set; }
+    public long Count { get; set; }
+}

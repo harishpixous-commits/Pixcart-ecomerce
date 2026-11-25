@@ -34,11 +34,16 @@ public class AppSettings
     public string RazorpayKeySecret { get; set; } = "";
     public string RazorpayWebhookSecret { get; set; } = "";
     public string RazorpayApiBase { get; set; } = "https://api.razorpay.com/v1";
+    /// <summary>Provider egress policy, FAIL CLOSED BY DEFAULT: anything but "open" (including unset) restricts every
+    /// payment-gateway call to a literal loopback base URL (a local mock). Production must set this to "open"
+    /// explicitly; a missing value can never silently restore real provider access.</summary>
+    public string ExternalProviderMode { get; set; } = "";
+    /// <summary>Admin → Integrations switch; off hides online payment at checkout (reference: config.py razorpay_checkout).</summary>
+    public bool RazorpayCheckout { get; set; } = true;
     public string RazorpayCheckoutUrl { get; set; } = "https://checkout.razorpay.com/v1/checkout.js";
     public int PaymentWindowMinutes { get; set; } = 30;
 
     // Further provider settings (Admin → Integrations overrides each one; see IIntegrationBAL)
-    public bool RazorpayCheckout { get; set; } = true;
     /// <summary>"manual" or "razorpayx".</summary>
     public string PayoutMode { get; set; } = "manual";
     public string RazorpayxAccountNumber { get; set; } = "";
@@ -100,4 +105,6 @@ public class AppSettings
     public bool IsProduction => Environment == "production";
     public bool IsTest => Environment == "test";
     public IEnumerable<string> CorsOriginList => CorsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    /// <summary>Run every scheduled job once at startup (local verification; reference fires on the cadence only).</summary>
+    public bool JobsRunAtStartup { get; set; }
 }

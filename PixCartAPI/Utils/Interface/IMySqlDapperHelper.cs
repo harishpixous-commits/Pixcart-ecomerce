@@ -10,6 +10,8 @@ namespace Utils.Interface;
 public interface IMySqlDapperHelper
 {
     Task<IEnumerable<T>> QueryAsync<T>(string sql, object? param = null, IDbTransaction? tx = null);
+    Task<IEnumerable<TReturn>> QueryAsync<T1, T2, T3, TReturn>(string sql, Func<T1, T2, T3, TReturn> map, object? param = null, string splitOn = "id", IDbTransaction? tx = null);
+    Task<IEnumerable<TReturn>> QueryAsync<T1, T2, T3, T4, TReturn>(string sql, Func<T1, T2, T3, T4, TReturn> map, object? param = null, string splitOn = "id", IDbTransaction? tx = null);
     Task<T?> QueryFirstOrDefaultAsync<T>(string sql, object? param = null, IDbTransaction? tx = null);
     Task<T?> ExecuteScalarAsync<T>(string sql, object? param = null, IDbTransaction? tx = null);
     Task<int> ExecuteAsync(string sql, object? param = null, IDbTransaction? tx = null);
@@ -25,5 +27,7 @@ public interface IUnitOfWork : IAsyncDisposable
     Task<T?> QueryFirstOrDefaultAsync<T>(string sql, object? param = null);
     Task<T?> ExecuteScalarAsync<T>(string sql, object? param = null);
     Task<int> ExecuteAsync(string sql, object? param = null);
+    /// <summary>Runs only after a successful commit; discarded on rollback/disposal.</summary>
+    void AfterCommit(Action callback);
     Task CommitAsync();
 }

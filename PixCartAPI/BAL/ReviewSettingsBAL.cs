@@ -92,7 +92,7 @@ public partial class ReviewSettingsBAL(SettingsDAL settings, CatalogSupportDAL s
         return outp;
     }
 
-    public async Task<JsonObject> UpdateAsync(JsonObject data)
+    public static JsonObject ValidateUpdates(JsonObject data)
     {
         var clean = new JsonObject();
         var defaults = Defaults();
@@ -125,7 +125,12 @@ public partial class ReviewSettingsBAL(SettingsDAL settings, CatalogSupportDAL s
         {
             throw new AppException(e.Message, "invalid_setting");
         }
-        await support.MergeSettingsAsync(Key, clean);
+        return clean;
+    }
+
+    public async Task<JsonObject> UpdateAsync(JsonObject data)
+    {
+        await support.MergeSettingsAsync(Key, ValidateUpdates(data));
         return await GetAsync();
     }
 

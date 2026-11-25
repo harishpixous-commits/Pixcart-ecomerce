@@ -294,4 +294,121 @@ public class IntegrationsTests(ApiFactory f) : ApiTest(f)
         Assert.False(check["ok"]!.GetValue<bool>());
         Assert.StartsWith("The private key could not be read", check["message"]!.GetValue<string>());
     }
+    [Fact]
+    public async Task Push_only_transaction_dispatches_on_commit_not_scope_disposal_and_drops_rollback()
+    {
+        var admin = await Admin();
+        var values = new { project_id = "pixcart-demo", client_email = "push@pixcart-demo.iam.gserviceaccount.com",
+            private_key = ServiceKey(), api_key = "AIzaSyD" + new string('x', 32), sender_id = "123456789012",
+            app_id = "1:123456789012:web:abc123def456", vapid_key = "B" + new string('y', 86) };
+        Assert.Equal(200, (await admin.Put("/api/admin/integrations/firebase", new { values, enabled = true, password = AdminPassword })).Status);
+        var customer = await LoginPhone("9600000991", "Push Customer");
+        Assert.Equal(201, (await customer.Post("/api/push/tokens", new { token = new string('a', 30) })).Status);
+        BAL.FcmClient.Reset();
+        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        Fakes.PushHandler = req =>
+        {
+            if (req.RequestUri!.Host.Contains("oauth")) return Fakes.Json(200, new { access_token = "mock-token", expires_in = 3600 });
+            Interlocked.Increment(ref count);
+            sent.TrySetResult();
+            return Fakes.Json(200, new { name = "mock-message" });
+        };
+        try
+        {
+            // Push-only channel creates no notification row. Rollback must still suppress dispatch.
+            await using (var scope = Factory.Services.CreateAsyncScope())
+            {
+                var sp = scope.ServiceProvider;
+                var user = await sp.GetRequiredService<DAL.AccountDAL>().GetUserAsync(Guid.Parse(customer.Id));
+                await using var uow = await sp.GetRequiredService<Utils.Interface.IMySqlDapperHelper>().BeginAsync();
+                await sp.GetRequiredService<INotifyBAL>().NotifyAsync("security_notice", user,
+                    new Dictionary<string, object?> { ["what"] = "test", ["message"] = "synthetic" }, channels: ["push"], uow: uow);
+            }
+            await Task.Delay(300);
+            Assert.Equal(0, Volatile.Read(ref count));
+            // Keep the scope alive after commit: dispatch must not wait for disposal.
+            await using (var scope = Factory.Services.CreateAsyncScope())
+            {
+                var sp = scope.ServiceProvider;
+                var user = await sp.GetRequiredService<DAL.AccountDAL>().GetUserAsync(Guid.Parse(customer.Id));
+                await using var uow = await sp.GetRequiredService<Utils.Interface.IMySqlDapperHelper>().BeginAsync();
+                await sp.GetRequiredService<INotifyBAL>().NotifyAsync("security_notice", user,
+                    new Dictionary<string, object?> { ["what"] = "test", ["message"] = "synthetic" }, channels: ["push"], uow: uow);
+                Assert.Equal(0, Volatile.Read(ref count));
+                await uow.CommitAsync();
+                await sent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(1, Volatile.Read(ref count));
+            }
+            await Task.Delay(100);
+            Assert.Equal(1, Volatile.Read(ref count));
+        }
+        finally { Fakes.PushHandler = null; BAL.FcmClient.Reset(); }
+    }
+
+    [Fact]
+    public async Task Device_registration_keeps_ten_newest_and_rate_limits()
+    {
+        var customer = await LoginPhone("9600000992", "Many Devices");
+        for (var i = 0; i < 11; i++)
+        {
+            Assert.Equal(201, (await customer.Post("/api/push/tokens", new { token = $"device-{i:D2}-" + new string('x', 25) })).Status);
+            if (i == 0) await ApiFactory.DbExecAsync("UPDATE push_tokens SET last_seen_at='2020-01-01' WHERE user_id=@id", new { id = customer.Id });
+        }
+        var tokens = (await ApiFactory.DbQueryAsync<string>("SELECT token FROM push_tokens WHERE user_id=@id", new { id = customer.Id })).ToList();
+        Assert.Equal(10, tokens.Count);
+        Assert.DoesNotContain("device-00-" + new string('x', 25), tokens);
+        for (var i = 11; i < 30; i++)
+            Assert.Equal(201, (await customer.Post("/api/push/tokens", new { token = $"device-{i:D2}-" + new string('x', 25) })).Status);
+        Assert.Equal(429, (await customer.Post("/api/push/tokens", new { token = "one-too-many-" + new string('x', 25) })).Status);
+    }
+
+    [Theory]
+    [InlineData(200, "", "sent")]
+    [InlineData(404, "", "gone")]
+    [InlineData(410, "", "gone")]
+    [InlineData(400, "Invalid REGISTRATION TOKEN", "gone")]
+    [InlineData(400, "other invalid request", "error")]
+    [InlineData(503, "unavailable", "error")]
+    public async Task Fcm_payload_and_status_mapping_are_reference_compatible(int status, string body, string expected)
+    {
+        using var rsa = RSA.Create(2048);
+        var cfg = new Model.DomainModel.Integrations.IntegrationSettings
+        {
+            FirebaseProjectId = "synthetic", FirebaseClientEmail = "test@synthetic.invalid", FirebasePrivateKey = rsa.ExportPkcs8PrivateKeyPem(),
+            FirebaseOauthUrl = "https://oauth.invalid/token", FirebaseFcmBase = "https://fcm.invalid",
+        };
+        BAL.FcmClient.Reset();
+        var oauthCalls = 0;
+        JsonNode? captured = null;
+        using var client = new HttpClient(new FakeHandler(req =>
+        {
+            if (req.RequestUri!.Host == "oauth.invalid")
+            {
+                oauthCalls++;
+                return Fakes.Json(200, new { access_token = "synthetic-token", expires_in = 3600 });
+            }
+            Assert.Equal("Bearer synthetic-token", req.Headers.Authorization!.ToString());
+            captured = JsonNode.Parse(req.Content!.ReadAsStringAsync().Result)!["message"];
+            return new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(body) };
+        }));
+        try
+        {
+            var result = await BAL.FcmClient.SendOneAsync(client, cfg, "https://shop.invalid", "synthetic-device",
+                new string('t', 121), new string('b', 401), "/delivery", new Dictionary<string, string> { ["urgent"] = "1" });
+            Assert.Equal(expected, result);
+            Assert.Equal(120, captured!["notification"]!["title"]!.GetValue<string>().Length);
+            Assert.Equal(400, captured["notification"]!["body"]!.GetValue<string>().Length);
+            Assert.Equal("https://shop.invalid/delivery", captured["webpush"]!["fcm_options"]!["link"]!.GetValue<string>());
+            Assert.True(captured["webpush"]!["notification"]!["requireInteraction"]!.GetValue<bool>());
+            Assert.Equal("deliveries", captured["android"]!["notification"]!["channel_id"]!.GetValue<string>());
+            await BAL.FcmClient.AccessTokenAsync(client, cfg);
+            Assert.Equal(1, oauthCalls);
+            cfg.FirebaseClientEmail = "other@synthetic.invalid";
+            await BAL.FcmClient.AccessTokenAsync(client, cfg);
+            Assert.Equal(2, oauthCalls);
+        }
+        finally { BAL.FcmClient.Reset(); }
+    }
+
 }

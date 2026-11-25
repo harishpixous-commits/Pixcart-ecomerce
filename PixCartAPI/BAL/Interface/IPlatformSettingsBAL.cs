@@ -24,6 +24,13 @@ public interface IPlatformSettingsBAL
 
     /// <summary>The cleaned changes (spaces tidied in texts), or 400 "invalid_setting". Does not save.</summary>
     JsonObject Validate(JsonObject updates);
+
+    /// <summary>Locked merge of already-validated updates inside the caller's transaction, so related writes
+    /// commit with the change (reference: update_settings' single session).</summary>
+    Task MergeValidatedAsync(JsonObject clean, Utils.Interface.IUnitOfWork uow);
+
+    /// <summary>Drops the cached settings after an outside-the-service write.</summary>
+    void InvalidateCache();
 }
 
 /// <summary>Typed reads from a settings document (JSON numbers, booleans and strings).</summary>

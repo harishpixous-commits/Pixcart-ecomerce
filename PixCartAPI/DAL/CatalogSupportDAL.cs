@@ -40,6 +40,14 @@ public class CatalogSupportDAL(IMySqlDapperHelper db)
     public async Task MergeSettingsAsync(string key, JsonObject changes)
     {
         await using var uow = await db.BeginAsync();
+        await MergeSettingsAsync(key, changes, uow);
+        await uow.CommitAsync();
+    }
+
+    /// <summary>The same locked merge inside the caller's transaction, so related writes (the settings audit)
+    /// commit or roll back together with the settings change (reference: write_settings' single session).</summary>
+    public async Task MergeSettingsAsync(string key, JsonObject changes, IUnitOfWork uow)
+    {
         var json = await uow.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = @key FOR UPDATE", new { key });
         var saved = JsonHelper.Object(json);
         foreach (var (k, v) in changes) saved[k] = v?.DeepClone();
@@ -47,8 +55,13 @@ public class CatalogSupportDAL(IMySqlDapperHelper db)
             "INSERT INTO platform_settings (`key`, `value`, updated_at) VALUES (@key, CAST(@value AS JSON), @now) " +
             "ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = VALUES(updated_at)",
             new { key, value = saved.ToJsonString(), now = DateTimeFunctions.UtcNow() });
-        await uow.CommitAsync();
     }
+
+    /// <summary>Running deals with a quantity limit: (variant, limit, sold) per version (reference: deals.units_left).</summary>
+    public Task<IEnumerable<(Guid VariantId, int? QtyLimit, int SoldQty)>> DealQuantitiesAsync(IEnumerable<Guid> variantIds) =>
+        db.QueryAsync<(Guid, int?, int)>(
+            "SELECT variant_id, qty_limit, sold_qty FROM deals WHERE variant_id IN @variantIds AND status = 'active' AND qty_limit IS NOT NULL",
+            new { variantIds });
 
     public Task<UserModel?> GetUserAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<UserModel>("SELECT * FROM users WHERE id = @id", new { id });

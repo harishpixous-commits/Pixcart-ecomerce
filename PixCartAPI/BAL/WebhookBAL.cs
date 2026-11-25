@@ -36,12 +36,13 @@ public interface IShipmentWebhookTarget
 /// <summary>Inbound webhooks from RazorpayX (payout status) and Shiprocket (shipment tracking): routers/webhooks.py.</summary>
 public interface IWebhookBAL
 {
+    Task<object> RazorpayAsync(byte[] body,string signature,string? eventIdHeader);
     Task<object> RazorpayxAsync(byte[] body, string signature, string? eventIdHeader);
     Task<object> ShiprocketAsync(byte[] body, string apiKey);
 }
 
 /// <inheritdoc cref="IWebhookBAL"/>
-public class WebhookBAL(IntegrationDAL dal, IIntegrationBAL integrations, IMySqlDapperHelper db, IServiceProvider services) : IWebhookBAL
+public partial class WebhookBAL(IntegrationDAL dal, IIntegrationBAL integrations, IMySqlDapperHelper db, IServiceProvider services) : IWebhookBAL
 {
     private static readonly HashSet<string> Delivered = ["DELIVERED"];
     private static readonly HashSet<string> InTransit = ["PICKED UP", "SHIPPED", "IN TRANSIT", "OUT FOR DELIVERY", "REACHED AT DESTINATION HUB", "OUT FOR PICKUP"];

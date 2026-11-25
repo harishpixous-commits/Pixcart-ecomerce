@@ -82,7 +82,7 @@ public static partial class ProductInfo
     private sealed class Invalid : Exception;
 
     /// <summary>Stored details (possibly from an older version); anything invalid gives empty details (a product page never breaks over one bad value).</summary>
-    public static Details DetailsOf(string? json)
+    public static Details DetailsOf(string? json, bool strict = false)
     {
         try
         {
@@ -110,6 +110,7 @@ public static partial class ProductInfo
                 var outp = new List<string>();
                 foreach (var x in arr)
                 {
+                    if (strict && (x is not JsonValue j || !j.TryGetValue<string>(out _))) throw new Invalid();
                     var s = Clean(CatalogText.Str(x));
                     s = s.Length > 120 ? s[..120] : s;
                     if (s.Length > 0 && !outp.Contains(s)) outp.Add(s);
@@ -133,6 +134,7 @@ public static partial class ProductInfo
         }
         catch (Exception e) when (e is Invalid or JsonException or FormatException or InvalidOperationException)
         {
+            if (strict) throw new AppException("Invalid product details", "validation", 422);
             return new Details();
         }
     }

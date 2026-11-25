@@ -28,6 +28,12 @@ public static class ServiceConfiguration
 
         // Utils (company helpers)
         services.AddSingleton<IMySqlDapperHelper, MySqlDapperHelper>();
+        services.AddSingleton<API.Infrastructure.RefundQueue>();
+        services.AddSingleton<BAL.Interface.IRefundQueue>(sp => sp.GetRequiredService<API.Infrastructure.RefundQueue>());
+        services.AddHostedService<API.Infrastructure.RefundWorker>();
+        // scheduled jobs worker (reference: jobs.py); same RunJobs gate as the BAL hosted-service scan
+        if (settings.RunJobs && !settings.IsTest)
+            services.AddHostedService<API.Infrastructure.JobsWorker>();
         services.AddSingleton<IMySqlHelper, Utils.MySqlHelper>();
         services.AddSingleton<IMailHelper, MailHelper>();
         services.AddSingleton<ISMSHelper, SMSHelper>();
@@ -42,6 +48,8 @@ public static class ServiceConfiguration
         // every *DAL class (scoped), and every *BAL class under its I*BAL interface when it has one
         RegisterByName(services, typeof(DAL.SettingsDAL).Assembly, "DAL");
         RegisterByName(services, typeof(BAL.AccessBAL).Assembly, "BAL");
+        // The storefront's optional deal-timer hook is the same DealsBAL instance as IDealsBAL.
+        services.AddScoped<BAL.Interface.IDealSync>(sp => sp.GetRequiredService<BAL.DealsBAL>());
         services.AddScoped<IRazorpayClient, BAL.RazorpayClient>(); // customers and saved-card tokens (payments may replace it)
 
         // background workers (BAL/BackgroundWorkerService): scheduled jobs, notifications, refunds ...
@@ -52,7 +60,12 @@ public static class ServiceConfiguration
                 services.AddSingleton(typeof(IHostedService), t);
         }
 
-        services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
+        services.AddControllers(o =>
+            {
+                o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+                // the reference API's sign-in/permission rule per route, applied before the body is read
+                o.Filters.Add<API.Infrastructure.ReferenceGuardFilter>();
+            })
             .AddJsonOptions(o =>
             {
                 var j = JsonHelper.Options;
@@ -60,7 +73,13 @@ public static class ServiceConfiguration
                 o.JsonSerializerOptions.DictionaryKeyPolicy = j.DictionaryKeyPolicy;
                 o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
             })
-            .ConfigureApiBehaviorOptions(o => o.InvalidModelStateResponseFactory = ValidationResponse);
+            .ConfigureApiBehaviorOptions(o =>
+            {
+                o.InvalidModelStateResponseFactory = ValidationResponse;
+                // An IFormFile parameter would otherwise add a hidden "multipart only" rule that answers 415 before
+                // any filter runs, so a visitor got 415 where the reference says 401 (sign-in is checked first there).
+                o.SuppressConsumesConstraintForFormFileParameters = true;
+            });
 
         services.AddCors(o => o.AddDefaultPolicy(p => p
             .WithOrigins(settings.CorsOriginList.ToArray())

@@ -1,0 +1,29 @@
+namespace DAL;
+public sealed partial class ExportsDAL
+{
+    private static Plan OtherPlan(string name) => name switch
+    {
+        "returns" => new("return_requests r JOIN sub_orders p ON p.id=r.sub_order_id JOIN sellers s ON s.id=r.seller_id LEFT JOIN (SELECT return_id,SUM(qty) units FROM return_items GROUP BY return_id) i ON i.return_id=r.id",
+            [new("r.number"),new("p.number"),new("s.display_name"),new("r.created_at","ist"),new("r.status"),new("r.reason"),new("COALESCE(i.units,0)"),new("r.refund_amount","money"),new("r.credit_note_number"),new("r.received_at","ist"),new("r.refunded_at","ist"),new("r.seller_note")],
+            "r.created_at,r.id",Date:"r.created_at",Seller:"r.seller_id",Status:"r.status",Search:["r.number","p.number"]),
+        "payouts" => new("payouts p JOIN sellers s ON s.id=p.seller_id",
+            [new("p.number"),new("s.display_name"),new("s.legal_name"),new("p.created_at","ist"),new("p.amount","money"),new("p.status"),new("p.mode"),new("p.utr"),new("p.paid_at","ist"),new("JSON_UNQUOTE(JSON_EXTRACT(p.bank_snapshot,'$.account_last4'))","jsonstr"),new("JSON_UNQUOTE(JSON_EXTRACT(p.bank_snapshot,'$.ifsc'))","jsonstr"),new("p.failure_reason")],
+            "p.created_at,p.id",Date:"p.created_at",Seller:"p.seller_id",Status:"p.status",Search:["p.number","p.utr"]),
+        "ledger" => new("seller_ledger e JOIN sellers s ON s.id=e.seller_id LEFT JOIN sub_orders p ON p.id=e.sub_order_id LEFT JOIN payouts po ON po.id=e.payout_id",
+            [new("e.created_at","ist"),new("s.display_name"),new("e.kind"),new("p.number"),new("e.description"),new("e.amount","money"),new("e.available_at","date"),new("po.number")],
+            "e.created_at,e.id",Date:"e.created_at",Seller:"e.seller_id"),
+        "sellers" => new("sellers s LEFT JOIN (SELECT seller_id,COUNT(*) n FROM products WHERE status='approved' GROUP BY seller_id) p ON p.seller_id=s.id",
+            [new("s.display_name"),new("s.legal_name"),new("s.business_type"),new("s.gstin"),new("s.status"),new("s.pickup_city"),new("s.pickup_state_code","statecode"),new("s.pickup_pincode"),new("s.contact_email"),new("s.contact_phone"),new("s.commission_bps_override","optionalpct"),new("COALESCE(p.n,0)"),new("s.rating_avg","rating"),new("s.rating_count"),new("s.holiday_mode","bool"),new("s.created_at","ist"),new("s.approved_at","ist")],
+            "s.created_at",Date:"s.created_at",Status:"s.status",Search:["s.display_name","s.legal_name","s.gstin","s.pickup_city"]),
+        "customers" => new("users u LEFT JOIN (SELECT user_id,COUNT(*) n,COALESCE(SUM(grand_total-refunded_total),0) spent,MAX(placed_at) last_order FROM orders WHERE status='placed' GROUP BY user_id) o ON o.user_id=u.id",
+            [new("u.name"),new("u.phone"),new("u.email"),new("u.created_at","ist"),new("COALESCE(o.n,0)"),new("COALESCE(o.spent,0)","money"),new("o.last_order","ist"),new("u.marketing_opt_in","bool"),new("u.is_active","bool")],
+            "u.created_at",Date:"u.created_at",Search:["u.name","u.phone","u.email"],BaseWhere:"u.is_admin=0 AND u.deleted_at IS NULL"),
+        "tickets" => new("support_tickets t LEFT JOIN orders o ON o.id=t.order_id",
+            [new("t.number"),new("t.created_at","ist"),new("t.category"),new("t.subject"),new("o.number"),new("t.status"),new("t.priority"),new("t.is_grievance","bool"),new("t.ack_due_at","ist"),new("t.acknowledged_at","ist"),new("IF(t.acknowledged_at IS NULL,NULL,t.acknowledged_at<=t.ack_due_at)","optionalbool"),new("t.resolve_due_at","ist"),new("t.resolved_at","ist"),new("IF(t.resolved_at IS NULL,NULL,t.resolved_at<=t.resolve_due_at)","optionalbool")],
+            "t.created_at",Date:"t.created_at",Status:"t.status",Search:["t.number","t.subject","o.number"]),
+        "ai-runs" => new("ai_runs r LEFT JOIN users u ON u.id=r.created_by",
+            [new("r.created_at","ist"),new("r.task"),new("COALESCE(u.name,'System')"),new("r.status"),new("r.mode"),new("r.model"),new("r.input_tokens"),new("r.output_tokens"),new("r.cache_creation_tokens"),new("r.cache_read_tokens"),new("r.latency_ms"),new("IF(r.subject_type='', '', CONCAT(r.subject_type,':',r.subject_id))"),new("r.error")],
+            "r.created_at,r.id",Date:"r.created_at",Seller:"r.seller_id",Status:"r.status"),
+        _ => throw new NotSupportedException("Export data plan has not been implemented: " + name),
+    };
+}
