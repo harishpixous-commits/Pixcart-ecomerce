@@ -13,6 +13,8 @@
   <ItemGroup>
     <!-- built-in Tamil and Hindi lines for the site (TranslateBAL) -->
     <EmbeddedResource Include="Assets\i18n\*.json" />
+    <!-- the admin assistant's tool specs, generated from the reference by tools/schema/assistant_tool_specs.py -->
+    <EmbeddedResource Include="Assets\assistant\tool-specs.json" LogicalName="BAL.Assets.assistant.tool-specs.json" />
   </ItemGroup>
 
   <PropertyGroup>

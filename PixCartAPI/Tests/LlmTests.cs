@@ -75,7 +75,7 @@ public class LlmTests(ApiFactory f) : ApiTest(f)
 
         // edit: add a second key, rename
         r = await admin.Put($"/api/admin/ai-providers/connections/{connId}",
-            new { name = "Renamed", add_keys = new[] { new { key = "sk-test-9999zzzz", label = "second" } } });
+            new { name = "Renamed", type = "openai", add_keys = new[] { new { key = "sk-test-9999zzzz", label = "second" } } }); // type is required, like the reference ConnectionIn
         Assert.Equal(200, r.Status);
         conn = r.Json["connections"]!.AsArray().Single()!;
         Assert.Equal("Renamed", conn["name"]!.GetValue<string>());
@@ -93,7 +93,7 @@ public class LlmTests(ApiFactory f) : ApiTest(f)
         Assert.True(bad.Status == 400 && bad.ErrorCode == "invalid_routes", bad.ToString());
 
         // the built-in connection cannot be edited here
-        bad = await admin.Put($"/api/admin/ai-providers/connections/{LlmConfigBAL.BuiltinId}", new { name = "x" });
+        bad = await admin.Put($"/api/admin/ai-providers/connections/{LlmConfigBAL.BuiltinId}", new { name = "x", type = "anthropic" });
         Assert.True(bad.Status == 400 && bad.ErrorCode == "builtin_connection", bad.ToString());
 
         // delete

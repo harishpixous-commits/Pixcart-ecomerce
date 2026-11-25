@@ -9,8 +9,8 @@ using Utils;
 
 /// <summary>
 /// Staff assistant settings, memory notes and conversations (reference: app/assistant/settings.py and the
-/// conversation endpoints of routers/assistant.py). The chat engine (ask, tools, actions, uploads) is a later
-/// slice; the mode is reported "sandbox" because no LLM route can be configured in this environment.
+/// conversation endpoints of routers/assistant.py). The mode is "live" when a model is connected on the assistant
+/// route (Admin â†’ AI providers), otherwise "sandbox".
 /// </summary>
 public partial class AssistantBAL(
     AssistantDAL dal,
@@ -18,7 +18,7 @@ public partial class AssistantBAL(
     AuditDAL audit,
     IAccessBAL access,
     IStepUpBAL stepUp,
-    EncryptDecrypt crypto, ISiteBAL site) : IAssistantBAL
+    EncryptDecrypt crypto, ISiteBAL site, BAL.AI.ILlmConfigBAL llmConfig) : IAssistantBAL
 {
     public const string SettingsKey = "assistant";
     private const int MaxNotes = 30;
@@ -260,7 +260,16 @@ public partial class AssistantBAL(
     private async Task<JsonObject> StoredAsync() => Merge(await settings.GetAsync(SettingsKey));
 
     /// <summary>Merged runtime settings for the ask path (reference: settings.get with reveal).</summary>
-    public async Task<JsonObject> ConfigForRunAsync() => await StoredAsync();
+    public async Task<JsonObject> ConfigForRunAsync()
+    {
+        var cfg = await StoredAsync();
+        if (cfg["decision"] is JsonObject d)
+        {
+            var enc = d["laya_key"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+            d["laya_key"] = enc.Length > 0 ? crypto.Decrypt(enc) : "";
+        }
+        return cfg;
+    }
 
     private async Task<JsonObject> GetAsync()
     {
@@ -329,8 +338,7 @@ public partial class AssistantBAL(
         var perms = await access.PermissionsForAsync(user);
         var voice = cfg["voice"] as JsonObject ?? new JsonObject();
         var langs = (voice["languages"] as JsonArray ?? new JsonArray()).Select(l => l!.GetValue<string>()).ToArray();
-        // The LLM route chain is always empty here (no provider connections can be configured), so the mode is
-        // honestly "sandbox"; the reference computes "live" when a chain exists.
+        var chain = await llmConfig.TargetsAsync("assistant");
         var voiceOut = (JsonObject)voice.DeepClone();
         voiceOut["languages"] = new JsonArray(langs.Select(c => (JsonNode)new JsonObject { ["code"] = c, ["label"] = Langs.GetValueOrDefault(c, c) }).ToArray());
         return new JsonObject
@@ -338,9 +346,9 @@ public partial class AssistantBAL(
             ["enabled"] = cfg["enabled"]?.GetValue<bool>(),
             ["name"] = cfg["name"]?.GetValue<string>(),
             ["suggestions"] = cfg["suggestions"]?.DeepClone(),
-            ["mode"] = "sandbox",
-            ["model"] = "",
-            ["fallbacks"] = 0,
+            ["mode"] = chain.Count > 0 ? "live" : "sandbox",
+            ["model"] = chain.Count > 0 ? $"{chain[0].Model} via {chain[0].Connection.Name}" : "",
+            ["fallbacks"] = Math.Max(0, chain.Count - 1),
             ["decision"] = (cfg["decision"] as JsonObject)?["provider"]?.GetValue<string>(),
             ["voice"] = voiceOut,
             ["can"] = new JsonObject
@@ -364,8 +372,8 @@ public partial class AssistantBAL(
     /// <summary>Reference: routers/assistant.py decision_test — runs the decision layer over every tool name.</summary>
     public async Task<JsonObject> DecisionTestAsync(string text)
     {
-        var cfg = (await StoredAsync())["decision"] as JsonObject ?? new JsonObject();
-        return AssistantDecision.Decide(text, cfg, AssistantTools.ByName.Keys.ToHashSet(), false).AsDict();
+        var cfg = (await ConfigForRunAsync())["decision"] as JsonObject ?? new JsonObject();
+        return (await AssistantDecision.DecideAsync(text, cfg, AssistantTools.ByName.Keys.ToHashSet(), false)).AsDict();
     }
 
     // ---------------------------------------------------------------- memory notes (reference: settings.memories, set_memories)

@@ -1,0 +1,7040 @@
+{
+"POST /api/auth/otp/request": {
+"required": true,
+"schema": {
+"properties": {
+"phone": {
+"type": "string",
+"title": "Phone"
+},
+"purpose": {
+"type": "string",
+"enum": [
+"signin",
+"signup",
+"any"
+],
+"title": "Purpose"
+},
+"for_seller": {
+"type": "boolean",
+"title": "For Seller"
+}
+},
+"type": "object",
+"required": [
+"phone"
+],
+"title": "OtpRequest"
+}
+},
+"POST /api/auth/otp/verify": {
+"required": true,
+"schema": {
+"properties": {
+"phone": {
+"type": "string",
+"title": "Phone"
+},
+"purpose": {
+"type": "string",
+"enum": [
+"signin",
+"signup",
+"any"
+],
+"title": "Purpose"
+},
+"for_seller": {
+"type": "boolean",
+"title": "For Seller"
+},
+"code": {
+"type": "string",
+"maxLength": 8,
+"minLength": 4,
+"title": "Code"
+},
+"name": {
+"type": "string",
+"maxLength": 120,
+"title": "Name"
+},
+"email": {
+"anyOf": [
+{
+"type": "string",
+"format": "email"
+},
+{
+"type": "null"
+}
+],
+"title": "Email"
+},
+"accept_terms": {
+"type": "boolean",
+"title": "Accept Terms"
+},
+"marketing_opt_in": {
+"type": "boolean",
+"title": "Marketing Opt In"
+}
+},
+"type": "object",
+"required": [
+"phone",
+"code"
+],
+"title": "OtpVerify"
+}
+},
+"POST /api/auth/login": {
+"required": true,
+"schema": {
+"properties": {
+"email": {
+"type": "string",
+"format": "email",
+"title": "Email"
+},
+"password": {
+"type": "string",
+"maxLength": 200,
+"minLength": 1,
+"title": "Password"
+},
+"totp": {
+"type": "string",
+"maxLength": 8,
+"title": "Totp"
+}
+},
+"type": "object",
+"required": [
+"email",
+"password"
+],
+"title": "PasswordLogin"
+}
+},
+"POST /api/auth/password": {
+"required": true,
+"schema": {
+"properties": {
+"current_password": {
+"type": "string",
+"maxLength": 200,
+"minLength": 1,
+"title": "Current Password"
+},
+"new_password": {
+"type": "string",
+"maxLength": 200,
+"minLength": 8,
+"title": "New Password"
+}
+},
+"type": "object",
+"required": [
+"current_password",
+"new_password"
+],
+"title": "PasswordChange"
+}
+},
+"POST /api/auth/totp/enable": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 8,
+"minLength": 6,
+"title": "Code"
+},
+"password": {
+"type": "string",
+"maxLength": 200,
+"title": "Password"
+}
+},
+"type": "object",
+"required": [
+"code"
+],
+"title": "TotpCode"
+}
+},
+"POST /api/auth/totp/disable": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 8,
+"minLength": 6,
+"title": "Code"
+},
+"password": {
+"type": "string",
+"maxLength": 200,
+"title": "Password"
+}
+},
+"type": "object",
+"required": [
+"code"
+],
+"title": "TotpCode"
+}
+},
+"PATCH /api/auth/me": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 1
+},
+{
+"type": "null"
+}
+],
+"title": "Name"
+},
+"email": {
+"anyOf": [
+{
+"type": "string",
+"format": "email"
+},
+{
+"type": "null"
+}
+],
+"title": "Email"
+}
+},
+"type": "object",
+"title": "ProfileUpdate"
+}
+},
+"POST /api/addresses": {
+"required": true,
+"schema": {
+"properties": {
+"full_name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 2,
+"title": "Full Name"
+},
+"phone": {
+"type": "string",
+"title": "Phone"
+},
+"line1": {
+"type": "string",
+"maxLength": 200,
+"minLength": 3,
+"title": "Line1"
+},
+"line2": {
+"type": "string",
+"maxLength": 200,
+"title": "Line2"
+},
+"landmark": {
+"type": "string",
+"maxLength": 120,
+"title": "Landmark"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"state_code": {
+"type": "string",
+"title": "State Code"
+},
+"pincode": {
+"type": "string",
+"title": "Pincode"
+},
+"kind": {
+"type": "string",
+"enum": [
+"home",
+"work",
+"other"
+],
+"title": "Kind"
+},
+"is_default": {
+"type": "boolean",
+"title": "Is Default"
+},
+"label": {
+"type": "string",
+"maxLength": 40,
+"title": "Label"
+},
+"instructions": {
+"type": "string",
+"maxLength": 300,
+"title": "Instructions"
+},
+"lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 38.0,
+"minimum": 6.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lat"
+},
+"lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 98.0,
+"minimum": 68.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lng"
+}
+},
+"type": "object",
+"required": [
+"full_name",
+"phone",
+"line1",
+"city",
+"state_code",
+"pincode"
+],
+"title": "AddressIn"
+}
+},
+"PATCH /api/addresses/{}/instructions": {
+"required": true,
+"schema": {
+"properties": {
+"instructions": {
+"type": "string",
+"maxLength": 300,
+"title": "Instructions"
+}
+},
+"type": "object",
+"title": "InstructionsIn"
+}
+},
+"PATCH /api/addresses/{}/location": {
+"required": true,
+"schema": {
+"properties": {
+"lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 38.0,
+"minimum": 6.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lat"
+},
+"lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 98.0,
+"minimum": 68.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lng"
+}
+},
+"type": "object",
+"title": "LocationIn"
+}
+},
+"PUT /api/addresses/{}": {
+"required": true,
+"schema": {
+"properties": {
+"full_name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 2,
+"title": "Full Name"
+},
+"phone": {
+"type": "string",
+"title": "Phone"
+},
+"line1": {
+"type": "string",
+"maxLength": 200,
+"minLength": 3,
+"title": "Line1"
+},
+"line2": {
+"type": "string",
+"maxLength": 200,
+"title": "Line2"
+},
+"landmark": {
+"type": "string",
+"maxLength": 120,
+"title": "Landmark"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"state_code": {
+"type": "string",
+"title": "State Code"
+},
+"pincode": {
+"type": "string",
+"title": "Pincode"
+},
+"kind": {
+"type": "string",
+"enum": [
+"home",
+"work",
+"other"
+],
+"title": "Kind"
+},
+"is_default": {
+"type": "boolean",
+"title": "Is Default"
+},
+"label": {
+"type": "string",
+"maxLength": 40,
+"title": "Label"
+},
+"instructions": {
+"type": "string",
+"maxLength": 300,
+"title": "Instructions"
+},
+"lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 38.0,
+"minimum": 6.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lat"
+},
+"lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 98.0,
+"minimum": 68.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lng"
+}
+},
+"type": "object",
+"required": [
+"full_name",
+"phone",
+"line1",
+"city",
+"state_code",
+"pincode"
+],
+"title": "AddressIn"
+}
+},
+"PUT /api/catalog/products/{}/reviews": {
+"required": true,
+"schema": {
+"properties": {
+"rating": {
+"type": "integer",
+"maximum": 5.0,
+"minimum": 1.0,
+"title": "Rating"
+},
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"body": {
+"type": "string",
+"maxLength": 4000,
+"title": "Body"
+},
+"media": {
+"items": {
+"properties": {
+"kind": {
+"type": "string",
+"enum": [
+"image",
+"video"
+],
+"title": "Kind"
+},
+"url": {
+"type": "string",
+"maxLength": 400,
+"title": "Url"
+},
+"poster_url": {
+"type": "string",
+"maxLength": 400,
+"title": "Poster Url"
+}
+},
+"type": "object",
+"required": [
+"kind",
+"url"
+],
+"title": "ReviewMediaIn"
+},
+"type": "array",
+"maxItems": 12,
+"title": "Media"
+}
+},
+"type": "object",
+"required": [
+"rating"
+],
+"title": "ReviewIn"
+}
+},
+"POST /api/reviews/{}/report": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 20,
+"title": "Reason"
+},
+"note": {
+"type": "string",
+"maxLength": 500,
+"title": "Note"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReportIn"
+}
+},
+"POST /api/catalog/products/{}/report": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 20,
+"title": "Reason"
+},
+"note": {
+"type": "string",
+"maxLength": 2000,
+"title": "Note"
+},
+"url": {
+"type": "string",
+"maxLength": 400,
+"title": "Url"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ProductReportIn"
+}
+},
+"POST /api/returns": {
+"required": true,
+"schema": {
+"properties": {
+"sub_order_id": {
+"type": "string",
+"format": "uuid",
+"title": "Sub Order Id"
+},
+"items": {
+"items": {
+"additionalProperties": true,
+"type": "object"
+},
+"type": "array",
+"maxItems": 50,
+"minItems": 1,
+"title": "Items"
+},
+"reason": {
+"type": "string",
+"title": "Reason"
+},
+"comment": {
+"type": "string",
+"maxLength": 2000,
+"title": "Comment"
+},
+"refund_upi": {
+"type": "string",
+"maxLength": 60,
+"title": "Refund Upi"
+}
+},
+"type": "object",
+"required": [
+"sub_order_id",
+"items",
+"reason"
+],
+"title": "ReturnIn"
+}
+},
+"POST /api/support/tickets": {
+"required": true,
+"schema": {
+"properties": {
+"category": {
+"type": "string",
+"title": "Category"
+},
+"subject": {
+"type": "string",
+"maxLength": 200,
+"minLength": 5,
+"title": "Subject"
+},
+"message": {
+"type": "string",
+"maxLength": 5000,
+"minLength": 10,
+"title": "Message"
+},
+"order_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Order Id"
+},
+"is_grievance": {
+"type": "boolean",
+"title": "Is Grievance"
+}
+},
+"type": "object",
+"required": [
+"category",
+"subject",
+"message"
+],
+"title": "TicketIn"
+}
+},
+"POST /api/support/tickets/{}/messages": {
+"required": true,
+"schema": {
+"properties": {
+"body": {
+"type": "string",
+"maxLength": 5000,
+"minLength": 1,
+"title": "Body"
+}
+},
+"type": "object",
+"required": [
+"body"
+],
+"title": "MessageIn"
+}
+},
+"POST /api/events": {
+"required": true,
+"schema": {
+"properties": {
+"type": {
+"type": "string",
+"enum": [
+"view",
+"add_to_cart"
+],
+"title": "Type"
+},
+"product_id": {
+"type": "string",
+"format": "uuid",
+"title": "Product Id"
+}
+},
+"type": "object",
+"required": [
+"type",
+"product_id"
+],
+"title": "EventIn"
+}
+},
+"PUT /api/account/consent": {
+"required": true,
+"schema": {
+"properties": {
+"marketing_opt_in": {
+"type": "boolean",
+"title": "Marketing Opt In"
+}
+},
+"type": "object",
+"required": [
+"marketing_opt_in"
+],
+"title": "ConsentIn"
+}
+},
+"POST /api/seller/deals": {
+"required": true,
+"schema": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+},
+"kind": {
+"type": "string",
+"enum": [
+"lightning",
+"deal_of_day",
+"limited"
+],
+"title": "Kind"
+},
+"deal_price_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Deal Price Paise"
+},
+"starts_at": {
+"type": "string",
+"format": "date-time",
+"title": "Starts At"
+},
+"ends_at": {
+"type": "string",
+"format": "date-time",
+"title": "Ends At"
+},
+"qty_limit": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 100000.0,
+"minimum": 1.0
+},
+{
+"type": "null"
+}
+],
+"title": "Qty Limit"
+}
+},
+"type": "object",
+"required": [
+"variant_id",
+"kind",
+"deal_price_paise",
+"starts_at",
+"ends_at"
+],
+"title": "DealIn"
+}
+},
+"POST /api/admin/deals/{}/{}": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 300,
+"title": "Reason"
+}
+},
+"type": "object",
+"title": "ReasonIn"
+}
+},
+"POST /api/seller/ads": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 3,
+"title": "Name"
+},
+"product_ids": {
+"items": {
+"type": "string",
+"format": "uuid"
+},
+"type": "array",
+"maxItems": 50,
+"minItems": 1,
+"title": "Product Ids"
+},
+"placements": {
+"items": {
+"type": "string",
+"enum": [
+"search",
+"product",
+"home"
+]
+},
+"type": "array",
+"maxItems": 3,
+"minItems": 1,
+"title": "Placements"
+},
+"keywords": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 30,
+"title": "Keywords"
+},
+"bid_paise": {
+"type": "integer",
+"maximum": 10000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Bid Paise"
+},
+"daily_budget_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Daily Budget Paise"
+},
+"total_budget_paise": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 10000000000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Total Budget Paise"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+}
+},
+"type": "object",
+"required": [
+"name",
+"product_ids",
+"placements",
+"bid_paise",
+"daily_budget_paise"
+],
+"title": "CampaignIn"
+}
+},
+"PUT /api/seller/ads/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 3,
+"title": "Name"
+},
+"product_ids": {
+"items": {
+"type": "string",
+"format": "uuid"
+},
+"type": "array",
+"maxItems": 50,
+"minItems": 1,
+"title": "Product Ids"
+},
+"placements": {
+"items": {
+"type": "string",
+"enum": [
+"search",
+"product",
+"home"
+]
+},
+"type": "array",
+"maxItems": 3,
+"minItems": 1,
+"title": "Placements"
+},
+"keywords": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 30,
+"title": "Keywords"
+},
+"bid_paise": {
+"type": "integer",
+"maximum": 10000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Bid Paise"
+},
+"daily_budget_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Daily Budget Paise"
+},
+"total_budget_paise": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 10000000000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Total Budget Paise"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+}
+},
+"type": "object",
+"required": [
+"name",
+"product_ids",
+"placements",
+"bid_paise",
+"daily_budget_paise"
+],
+"title": "CampaignIn"
+}
+},
+"POST /api/admin/ads/{}/{}": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 300,
+"title": "Reason"
+}
+},
+"type": "object",
+"title": "ReasonIn"
+}
+},
+"POST /api/catalog/products/{}/questions": {
+"required": true,
+"schema": {
+"properties": {
+"text": {
+"type": "string",
+"maxLength": 500,
+"minLength": 10,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"text"
+],
+"title": "QuestionIn"
+}
+},
+"POST /api/questions/{}/answers": {
+"required": true,
+"schema": {
+"properties": {
+"text": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 2,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"text"
+],
+"title": "AnswerIn"
+}
+},
+"POST /api/qa/report": {
+"required": true,
+"schema": {
+"properties": {
+"kind": {
+"type": "string",
+"enum": [
+"question",
+"answer"
+],
+"title": "Kind"
+},
+"id": {
+"type": "string",
+"format": "uuid",
+"title": "Id"
+}
+},
+"type": "object",
+"required": [
+"kind",
+"id"
+],
+"title": "QaReportIn"
+}
+},
+"POST /api/alerts/stock": {
+"required": true,
+"schema": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+}
+},
+"type": "object",
+"required": [
+"variant_id"
+],
+"title": "AlertIn"
+}
+},
+"POST /api/seller/questions/{}/answer": {
+"required": true,
+"schema": {
+"properties": {
+"text": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 2,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"text"
+],
+"title": "AnswerIn"
+}
+},
+"PUT /api/cart/items": {
+"required": true,
+"schema": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+},
+"qty": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 0.0,
+"title": "Qty"
+}
+},
+"type": "object",
+"required": [
+"variant_id",
+"qty"
+],
+"title": "SetQty"
+}
+},
+"POST /api/cart/items": {
+"required": true,
+"schema": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+},
+"qty": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 0.0,
+"title": "Qty"
+}
+},
+"type": "object",
+"required": [
+"variant_id",
+"qty"
+],
+"title": "SetQty"
+}
+},
+"POST /api/cart/merge": {
+"required": true,
+"schema": {
+"properties": {
+"items": {
+"items": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+},
+"qty": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 0.0,
+"title": "Qty"
+}
+},
+"type": "object",
+"required": [
+"variant_id",
+"qty"
+],
+"title": "SetQty"
+},
+"type": "array",
+"maxItems": 50,
+"title": "Items"
+}
+},
+"type": "object",
+"required": [
+"items"
+],
+"title": "MergeIn"
+}
+},
+"POST /api/checkout/quote": {
+"required": true,
+"schema": {
+"properties": {
+"address_id": {
+"type": "string",
+"format": "uuid",
+"title": "Address Id"
+},
+"payment_method": {
+"type": "string",
+"enum": [
+"cod",
+"online"
+],
+"title": "Payment Method"
+},
+"coupon_code": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 30
+},
+{
+"type": "null"
+}
+],
+"title": "Coupon Code"
+},
+"tip_paise": {
+"type": "integer",
+"maximum": 500000.0,
+"minimum": 0.0,
+"title": "Tip Paise"
+}
+},
+"type": "object",
+"required": [
+"address_id"
+],
+"title": "QuoteIn"
+}
+},
+"POST /api/orders": {
+"required": true,
+"schema": {
+"properties": {
+"address_id": {
+"type": "string",
+"format": "uuid",
+"title": "Address Id"
+},
+"payment_method": {
+"type": "string",
+"enum": [
+"cod",
+"online"
+],
+"title": "Payment Method"
+},
+"coupon_code": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 30
+},
+{
+"type": "null"
+}
+],
+"title": "Coupon Code"
+},
+"tip_paise": {
+"type": "integer",
+"maximum": 500000.0,
+"minimum": 0.0,
+"title": "Tip Paise"
+},
+"idempotency_key": {
+"type": "string",
+"maxLength": 64,
+"minLength": 8,
+"pattern": "^[A-Za-z0-9\\-_]+$",
+"title": "Idempotency Key"
+},
+"expected_total": {
+"anyOf": [
+{
+"type": "integer"
+},
+{
+"type": "null"
+}
+],
+"title": "Expected Total"
+},
+"buyer_gstin": {
+"type": "string",
+"maxLength": 20,
+"title": "Buyer Gstin"
+},
+"buyer_business": {
+"type": "string",
+"maxLength": 160,
+"title": "Buyer Business"
+},
+"instructions": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 300
+},
+{
+"type": "null"
+}
+],
+"title": "Instructions"
+},
+"no_bag": {
+"type": "boolean",
+"title": "No Bag"
+},
+"currency": {
+"anyOf": [
+{
+"type": "string",
+"pattern": "^[A-Z]{3}$"
+},
+{
+"type": "null"
+}
+],
+"title": "Currency"
+}
+},
+"type": "object",
+"required": [
+"address_id",
+"idempotency_key"
+],
+"title": "PlaceIn"
+}
+},
+"POST /api/orders/{}/cancel": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 300,
+"minLength": 3,
+"title": "Reason"
+},
+"sub_order_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Sub Order Id"
+}
+},
+"type": "object",
+"title": "CancelIn"
+}
+},
+"POST /api/orders/{}/delivery-rating": {
+"required": true,
+"schema": {
+"properties": {
+"sub_order_id": {
+"type": "string",
+"format": "uuid",
+"title": "Sub Order Id"
+},
+"rating": {
+"type": "integer",
+"maximum": 5.0,
+"minimum": 1.0,
+"title": "Rating"
+},
+"comment": {
+"type": "string",
+"maxLength": 500,
+"title": "Comment"
+}
+},
+"type": "object",
+"required": [
+"sub_order_id",
+"rating"
+],
+"title": "DeliveryRatingIn"
+}
+},
+"POST /api/orders/{}/delivery-complaint": {
+"required": true,
+"schema": {
+"properties": {
+"sub_order_id": {
+"type": "string",
+"format": "uuid",
+"title": "Sub Order Id"
+},
+"category": {
+"type": "string",
+"enum": [
+"late",
+"rude",
+"damaged",
+"not_received",
+"extra_money",
+"other"
+],
+"title": "Category"
+},
+"text": {
+"type": "string",
+"maxLength": 1000,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"sub_order_id",
+"category"
+],
+"title": "DeliveryComplaintIn"
+}
+},
+"POST /api/payments/razorpay/verify": {
+"required": true,
+"schema": {
+"properties": {
+"razorpay_order_id": {
+"type": "string",
+"maxLength": 40,
+"title": "Razorpay Order Id"
+},
+"razorpay_payment_id": {
+"type": "string",
+"maxLength": 40,
+"title": "Razorpay Payment Id"
+},
+"razorpay_signature": {
+"type": "string",
+"maxLength": 128,
+"title": "Razorpay Signature"
+}
+},
+"type": "object",
+"required": [
+"razorpay_order_id",
+"razorpay_payment_id",
+"razorpay_signature"
+],
+"title": "VerifyIn"
+}
+},
+"POST /api/seller/register": {
+"required": true,
+"schema": {
+"properties": {
+"display_name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 3,
+"title": "Display Name"
+}
+},
+"type": "object",
+"required": [
+"display_name"
+],
+"title": "RegisterIn"
+}
+},
+"PUT /api/seller/profile": {
+"required": true,
+"schema": {
+"properties": {
+"display_name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 3,
+"title": "Display Name"
+},
+"description": {
+"type": "string",
+"maxLength": 2000,
+"title": "Description"
+},
+"legal_name": {
+"type": "string",
+"maxLength": 160,
+"minLength": 3,
+"title": "Legal Name"
+},
+"business_type": {
+"type": "string",
+"enum": [
+"individual",
+"proprietorship",
+"partnership",
+"llp",
+"private_limited",
+"public_limited"
+],
+"title": "Business Type"
+},
+"gstin": {
+"type": "string",
+"title": "Gstin"
+},
+"pan": {
+"type": "string",
+"title": "Pan"
+},
+"contact_email": {
+"type": "string",
+"format": "email",
+"title": "Contact Email"
+},
+"contact_phone": {
+"type": "string",
+"title": "Contact Phone"
+}
+},
+"type": "object",
+"required": [
+"display_name",
+"legal_name",
+"business_type",
+"gstin",
+"pan",
+"contact_email",
+"contact_phone"
+],
+"title": "ProfileIn"
+}
+},
+"PUT /api/seller/store": {
+"required": true,
+"schema": {
+"properties": {
+"display_name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 3,
+"title": "Display Name"
+},
+"description": {
+"type": "string",
+"maxLength": 2000,
+"title": "Description"
+},
+"contact_email": {
+"type": "string",
+"format": "email",
+"title": "Contact Email"
+},
+"contact_phone": {
+"type": "string",
+"title": "Contact Phone"
+}
+},
+"type": "object",
+"required": [
+"display_name",
+"contact_email",
+"contact_phone"
+],
+"title": "StoreInfoIn"
+}
+},
+"PUT /api/seller/pickup-address": {
+"required": true,
+"schema": {
+"properties": {
+"line1": {
+"type": "string",
+"maxLength": 200,
+"minLength": 3,
+"title": "Line1"
+},
+"line2": {
+"type": "string",
+"maxLength": 200,
+"title": "Line2"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"state_code": {
+"type": "string",
+"title": "State Code"
+},
+"pincode": {
+"type": "string",
+"title": "Pincode"
+}
+},
+"type": "object",
+"required": [
+"line1",
+"city",
+"state_code",
+"pincode"
+],
+"title": "PickupIn"
+}
+},
+"PUT /api/seller/bank": {
+"required": true,
+"schema": {
+"properties": {
+"holder_name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 3,
+"title": "Holder Name"
+},
+"account_number": {
+"type": "string",
+"title": "Account Number"
+},
+"confirm_account_number": {
+"type": "string",
+"title": "Confirm Account Number"
+},
+"ifsc": {
+"type": "string",
+"title": "Ifsc"
+}
+},
+"type": "object",
+"required": [
+"holder_name",
+"account_number",
+"confirm_account_number",
+"ifsc"
+],
+"title": "BankIn"
+}
+},
+"PUT /api/seller/grievance-officer": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 3,
+"title": "Name"
+},
+"email": {
+"type": "string",
+"format": "email",
+"title": "Email"
+},
+"phone": {
+"type": "string",
+"title": "Phone"
+}
+},
+"type": "object",
+"required": [
+"name",
+"email",
+"phone"
+],
+"title": "GrievanceIn"
+}
+},
+"POST /api/seller/products": {
+"required": true,
+"schema": {
+"properties": {
+"category_id": {
+"type": "string",
+"format": "uuid",
+"title": "Category Id"
+},
+"title": {
+"type": "string",
+"maxLength": 200,
+"minLength": 10,
+"title": "Title"
+},
+"brand": {
+"type": "string",
+"maxLength": 80,
+"title": "Brand"
+},
+"description": {
+"type": "string",
+"maxLength": 10000,
+"title": "Description"
+},
+"highlights": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Highlights"
+},
+"specs": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object",
+"title": "Specs"
+},
+"hsn_code": {
+"type": "string",
+"pattern": "^\\d{4}(\\d{2}){0,2}$",
+"title": "Hsn Code"
+},
+"gst_bps": {
+"type": "integer",
+"title": "Gst Bps"
+},
+"country_of_origin": {
+"type": "string",
+"maxLength": 60,
+"minLength": 2,
+"title": "Country Of Origin"
+},
+"return_window_days": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 30.0,
+"minimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Return Window Days"
+},
+"images": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 8,
+"title": "Images"
+},
+"videos": {
+"items": {
+"properties": {
+"url": {
+"type": "string",
+"title": "Url"
+},
+"poster_url": {
+"type": "string",
+"title": "Poster Url"
+},
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"duration_s": {
+"type": "integer",
+"maximum": 3600.0,
+"minimum": 0.0,
+"title": "Duration S"
+}
+},
+"type": "object",
+"required": [
+"url"
+],
+"title": "VideoIn"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Videos"
+},
+"variants": {
+"items": {
+"properties": {
+"id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Id"
+},
+"sku": {
+"type": "string",
+"maxLength": 60,
+"minLength": 1,
+"pattern": "^[A-Za-z0-9._\\-/]+$",
+"title": "Sku"
+},
+"options": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object",
+"title": "Options"
+},
+"mrp_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Mrp Paise"
+},
+"price_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Price Paise"
+},
+"stock": {
+"type": "integer",
+"maximum": 1000000.0,
+"minimum": 0.0,
+"title": "Stock"
+},
+"weight_grams": {
+"type": "integer",
+"maximum": 100000.0,
+"minimum": 1.0,
+"title": "Weight Grams"
+},
+"net_qty": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 1000000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Net Qty"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"sku",
+"mrp_paise",
+"price_paise",
+"stock"
+],
+"title": "VariantIn"
+},
+"type": "array",
+"maxItems": 50,
+"minItems": 1,
+"title": "Variants"
+},
+"details": {
+"properties": {
+"net_unit": {
+"type": "string",
+"enum": [
+"",
+"g",
+"kg",
+"ml",
+"l",
+"m",
+"pcs",
+"pair"
+],
+"title": "Net Unit"
+},
+"generic_name": {
+"type": "string",
+"maxLength": 120,
+"title": "Generic Name"
+},
+"model_number": {
+"type": "string",
+"maxLength": 60,
+"title": "Model Number"
+},
+"manufacturer": {
+"type": "string",
+"maxLength": 400,
+"title": "Manufacturer"
+},
+"packer": {
+"type": "string",
+"maxLength": 400,
+"title": "Packer"
+},
+"importer": {
+"type": "string",
+"maxLength": 400,
+"title": "Importer"
+},
+"customer_care": {
+"type": "string",
+"maxLength": 300,
+"title": "Customer Care"
+},
+"fssai_license": {
+"type": "string",
+"maxLength": 14,
+"title": "Fssai License"
+},
+"ingredients": {
+"type": "string",
+"maxLength": 2000,
+"title": "Ingredients"
+},
+"directions": {
+"type": "string",
+"maxLength": 2000,
+"title": "Directions"
+},
+"safety_info": {
+"type": "string",
+"maxLength": 2000,
+"title": "Safety Info"
+},
+"legal_disclaimer": {
+"type": "string",
+"maxLength": 1000,
+"title": "Legal Disclaimer"
+},
+"shelf_life": {
+"type": "string",
+"maxLength": 80,
+"title": "Shelf Life"
+},
+"warranty": {
+"type": "string",
+"maxLength": 300,
+"title": "Warranty"
+},
+"in_the_box": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 20,
+"title": "In The Box"
+},
+"length_cm": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 10000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Length Cm"
+},
+"width_cm": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 10000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Width Cm"
+},
+"height_cm": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 10000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Height Cm"
+},
+"key_specs": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 6,
+"title": "Key Specs"
+}
+},
+"type": "object",
+"title": "ProductDetails"
+}
+},
+"type": "object",
+"required": [
+"category_id",
+"title",
+"hsn_code",
+"gst_bps",
+"variants"
+],
+"title": "ProductIn"
+}
+},
+"PUT /api/seller/products/{}": {
+"required": true,
+"schema": {
+"properties": {
+"category_id": {
+"type": "string",
+"format": "uuid",
+"title": "Category Id"
+},
+"title": {
+"type": "string",
+"maxLength": 200,
+"minLength": 10,
+"title": "Title"
+},
+"brand": {
+"type": "string",
+"maxLength": 80,
+"title": "Brand"
+},
+"description": {
+"type": "string",
+"maxLength": 10000,
+"title": "Description"
+},
+"highlights": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Highlights"
+},
+"specs": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object",
+"title": "Specs"
+},
+"hsn_code": {
+"type": "string",
+"pattern": "^\\d{4}(\\d{2}){0,2}$",
+"title": "Hsn Code"
+},
+"gst_bps": {
+"type": "integer",
+"title": "Gst Bps"
+},
+"country_of_origin": {
+"type": "string",
+"maxLength": 60,
+"minLength": 2,
+"title": "Country Of Origin"
+},
+"return_window_days": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 30.0,
+"minimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Return Window Days"
+},
+"images": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 8,
+"title": "Images"
+},
+"videos": {
+"items": {
+"properties": {
+"url": {
+"type": "string",
+"title": "Url"
+},
+"poster_url": {
+"type": "string",
+"title": "Poster Url"
+},
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"duration_s": {
+"type": "integer",
+"maximum": 3600.0,
+"minimum": 0.0,
+"title": "Duration S"
+}
+},
+"type": "object",
+"required": [
+"url"
+],
+"title": "VideoIn"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Videos"
+},
+"variants": {
+"items": {
+"properties": {
+"id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Id"
+},
+"sku": {
+"type": "string",
+"maxLength": 60,
+"minLength": 1,
+"pattern": "^[A-Za-z0-9._\\-/]+$",
+"title": "Sku"
+},
+"options": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object",
+"title": "Options"
+},
+"mrp_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Mrp Paise"
+},
+"price_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Price Paise"
+},
+"stock": {
+"type": "integer",
+"maximum": 1000000.0,
+"minimum": 0.0,
+"title": "Stock"
+},
+"weight_grams": {
+"type": "integer",
+"maximum": 100000.0,
+"minimum": 1.0,
+"title": "Weight Grams"
+},
+"net_qty": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 1000000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Net Qty"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"sku",
+"mrp_paise",
+"price_paise",
+"stock"
+],
+"title": "VariantIn"
+},
+"type": "array",
+"maxItems": 50,
+"minItems": 1,
+"title": "Variants"
+},
+"details": {
+"properties": {
+"net_unit": {
+"type": "string",
+"enum": [
+"",
+"g",
+"kg",
+"ml",
+"l",
+"m",
+"pcs",
+"pair"
+],
+"title": "Net Unit"
+},
+"generic_name": {
+"type": "string",
+"maxLength": 120,
+"title": "Generic Name"
+},
+"model_number": {
+"type": "string",
+"maxLength": 60,
+"title": "Model Number"
+},
+"manufacturer": {
+"type": "string",
+"maxLength": 400,
+"title": "Manufacturer"
+},
+"packer": {
+"type": "string",
+"maxLength": 400,
+"title": "Packer"
+},
+"importer": {
+"type": "string",
+"maxLength": 400,
+"title": "Importer"
+},
+"customer_care": {
+"type": "string",
+"maxLength": 300,
+"title": "Customer Care"
+},
+"fssai_license": {
+"type": "string",
+"maxLength": 14,
+"title": "Fssai License"
+},
+"ingredients": {
+"type": "string",
+"maxLength": 2000,
+"title": "Ingredients"
+},
+"directions": {
+"type": "string",
+"maxLength": 2000,
+"title": "Directions"
+},
+"safety_info": {
+"type": "string",
+"maxLength": 2000,
+"title": "Safety Info"
+},
+"legal_disclaimer": {
+"type": "string",
+"maxLength": 1000,
+"title": "Legal Disclaimer"
+},
+"shelf_life": {
+"type": "string",
+"maxLength": 80,
+"title": "Shelf Life"
+},
+"warranty": {
+"type": "string",
+"maxLength": 300,
+"title": "Warranty"
+},
+"in_the_box": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 20,
+"title": "In The Box"
+},
+"length_cm": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 10000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Length Cm"
+},
+"width_cm": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 10000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Width Cm"
+},
+"height_cm": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 10000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Height Cm"
+},
+"key_specs": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 6,
+"title": "Key Specs"
+}
+},
+"type": "object",
+"title": "ProductDetails"
+}
+},
+"type": "object",
+"required": [
+"category_id",
+"title",
+"hsn_code",
+"gst_bps",
+"variants"
+],
+"title": "ProductIn"
+}
+},
+"PATCH /api/seller/variants/{}": {
+"required": true,
+"schema": {
+"properties": {
+"price_paise": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Price Paise"
+},
+"mrp_paise": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Mrp Paise"
+},
+"stock": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 1000000.0,
+"minimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Stock"
+},
+"is_active": {
+"anyOf": [
+{
+"type": "boolean"
+},
+{
+"type": "null"
+}
+],
+"title": "Is Active"
+}
+},
+"type": "object",
+"title": "VariantPatch"
+}
+},
+"POST /api/seller/orders/{}/ship": {
+"required": true,
+"schema": {
+"properties": {
+"courier_name": {
+"type": "string",
+"maxLength": 60,
+"minLength": 2,
+"title": "Courier Name"
+},
+"tracking_number": {
+"type": "string",
+"maxLength": 60,
+"minLength": 4,
+"pattern": "^[A-Za-z0-9\\-]+$",
+"title": "Tracking Number"
+},
+"tracking_url": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 2083,
+"minLength": 1,
+"format": "uri"
+},
+{
+"type": "null"
+}
+],
+"title": "Tracking Url"
+}
+},
+"type": "object",
+"required": [
+"courier_name",
+"tracking_number"
+],
+"title": "ShipIn"
+}
+},
+"POST /api/seller/orders/{}/reject": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"enum": [
+"out_of_stock",
+"cannot_ship_to_pincode",
+"pricing_error",
+"other"
+],
+"title": "Reason"
+},
+"note": {
+"type": "string",
+"maxLength": 200,
+"title": "Note"
+},
+"out_of_stock_items": {
+"items": {
+"type": "string",
+"format": "uuid"
+},
+"type": "array",
+"maxItems": 100,
+"title": "Out Of Stock Items"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "RejectIn"
+}
+},
+"POST /api/seller/orders/{}/rto": {
+"required": true,
+"schema": {
+"properties": {
+"note": {
+"type": "string",
+"maxLength": 200,
+"title": "Note"
+}
+},
+"type": "object",
+"title": "RtoIn"
+}
+},
+"PUT /api/seller/preferences": {
+"required": true,
+"schema": {
+"properties": {
+"dispatch_days": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 0.0,
+"title": "Dispatch Days"
+},
+"holiday_mode": {
+"type": "boolean",
+"title": "Holiday Mode"
+},
+"invoice_prefix": {
+"type": "string",
+"maxLength": 4,
+"pattern": "^[A-Z0-9]{0,4}$",
+"title": "Invoice Prefix"
+},
+"dispatch_cutoff": {
+"anyOf": [
+{
+"type": "string",
+"pattern": "^((?:[01]\\d|2[0-3]):[0-5]\\d)?$"
+},
+{
+"type": "null"
+}
+],
+"title": "Dispatch Cutoff"
+}
+},
+"type": "object",
+"required": [
+"dispatch_days",
+"holiday_mode"
+],
+"title": "PrefsIn"
+}
+},
+"POST /api/seller/warehouses": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 20,
+"minLength": 2,
+"pattern": "^[A-Za-z0-9\\-]+$",
+"title": "Code"
+},
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"line1": {
+"type": "string",
+"maxLength": 200,
+"minLength": 3,
+"title": "Line1"
+},
+"line2": {
+"type": "string",
+"maxLength": 200,
+"title": "Line2"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"state_code": {
+"type": "string",
+"title": "State Code"
+},
+"pincode": {
+"type": "string",
+"title": "Pincode"
+},
+"contact_name": {
+"type": "string",
+"maxLength": 120,
+"title": "Contact Name"
+},
+"contact_phone": {
+"type": "string",
+"title": "Contact Phone"
+},
+"gstin": {
+"type": "string",
+"title": "Gstin"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"code",
+"name",
+"line1",
+"city",
+"state_code",
+"pincode"
+],
+"title": "WarehouseIn"
+}
+},
+"PUT /api/seller/warehouses/{}": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 20,
+"minLength": 2,
+"pattern": "^[A-Za-z0-9\\-]+$",
+"title": "Code"
+},
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"line1": {
+"type": "string",
+"maxLength": 200,
+"minLength": 3,
+"title": "Line1"
+},
+"line2": {
+"type": "string",
+"maxLength": 200,
+"title": "Line2"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"state_code": {
+"type": "string",
+"title": "State Code"
+},
+"pincode": {
+"type": "string",
+"title": "Pincode"
+},
+"contact_name": {
+"type": "string",
+"maxLength": 120,
+"title": "Contact Name"
+},
+"contact_phone": {
+"type": "string",
+"title": "Contact Phone"
+},
+"gstin": {
+"type": "string",
+"title": "Gstin"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"code",
+"name",
+"line1",
+"city",
+"state_code",
+"pincode"
+],
+"title": "WarehouseIn"
+}
+},
+"POST /api/seller/inventory/adjust": {
+"required": true,
+"schema": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+},
+"warehouse_id": {
+"type": "string",
+"format": "uuid",
+"title": "Warehouse Id"
+},
+"mode": {
+"type": "string",
+"enum": [
+"set",
+"add",
+"remove"
+],
+"title": "Mode"
+},
+"quantity": {
+"type": "integer",
+"maximum": 1000000.0,
+"minimum": 0.0,
+"title": "Quantity"
+},
+"note": {
+"type": "string",
+"maxLength": 300,
+"title": "Note"
+}
+},
+"type": "object",
+"required": [
+"variant_id",
+"warehouse_id",
+"mode",
+"quantity"
+],
+"title": "AdjustIn"
+}
+},
+"POST /api/seller/inventory/transfer": {
+"required": true,
+"schema": {
+"properties": {
+"variant_id": {
+"type": "string",
+"format": "uuid",
+"title": "Variant Id"
+},
+"from_warehouse_id": {
+"type": "string",
+"format": "uuid",
+"title": "From Warehouse Id"
+},
+"to_warehouse_id": {
+"type": "string",
+"format": "uuid",
+"title": "To Warehouse Id"
+},
+"quantity": {
+"type": "integer",
+"maximum": 1000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Quantity"
+}
+},
+"type": "object",
+"required": [
+"variant_id",
+"from_warehouse_id",
+"to_warehouse_id",
+"quantity"
+],
+"title": "TransferIn"
+}
+},
+"POST /api/seller/returns/{}": {
+"required": true,
+"schema": {
+"properties": {
+"action": {
+"type": "string",
+"enum": [
+"approve",
+"reject",
+"picked_up",
+"received"
+],
+"title": "Action"
+},
+"note": {
+"type": "string",
+"maxLength": 2000,
+"title": "Note"
+},
+"courier": {
+"type": "string",
+"maxLength": 60,
+"title": "Courier"
+},
+"tracking": {
+"type": "string",
+"maxLength": 60,
+"title": "Tracking"
+},
+"items": {
+"items": {
+"properties": {
+"order_item_id": {
+"type": "string",
+"format": "uuid",
+"title": "Order Item Id"
+},
+"condition": {
+"type": "string",
+"enum": [
+"sellable",
+"damaged"
+],
+"title": "Condition"
+}
+},
+"type": "object",
+"required": [
+"order_item_id",
+"condition"
+],
+"title": "ItemCondition"
+},
+"type": "array",
+"maxItems": 100,
+"title": "Items"
+}
+},
+"type": "object",
+"required": [
+"action"
+],
+"title": "ReturnAction"
+}
+},
+"POST /api/seller/coupons": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 30,
+"minLength": 4,
+"pattern": "^[A-Za-z0-9]+$",
+"title": "Code"
+},
+"description": {
+"type": "string",
+"maxLength": 200,
+"title": "Description"
+},
+"kind": {
+"type": "string",
+"enum": [
+"percent",
+"flat"
+],
+"title": "Kind"
+},
+"value": {
+"type": "integer",
+"exclusiveMinimum": 0.0,
+"title": "Value"
+},
+"max_discount_paise": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Max Discount Paise"
+},
+"min_order_paise": {
+"type": "integer",
+"minimum": 0.0,
+"title": "Min Order Paise"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+},
+"usage_limit": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Usage Limit"
+},
+"per_user_limit": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 1.0,
+"title": "Per User Limit"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"code",
+"kind",
+"value"
+],
+"title": "SellerCouponIn"
+}
+},
+"PUT /api/seller/coupons/{}": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 30,
+"minLength": 4,
+"pattern": "^[A-Za-z0-9]+$",
+"title": "Code"
+},
+"description": {
+"type": "string",
+"maxLength": 200,
+"title": "Description"
+},
+"kind": {
+"type": "string",
+"enum": [
+"percent",
+"flat"
+],
+"title": "Kind"
+},
+"value": {
+"type": "integer",
+"exclusiveMinimum": 0.0,
+"title": "Value"
+},
+"max_discount_paise": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Max Discount Paise"
+},
+"min_order_paise": {
+"type": "integer",
+"minimum": 0.0,
+"title": "Min Order Paise"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+},
+"usage_limit": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Usage Limit"
+},
+"per_user_limit": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 1.0,
+"title": "Per User Limit"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"code",
+"kind",
+"value"
+],
+"title": "SellerCouponIn"
+}
+},
+"POST /api/seller/reviews/{}/report": {
+"required": true,
+"schema": {
+"type": "object",
+"additionalProperties": true,
+"title": "Body"
+}
+},
+"POST /api/seller/product-reports/{}/respond": {
+"required": true,
+"schema": {
+"properties": {
+"note": {
+"type": "string",
+"maxLength": 2000,
+"minLength": 2,
+"title": "Note"
+}
+},
+"type": "object",
+"required": [
+"note"
+],
+"title": "SellerNoteIn"
+}
+},
+"PUT /api/seller/reviews/{}/reply": {
+"required": true,
+"schema": {
+"properties": {
+"reply": {
+"type": "string",
+"maxLength": 2000,
+"title": "Reply"
+},
+"ai_run_id": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 40
+},
+{
+"type": "null"
+}
+],
+"title": "Ai Run Id"
+}
+},
+"type": "object",
+"required": [
+"reply"
+],
+"title": "ReplyIn"
+}
+},
+"POST /api/admin/sellers": {
+"required": true,
+"schema": {
+"properties": {
+"phone": {
+"type": "string",
+"title": "Phone"
+},
+"name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 2,
+"title": "Name"
+},
+"store_name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Store Name"
+},
+"email": {
+"anyOf": [
+{
+"type": "string",
+"format": "email"
+},
+{
+"type": "null"
+}
+],
+"title": "Email"
+}
+},
+"type": "object",
+"required": [
+"phone",
+"name",
+"store_name"
+],
+"title": "SellerIn"
+}
+},
+"POST /api/admin/sellers/{}/reject": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 5,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReasonIn"
+}
+},
+"POST /api/admin/sellers/{}/suspend": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 5,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReasonIn"
+}
+},
+"PUT /api/admin/sellers/{}/commission": {
+"required": true,
+"schema": {
+"properties": {
+"commission_bps_override": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 5000.0,
+"minimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Commission Bps Override"
+}
+},
+"type": "object",
+"title": "CommissionIn"
+}
+},
+"PUT /api/admin/products/{}/images": {
+"required": true,
+"schema": {
+"properties": {
+"images": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 8,
+"minItems": 1,
+"title": "Images"
+}
+},
+"type": "object",
+"required": [
+"images"
+],
+"title": "ProductImagesIn"
+}
+},
+"PUT /api/admin/products/{}/videos": {
+"required": true,
+"schema": {
+"properties": {
+"videos": {
+"items": {
+"properties": {
+"url": {
+"type": "string",
+"title": "Url"
+},
+"poster_url": {
+"type": "string",
+"title": "Poster Url"
+},
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"duration_s": {
+"type": "integer",
+"maximum": 3600.0,
+"minimum": 0.0,
+"title": "Duration S"
+}
+},
+"type": "object",
+"required": [
+"url"
+],
+"title": "VideoIn"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Videos"
+}
+},
+"type": "object",
+"title": "ProductVideosIn"
+}
+},
+"POST /api/admin/products/{}/reject": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 5,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReasonIn"
+}
+},
+"POST /api/admin/categories": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"parent_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Parent Id"
+},
+"image_url": {
+"type": "string",
+"maxLength": 400,
+"title": "Image Url"
+},
+"commission_bps": {
+"type": "integer",
+"maximum": 5000.0,
+"minimum": 0.0,
+"title": "Commission Bps"
+},
+"default_gst_bps": {
+"type": "integer",
+"title": "Default Gst Bps"
+},
+"position": {
+"type": "integer",
+"maximum": 10000.0,
+"minimum": 0.0,
+"title": "Position"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"required_details": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 20,
+"title": "Required Details"
+},
+"return_window_days": {
+"type": "integer",
+"maximum": 30.0,
+"minimum": 0.0,
+"title": "Return Window Days"
+},
+"min_return_window_days": {
+"type": "integer",
+"maximum": 30.0,
+"minimum": 0.0,
+"title": "Min Return Window Days"
+}
+},
+"type": "object",
+"required": [
+"name",
+"commission_bps",
+"default_gst_bps"
+],
+"title": "CategoryIn"
+}
+},
+"PUT /api/admin/categories/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"parent_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Parent Id"
+},
+"image_url": {
+"type": "string",
+"maxLength": 400,
+"title": "Image Url"
+},
+"commission_bps": {
+"type": "integer",
+"maximum": 5000.0,
+"minimum": 0.0,
+"title": "Commission Bps"
+},
+"default_gst_bps": {
+"type": "integer",
+"title": "Default Gst Bps"
+},
+"position": {
+"type": "integer",
+"maximum": 10000.0,
+"minimum": 0.0,
+"title": "Position"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"required_details": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 20,
+"title": "Required Details"
+},
+"return_window_days": {
+"type": "integer",
+"maximum": 30.0,
+"minimum": 0.0,
+"title": "Return Window Days"
+},
+"min_return_window_days": {
+"type": "integer",
+"maximum": 30.0,
+"minimum": 0.0,
+"title": "Min Return Window Days"
+}
+},
+"type": "object",
+"required": [
+"name",
+"commission_bps",
+"default_gst_bps"
+],
+"title": "CategoryIn"
+}
+},
+"POST /api/admin/sub-orders/{}/cancel": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 5,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReasonIn"
+}
+},
+"POST /api/admin/refunds/{}/settle": {
+"required": true,
+"schema": {
+"properties": {
+"method": {
+"type": "string",
+"enum": [
+"upi",
+"neft",
+"imps",
+"rtgs",
+"cheque",
+"other"
+],
+"title": "Method"
+},
+"reference": {
+"type": "string",
+"maxLength": 40,
+"minLength": 4,
+"pattern": "^[A-Za-z0-9\\-/ ]+$",
+"title": "Reference"
+}
+},
+"type": "object",
+"required": [
+"method",
+"reference"
+],
+"title": "SettleIn"
+}
+},
+"POST /api/admin/customers": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 2,
+"title": "Name"
+},
+"phone": {
+"type": "string",
+"title": "Phone"
+},
+"email": {
+"anyOf": [
+{
+"type": "string",
+"format": "email"
+},
+{
+"type": "null"
+}
+],
+"title": "Email"
+},
+"marketing_opt_in": {
+"type": "boolean",
+"title": "Marketing Opt In"
+}
+},
+"type": "object",
+"required": [
+"name",
+"phone"
+],
+"title": "CustomerIn"
+}
+},
+"POST /api/admin/customers/{}/block": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 1000,
+"minLength": 5,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReasonIn"
+}
+},
+"PUT /api/admin/settings": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/admin/coupons": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 30,
+"minLength": 4,
+"pattern": "^[A-Za-z0-9]+$",
+"title": "Code"
+},
+"description": {
+"type": "string",
+"maxLength": 200,
+"title": "Description"
+},
+"kind": {
+"type": "string",
+"enum": [
+"percent",
+"flat"
+],
+"title": "Kind"
+},
+"value": {
+"type": "integer",
+"exclusiveMinimum": 0.0,
+"title": "Value"
+},
+"max_discount_paise": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Max Discount Paise"
+},
+"min_order_paise": {
+"type": "integer",
+"minimum": 0.0,
+"title": "Min Order Paise"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+},
+"usage_limit": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Usage Limit"
+},
+"per_user_limit": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 1.0,
+"title": "Per User Limit"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"category_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Category Id"
+},
+"first_order_only": {
+"type": "boolean",
+"title": "First Order Only"
+},
+"show_on_checkout": {
+"type": "boolean",
+"title": "Show On Checkout"
+}
+},
+"type": "object",
+"required": [
+"code",
+"kind",
+"value"
+],
+"title": "AdminCouponIn"
+}
+},
+"PUT /api/admin/coupons/{}": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 30,
+"minLength": 4,
+"pattern": "^[A-Za-z0-9]+$",
+"title": "Code"
+},
+"description": {
+"type": "string",
+"maxLength": 200,
+"title": "Description"
+},
+"kind": {
+"type": "string",
+"enum": [
+"percent",
+"flat"
+],
+"title": "Kind"
+},
+"value": {
+"type": "integer",
+"exclusiveMinimum": 0.0,
+"title": "Value"
+},
+"max_discount_paise": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Max Discount Paise"
+},
+"min_order_paise": {
+"type": "integer",
+"minimum": 0.0,
+"title": "Min Order Paise"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+},
+"usage_limit": {
+"anyOf": [
+{
+"type": "integer",
+"exclusiveMinimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Usage Limit"
+},
+"per_user_limit": {
+"type": "integer",
+"maximum": 10.0,
+"minimum": 1.0,
+"title": "Per User Limit"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"category_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Category Id"
+},
+"first_order_only": {
+"type": "boolean",
+"title": "First Order Only"
+},
+"show_on_checkout": {
+"type": "boolean",
+"title": "Show On Checkout"
+}
+},
+"type": "object",
+"required": [
+"code",
+"kind",
+"value"
+],
+"title": "AdminCouponIn"
+}
+},
+"PUT /api/admin/review-settings": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/admin/product-reports/{}": {
+"required": true,
+"schema": {
+"properties": {
+"status": {
+"type": "string",
+"enum": [
+"resolved",
+"dismissed"
+],
+"title": "Status"
+},
+"admin_note": {
+"type": "string",
+"maxLength": 2000,
+"title": "Admin Note"
+},
+"take_down": {
+"type": "boolean",
+"title": "Take Down"
+},
+"notify_seller": {
+"type": "boolean",
+"title": "Notify Seller"
+}
+},
+"type": "object",
+"required": [
+"status"
+],
+"title": "ProductReportAction"
+}
+},
+"POST /api/admin/returns": {
+"required": true,
+"schema": {
+"properties": {
+"sub_order_id": {
+"type": "string",
+"format": "uuid",
+"title": "Sub Order Id"
+},
+"items": {
+"items": {
+"additionalProperties": true,
+"type": "object"
+},
+"type": "array",
+"maxItems": 50,
+"minItems": 1,
+"title": "Items"
+},
+"reason": {
+"type": "string",
+"title": "Reason"
+},
+"comment": {
+"type": "string",
+"maxLength": 2000,
+"title": "Comment"
+},
+"refund_upi": {
+"type": "string",
+"maxLength": 60,
+"title": "Refund Upi"
+}
+},
+"type": "object",
+"required": [
+"sub_order_id",
+"items",
+"reason"
+],
+"title": "ReturnIn"
+}
+},
+"POST /api/admin/returns/{}": {
+"required": true,
+"schema": {
+"properties": {
+"action": {
+"type": "string",
+"enum": [
+"approve",
+"reject",
+"received",
+"mark_refunded"
+],
+"title": "Action"
+},
+"note": {
+"type": "string",
+"maxLength": 2000,
+"title": "Note"
+},
+"reference": {
+"type": "string",
+"maxLength": 60,
+"title": "Reference"
+}
+},
+"type": "object",
+"required": [
+"action"
+],
+"title": "AdminReturnAction"
+}
+},
+"POST /api/admin/payouts/{}/paid": {
+"required": true,
+"schema": {
+"properties": {
+"utr": {
+"type": "string",
+"maxLength": 40,
+"minLength": 6,
+"pattern": "^[A-Za-z0-9]+$",
+"title": "Utr"
+}
+},
+"type": "object",
+"required": [
+"utr"
+],
+"title": "PaidIn"
+}
+},
+"POST /api/admin/tickets/{}/reply": {
+"required": true,
+"schema": {
+"properties": {
+"body": {
+"type": "string",
+"maxLength": 5000,
+"minLength": 1,
+"title": "Body"
+},
+"internal": {
+"type": "boolean",
+"title": "Internal"
+},
+"status": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"open",
+"awaiting_customer",
+"resolved",
+"closed"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Status"
+},
+"priority": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"low",
+"normal",
+"high",
+"urgent"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Priority"
+},
+"ai_run_id": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 40
+},
+{
+"type": "null"
+}
+],
+"title": "Ai Run Id"
+}
+},
+"type": "object",
+"required": [
+"body"
+],
+"title": "StaffReply"
+}
+},
+"PUT /api/admin/notifications/templates/{}/{}": {
+"required": true,
+"schema": {
+"properties": {
+"subject": {
+"type": "string",
+"maxLength": 200,
+"title": "Subject"
+},
+"body": {
+"type": "string",
+"maxLength": 5000,
+"title": "Body"
+},
+"provider_template": {
+"type": "string",
+"maxLength": 80,
+"title": "Provider Template"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+}
+},
+"type": "object",
+"required": [
+"body"
+],
+"title": "TemplateIn"
+}
+},
+"PUT /api/admin/storefront/site": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"PUT /api/admin/storefront/theme": {
+"required": true,
+"schema": {
+"properties": {
+"theme": {
+"type": "string",
+"maxLength": 24,
+"title": "Theme"
+},
+"settings": {
+"additionalProperties": true,
+"type": "object",
+"title": "Settings"
+}
+},
+"type": "object",
+"required": [
+"theme"
+],
+"title": "ThemeIn"
+}
+},
+"POST /api/admin/storefront/sections": {
+"required": true,
+"schema": {
+"properties": {
+"kind": {
+"type": "string",
+"title": "Kind"
+},
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"config": {
+"additionalProperties": true,
+"type": "object",
+"title": "Config"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"device": {
+"type": "string",
+"enum": [
+"all",
+"mobile",
+"desktop"
+],
+"title": "Device"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+}
+},
+"type": "object",
+"required": [
+"kind"
+],
+"title": "SectionIn"
+}
+},
+"PUT /api/admin/storefront/sections/{}": {
+"required": true,
+"schema": {
+"properties": {
+"kind": {
+"type": "string",
+"title": "Kind"
+},
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"config": {
+"additionalProperties": true,
+"type": "object",
+"title": "Config"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"device": {
+"type": "string",
+"enum": [
+"all",
+"mobile",
+"desktop"
+],
+"title": "Device"
+},
+"starts_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Starts At"
+},
+"ends_at": {
+"anyOf": [
+{
+"type": "string",
+"format": "date-time"
+},
+{
+"type": "null"
+}
+],
+"title": "Ends At"
+}
+},
+"type": "object",
+"required": [
+"kind"
+],
+"title": "SectionIn"
+}
+},
+"PUT /api/admin/storefront/sections-order": {
+"required": true,
+"schema": {
+"properties": {
+"ids": {
+"items": {
+"type": "string",
+"format": "uuid"
+},
+"type": "array",
+"title": "Ids"
+}
+},
+"type": "object",
+"required": [
+"ids"
+],
+"title": "OrderIn"
+}
+},
+"PUT /api/admin/storefront/pages/{}": {
+"required": true,
+"schema": {
+"properties": {
+"slug": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"pattern": "^[a-z0-9\\-]+$",
+"title": "Slug"
+},
+"title": {
+"type": "string",
+"maxLength": 160,
+"minLength": 2,
+"title": "Title"
+},
+"body": {
+"type": "string",
+"maxLength": 100000,
+"title": "Body"
+},
+"meta_description": {
+"type": "string",
+"maxLength": 300,
+"title": "Meta Description"
+},
+"is_published": {
+"type": "boolean",
+"title": "Is Published"
+}
+},
+"type": "object",
+"required": [
+"slug",
+"title",
+"body"
+],
+"title": "PageIn"
+}
+},
+"PUT /api/admin/me/preferences": {
+"required": true,
+"schema": {
+"properties": {
+"admin_layout": {
+"anyOf": [
+{
+"type": "string"
+},
+{
+"type": "null"
+}
+],
+"title": "Admin Layout"
+},
+"nav_collapsed": {
+"anyOf": [
+{
+"items": {
+"type": "string"
+},
+"type": "array"
+},
+{
+"type": "null"
+}
+],
+"title": "Nav Collapsed"
+},
+"sidebar_collapsed": {
+"anyOf": [
+{
+"type": "boolean"
+},
+{
+"type": "null"
+}
+],
+"title": "Sidebar Collapsed"
+}
+},
+"type": "object",
+"title": "PrefsIn"
+}
+},
+"PUT /api/admin/auth-settings": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"PATCH /api/admin/customers/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "Name"
+},
+"phone": {
+"anyOf": [
+{
+"type": "string"
+},
+{
+"type": "null"
+}
+],
+"title": "Phone"
+},
+"email": {
+"anyOf": [
+{
+"type": "string",
+"format": "email"
+},
+{
+"type": "null"
+}
+],
+"title": "Email"
+},
+"clear_email": {
+"type": "boolean",
+"title": "Clear Email"
+},
+"marketing_opt_in": {
+"anyOf": [
+{
+"type": "boolean"
+},
+{
+"type": "null"
+}
+],
+"title": "Marketing Opt In"
+}
+},
+"type": "object",
+"title": "CustomerPatch"
+}
+},
+"PUT /api/admin/sellers/{}/business": {
+"required": true,
+"schema": {
+"properties": {
+"display_name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 3,
+"title": "Display Name"
+},
+"description": {
+"type": "string",
+"maxLength": 2000,
+"title": "Description"
+},
+"legal_name": {
+"type": "string",
+"maxLength": 160,
+"minLength": 3,
+"title": "Legal Name"
+},
+"business_type": {
+"type": "string",
+"enum": [
+"individual",
+"proprietorship",
+"partnership",
+"llp",
+"private_limited",
+"public_limited"
+],
+"title": "Business Type"
+},
+"gstin": {
+"type": "string",
+"title": "Gstin"
+},
+"pan": {
+"type": "string",
+"title": "Pan"
+},
+"contact_email": {
+"type": "string",
+"format": "email",
+"title": "Contact Email"
+},
+"contact_phone": {
+"type": "string",
+"title": "Contact Phone"
+}
+},
+"type": "object",
+"required": [
+"display_name",
+"legal_name",
+"business_type",
+"gstin",
+"pan",
+"contact_email",
+"contact_phone"
+],
+"title": "ProfileIn"
+}
+},
+"PUT /api/admin/sellers/{}/pickup-address": {
+"required": true,
+"schema": {
+"properties": {
+"line1": {
+"type": "string",
+"maxLength": 200,
+"minLength": 3,
+"title": "Line1"
+},
+"line2": {
+"type": "string",
+"maxLength": 200,
+"title": "Line2"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"state_code": {
+"type": "string",
+"title": "State Code"
+},
+"pincode": {
+"type": "string",
+"title": "Pincode"
+}
+},
+"type": "object",
+"required": [
+"line1",
+"city",
+"state_code",
+"pincode"
+],
+"title": "PickupIn"
+}
+},
+"PUT /api/admin/sellers/{}/bank": {
+"required": true,
+"schema": {
+"properties": {
+"holder_name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 3,
+"title": "Holder Name"
+},
+"account_number": {
+"type": "string",
+"title": "Account Number"
+},
+"confirm_account_number": {
+"type": "string",
+"title": "Confirm Account Number"
+},
+"ifsc": {
+"type": "string",
+"title": "Ifsc"
+},
+"password": {
+"type": "string",
+"maxLength": 200,
+"title": "Password"
+},
+"totp": {
+"type": "string",
+"maxLength": 8,
+"title": "Totp"
+}
+},
+"type": "object",
+"required": [
+"holder_name",
+"account_number",
+"confirm_account_number",
+"ifsc"
+],
+"title": "StaffBankIn"
+}
+},
+"PUT /api/admin/sellers/{}/grievance-officer": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 3,
+"title": "Name"
+},
+"email": {
+"type": "string",
+"format": "email",
+"title": "Email"
+},
+"phone": {
+"type": "string",
+"title": "Phone"
+}
+},
+"type": "object",
+"required": [
+"name",
+"email",
+"phone"
+],
+"title": "GrievanceIn"
+}
+},
+"POST /api/admin/roles": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"description": {
+"type": "string",
+"maxLength": 300,
+"title": "Description"
+},
+"permissions": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 23,
+"title": "Permissions"
+}
+},
+"type": "object",
+"required": [
+"name"
+],
+"title": "RoleIn"
+}
+},
+"PUT /api/admin/roles/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"description": {
+"type": "string",
+"maxLength": 300,
+"title": "Description"
+},
+"permissions": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 23,
+"title": "Permissions"
+}
+},
+"type": "object",
+"required": [
+"name"
+],
+"title": "RoleIn"
+}
+},
+"POST /api/admin/staff": {
+"required": true,
+"schema": {
+"properties": {
+"email": {
+"type": "string",
+"format": "email",
+"title": "Email"
+},
+"name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 2,
+"title": "Name"
+},
+"role": {
+"type": "string",
+"maxLength": 40,
+"minLength": 2,
+"title": "Role"
+},
+"password": {
+"type": "string",
+"maxLength": 200,
+"minLength": 8,
+"title": "Password"
+}
+},
+"type": "object",
+"required": [
+"email",
+"name",
+"role",
+"password"
+],
+"title": "StaffIn"
+}
+},
+"PATCH /api/admin/staff/{}": {
+"required": true,
+"schema": {
+"properties": {
+"role": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 40
+},
+{
+"type": "null"
+}
+],
+"title": "Role"
+},
+"is_active": {
+"anyOf": [
+{
+"type": "boolean"
+},
+{
+"type": "null"
+}
+],
+"title": "Is Active"
+},
+"name": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "Name"
+},
+"reset_two_step": {
+"type": "boolean",
+"title": "Reset Two Step"
+}
+},
+"type": "object",
+"title": "StaffPatch"
+}
+},
+"PUT /api/admin/integrations/{}": {
+"required": true,
+"schema": {
+"properties": {
+"values": {
+"additionalProperties": true,
+"type": "object",
+"title": "Values"
+},
+"clear": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 20,
+"title": "Clear"
+},
+"enabled": {
+"anyOf": [
+{
+"type": "boolean"
+},
+{
+"type": "null"
+}
+],
+"title": "Enabled"
+},
+"password": {
+"type": "string",
+"maxLength": 200,
+"minLength": 1,
+"title": "Password"
+},
+"totp": {
+"type": "string",
+"maxLength": 8,
+"title": "Totp"
+}
+},
+"type": "object",
+"required": [
+"password"
+],
+"title": "SaveIn"
+}
+},
+"POST /api/admin/integrations/{}/test": {
+"required": true,
+"schema": {
+"properties": {
+"phone": {
+"type": "string",
+"pattern": "^([6-9][0-9]{9})?$",
+"title": "Phone"
+},
+"to": {
+"type": "string",
+"maxLength": 200,
+"title": "To"
+}
+},
+"type": "object",
+"title": "TestIn"
+}
+},
+"POST /api/admin/exports/bulk": {
+"required": true,
+"schema": {
+"properties": {
+"items": {
+"items": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 40,
+"title": "Name"
+},
+"format": {
+"type": "string",
+"maxLength": 5,
+"title": "Format"
+},
+"from": {
+"anyOf": [
+{
+"type": "string",
+"format": "date"
+},
+{
+"type": "null"
+}
+],
+"title": "From"
+},
+"to": {
+"anyOf": [
+{
+"type": "string",
+"format": "date"
+},
+{
+"type": "null"
+}
+],
+"title": "To"
+},
+"status": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 30
+},
+{
+"type": "null"
+}
+],
+"title": "Status"
+},
+"month": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 7
+},
+{
+"type": "null"
+}
+],
+"title": "Month"
+},
+"seller": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Seller"
+},
+"category": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Category"
+},
+"payment_method": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 10
+},
+{
+"type": "null"
+}
+],
+"title": "Payment Method"
+},
+"q": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 80
+},
+{
+"type": "null"
+}
+],
+"title": "Q"
+},
+"low_stock": {
+"anyOf": [
+{
+"type": "integer",
+"maximum": 100000.0,
+"minimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Low Stock"
+},
+"columns": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 60,
+"title": "Columns"
+}
+},
+"type": "object",
+"required": [
+"name"
+],
+"title": "BulkItem"
+},
+"type": "array",
+"maxItems": 20,
+"minItems": 1,
+"title": "Items"
+}
+},
+"type": "object",
+"required": [
+"items"
+],
+"title": "BulkIn"
+}
+},
+"PUT /api/admin/ai": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/admin/ai/tasks/{}": {
+"required": true,
+"schema": {
+"properties": {
+"subject_id": {
+"type": "string",
+"maxLength": 40,
+"title": "Subject Id"
+},
+"tone": {
+"type": "string",
+"enum": [
+"friendly",
+"formal",
+"apologetic"
+],
+"title": "Tone"
+},
+"intent": {
+"type": "string",
+"maxLength": 300,
+"title": "Intent"
+},
+"notes": {
+"type": "string",
+"maxLength": 4000,
+"title": "Notes"
+},
+"category_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Category Id"
+},
+"brand": {
+"type": "string",
+"maxLength": 80,
+"title": "Brand"
+}
+},
+"type": "object",
+"title": "RunIn"
+}
+},
+"POST /api/admin/ai/runs/{}/send": {
+"required": true,
+"schema": {
+"properties": {
+"subject": {
+"type": "string",
+"maxLength": 150,
+"minLength": 3,
+"title": "Subject"
+},
+"text": {
+"type": "string",
+"maxLength": 2000,
+"minLength": 10,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"subject",
+"text"
+],
+"title": "SendIn"
+}
+},
+"POST /api/admin/ai/runs/{}/{}": {
+"required": true,
+"schema": {
+"properties": {
+"final_text": {
+"type": "string",
+"maxLength": 10000,
+"title": "Final Text"
+}
+},
+"type": "object",
+"title": "FinishIn"
+}
+},
+"POST /api/seller/ai/tasks/{}": {
+"required": true,
+"schema": {
+"properties": {
+"subject_id": {
+"type": "string",
+"maxLength": 40,
+"title": "Subject Id"
+},
+"tone": {
+"type": "string",
+"enum": [
+"friendly",
+"formal",
+"apologetic"
+],
+"title": "Tone"
+},
+"intent": {
+"type": "string",
+"maxLength": 300,
+"title": "Intent"
+},
+"notes": {
+"type": "string",
+"maxLength": 4000,
+"title": "Notes"
+},
+"category_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Category Id"
+},
+"brand": {
+"type": "string",
+"maxLength": 80,
+"title": "Brand"
+}
+},
+"type": "object",
+"title": "RunIn"
+}
+},
+"POST /api/seller/ai/runs/{}/{}": {
+"required": true,
+"schema": {
+"properties": {
+"final_text": {
+"type": "string",
+"maxLength": 10000,
+"title": "Final Text"
+}
+},
+"type": "object",
+"title": "FinishIn"
+}
+},
+"POST /api/seller/ai/listing": {
+"required": true,
+"schema": {
+"properties": {
+"subject_id": {
+"type": "string",
+"maxLength": 40,
+"title": "Subject Id"
+},
+"tone": {
+"type": "string",
+"enum": [
+"friendly",
+"formal",
+"apologetic"
+],
+"title": "Tone"
+},
+"intent": {
+"type": "string",
+"maxLength": 300,
+"title": "Intent"
+},
+"notes": {
+"type": "string",
+"maxLength": 4000,
+"title": "Notes"
+},
+"category_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Category Id"
+},
+"brand": {
+"type": "string",
+"maxLength": 80,
+"title": "Brand"
+}
+},
+"type": "object",
+"title": "RunIn"
+}
+},
+"PUT /api/admin/assistant/settings": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/admin/assistant/decision-test": {
+"required": true,
+"schema": {
+"properties": {
+"text": {
+"type": "string",
+"maxLength": 2000,
+"minLength": 1,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"text"
+],
+"title": "DecisionTest"
+}
+},
+"POST /api/admin/assistant/conversations": {
+"required": true,
+"schema": {
+"properties": {
+"title": {
+"type": "string",
+"maxLength": 120,
+"title": "Title"
+},
+"context": {
+"additionalProperties": true,
+"type": "object",
+"title": "Context"
+}
+},
+"type": "object",
+"title": "ConvIn"
+}
+},
+"PATCH /api/admin/assistant/conversations/{}": {
+"required": true,
+"schema": {
+"properties": {
+"title": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 1
+},
+{
+"type": "null"
+}
+],
+"title": "Title"
+},
+"archived": {
+"anyOf": [
+{
+"type": "boolean"
+},
+{
+"type": "null"
+}
+],
+"title": "Archived"
+}
+},
+"type": "object",
+"title": "ConvPatch"
+}
+},
+"POST /api/admin/assistant/conversations/{}/messages": {
+"required": true,
+"schema": {
+"properties": {
+"text": {
+"type": "string",
+"maxLength": 8000,
+"minLength": 1,
+"title": "Text"
+},
+"upload_ids": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 5,
+"title": "Upload Ids"
+},
+"page": {
+"anyOf": [
+{
+"additionalProperties": true,
+"type": "object"
+},
+{
+"type": "null"
+}
+],
+"title": "Page"
+},
+"voice": {
+"type": "boolean",
+"title": "Voice"
+}
+},
+"type": "object",
+"required": [
+"text"
+],
+"title": "AskIn"
+}
+},
+"PUT /api/admin/assistant/memory": {
+"required": true,
+"schema": {
+"properties": {
+"notes": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 30,
+"title": "Notes"
+}
+},
+"type": "object",
+"title": "MemoryIn"
+}
+},
+"POST /api/admin/ai-providers/connections": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 60,
+"title": "Name"
+},
+"type": {
+"type": "string",
+"maxLength": 30,
+"title": "Type"
+},
+"base_url": {
+"type": "string",
+"maxLength": 300,
+"title": "Base Url"
+},
+"models": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 40,
+"title": "Models"
+},
+"enabled": {
+"type": "boolean",
+"title": "Enabled"
+},
+"timeout_s": {
+"type": "integer",
+"maximum": 300.0,
+"minimum": 5.0,
+"title": "Timeout S"
+},
+"add_keys": {
+"items": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Add Keys"
+},
+"remove_keys": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Remove Keys"
+}
+},
+"type": "object",
+"required": [
+"type"
+],
+"title": "ConnectionIn"
+}
+},
+"PUT /api/admin/ai-providers/connections/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 60,
+"title": "Name"
+},
+"type": {
+"type": "string",
+"maxLength": 30,
+"title": "Type"
+},
+"base_url": {
+"type": "string",
+"maxLength": 300,
+"title": "Base Url"
+},
+"models": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 40,
+"title": "Models"
+},
+"enabled": {
+"type": "boolean",
+"title": "Enabled"
+},
+"timeout_s": {
+"type": "integer",
+"maximum": 300.0,
+"minimum": 5.0,
+"title": "Timeout S"
+},
+"add_keys": {
+"items": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Add Keys"
+},
+"remove_keys": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 10,
+"title": "Remove Keys"
+}
+},
+"type": "object",
+"required": [
+"type"
+],
+"title": "ConnectionIn"
+}
+},
+"POST /api/admin/ai-providers/connections/{}/test": {
+"required": true,
+"schema": {
+"properties": {
+"model": {
+"type": "string",
+"maxLength": 120,
+"title": "Model"
+}
+},
+"type": "object",
+"title": "TestIn"
+}
+},
+"PUT /api/admin/ai-providers/routes": {
+"required": true,
+"schema": {
+"properties": {
+"routes": {
+"additionalProperties": {
+"items": {
+"additionalProperties": {
+"type": "string"
+},
+"type": "object"
+},
+"type": "array"
+},
+"type": "object",
+"title": "Routes"
+}
+},
+"type": "object",
+"required": [
+"routes"
+],
+"title": "RoutesIn"
+}
+},
+"POST /api/shop-assistant/sessions": {
+"required": true,
+"schema": {
+"properties": {
+"page": {
+"additionalProperties": true,
+"type": "object",
+"title": "Page"
+}
+},
+"type": "object",
+"title": "StartIn"
+}
+},
+"POST /api/shop-assistant/sessions/{}/messages": {
+"required": true,
+"schema": {
+"properties": {
+"text": {
+"type": "string",
+"maxLength": 2000,
+"minLength": 1,
+"title": "Text"
+},
+"voice": {
+"type": "boolean",
+"title": "Voice"
+},
+"page": {
+"anyOf": [
+{
+"additionalProperties": true,
+"type": "object"
+},
+{
+"type": "null"
+}
+],
+"title": "Page"
+}
+},
+"type": "object",
+"required": [
+"text"
+],
+"title": "MessageIn"
+}
+},
+"POST /api/shop-assistant/sessions/{}/ticket": {
+"required": true,
+"schema": {
+"properties": {
+"category": {
+"type": "string",
+"title": "Category"
+},
+"subject": {
+"type": "string",
+"maxLength": 200,
+"minLength": 5,
+"title": "Subject"
+},
+"message": {
+"type": "string",
+"maxLength": 5000,
+"minLength": 10,
+"title": "Message"
+},
+"order_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Order Id"
+},
+"grievance": {
+"type": "boolean",
+"title": "Grievance"
+}
+},
+"type": "object",
+"required": [
+"category",
+"subject",
+"message"
+],
+"title": "TicketIn"
+}
+},
+"POST /api/shop-assistant/sessions/{}/feedback": {
+"required": true,
+"schema": {
+"properties": {
+"value": {
+"type": "integer",
+"enum": [
+1,
+-1
+],
+"title": "Value"
+}
+},
+"type": "object",
+"required": [
+"value"
+],
+"title": "FeedbackIn"
+}
+},
+"PUT /api/admin/shop-assistant/settings": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/admin/shop-assistant/articles": {
+"required": true,
+"schema": {
+"properties": {
+"title": {
+"type": "string",
+"maxLength": 160,
+"minLength": 3,
+"title": "Title"
+},
+"body": {
+"type": "string",
+"maxLength": 5000,
+"minLength": 10,
+"title": "Body"
+},
+"keywords": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 40,
+"title": "Keywords"
+},
+"topic": {
+"type": "string",
+"title": "Topic"
+},
+"link": {
+"type": "string",
+"maxLength": 300,
+"title": "Link"
+},
+"is_published": {
+"type": "boolean",
+"title": "Is Published"
+},
+"position": {
+"type": "integer",
+"maximum": 10000.0,
+"minimum": 0.0,
+"title": "Position"
+}
+},
+"type": "object",
+"required": [
+"title",
+"body"
+],
+"title": "ArticleIn"
+}
+},
+"PUT /api/admin/shop-assistant/articles/{}": {
+"required": true,
+"schema": {
+"properties": {
+"title": {
+"type": "string",
+"maxLength": 160,
+"minLength": 3,
+"title": "Title"
+},
+"body": {
+"type": "string",
+"maxLength": 5000,
+"minLength": 10,
+"title": "Body"
+},
+"keywords": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 40,
+"title": "Keywords"
+},
+"topic": {
+"type": "string",
+"title": "Topic"
+},
+"link": {
+"type": "string",
+"maxLength": 300,
+"title": "Link"
+},
+"is_published": {
+"type": "boolean",
+"title": "Is Published"
+},
+"position": {
+"type": "integer",
+"maximum": 10000.0,
+"minimum": 0.0,
+"title": "Position"
+}
+},
+"type": "object",
+"required": [
+"title",
+"body"
+],
+"title": "ArticleIn"
+}
+},
+"POST /api/admin/shop-assistant/articles/try": {
+"required": true,
+"schema": {
+"properties": {
+"question": {
+"type": "string",
+"maxLength": 300,
+"minLength": 2,
+"title": "Question"
+}
+},
+"type": "object",
+"required": [
+"question"
+],
+"title": "TryIn"
+}
+},
+"PUT /api/delivery/me": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "Name"
+},
+"city": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 80,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "City"
+},
+"address": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 500
+},
+{
+"type": "null"
+}
+],
+"title": "Address"
+},
+"zone_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Zone Id"
+},
+"vehicle_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"bike",
+"scooter",
+"ev",
+"cycle",
+"auto",
+"van"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle Type"
+},
+"vehicle_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 15
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle No"
+},
+"license_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "License No"
+},
+"id_proof_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"aadhaar",
+"pan",
+"voter",
+"passport"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof Type"
+},
+"id_proof_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof No"
+}
+},
+"type": "object",
+"title": "ProfileIn"
+}
+},
+"POST /api/delivery/register": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "Name"
+},
+"city": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 80,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "City"
+},
+"address": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 500
+},
+{
+"type": "null"
+}
+],
+"title": "Address"
+},
+"zone_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Zone Id"
+},
+"vehicle_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"bike",
+"scooter",
+"ev",
+"cycle",
+"auto",
+"van"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle Type"
+},
+"vehicle_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 15
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle No"
+},
+"license_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "License No"
+},
+"id_proof_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"aadhaar",
+"pan",
+"voter",
+"passport"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof Type"
+},
+"id_proof_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof No"
+}
+},
+"type": "object",
+"title": "ProfileIn"
+}
+},
+"PUT /api/delivery/me/bank": {
+"required": true,
+"schema": {
+"properties": {
+"holder": {
+"type": "string",
+"maxLength": 120,
+"minLength": 3,
+"title": "Holder"
+},
+"account_number": {
+"type": "string",
+"title": "Account Number"
+},
+"confirm_account_number": {
+"type": "string",
+"title": "Confirm Account Number"
+},
+"ifsc": {
+"type": "string",
+"title": "Ifsc"
+},
+"upi": {
+"type": "string",
+"maxLength": 80,
+"title": "Upi"
+}
+},
+"type": "object",
+"required": [
+"holder"
+],
+"title": "BankIn"
+}
+},
+"POST /api/delivery/me/online": {
+"required": true,
+"schema": {
+"properties": {
+"online": {
+"type": "boolean",
+"title": "Online"
+}
+},
+"type": "object",
+"required": [
+"online"
+],
+"title": "OnlineIn"
+}
+},
+"POST /api/delivery/me/location": {
+"required": true,
+"schema": {
+"properties": {
+"lat": {
+"type": "number",
+"maximum": 90.0,
+"minimum": -90.0,
+"title": "Lat"
+},
+"lng": {
+"type": "number",
+"maximum": 180.0,
+"minimum": -180.0,
+"title": "Lng"
+},
+"accuracy": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 100000.0,
+"minimum": 0.0
+},
+{
+"type": "null"
+}
+],
+"title": "Accuracy"
+}
+},
+"type": "object",
+"required": [
+"lat",
+"lng"
+],
+"title": "LocationIn"
+}
+},
+"POST /api/delivery/offers/{}/reject": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"enum": [
+"too_far",
+"vehicle",
+"busy",
+"ending_shift",
+"unsafe",
+"other"
+],
+"title": "Reason"
+},
+"note": {
+"type": "string",
+"maxLength": 200,
+"title": "Note"
+}
+},
+"type": "object",
+"title": "RejectIn"
+}
+},
+"POST /api/delivery/trips/{}/status": {
+"required": true,
+"schema": {
+"properties": {
+"to": {
+"type": "string",
+"enum": [
+"at_store",
+"picked",
+"on_the_way",
+"reached"
+],
+"title": "To"
+},
+"code": {
+"type": "string",
+"maxLength": 8,
+"title": "Code"
+},
+"lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 90.0,
+"minimum": -90.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lat"
+},
+"lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 180.0,
+"minimum": -180.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lng"
+}
+},
+"type": "object",
+"required": [
+"to"
+],
+"title": "StepIn"
+}
+},
+"POST /api/delivery/trips/{}/fail": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"enum": [
+"not_available",
+"wrong_address",
+"refused",
+"no_cash",
+"damaged",
+"other"
+],
+"title": "Reason"
+},
+"note": {
+"type": "string",
+"maxLength": 200,
+"title": "Note"
+},
+"lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 90.0,
+"minimum": -90.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lat"
+},
+"lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 180.0,
+"minimum": -180.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lng"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "FailIn"
+}
+},
+"POST /api/delivery/trips/{}/returned": {
+"required": true,
+"schema": {
+"properties": {
+"code": {
+"type": "string",
+"maxLength": 8,
+"title": "Code"
+},
+"lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 90.0,
+"minimum": -90.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lat"
+},
+"lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 180.0,
+"minimum": -180.0
+},
+{
+"type": "null"
+}
+],
+"title": "Lng"
+}
+},
+"type": "object",
+"title": "ReturnedIn"
+}
+},
+"POST /api/admin/delivery/returns/{}/assign": {
+"required": true,
+"schema": {
+"properties": {
+"partner_id": {
+"type": "string",
+"format": "uuid",
+"title": "Partner Id"
+},
+"direct": {
+"type": "boolean",
+"title": "Direct"
+},
+"force": {
+"type": "boolean",
+"title": "Force"
+}
+},
+"type": "object",
+"required": [
+"partner_id"
+],
+"title": "PickupAssignIn"
+}
+},
+"POST /api/admin/delivery/assign": {
+"required": true,
+"schema": {
+"properties": {
+"sub_order_id": {
+"type": "string",
+"format": "uuid",
+"title": "Sub Order Id"
+},
+"partner_id": {
+"type": "string",
+"format": "uuid",
+"title": "Partner Id"
+},
+"direct": {
+"type": "boolean",
+"title": "Direct"
+},
+"force": {
+"type": "boolean",
+"title": "Force"
+}
+},
+"type": "object",
+"required": [
+"sub_order_id",
+"partner_id"
+],
+"title": "AssignIn"
+}
+},
+"POST /api/admin/delivery/assignments/{}/cancel": {
+"required": true,
+"schema": {
+"properties": {
+"reason": {
+"type": "string",
+"maxLength": 300,
+"minLength": 3,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"reason"
+],
+"title": "ReasonIn"
+}
+},
+"POST /api/admin/delivery/assignments/{}/resolve": {
+"required": true,
+"schema": {
+"properties": {
+"action": {
+"type": "string",
+"enum": [
+"retry",
+"return"
+],
+"title": "Action"
+}
+},
+"type": "object",
+"required": [
+"action"
+],
+"title": "ResolveIn"
+}
+},
+"POST /api/admin/delivery/partners/{}/deposits": {
+"required": true,
+"schema": {
+"properties": {
+"amount_paise": {
+"type": "integer",
+"maximum": 100000000.0,
+"exclusiveMinimum": 0.0,
+"title": "Amount Paise"
+},
+"method": {
+"type": "string",
+"enum": [
+"cash",
+"upi",
+"bank"
+],
+"title": "Method"
+},
+"reference": {
+"type": "string",
+"maxLength": 60,
+"title": "Reference"
+},
+"note": {
+"type": "string",
+"maxLength": 300,
+"title": "Note"
+}
+},
+"type": "object",
+"required": [
+"amount_paise"
+],
+"title": "DepositIn"
+}
+},
+"POST /api/admin/delivery/payouts/generate": {
+"required": true,
+"schema": {
+"properties": {
+"week_start": {
+"anyOf": [
+{
+"type": "string",
+"format": "date"
+},
+{
+"type": "null"
+}
+],
+"title": "Week Start"
+}
+},
+"type": "object",
+"title": "GenerateIn"
+}
+},
+"POST /api/admin/delivery/payouts/{}/paid": {
+"required": true,
+"schema": {
+"properties": {
+"reference": {
+"type": "string",
+"maxLength": 60,
+"minLength": 3,
+"title": "Reference"
+}
+},
+"type": "object",
+"required": [
+"reference"
+],
+"title": "PaidIn"
+}
+},
+"POST /api/admin/delivery/complaints/{}/resolve": {
+"required": true,
+"schema": {
+"properties": {
+"note": {
+"type": "string",
+"maxLength": 500,
+"minLength": 3,
+"title": "Note"
+}
+},
+"type": "object",
+"required": [
+"note"
+],
+"title": "ResolveComplaintIn"
+}
+},
+"POST /api/admin/delivery/partners": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 120,
+"minLength": 2,
+"title": "Name"
+},
+"city": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 80,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "City"
+},
+"address": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 500
+},
+{
+"type": "null"
+}
+],
+"title": "Address"
+},
+"zone_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Zone Id"
+},
+"vehicle_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"bike",
+"scooter",
+"ev",
+"cycle",
+"auto",
+"van"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle Type"
+},
+"vehicle_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 15
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle No"
+},
+"license_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "License No"
+},
+"id_proof_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"aadhaar",
+"pan",
+"voter",
+"passport"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof Type"
+},
+"id_proof_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof No"
+},
+"phone": {
+"type": "string",
+"maxLength": 15,
+"minLength": 10,
+"title": "Phone"
+}
+},
+"type": "object",
+"required": [
+"name",
+"phone"
+],
+"title": "NewPartnerIn"
+}
+},
+"PUT /api/admin/delivery/partners/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 120,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "Name"
+},
+"city": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 80,
+"minLength": 2
+},
+{
+"type": "null"
+}
+],
+"title": "City"
+},
+"address": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 500
+},
+{
+"type": "null"
+}
+],
+"title": "Address"
+},
+"zone_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Zone Id"
+},
+"vehicle_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"bike",
+"scooter",
+"ev",
+"cycle",
+"auto",
+"van"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle Type"
+},
+"vehicle_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 15
+},
+{
+"type": "null"
+}
+],
+"title": "Vehicle No"
+},
+"license_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "License No"
+},
+"id_proof_type": {
+"anyOf": [
+{
+"type": "string",
+"enum": [
+"aadhaar",
+"pan",
+"voter",
+"passport"
+]
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof Type"
+},
+"id_proof_no": {
+"anyOf": [
+{
+"type": "string",
+"maxLength": 20
+},
+{
+"type": "null"
+}
+],
+"title": "Id Proof No"
+}
+},
+"type": "object",
+"title": "ProfileIn"
+}
+},
+"POST /api/admin/delivery/partners/{}/kyc": {
+"required": true,
+"schema": {
+"properties": {
+"action": {
+"type": "string",
+"enum": [
+"approve",
+"reject"
+],
+"title": "Action"
+},
+"note": {
+"type": "string",
+"maxLength": 500,
+"title": "Note"
+},
+"zone_id": {
+"anyOf": [
+{
+"type": "string",
+"format": "uuid"
+},
+{
+"type": "null"
+}
+],
+"title": "Zone Id"
+}
+},
+"type": "object",
+"required": [
+"action"
+],
+"title": "KycIn"
+}
+},
+"POST /api/admin/delivery/partners/{}/active": {
+"required": true,
+"schema": {
+"properties": {
+"active": {
+"type": "boolean",
+"title": "Active"
+},
+"reason": {
+"type": "string",
+"maxLength": 300,
+"title": "Reason"
+}
+},
+"type": "object",
+"required": [
+"active"
+],
+"title": "ActiveIn"
+}
+},
+"POST /api/admin/delivery/zones": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"pincodes": {
+"anyOf": [
+{
+"items": {
+"type": "string"
+},
+"type": "array"
+},
+{
+"type": "string"
+}
+],
+"title": "Pincodes"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"center_lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 90.0,
+"minimum": -90.0
+},
+{
+"type": "null"
+}
+],
+"title": "Center Lat"
+},
+"center_lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 180.0,
+"minimum": -180.0
+},
+{
+"type": "null"
+}
+],
+"title": "Center Lng"
+}
+},
+"type": "object",
+"required": [
+"name",
+"city",
+"pincodes"
+],
+"title": "ZoneIn"
+}
+},
+"PUT /api/admin/delivery/zones/{}": {
+"required": true,
+"schema": {
+"properties": {
+"name": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "Name"
+},
+"city": {
+"type": "string",
+"maxLength": 80,
+"minLength": 2,
+"title": "City"
+},
+"pincodes": {
+"anyOf": [
+{
+"items": {
+"type": "string"
+},
+"type": "array"
+},
+{
+"type": "string"
+}
+],
+"title": "Pincodes"
+},
+"is_active": {
+"type": "boolean",
+"title": "Is Active"
+},
+"center_lat": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 90.0,
+"minimum": -90.0
+},
+{
+"type": "null"
+}
+],
+"title": "Center Lat"
+},
+"center_lng": {
+"anyOf": [
+{
+"type": "number",
+"maximum": 180.0,
+"minimum": -180.0
+},
+{
+"type": "null"
+}
+],
+"title": "Center Lng"
+}
+},
+"type": "object",
+"required": [
+"name",
+"city",
+"pincodes"
+],
+"title": "ZoneIn"
+}
+},
+"POST /api/admin/delivery/zones/{}/partners": {
+"required": true,
+"schema": {
+"properties": {
+"partner_ids": {
+"items": {
+"type": "string",
+"format": "uuid"
+},
+"type": "array",
+"maxItems": 200,
+"minItems": 1,
+"title": "Partner Ids"
+}
+},
+"type": "object",
+"required": [
+"partner_ids"
+],
+"title": "AssignZoneIn"
+}
+},
+"PUT /api/admin/delivery/settings": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"PUT /api/admin/checkout": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/admin/checkout/preview": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"POST /api/push/tokens": {
+"required": true,
+"schema": {
+"properties": {
+"token": {
+"type": "string",
+"maxLength": 400,
+"minLength": 20,
+"title": "Token"
+},
+"platform": {
+"type": "string",
+"enum": [
+"web",
+"android",
+"ios"
+],
+"title": "Platform"
+},
+"app": {
+"type": "string",
+"enum": [
+"shop",
+"delivery",
+"seller",
+"admin"
+],
+"title": "App"
+}
+},
+"type": "object",
+"required": [
+"token"
+],
+"title": "TokenIn"
+}
+},
+"POST /api/push/tokens/remove": {
+"required": true,
+"schema": {
+"properties": {
+"token": {
+"type": "string",
+"maxLength": 400,
+"minLength": 20,
+"title": "Token"
+}
+},
+"type": "object",
+"required": [
+"token"
+],
+"title": "TokenOut"
+}
+},
+"POST /api/i18n/translate": {
+"required": true,
+"schema": {
+"properties": {
+"lang": {
+"type": "string",
+"maxLength": 12,
+"minLength": 2,
+"title": "Lang"
+},
+"texts": {
+"items": {
+"type": "string"
+},
+"type": "array",
+"maxItems": 80,
+"title": "Texts"
+}
+},
+"type": "object",
+"required": [
+"lang",
+"texts"
+],
+"title": "TranslateIn"
+}
+},
+"PUT /api/admin/regional": {
+"required": true,
+"schema": {
+"additionalProperties": true,
+"type": "object",
+"title": "Body"
+}
+},
+"PUT /api/admin/translations": {
+"required": true,
+"schema": {
+"properties": {
+"lang": {
+"type": "string",
+"maxLength": 12,
+"minLength": 2,
+"title": "Lang"
+},
+"source": {
+"type": "string",
+"maxLength": 400,
+"minLength": 1,
+"title": "Source"
+},
+"text": {
+"type": "string",
+"maxLength": 1200,
+"minLength": 1,
+"title": "Text"
+}
+},
+"type": "object",
+"required": [
+"lang",
+"source",
+"text"
+],
+"title": "TranslationIn"
+}
+}
+}

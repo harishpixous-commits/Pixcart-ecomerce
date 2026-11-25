@@ -107,7 +107,8 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
 
     /// <summary>
     /// Ask the assistant; the answer streams back as server-sent events (reference: POST
-    /// /api/admin/assistant/conversations/{conv_id}/messages). Sandbox mode only: no external model is ever called.
+    /// /api/admin/assistant/conversations/{conv_id}/messages). Live mode (a model connected in Admin → AI providers)
+    /// answers on the assistant route's fallback chain; otherwise the sandbox engine answers.
     /// </summary>
     [HttpPost("assistant/conversations/{convId:guid}/messages")]
     public async Task Ask(Guid convId, AssistantAskIn body, CancellationToken cancellationToken)
@@ -125,10 +126,14 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
         JsonObject? page = null;
         if (body.Page is not null)
         {
+            // reference: {k: str(v)[:300] for k, v in (body.page or {}).items() if k in ("path", "title", "filters")} or None
             page = new JsonObject();
-            foreach (var key in new[] { "path", "title", "filters" })
-                if (body.Page[key]?.GetValue<string>() is { } v)
+            foreach (var (key, value) in body.Page)
+                if (key is "path" or "title" or "filters")
+                {
+                    var v = BAL.AssistantPrompts.PyStr(value);
                     page[key] = v.Length > 300 ? v[..300] : v;
+                }
             if (page.Count == 0) page = null;
         }
         Response.StatusCode = 200;
