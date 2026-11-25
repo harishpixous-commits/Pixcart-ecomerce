@@ -48,10 +48,12 @@ await Exec(my, "SET FOREIGN_KEY_CHECKS = 0");
 long total = 0;
 foreach (var table in tables)
 {
-    // MySQL columns that can be written (generated columns like active_sub_order_id are skipped)
+    // MySQL columns that can be written: computed columns (VIRTUAL/STORED GENERATED, like active_sub_order_id) are
+    // skipped. Not "DEFAULT_GENERATED": MySQL marks every column with a default expression that way (JSON columns,
+    // created_at), and skipping those silently dropped all JSON data and every original timestamp.
     var myCols = new Dictionary<string, string>();
     await using (var cmd = new MySqlCommand(
-        "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = @t AND extra NOT LIKE '%GENERATED%'", my))
+        "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = @t AND extra NOT LIKE '%VIRTUAL GENERATED%' AND extra NOT LIKE '%STORED GENERATED%'", my))
     {
         cmd.Parameters.AddWithValue("@t", table);
         await using var r = await cmd.ExecuteReaderAsync();
