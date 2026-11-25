@@ -38,7 +38,8 @@ public class OrdersBAL(
     AuditDAL audit,
     SettingsDAL settings,
     Utils.AppSettings app,
-    IMySqlDapperHelper db) : IOrdersBAL
+    IMySqlDapperHelper db,
+    INotifyBAL notifier) : IOrdersBAL
 {
     private static readonly char[] NumberAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray(); // no O, I
 
@@ -421,9 +422,31 @@ public class OrdersBAL(
 
     /// <summary>Reference: _announce_placed. In-app notifications now; the notifications module adds the other
     /// channels through the same templates.</summary>
-    private async Task AnnouncePlacedAsync(OrderModel order, UserModel user, IReadOnlyList<SubOrderModel> subs)
+    private async Task AnnouncePlacedAsync(OrderModel order, UserModel? user, IReadOnlyList<SubOrderModel> subs, IUnitOfWork? uow = null)
     {
-        await notify.NotifyUserAsync(user.Id, "order_placed",
+        if (uow is not null)
+        {
+            // inside the payment's unit of work: the messages are recorded if and only if the order is marked paid
+            await notifier.NotifyAsync("order_placed", user ?? await db.QueryFirstOrDefaultAsync<UserModel>("SELECT * FROM users WHERE id = @id", new { id = order.UserId }, uow.Transaction),
+                new Dictionary<string, object?> { ["order_number"] = order.Number, ["amount"] = Money.Rupees(order.GrandTotal) },
+                $"/orders/{order.Id}", uow: uow);
+            foreach (var sub in subs)
+            {
+                var seller = await catalog.GetSellerAsync(sub.SellerId);
+                var titles = string.Join(", ", (await orders.ItemsAsync([sub.Id], uow)).Select(i => i.Title));
+                await notifier.NotifySellerAsync(sub.SellerId, "seller_new_order",
+                    new Dictionary<string, object?>
+                    {
+                        ["order_number"] = sub.Number,
+                        ["items"] = titles.Length > 150 ? titles[..150] : titles,
+                        ["amount"] = Money.Rupees(sub.Total),
+                        ["dispatch_days"] = seller?.DispatchDays ?? 2,
+                    },
+                    $"/seller/orders/{sub.Id}", uow);
+            }
+            return;
+        }
+        await notify.NotifyUserAsync(user!.Id, "order_placed",
             new Dictionary<string, string> { ["order_number"] = order.Number, ["amount"] = Money.Rupees(order.GrandTotal) },
             $"/orders/{order.Id}");
         foreach (var sub in subs)
@@ -705,6 +728,9 @@ public class OrdersBAL(
                 await orders.SetSubStatusAsync(sub.Id, "placed", uow);
                 await AddEventAsync(order.Id, sub.Id, "pending_payment", "placed", "payment", $"paid via {method}", uow);
             }
+            // Every way a payment is confirmed (payment window, Razorpay's return to the site, the webhook, the shopper's
+            // or staff's status check, the expiry job) tells the shopper and each seller, recorded with this change.
+            await AnnouncePlacedAsync(order, null, await orders.SubOrdersForUpdateAsync(order.Id, uow), uow);
             return "paid";
         }
         // Paid after the order was cancelled (payment window expired): refund in full.
@@ -820,10 +846,92 @@ public class OrdersBAL(
         }
         if (result == "not_captured")
             throw new AppException("The payment was not completed. You can try again.", "payment_not_captured");
-        if (result == "paid")
-            await AnnouncePlacedAsync(order, user, await orders.SubOrdersAsync(order.Id));
         return (result, (await orders.GetOrderAsync(order.Id))!);
     }
+
+    /// <summary>
+    /// Where Razorpay sends the shopper after paying (its callback_url), used on phones and in the app, where the
+    /// shopper leaves for Google Pay, PhonePe or another UPI app (reference: razorpay_callback). Nothing in the post is
+    /// trusted: the signature is checked and the payment confirmed with Razorpay before the order is marked paid.
+    /// Returns where to send the shopper: outcome success | checking | failed | unknown, with the reason for failed.
+    /// </summary>
+    public async Task<(Guid? OrderId, string Outcome, string Reason)> PaymentReturnAsync(IReadOnlyDictionary<string, string> data)
+    {
+        static string Cut(string? v, int n) => v is null ? "" : v.Length > n ? v[..n] : v;
+        var rzpOrder = Cut(data.GetValueOrDefault("razorpay_order_id"), 40);
+        var rzpPayment = Cut(data.GetValueOrDefault("razorpay_payment_id"), 40);
+        var signature = Cut(data.GetValueOrDefault("razorpay_signature"), 128);
+        var reason = Cut(data.GetValueOrDefault("error[description]"), 300);
+        if (rzpOrder.Length == 0 && data.GetValueOrDefault("error[metadata]") is { Length: > 0 } metaText)
+        {
+            try
+            {
+                if (JsonNode.Parse(metaText) is JsonObject meta)
+                {
+                    rzpOrder = Cut(PyText(meta["order_id"]), 40);
+                    rzpPayment = Cut(PyText(meta["payment_id"]), 40);
+                }
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+        if (rzpOrder.Length == 0) return (null, "unknown", "");
+
+        JsonObject res;
+        var orderId = Guid.Empty;
+        var confirmedButNotDone = false;
+        try
+        {
+            await using (var uow = await db.BeginAsync())
+            {
+                var payment = await orders.PaymentByProviderOrderForUpdateAsync(rzpOrder, uow);
+                if (payment is null) return (null, "unknown", "");
+                orderId = payment.OrderId;
+                if (rzpPayment.Length > 0 && signature.Length > 0 && await razorpay.VerifyPaymentSignatureAsync(rzpOrder, rzpPayment, signature))
+                {
+                    var result = await ConfirmWithGatewayAsync(payment, rzpPayment, uow);
+                    await uow.CommitAsync();
+                    if (result == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+                    if (result is "paid" or "already" or "refund") return (orderId, "success", "");
+                    confirmedButNotDone = true;
+                    res = new JsonObject();
+                }
+                else
+                {
+                    // failure, a bad signature or no details: Razorpay's own records decide
+                    res = await CheckWithGatewayAsync(payment, uow);
+                    await uow.CommitAsync();
+                    if (res["result"]?.GetValue<string>() == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+                }
+            }
+            if (confirmedButNotDone)
+            {
+                await using var uow = await db.BeginAsync();
+                var payment = await orders.PaymentByProviderOrderForUpdateAsync(rzpOrder, uow) ?? throw new NotFoundException("Payment");
+                res = await CheckWithGatewayAsync(payment, uow);
+                await uow.CommitAsync();
+                if (res["result"]?.GetValue<string>() == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+            }
+        }
+        catch (Exception exc) when (exc is RazorpayBAL.GatewayException or AppException)
+        {
+            // the order page keeps checking, and the webhook also records the payment
+            return (orderId, "checking", "");
+        }
+        var word = res["result"]?.GetValue<string>();
+        if (word is "paid" or "already" or "already_paid" or "refund") return (orderId, "success", "");
+        if (res["waiting"]?.GetValue<bool>() == true && reason.Length == 0) return (orderId, "checking", "");
+        var why = reason.Length > 0 ? reason : res["reason"]?.GetValue<string>() is { Length: > 0 } r ? r : "The payment did not go through";
+        return (orderId, "failed", why);
+    }
+
+    /// <summary>Python's str(x or ""): a JSON string as itself, a number or true/false as text, null or "" as "".</summary>
+    private static string PyText(JsonNode? n) => n switch
+    {
+        null => "",
+        JsonValue v when v.TryGetValue<string>(out var t) => t,
+        JsonValue v when v.TryGetValue<bool>(out var b) => b ? "True" : "",
+        _ => n.ToJsonString(),
+    };
 
     public async Task<JsonObject> PaymentStatusAsync(UserModel user, Guid orderId)
     {

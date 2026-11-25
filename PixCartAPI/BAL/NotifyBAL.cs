@@ -21,7 +21,7 @@ public record PushItem(Guid UserId, string Title, string Body, string Link, IRea
 public class NotifyBAL(
     NotificationDAL dal, AccountDAL accounts, StaffDAL staff, SettingsDAL settings, IIntegrationBAL integrations, IAccessBAL access,
     IMailHelper mail, ISMSHelper sms, IHttpClientFactory http, IServiceScopeFactory scopes, AppSettings env, IMySqlDapperHelper db,
-    ILogger<NotifyBAL> log) : INotifyBAL, IAsyncDisposable
+    ILogger<NotifyBAL> log) : INotifyBAL, IAsyncDisposable, IDisposable
 {
     // Nontransactional pushes flush when this scope is disposed. Transactional pushes use commit callbacks.
     private readonly List<PushItem> _pushes = [];
@@ -177,9 +177,16 @@ public class NotifyBAL(
 
     public ValueTask DisposeAsync()
     {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Same as <see cref="DisposeAsync"/> (the push hand-off is synchronous), so a scope disposed with a plain
+    /// <c>using</c> works too.</summary>
+    public void Dispose()
+    {
         FlushPush();
         GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 
     // ---------------------------------------------------------------- the dispatcher

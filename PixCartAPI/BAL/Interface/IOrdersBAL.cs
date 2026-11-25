@@ -39,6 +39,8 @@ public interface IOrdersBAL
     /// not_paid | unknown, from Razorpay's records, plus the shopper's order view.</summary>
     Task<JsonObject> CheckWithGatewayAsync(PaymentModel payment,IUnitOfWork uow);
     Task<JsonObject> PaymentStatusAsync(UserModel user, Guid orderId);
+    /// <summary>Razorpay's return to the site after a payment (reference: razorpay_callback); where to send the shopper.</summary>
+    Task<(Guid? OrderId, string Outcome, string Reason)> PaymentReturnAsync(IReadOnlyDictionary<string, string> data);
 
     /// <summary>A refund in rupees as Razorpay must send it: in the currency the shopper paid, at the order's own
     /// rate (reference: refund_charge).</summary>

@@ -60,7 +60,12 @@ public static class ServiceConfiguration
                 services.AddSingleton(typeof(IHostedService), t);
         }
 
-        services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
+        services.AddControllers(o =>
+            {
+                o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+                // the reference API's sign-in/permission rule per route, applied before the body is read
+                o.Filters.Add<API.Infrastructure.ReferenceGuardFilter>();
+            })
             .AddJsonOptions(o =>
             {
                 var j = JsonHelper.Options;
@@ -68,7 +73,13 @@ public static class ServiceConfiguration
                 o.JsonSerializerOptions.DictionaryKeyPolicy = j.DictionaryKeyPolicy;
                 o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
             })
-            .ConfigureApiBehaviorOptions(o => o.InvalidModelStateResponseFactory = ValidationResponse);
+            .ConfigureApiBehaviorOptions(o =>
+            {
+                o.InvalidModelStateResponseFactory = ValidationResponse;
+                // An IFormFile parameter would otherwise add a hidden "multipart only" rule that answers 415 before
+                // any filter runs, so a visitor got 415 where the reference says 401 (sign-in is checked first there).
+                o.SuppressConsumesConstraintForFormFileParameters = true;
+            });
 
         services.AddCors(o => o.AddDefaultPolicy(p => p
             .WithOrigins(settings.CorsOriginList.ToArray())

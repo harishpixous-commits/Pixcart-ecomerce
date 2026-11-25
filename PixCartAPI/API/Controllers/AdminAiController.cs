@@ -117,9 +117,10 @@ public class AdminAiController(
     }
 
     /// <summary>Apply or discard a draft (reference: POST /api/admin/ai/runs/{run_id}/{action}).</summary>
-    [HttpPost("runs/{runId:guid}/{act:regex(^(apply|discard)$)}")]
+    [HttpPost("runs/{runId:guid}/{act}")]
     public async Task<JsonObject> Finish(Guid runId, string act, AiFinishIn body)
     {
+        API.Helpers.PathChoice.Require(act, "action", "apply", "discard");
         var user = await current.RequireAsync();
         await OwnAdminRunAsync(runId, user);
         var r = await ai.FinishAsync(runId.ToString(), act == "apply" ? "applied" : "discarded", user, body.FinalText)

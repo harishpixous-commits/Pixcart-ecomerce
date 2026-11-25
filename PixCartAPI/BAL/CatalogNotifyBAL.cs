@@ -11,7 +11,7 @@ namespace BAL;
 /// In-app notifications for the storefront's events, with the same built-in texts as the reference version
 /// (services/notify.py EVENTS) and the admin's saved templates taking precedence.
 /// </summary>
-public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL catalog, ISiteBAL site, AppSettings app) : ICatalogNotifyBAL
+public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL catalog, ISiteBAL site, AppSettings app, INotifyBAL notify) : ICatalogNotifyBAL
 {
     /// <summary>event → (in-app title, in-app body).</summary>
     public static readonly IReadOnlyDictionary<string, (string Subject, string Body)> InApp = new Dictionary<string, (string, string)>
@@ -21,11 +21,11 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["price_drop"] = ("Price dropped", "{{item}} in your wishlist is now {{price}} (was {{old_price}})."),
         ["question_answered"] = ("Your question was answered", "{{answerer}} answered your question about {{item}}."),
         ["seller_new_question"] = ("New customer question", "A shopper asked about {{item}}: {{question}}"),
-        ["order_placed"] = ("Order {{order_number}} placed", "Thanks! Your order for {{amount}} is confirmed."),
-        ["seller_new_order"] = ("New order {{order_number}}", "{{items}} — {{amount}}. Dispatch within {{dispatch_days}} days."),
-        ["order_cancelled"] = ("Order {{order_number}} cancelled", "Your order was cancelled. {{refund_note}}"),
-        ["seller_order_cancelled"] = ("Order {{order_number}} cancelled", "{{items}} — the customer cancelled {{reason}}."),
-        ["refund_processed"] = ("Refund of {{amount}} processed", "The refund for order {{order_number}} is on its way to your bank."),
+        ["order_placed"] = ("Order placed", "Your order {{order_number}} for {{amount}} is placed."),
+        ["seller_new_order"] = ("New order {{order_number}}", "{{items}} for {{amount}}. Confirm it from your orders page."),
+        ["order_cancelled"] = ("Order cancelled", "{{item}} was cancelled: {{reason}}."),
+        ["seller_order_cancelled"] = ("Order {{order_number}} cancelled", "The customer cancelled {{order_number}}. Do not ship it."),
+        ["refund_processed"] = ("Refund started", "We have refunded {{amount}} for order {{order_number}}. It reaches your account in 5 to 7 working days."),
         ["order_shipped"] = ("Package shipped", "{{item}} has shipped with {{courier}}, tracking {{awb}}."),
         ["staff_delivery_kyc"] = ("Delivery partner to verify", "{{name}} ({{city}}) submitted documents. Check them in Delivery → Partners."),
         ["security_notice"] = ("Security notice: {{what}}", "{{message}} If this was not you or someone you asked, contact {{brand}} support at once."),
@@ -69,36 +69,17 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
     public static string Render(string text, IReadOnlyDictionary<string, string> vars) =>
         Var().Replace(text, m => vars.TryGetValue(m.Groups[1].Value, out var v) ? v : "");
 
+    /// <summary>
+    /// Sends the event on every channel that has an active template (in-app, push, email, SMS, WhatsApp), with the
+    /// reference texts (Model.Constants.NotificationEvents) unless an admin changed them, exactly like the reference
+    /// notify(). Earlier this wrote the in-app row only, with its own texts (see <see cref="InApp"/>), so order and
+    /// delivery messages never reached email, SMS, WhatsApp or the phone, and five texts differed from the reference.
+    /// </summary>
     public async Task NotifyUserAsync(Guid userId, string @event, IReadOnlyDictionary<string, string> variables, string link = "")
     {
         var user = await support.GetUserAsync(userId);
         if (user is null || user.DeletedAt != null) return;
-        string subject, body;
-        var tpl = await support.GetTemplateAsync(@event, "inapp");
-        if (tpl != null)
-        {
-            if (!tpl.IsActive) return;
-            (subject, body) = (tpl.Subject, tpl.Body);
-        }
-        else if (InApp.TryGetValue(@event, out var d)) (subject, body) = d;
-        else return;
-        var business = site.PublicBusiness(await site.GetSiteAsync());
-        var vars = new Dictionary<string, string>
-        {
-            ["name"] = string.IsNullOrEmpty(user.Name) ? "there" : user.Name,
-            ["brand"] = CatalogText.AsString(business["brand"]) ?? app.AppName,
-            ["link"] = link.StartsWith('/') ? app.PublicWebUrl.TrimEnd('/') + link : link,
-        };
-        foreach (var (k, v) in variables) vars[k] = v;
-        var now = DateTimeFunctions.UtcNow();
-        var s = Render(subject, vars);
-        await support.InsertNotificationAsync(new NotificationModel
-        {
-            Id = Guid.NewGuid(), UserId = user.Id, Event = @event, Channel = "inapp", Recipient = "",
-            Subject = s.Length > 200 ? s[..200] : s, Body = Render(body, vars), Link = link.Length > 300 ? link[..300] : link,
-            Variables = new JsonObject(vars.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, kv.Value))).ToJsonString(),
-            Status = "sent", Attempts = 0, Error = "", CreatedAt = now, SentAt = now,
-        });
+        await notify.NotifyAsync(@event, user, variables.ToDictionary(kv => kv.Key, kv => (object?)kv.Value), link);
     }
 
     public async Task NotifySellerAsync(Guid sellerId, string @event, IReadOnlyDictionary<string, string> variables, string link = "")

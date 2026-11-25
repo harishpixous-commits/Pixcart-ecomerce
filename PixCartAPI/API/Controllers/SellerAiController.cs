@@ -29,9 +29,10 @@ public class SellerAiController(IAiBAL ai, ICurrentUser current) : ControllerBas
     }
 
     /// <summary>Apply or discard one of the seller's drafts (reference: POST /api/seller/ai/runs/{run_id}/{action}).</summary>
-    [HttpPost("runs/{runId:guid}/{act:regex(^(apply|discard)$)}")]
+    [HttpPost("runs/{runId:guid}/{act}")]
     public async Task<JsonObject> Finish(Guid runId, string act, AiFinishIn body)
     {
+        API.Helpers.PathChoice.Require(act, "action", "apply", "discard");
         var user = await current.RequireAsync();
         var seller = await current.RequireSellerAsync();
         var r = await ai.FinishAsync(runId.ToString(), act == "apply" ? "applied" : "discarded", user, body.FinalText, seller.Id)

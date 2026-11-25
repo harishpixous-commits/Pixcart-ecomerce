@@ -17,4 +17,9 @@
     <ProjectReference Include="..\Utils\Utils.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- the reference API's sign-in/permission rule per route (tools/schema/route_guards.py) -->
+    <EmbeddedResource Include="Infrastructure/route-guards.json" LogicalName="API.Infrastructure.route-guards.json" />
+  </ItemGroup>
+
 </Project>

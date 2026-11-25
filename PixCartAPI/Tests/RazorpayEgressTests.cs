@@ -14,6 +14,7 @@ namespace PixCartAPI.Tests;
 /// Covers the main payment paths, the auxiliary customer path, an omitted (unset) ExternalProviderMode,
 /// and a redirect attempt from a loopback mock.
 /// </summary>
+[Collection("api")] // shares the static RazorpayBAL.TransportFactory with PaymentCallbackTests: never in parallel
 public sealed class RazorpayEgressTests : IDisposable
 {
     public RazorpayEgressTests() => RazorpayBAL.TransportFactory = () => Handler;

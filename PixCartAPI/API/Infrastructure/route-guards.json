@@ -1,0 +1,2162 @@
+[
+{
+"method": "DELETE",
+"path": "/api/account",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/account/cards",
+"guard": "signed_in"
+},
+{
+"method": "DELETE",
+"path": "/api/account/cards/{token_id}",
+"guard": "signed_in"
+},
+{
+"method": "PUT",
+"path": "/api/account/consent",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/account/export",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/addresses",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/addresses",
+"guard": "signed_in"
+},
+{
+"method": "DELETE",
+"path": "/api/addresses/{address_id}",
+"guard": "signed_in"
+},
+{
+"method": "PUT",
+"path": "/api/addresses/{address_id}",
+"guard": "signed_in"
+},
+{
+"method": "PATCH",
+"path": "/api/addresses/{address_id}/instructions",
+"guard": "signed_in"
+},
+{
+"method": "PATCH",
+"path": "/api/addresses/{address_id}/location",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/admin/ads",
+"guard": "perm:marketing"
+},
+{
+"method": "POST",
+"path": "/api/admin/ads/bill",
+"guard": "perm:marketing"
+},
+{
+"method": "POST",
+"path": "/api/admin/ads/{campaign_id}/{action}",
+"guard": "perm:marketing"
+},
+{
+"method": "GET",
+"path": "/api/admin/ai",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/ai",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/ai-providers",
+"guard": "perm:ai_providers"
+},
+{
+"method": "POST",
+"path": "/api/admin/ai-providers/connections",
+"guard": "perm:ai_providers"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/ai-providers/connections/{conn_id}",
+"guard": "perm:ai_providers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/ai-providers/connections/{conn_id}",
+"guard": "perm:ai_providers"
+},
+{
+"method": "POST",
+"path": "/api/admin/ai-providers/connections/{conn_id}/test",
+"guard": "perm:ai_providers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/ai-providers/routes",
+"guard": "perm:ai_providers"
+},
+{
+"method": "GET",
+"path": "/api/admin/ai/briefs/order/{order_id}",
+"guard": "perm:orders"
+},
+{
+"method": "GET",
+"path": "/api/admin/ai/briefs/seller/{seller_id}",
+"guard": "perm:sellers"
+},
+{
+"method": "GET",
+"path": "/api/admin/ai/runs",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/ai/runs/{run_id}",
+"guard": "perm:settings"
+},
+{
+"method": "POST",
+"path": "/api/admin/ai/runs/{run_id}/send",
+"guard": "perm:orders"
+},
+{
+"method": "POST",
+"path": "/api/admin/ai/runs/{run_id}/{action}",
+"guard": "admin"
+},
+{
+"method": "POST",
+"path": "/api/admin/ai/tasks/{task}",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/analytics",
+"guard": "perm:dashboard"
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/actions/{action_id}/{decision_}",
+"guard": "perm:assistant_actions"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/conversations",
+"guard": "perm:assistant"
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/conversations",
+"guard": "perm:assistant"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/assistant/conversations/{conv_id}",
+"guard": "perm:assistant"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/conversations/{conv_id}",
+"guard": "perm:assistant"
+},
+{
+"method": "PATCH",
+"path": "/api/admin/assistant/conversations/{conv_id}",
+"guard": "perm:assistant"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/conversations/{conv_id}/download.{fmt}",
+"guard": "perm:assistant"
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/conversations/{conv_id}/messages",
+"guard": "perm:assistant"
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/decision-test",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/memory",
+"guard": "perm:assistant"
+},
+{
+"method": "PUT",
+"path": "/api/admin/assistant/memory",
+"guard": "perm:assistant"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/messages/{message_id}/download.{fmt}",
+"guard": "perm:assistant"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/settings",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/assistant/settings",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/assistant/status",
+"guard": "perm:assistant"
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/uploads",
+"guard": "perm:assistant_files"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/assistant/uploads/{upload_id}",
+"guard": "perm:assistant_files"
+},
+{
+"method": "GET",
+"path": "/api/admin/audit",
+"guard": "perm:audit"
+},
+{
+"method": "GET",
+"path": "/api/admin/auth-settings",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/auth-settings",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/categories",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/categories",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/categories/requirements",
+"guard": "perm:catalog"
+},
+{
+"method": "PUT",
+"path": "/api/admin/categories/{category_id}",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/checkout",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/checkout",
+"guard": "perm:settings"
+},
+{
+"method": "POST",
+"path": "/api/admin/checkout/preview",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/coupons",
+"guard": "perm:marketing"
+},
+{
+"method": "POST",
+"path": "/api/admin/coupons",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/coupons/{coupon_id}",
+"guard": "perm:marketing"
+},
+{
+"method": "GET",
+"path": "/api/admin/customers",
+"guard": "perm:customers"
+},
+{
+"method": "POST",
+"path": "/api/admin/customers",
+"guard": "perm:customers"
+},
+{
+"method": "GET",
+"path": "/api/admin/customers/{user_id}",
+"guard": "perm:customers"
+},
+{
+"method": "PATCH",
+"path": "/api/admin/customers/{user_id}",
+"guard": "perm:customers"
+},
+{
+"method": "POST",
+"path": "/api/admin/customers/{user_id}/block",
+"guard": "perm:customers"
+},
+{
+"method": "POST",
+"path": "/api/admin/customers/{user_id}/sign-out",
+"guard": "perm:customers"
+},
+{
+"method": "POST",
+"path": "/api/admin/customers/{user_id}/unblock",
+"guard": "perm:customers"
+},
+{
+"method": "GET",
+"path": "/api/admin/dashboard",
+"guard": "perm:dashboard"
+},
+{
+"method": "GET",
+"path": "/api/admin/deals",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/deals/{deal_id}/{action}",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/app",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/assign",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/assignments/{assignment_id}/cancel",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/assignments/{assignment_id}/resolve",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/cash",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/complaints/{complaint_id}/resolve",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/feedback",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/live",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/overview",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/packages/{sub_id}/auto-assign",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/packages/{sub_id}/candidates",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/packages/{sub_id}/courier",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/partners",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/partners/{partner_id}",
+"guard": "perm:delivery"
+},
+{
+"method": "PUT",
+"path": "/api/admin/delivery/partners/{partner_id}",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/active",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/partners/{partner_id}/bank",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/deposits",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/partners/{partner_id}/docs/{kind}",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/docs/{kind}",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/kyc",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/payouts",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/payouts/generate",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/payouts/{payout_id}/paid",
+"guard": "perm:payouts"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/queue",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/reports",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/returns/{return_id}/assign",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/returns/{return_id}/auto-assign",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/returns/{return_id}/candidates",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/returns/{return_id}/courier",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/settings",
+"guard": "perm:delivery"
+},
+{
+"method": "PUT",
+"path": "/api/admin/delivery/settings",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/trips",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/trips/{assignment_id}",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/trips/{assignment_id}/proof",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/delivery/zones",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/zones",
+"guard": "perm:delivery"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/delivery/zones/{zone_id}",
+"guard": "perm:delivery"
+},
+{
+"method": "PUT",
+"path": "/api/admin/delivery/zones/{zone_id}",
+"guard": "perm:delivery"
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/zones/{zone_id}/partners",
+"guard": "perm:delivery"
+},
+{
+"method": "GET",
+"path": "/api/admin/exports",
+"guard": "admin"
+},
+{
+"method": "POST",
+"path": "/api/admin/exports/bulk",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/exports/lookup/{kind}",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/exports/{name}.{fmt}",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/go-live",
+"guard": "perm:dashboard"
+},
+{
+"method": "GET",
+"path": "/api/admin/integrations",
+"guard": "perm:integrations"
+},
+{
+"method": "PUT",
+"path": "/api/admin/integrations/{key}",
+"guard": "perm:integrations"
+},
+{
+"method": "POST",
+"path": "/api/admin/integrations/{key}/test",
+"guard": "perm:integrations"
+},
+{
+"method": "GET",
+"path": "/api/admin/me",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/me/preferences",
+"guard": "admin"
+},
+{
+"method": "PUT",
+"path": "/api/admin/me/preferences",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/media",
+"guard": "perm:marketing"
+},
+{
+"method": "POST",
+"path": "/api/admin/media",
+"guard": "perm:marketing"
+},
+{
+"method": "GET",
+"path": "/api/admin/notifications/templates",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/notifications/templates/{event}/{channel}",
+"guard": "perm:marketing"
+},
+{
+"method": "GET",
+"path": "/api/admin/orders",
+"guard": "perm:orders"
+},
+{
+"method": "GET",
+"path": "/api/admin/orders/{order_id}",
+"guard": "perm:orders"
+},
+{
+"method": "POST",
+"path": "/api/admin/orders/{order_id}/check-payment",
+"guard": "perm:orders"
+},
+{
+"method": "GET",
+"path": "/api/admin/orders/{order_id}/fee-invoice.pdf",
+"guard": "perm:orders"
+},
+{
+"method": "GET",
+"path": "/api/admin/orders/{order_id}/returnable",
+"guard": "perm:orders"
+},
+{
+"method": "GET",
+"path": "/api/admin/payouts",
+"guard": "perm:payouts"
+},
+{
+"method": "GET",
+"path": "/api/admin/payouts/bank-file.csv",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/payouts/run",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/payouts/{payout_id}/cancel",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/payouts/{payout_id}/paid",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/payouts/{payout_id}/send",
+"guard": "perm:payouts"
+},
+{
+"method": "POST",
+"path": "/api/admin/payouts/{payout_id}/use-current-bank",
+"guard": "perm:payouts"
+},
+{
+"method": "GET",
+"path": "/api/admin/permissions",
+"guard": "perm:staff"
+},
+{
+"method": "GET",
+"path": "/api/admin/product-reports",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/product-reports/{report_id}",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/products",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/products/images",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/products/videos",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/products/{product_id}",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/products/{product_id}/ai-check",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/products/{product_id}/approve",
+"guard": "perm:catalog"
+},
+{
+"method": "PUT",
+"path": "/api/admin/products/{product_id}/images",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/products/{product_id}/reject",
+"guard": "perm:catalog"
+},
+{
+"method": "PUT",
+"path": "/api/admin/products/{product_id}/videos",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/questions",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/questions/{kind}/{post_id}/{action}",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/refunds",
+"guard": "perm:refunds"
+},
+{
+"method": "POST",
+"path": "/api/admin/refunds/{refund_id}/retry",
+"guard": "perm:refunds"
+},
+{
+"method": "POST",
+"path": "/api/admin/refunds/{refund_id}/settle",
+"guard": "perm:refunds"
+},
+{
+"method": "GET",
+"path": "/api/admin/regional",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/regional",
+"guard": "perm:settings"
+},
+{
+"method": "POST",
+"path": "/api/admin/regional/rates",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/reports/tcs",
+"guard": "perm:reports"
+},
+{
+"method": "GET",
+"path": "/api/admin/returns",
+"guard": "perm:orders"
+},
+{
+"method": "POST",
+"path": "/api/admin/returns",
+"guard": "perm:orders"
+},
+{
+"method": "POST",
+"path": "/api/admin/returns/{return_id}",
+"guard": "perm:refunds"
+},
+{
+"method": "GET",
+"path": "/api/admin/review-settings",
+"guard": "perm:catalog"
+},
+{
+"method": "PUT",
+"path": "/api/admin/review-settings",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/reviews",
+"guard": "perm:catalog"
+},
+{
+"method": "POST",
+"path": "/api/admin/reviews/{review_id}/{action}",
+"guard": "perm:catalog"
+},
+{
+"method": "GET",
+"path": "/api/admin/roles",
+"guard": "perm:staff"
+},
+{
+"method": "POST",
+"path": "/api/admin/roles",
+"guard": "perm:staff"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/roles/{code}",
+"guard": "perm:staff"
+},
+{
+"method": "PUT",
+"path": "/api/admin/roles/{code}",
+"guard": "perm:staff"
+},
+{
+"method": "GET",
+"path": "/api/admin/search",
+"guard": "admin"
+},
+{
+"method": "GET",
+"path": "/api/admin/sellers",
+"guard": "perm:sellers"
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers",
+"guard": "perm:sellers"
+},
+{
+"method": "GET",
+"path": "/api/admin/sellers/{seller_id}",
+"guard": "perm:sellers"
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers/{seller_id}/approve",
+"guard": "perm:sellers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/bank",
+"guard": "perm:sellers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/business",
+"guard": "perm:sellers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/commission",
+"guard": "perm:sellers"
+},
+{
+"method": "GET",
+"path": "/api/admin/sellers/{seller_id}/documents/{kind}",
+"guard": "perm:sellers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/grievance-officer",
+"guard": "perm:sellers"
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/pickup-address",
+"guard": "perm:sellers"
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers/{seller_id}/reject",
+"guard": "perm:sellers"
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers/{seller_id}/suspend",
+"guard": "perm:sellers"
+},
+{
+"method": "GET",
+"path": "/api/admin/settings",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/settings",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/setup-status",
+"guard": "perm:dashboard"
+},
+{
+"method": "POST",
+"path": "/api/admin/shop-app",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/shop-assistant/articles",
+"guard": "perm:shop_assistant_kb"
+},
+{
+"method": "POST",
+"path": "/api/admin/shop-assistant/articles",
+"guard": "perm:shop_assistant_kb"
+},
+{
+"method": "POST",
+"path": "/api/admin/shop-assistant/articles/try",
+"guard": "perm:shop_assistant_kb"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/shop-assistant/articles/{article_id}",
+"guard": "perm:shop_assistant_kb"
+},
+{
+"method": "PUT",
+"path": "/api/admin/shop-assistant/articles/{article_id}",
+"guard": "perm:shop_assistant_kb"
+},
+{
+"method": "GET",
+"path": "/api/admin/shop-assistant/chats",
+"guard": "perm:shop_assistant_chats"
+},
+{
+"method": "GET",
+"path": "/api/admin/shop-assistant/chats/{chat_id}",
+"guard": "perm:shop_assistant_chats"
+},
+{
+"method": "GET",
+"path": "/api/admin/shop-assistant/settings",
+"guard": "perm:shop_assistant"
+},
+{
+"method": "PUT",
+"path": "/api/admin/shop-assistant/settings",
+"guard": "perm:shop_assistant"
+},
+{
+"method": "GET",
+"path": "/api/admin/shop-assistant/stats",
+"guard": "perm:shop_assistant_chats"
+},
+{
+"method": "GET",
+"path": "/api/admin/staff",
+"guard": "perm:staff"
+},
+{
+"method": "POST",
+"path": "/api/admin/staff",
+"guard": "perm:staff"
+},
+{
+"method": "PATCH",
+"path": "/api/admin/staff/{user_id}",
+"guard": "perm:staff"
+},
+{
+"method": "GET",
+"path": "/api/admin/storefront/pages",
+"guard": "perm:marketing"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/storefront/pages/{slug}",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/pages/{slug}",
+"guard": "perm:marketing"
+},
+{
+"method": "GET",
+"path": "/api/admin/storefront/sections",
+"guard": "perm:marketing"
+},
+{
+"method": "POST",
+"path": "/api/admin/storefront/sections",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/sections-order",
+"guard": "perm:marketing"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/storefront/sections/{section_id}",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/sections/{section_id}",
+"guard": "perm:marketing"
+},
+{
+"method": "GET",
+"path": "/api/admin/storefront/site",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/site",
+"guard": "perm:marketing"
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/theme",
+"guard": "perm:marketing"
+},
+{
+"method": "POST",
+"path": "/api/admin/sub-orders/{sub_id}/cancel",
+"guard": "perm:orders"
+},
+{
+"method": "POST",
+"path": "/api/admin/sub-orders/{sub_id}/deliver",
+"guard": "perm:orders"
+},
+{
+"method": "GET",
+"path": "/api/admin/tickets",
+"guard": "perm:support"
+},
+{
+"method": "GET",
+"path": "/api/admin/tickets/{ticket_id}",
+"guard": "perm:support"
+},
+{
+"method": "POST",
+"path": "/api/admin/tickets/{ticket_id}/reply",
+"guard": "perm:support"
+},
+{
+"method": "DELETE",
+"path": "/api/admin/translations",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/admin/translations",
+"guard": "perm:settings"
+},
+{
+"method": "PUT",
+"path": "/api/admin/translations",
+"guard": "perm:settings"
+},
+{
+"method": "GET",
+"path": "/api/ads/click",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/ads/clicks/{click_id}/claim",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/ads/serve",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/alerts",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/alerts/stock",
+"guard": "signed_in"
+},
+{
+"method": "DELETE",
+"path": "/api/alerts/stock/{variant_id}",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/answers/{answer_id}/helpful",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/auth/login",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/auth/logout",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/auth/me",
+"guard": "signed_in"
+},
+{
+"method": "PATCH",
+"path": "/api/auth/me",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/auth/options",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/auth/otp/request",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/auth/otp/verify",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/auth/password",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/auth/refresh",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/auth/sessions",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/auth/sessions/sign-out-others",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/auth/totp/disable",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/auth/totp/enable",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/auth/totp/setup",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/cart",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/cart/items",
+"guard": "signed_in"
+},
+{
+"method": "PUT",
+"path": "/api/cart/items",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/cart/items/{variant_id}/save-for-later",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/cart/merge",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/cart/saved",
+"guard": "signed_in"
+},
+{
+"method": "DELETE",
+"path": "/api/cart/saved/{variant_id}",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/cart/saved/{variant_id}/move-to-cart",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/catalog/categories",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/compare",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/coupons",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/deals",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/delivery-estimate",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/home",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/platform",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/products",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/products/{slug}",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/products/{slug}/bought-together",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/products/{slug}/media",
+"guard": "optional"
+},
+{
+"method": "GET",
+"path": "/api/catalog/products/{slug}/questions",
+"guard": "optional"
+},
+{
+"method": "POST",
+"path": "/api/catalog/products/{slug}/questions",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/catalog/products/{slug}/report",
+"guard": "signed_in"
+},
+{
+"method": "DELETE",
+"path": "/api/catalog/products/{slug}/reviews",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/catalog/products/{slug}/reviews",
+"guard": "optional"
+},
+{
+"method": "PUT",
+"path": "/api/catalog/products/{slug}/reviews",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/catalog/related",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/stores/{slug}",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/suggest",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/catalog/top",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/checkout/coupons",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/checkout/quote",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/credit-notes/{return_id}.pdf",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/delivery/earnings",
+"guard": "partner:current_partner"
+},
+{
+"method": "GET",
+"path": "/api/delivery/feed",
+"guard": "partner:trip_partner"
+},
+{
+"method": "GET",
+"path": "/api/delivery/history",
+"guard": "partner:current_partner"
+},
+{
+"method": "GET",
+"path": "/api/delivery/me",
+"guard": "partner:current_partner"
+},
+{
+"method": "PUT",
+"path": "/api/delivery/me",
+"guard": "partner:current_partner"
+},
+{
+"method": "PUT",
+"path": "/api/delivery/me/bank",
+"guard": "partner:current_partner"
+},
+{
+"method": "GET",
+"path": "/api/delivery/me/docs/{kind}",
+"guard": "partner:current_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/me/docs/{kind}",
+"guard": "partner:current_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/me/location",
+"guard": "partner:trip_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/me/online",
+"guard": "partner:approved_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/me/submit",
+"guard": "partner:current_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/offers/{assignment_id}/accept",
+"guard": "partner:approved_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/offers/{assignment_id}/reject",
+"guard": "partner:approved_partner"
+},
+{
+"method": "GET",
+"path": "/api/delivery/options",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/delivery/register",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/delivery/trips/{assignment_id}",
+"guard": "partner:current_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/trips/{assignment_id}/deliver",
+"guard": "partner:trip_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/trips/{assignment_id}/fail",
+"guard": "partner:trip_partner"
+},
+{
+"method": "GET",
+"path": "/api/delivery/trips/{assignment_id}/proof",
+"guard": "partner:current_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/trips/{assignment_id}/returned",
+"guard": "partner:trip_partner"
+},
+{
+"method": "POST",
+"path": "/api/delivery/trips/{assignment_id}/status",
+"guard": "partner:trip_partner"
+},
+{
+"method": "POST",
+"path": "/api/events",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/health",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/home",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/i18n/translate",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/invoices/{sub_id}.pdf",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/notifications",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/notifications/read-all",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/orders",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/orders",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/orders/buy-again",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/orders/{order_id}",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/orders/{order_id}/cancel",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/orders/{order_id}/delivery-complaint",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/orders/{order_id}/delivery-proof/{sub_order_id}",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/orders/{order_id}/delivery-rating",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/orders/{order_id}/fee-invoice.pdf",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/orders/{order_id}/payment-status",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/orders/{order_id}/returnable",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/pages/{slug}",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/payments/razorpay/callback",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/payments/razorpay/callback",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/payments/razorpay/verify",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/payments/razorpay/webhook",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/push/config",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/push/tokens",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/push/tokens/remove",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/qa/report",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/questions/{question_id}/answers",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/regional",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/returns",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/returns/reasons",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/returns/{return_id}/cancel",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/reviews/media",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/reviews/{review_id}/helpful",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/reviews/{review_id}/report",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/seller/ads",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/ads",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/ads/products",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/ads/{campaign_id}",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/ads/{campaign_id}/report",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/ads/{campaign_id}/{action}",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/ai/listing",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/ai/runs/{run_id}/{action}",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/ai/tasks/{task}",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/analytics",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/badges",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/bank",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/categories",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/coupons",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/coupons",
+"guard": "approved_seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/coupons/{coupon_id}",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/dashboard",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/deals",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/deals",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/deals/options",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/deals/{deal_id}/cancel",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/documents/{kind}",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/documents/{kind}",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/earnings",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/exports",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/exports/lookup/category",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/exports/{name}.{fmt}",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/fees",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/grievance-officer",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/images",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/inventory",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/inventory/adjust",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/inventory/import",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/inventory/transfer",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/inventory/{variant_id}/movements",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/ledger",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/listing-requirements",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/me",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/orders",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/orders/{sub_id}",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/book-courier",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/confirm",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/deliver",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/orders/{sub_id}/invoice.pdf",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/pack",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/ready-for-pickup",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/reject",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/rto",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/ship",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/use-courier",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/payouts",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/pickup-address",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/preferences",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/preferences",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/product-reports",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/product-reports/{report_id}/respond",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/products",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/products",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/products/import",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/products/import-template.csv",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/products/{product_id}",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/products/{product_id}",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/products/{product_id}/archive",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/products/{product_id}/restore",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/products/{product_id}/submit",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/profile",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/questions",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/questions/{question_id}/answer",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/register",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/seller/returns",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/returns/{return_id}",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/returns/{return_id}/credit-note.pdf",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/reviews",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/reviews/{review_id}/reply",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/reviews/{review_id}/report",
+"guard": "approved_seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/shipping",
+"guard": "seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/store",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/submit",
+"guard": "seller"
+},
+{
+"method": "PATCH",
+"path": "/api/seller/variants/{variant_id}",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/videos",
+"guard": "seller"
+},
+{
+"method": "GET",
+"path": "/api/seller/warehouses",
+"guard": "seller"
+},
+{
+"method": "POST",
+"path": "/api/seller/warehouses",
+"guard": "approved_seller"
+},
+{
+"method": "PUT",
+"path": "/api/seller/warehouses/{wid}",
+"guard": "approved_seller"
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/actions/{action_id}/confirm",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/actions/{action_id}/dismiss",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/shop-assistant/config",
+"guard": "optional"
+},
+{
+"method": "GET",
+"path": "/api/shop-assistant/sessions",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions",
+"guard": "optional"
+},
+{
+"method": "GET",
+"path": "/api/shop-assistant/sessions/{chat_id}",
+"guard": "optional"
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions/{chat_id}/feedback",
+"guard": "optional"
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions/{chat_id}/messages",
+"guard": "optional"
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions/{chat_id}/ticket",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/site",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/support/categories",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/support/tickets",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/support/tickets",
+"guard": "signed_in"
+},
+{
+"method": "GET",
+"path": "/api/support/tickets/{ticket_id}",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/support/tickets/{ticket_id}/close",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/support/tickets/{ticket_id}/messages",
+"guard": "signed_in"
+},
+{
+"method": "POST",
+"path": "/api/webhooks/razorpayx",
+"guard": "public"
+},
+{
+"method": "POST",
+"path": "/api/webhooks/shiprocket",
+"guard": "public"
+},
+{
+"method": "GET",
+"path": "/api/wishlist",
+"guard": "signed_in"
+},
+{
+"method": "DELETE",
+"path": "/api/wishlist/{product_id}",
+"guard": "signed_in"
+},
+{
+"method": "PUT",
+"path": "/api/wishlist/{product_id}",
+"guard": "signed_in"
+}
+]

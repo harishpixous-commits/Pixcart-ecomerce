@@ -57,7 +57,7 @@ public class AdminDeliveryController(
     }
 
     /// <summary>Compatibility route retained for existing callers of this port's earlier body-ID shape.</summary>
-    [HttpPost("returns/assign"), SignedIn]
+    [HttpPost("returns/assign"), SignedIn, API.Infrastructure.RouteGuard("perm:delivery")]
     public async Task<JsonObject> AssignReturn(ReturnAssignIn body)
     {
         var user = await current.RequireAsync();
