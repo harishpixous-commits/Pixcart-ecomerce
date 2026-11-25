@@ -140,6 +140,7 @@ public static class ServiceConfiguration
 
     public static async Task UsePixCartAsync(this WebApplication app, AppSettings settings)
     {
+        settings.ValidateForProduction(); // never run production on the development secrets
         if (!settings.IsTest) await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
         app.UseMiddleware<RequestContextMiddleware>();
         app.UseMiddleware<ExceptionMiddleware>();

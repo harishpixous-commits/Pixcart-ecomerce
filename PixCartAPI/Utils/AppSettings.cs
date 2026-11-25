@@ -18,7 +18,9 @@ public class AppSettings
     public string RefreshCookieName { get; set; } = "pc_refresh";
     public bool CookieSecure { get; set; }
     /// <summary>Fernet key (urlsafe base64, 32 bytes) for PAN, bank numbers and saved integration keys. Same format as the reference version.</summary>
-    public string FieldEncryptionKey { get; set; } = "62P9O54u1vWja43dxBhdx7DlDaxYQVgo27zjo_K_4fU=";
+    public string FieldEncryptionKey { get; set; } = DevFieldEncryptionKey;
+    /// <summary>The public development key (the same default as the reference); refused in production.</summary>
+    public const string DevFieldEncryptionKey = "62P9O54u1vWja43dxBhdx7DlDaxYQVgo27zjo_K_4fU=";
 
     public int OtpLength { get; set; } = 6;
     public int OtpTtlSeconds { get; set; } = 300;
@@ -103,6 +105,26 @@ public class AppSettings
     public int TrustedProxyCount { get; set; } = 1;
 
     public bool IsProduction => Environment == "production";
+
+    /// <summary>
+    /// Refuses to start in production with the development secrets (reference: Settings.validate_for_production).
+    /// Provider keys (Razorpay, MSG91 ...) are not checked here: they can be added later in Admin → Integrations,
+    /// and Admin → Go-live shows what is still missing.
+    /// </summary>
+    public void ValidateForProduction()
+    {
+        if (!IsProduction) return;
+        var problems = new List<string>();
+        if (JwtSecret.StartsWith("dev-only", StringComparison.Ordinal) || JwtSecret.Length < 32)
+            problems.Add("App__JwtSecret must be a random value of at least 32 characters");
+        if (FieldEncryptionKey == DevFieldEncryptionKey)
+            problems.Add("App__FieldEncryptionKey must be set (a new Fernet key: 32 random bytes, urlsafe base64)");
+        if (!CookieSecure)
+            problems.Add("App__CookieSecure must be true in production");
+        if (problems.Count > 0)
+            throw new InvalidOperationException("Unsafe production configuration:" + string.Concat(problems.Select(p => System.Environment.NewLine + " - " + p)));
+    }
+
     public bool IsTest => Environment == "test";
     public IEnumerable<string> CorsOriginList => CorsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     /// <summary>Run every scheduled job once at startup (local verification; reference fires on the cadence only).</summary>
