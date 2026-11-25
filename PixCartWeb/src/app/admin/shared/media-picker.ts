@@ -157,7 +157,7 @@ const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4";
  */
 @Component({
   selector: "pc-media-grid",
-  imports: [Icon, MediaTile, NgTemplateOutlet],
+  imports: [Icon, MediaTile],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "flex flex-col gap-3" },
   template: `
