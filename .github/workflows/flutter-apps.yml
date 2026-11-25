@@ -85,7 +85,7 @@ jobs:
 
       - run: flutter pub get
       - run: flutter analyze
-      - name: Tests (each package from its own folder: fonts and golden images are found relative to it)
+      - name: "Tests (each package from its own folder, so fonts and golden images are found)"
         run: |
           set -e
           for d in packages/pixcart_core apps/customer_app apps/partner_app apps/seller_app; do
