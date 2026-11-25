@@ -151,7 +151,8 @@ public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst,
     /// <summary>Reference: tools.model_view — JSON the model sees, masked unless contacts may be shared.</summary>
     public static string ModelView(JsonNode? data, bool shareContacts, int limit = 14000)
     {
-        var text = (shareContacts ? data : Mask(data))?.ToJsonString() ?? "null";
+        // json.dumps(..., ensure_ascii=False): ", " and ": " separators, ₹ and Indian scripts as they are
+        var text = AssistantUploadBAL.PythonJson(shareContacts ? data : Mask(data), null, false);
         return text.Length > limit
             ? text[..limit] + "…\" (truncated: the screen shows the full table; summarise what is here)"
             : text;
