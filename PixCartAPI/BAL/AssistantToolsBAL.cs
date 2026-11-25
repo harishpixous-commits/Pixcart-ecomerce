@@ -9,10 +9,10 @@ using Utils;
 
 /// <summary>
 /// Runs the assistant's read-only tools and builds the screen cards (reference: app/assistant/tools.py).
-/// Only tools whose backing queries are ported are registered for execution; the status endpoint still
-/// reports all 25 from <see cref="AssistantTools"/>. Permissions are re-checked on every execution.
+/// All 25 tools of <see cref="AssistantTools"/> are registered. Permissions are re-checked on every execution.
 /// </summary>
-public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst, AiBAL ai, AssistantActionsBAL actionsBal,AssistantUploadDAL uploads)
+public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst, AiBAL ai, AssistantActionsBAL actionsBal, AssistantUploadDAL uploads,
+    BAL.Interface.IPlatformSettingsBAL platform, BAL.Interface.IIntegrationBAL integrations, TcsReportBAL tcs)
 {
     public sealed record AssistantToolContext(Guid UserId, HashSet<string> Permissions, Guid ConversationId, bool ShareContacts, List<string> UploadIds);
 
