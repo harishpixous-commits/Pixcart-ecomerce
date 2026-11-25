@@ -56,8 +56,9 @@ export class LookupSelect {
   selector: "pc-export-card",
   imports: [Icon, Pill, Field, Input, Select, Button, ErrorNote, LookupSelect],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { "[class]": "selected() ? 'flex flex-col gap-3 rounded-xl bg-white p-4 ring-peacock/50 ring-2' : 'flex flex-col gap-3 rounded-xl bg-white p-4 ring-peacock/50 '" },
+  host: { class: "contents" },
   template: `
+    <section [class]="selected() ? 'flex flex-col gap-3 rounded-xl bg-white p-4 ring-peacock/50 ring-2' : 'flex flex-col gap-3 rounded-xl bg-white p-4 ring-peacock/50 '">
     <div class="flex items-start gap-3">
       <svg [pcIcon]="FileSpreadsheet" class="mt-0.5 h-5 w-5 shrink-0 text-peacock" />
       <div class="min-w-0 flex-1">
@@ -144,6 +145,7 @@ export class LookupSelect {
         @if (tooMany()) {<p class="text-sm text-vermilion">A PDF fits {{ pdfMax() }} columns. Untick some, or choose Excel for all of them.</p>}
       </div>
     }
+    </section>
   `,
 })
 export class ExportCard {
@@ -242,10 +244,8 @@ export class ExportCard {
   host: { class: "flex flex-col gap-4" },
   template: `
     <pc-page-header [title]="title()" [sub]="sub()" [withActions]="!!d() && d()!.items.length > 1">
-      @if (d(); as d) {
-        @if (d.items.length > 1) {
-          <button actions pcButton variant="secondary" (click)="toggleAll()">{{ order().length === d.items.length ? "Clear selection" : "Select all" }}</button>
-        }
+      @if (d() && d()!.items.length > 1) {
+        <button actions pcButton variant="secondary" (click)="toggleAll()">{{ order().length === d()!.items.length ? "Clear selection" : "Select all" }}</button>
       }
     </pc-page-header>
     <pc-error-note [message]="error()" />

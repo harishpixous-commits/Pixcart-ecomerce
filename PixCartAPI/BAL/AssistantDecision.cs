@@ -5,9 +5,9 @@ using System.Text.RegularExpressions;
 
 /// <summary>
 /// The assistant's decision layer (reference: app/assistant/decision.py): keyword and pattern matching in
-/// English, Tamil, Hindi and Tanglish decides intent, areas, period and the obvious first lookup. The Laya
-/// provider makes an HTTP call in the reference; external calls are fail-closed in this environment, so a Laya
-/// configuration falls back to the built-in rules exactly as the reference does when Laya is unreachable.
+/// English, Tamil, Hindi and Tanglish decides intent, areas, period and the obvious first lookup. With the "laya"
+/// provider the question goes to the admin's Laya System 1 server (public https only, a short timeout); when it is
+/// slow, down or answers something unusable, the rules answer instead, as in the reference.
 /// </summary>
 public static class AssistantDecision
 {
@@ -210,21 +210,101 @@ public static class AssistantDecision
         return d with { Tools = tools, Prefetch = prefetchList, VoiceFast = voiceFast };
     }
 
-    /// <summary>
-    /// Reference: decision.decide. The "laya" provider would POST the question to the configured server; that
-    /// call is never made here, so Laya configurations fall back to the rules, the reference's own behaviour
-    /// when Laya is unreachable (source is reported "rules" either way).
-    /// </summary>
-    public static Decision Decide(string text, JsonObject cfg, IReadOnlySet<string> available, bool hasUpload)
+    // ----------------------------------------------------------------------------- Laya
+
+    /// <summary>Reference: decision.LAYA_QUESTIONS.</summary>
+    private static JsonObject LayaQuestions() => new()
     {
-        var provider = cfg["provider"]?.GetValue<string>() ?? "rules";
+        ["intent"] = new JsonObject
+        {
+            ["type"] = "choice", ["instructions"] = "What does the marketplace admin want?",
+            ["criteria"] = new JsonObject
+            {
+                ["data_question"] = "a number, list, status or comparison from the shop's data",
+                ["change_request"] = "change something: approve, reject, cancel, block, create, update, reply",
+                ["export_request"] = "download a report or spreadsheet", ["file_analysis"] = "analyse an uploaded file",
+                ["how_to"] = "how to do something in the admin panel", ["small_talk"] = "greeting or thanks",
+            },
+        },
+        ["area"] = new JsonObject
+        {
+            ["type"] = "choice", ["instructions"] = "Which part of the marketplace is it about?",
+            ["criteria"] = new JsonObject
+            {
+                ["sales"] = "sales, revenue, money earned", ["orders"] = "orders, deliveries, cancellations", ["customers"] = "customers and buyers",
+                ["catalog"] = "products, stock, prices, reviews", ["sellers"] = "sellers and stores", ["returns"] = "returns and refunds",
+                ["support"] = "support tickets and complaints", ["payouts"] = "payments to sellers", ["marketing"] = "coupons, offers, announcements",
+                ["reports"] = "GST, TCS and tax reports", ["settings"] = "settings, integrations, launch", ["overview"] = "what needs attention overall",
+            },
+        },
+    };
+
+    private static string Str(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+
+    /// <summary>
+    /// Reference: decision.laya — asks the Laya server (POST {laya_url}{laya_path} with {"state", "questions"}, the
+    /// bearer token when one is set, the configured timeout). Null when the address is not a public https one, or
+    /// the server is slow, down or answers something unusable: the rules answer then.
+    /// <paramref name="cfg"/> carries the decrypted token (settings.get(reveal=True)).
+    /// </summary>
+    public static async Task<Decision?> LayaAsync(string text, JsonObject cfg, CancellationToken ct = default)
+    {
+        if (!AssistantBAL.LayaAllowed(Str(cfg["laya_url"])))
+            return null; // not a public https address (saved before that rule): staff questions never go there
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var url = Str(cfg["laya_url"]).TrimEnd('/') + (Str(cfg["laya_path"]) is { Length: > 0 } path ? path : "/predict");
+        string intentChoice, areaChoice;
+        double conf;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMilliseconds(BAL.AI.J.Double(cfg["laya_timeout_ms"]) ?? 600));
+            using var req = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(
+                    new JsonObject { ["state"] = text.Length > 4000 ? text[..4000] : text, ["questions"] = LayaQuestions() }.ToJsonString(BAL.AI.J.Relaxed),
+                    System.Text.Encoding.UTF8, "application/json"),
+            };
+            if (Str(cfg["laya_key"]) is { Length: > 0 } key)
+                req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {key}");
+            using var http = BAL.AI.LlmTransport.LayaClient();
+            using var r = await http.SendAsync(req, timeout.Token);
+            r.EnsureSuccessStatusCode();
+            var body = JsonNode.Parse(await r.Content.ReadAsStringAsync(timeout.Token)) as JsonObject;
+            var answers = body?["answers"] as JsonObject ?? [];
+            var intent = answers["intent"] as JsonObject ?? [];
+            var area = answers["area"] as JsonObject ?? [];
+            intentChoice = Str(intent["choice"]);
+            areaChoice = Str(area["choice"]);
+            if (!Intents.Contains(intentChoice) || !Domains.Contains(areaChoice))
+                return null;
+            conf = Math.Min(BAL.AI.J.Double(intent["confidence"]) ?? 0, BAL.AI.J.Double(area["confidence"]) ?? 0);
+        }
+        catch (Exception exc) when (exc is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException
+                                        or InvalidOperationException or FormatException && !ct.IsCancellationRequested)
+        {
+            return null; // reference: log.info("laya decision unavailable (...); using rules")
+        }
+        var b = Rules(text);
+        var domains = new List<string> { areaChoice };
+        domains.AddRange(b.DomainList.Where(x => x != areaChoice));
+        return new Decision(intentChoice, domains.Take(3).ToList(), b.Period, conf, "laya",
+            System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, null, [], false, b.Entities);
+    }
+
+    /// <summary>
+    /// Reference: decision.decide — "off" offers every tool and prefetches nothing; "laya" asks the Laya server (not for
+    /// questions with files) and falls back to the rules; "rules" is the built-in reading. Then <see cref="Plan"/>.
+    /// </summary>
+    public static async Task<Decision> DecideAsync(string text, JsonObject cfg, IReadOnlySet<string> available, bool hasUpload, CancellationToken ct = default)
+    {
+        var provider = cfg["provider"] is null ? "rules" : Str(cfg["provider"]);
         if (provider == "off")
             return new Decision("data_question", [], DetectPeriod(text.ToLowerInvariant()), 0.0, "off", 0.0, null, [], false, new());
-        // provider "laya": network call skipped (fail-closed); the rules answer instead, as on a Laya outage.
-        var d = Rules(text, hasUpload);
-        return Plan(d,
-            cfg["min_confidence"] is JsonValue mc && mc.TryGetValue<double>(out var c) ? c : 0.55,
-            cfg["prefetch"] is JsonValue pf && pf.TryGetValue<bool>(out var p) ? p : true,
-            available);
+        Decision? d = null;
+        if (provider == "laya" && Str(cfg["laya_url"]).Length > 0 && !hasUpload)
+            d = await LayaAsync(text, cfg, ct);
+        d ??= Rules(text, hasUpload);
+        return Plan(d, BAL.AI.J.Double(cfg["min_confidence"]) ?? 0.55, cfg["prefetch"] is null || BAL.AI.J.Truthy(cfg["prefetch"]), available);
     }
 }

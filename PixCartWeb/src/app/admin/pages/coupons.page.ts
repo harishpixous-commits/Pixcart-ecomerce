@@ -1,16 +1,13 @@
-/* Placeholder for frontend/src/app/admin/coupons/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* Admin → Coupons (platform-funded). Port of frontend/src/app/admin/coupons/page.tsx. */
 
 import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { PageHeader } from "../../shared/portal-shell";
+import { CouponManager } from "../../shared/portal/coupons";
 
 @Component({
   selector: "pc-admin-coupons-page",
-  imports: [PageHeader],
+  imports: [CouponManager],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
-  template: `
-    <pc-page-header title="Coupons" sub="Reference: frontend/src/app/admin/coupons/page.tsx" />
-    <div class="rounded-xl bg-white p-6 text-ink-soft" data-testid="placeholder-page">This page is ported by its module.</div>
-  `,
+  template: `<pc-coupon-manager base="/api/admin/coupons" [admin]="true" />`,
 })
 export class AdminCouponsPage {}

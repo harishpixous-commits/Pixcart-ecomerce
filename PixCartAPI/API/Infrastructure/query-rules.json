@@ -1,30 +1,156 @@
 {
+"DELETE /api/account/cards/{}": [
+{
+"in": "path",
+"name": "token_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/addresses/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "address_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/ai-providers/connections/{}": [
+{
+"in": "path",
+"name": "conn_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/assistant/conversations/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "conv_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/assistant/uploads/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "upload_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/delivery/zones/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "zone_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/roles/{}": [
+{
+"in": "path",
+"name": "code",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/shop-assistant/articles/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "article_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/storefront/pages/{}": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/admin/storefront/sections/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "section_id",
+"required": true,
+"type": "string"
+}
+],
 "DELETE /api/admin/translations": [
 {
+"in": "query",
 "max_length": 12,
 "name": "lang",
 "required": true,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 40,
 "name": "id",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "only_ai",
 "required": false,
 "type": "boolean"
 }
 ],
+"DELETE /api/alerts/stock/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "variant_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/cart/saved/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "variant_id",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/catalog/products/{}/reviews": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"DELETE /api/wishlist/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/ads": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -32,32 +158,64 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/ai/briefs/order/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/ai/briefs/seller/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/ai/runs": [
 {
+"in": "query",
 "name": "task",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/ai/runs/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "run_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/analytics": [
 {
 "ge": 7,
+"in": "query",
 "le": 365,
 "name": "days",
 "required": false,
@@ -66,18 +224,60 @@
 ],
 "GET /api/admin/assistant/conversations": [
 {
+"in": "query",
 "name": "archived",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "name": "q",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/admin/assistant/conversations/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "conv_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/assistant/conversations/{}/download.{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "conv_id",
+"required": true,
+"type": "string"
+},
+{
+"in": "path",
+"name": "fmt",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/assistant/messages/{}/download.{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "message_id",
+"required": true,
+"type": "string"
+},
+{
+"in": "path",
+"name": "fmt",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/audit": [
 {
+"in": "query",
 "max_length": 64,
 "name": "entity_id",
 "required": false,
@@ -85,6 +285,7 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -92,6 +293,7 @@
 ],
 "GET /api/admin/customers": [
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -99,12 +301,14 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
@@ -118,18 +322,30 @@
 "staff",
 "blocked"
 ],
+"in": "query",
 "name": "kind",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/admin/customers/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "user_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/deals": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -137,6 +353,7 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -148,6 +365,7 @@
 "ratings",
 "complaints"
 ],
+"in": "query",
 "name": "kind",
 "required": false,
 "type": "string"
@@ -158,25 +376,38 @@
 "open",
 "resolved"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/delivery/packages/{}/candidates": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/delivery/partners": [
 {
+"in": "query",
 "max_length": 12,
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -184,20 +415,56 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "zone_id",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "online",
 "required": false,
 "type": "boolean"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
+}
+],
+"GET /api/admin/delivery/partners/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/delivery/partners/{}/bank": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/delivery/partners/{}/docs/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+},
+{
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
 }
 ],
 "GET /api/admin/delivery/payouts": [
@@ -207,12 +474,14 @@
 "pending",
 "paid"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -226,6 +495,7 @@
 "failed",
 "returns"
 ],
+"in": "query",
 "name": "tab",
 "required": false,
 "type": "string"
@@ -234,20 +504,32 @@
 "GET /api/admin/delivery/reports": [
 {
 "ge": 7,
+"in": "query",
 "le": 180,
 "name": "days",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/delivery/returns/{}/candidates": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/delivery/trips": [
 {
+"in": "query",
 "max_length": 12,
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 60,
 "name": "q",
 "required": false,
@@ -255,19 +537,46 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "partner_id",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/delivery/trips/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/delivery/trips/{}/proof": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/exports/lookup/{}": [
 {
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+},
+{
+"in": "query",
 "max_length": 60,
 "name": "q",
 "required": false,
@@ -276,24 +585,40 @@
 ],
 "GET /api/admin/exports/{}.{}": [
 {
+"in": "path",
+"name": "name",
+"required": true,
+"type": "string"
+},
+{
+"in": "path",
+"name": "fmt",
+"required": true,
+"type": "string"
+},
+{
 "format": "date",
+"in": "query",
 "name": "from",
 "required": false,
 "type": "string"
 },
 {
 "format": "date",
+"in": "query",
 "name": "to",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 30,
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 7,
 "name": "month",
 "required": false,
@@ -301,23 +626,27 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller",
 "required": false,
 "type": "string"
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "category",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 10,
 "name": "payment_method",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -325,12 +654,14 @@
 },
 {
 "ge": 0,
+"in": "query",
 "le": 100000,
 "name": "low_stock",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "item_type": "string",
 "max_items": 60,
 "name": "columns",
@@ -344,6 +675,7 @@
 "image",
 "video"
 ],
+"in": "query",
 "name": "kind",
 "required": false,
 "type": "string"
@@ -356,11 +688,13 @@
 "placed",
 "cancelled"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 60,
 "name": "q",
 "required": false,
@@ -371,6 +705,7 @@
 "cod",
 "online"
 ],
+"in": "query",
 "name": "payment_method",
 "required": false,
 "type": "string"
@@ -384,6 +719,7 @@
 "refunded",
 "partially_refunded"
 ],
+"in": "query",
 "name": "payment_status",
 "required": false,
 "type": "string"
@@ -398,29 +734,34 @@
 "delivered",
 "cancelled"
 ],
+"in": "query",
 "name": "package_status",
 "required": false,
 "type": "string"
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller_id",
 "required": false,
 "type": "string"
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "customer_id",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "date_from",
 "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "date_to",
 "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
 "required": false,
@@ -428,32 +769,64 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/orders/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/orders/{}/fee-invoice.pdf": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/orders/{}/returnable": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/payouts": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller_id",
 "required": false,
 "type": "string"
@@ -466,16 +839,19 @@
 "resolved",
 "dismissed"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "reason",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -483,12 +859,14 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller_id",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -503,11 +881,13 @@
 "rejected",
 "archived"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 100,
 "name": "q",
 "required": false,
@@ -515,22 +895,34 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller_id",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
 "type": "integer"
+}
+],
+"GET /api/admin/products/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
 }
 ],
 "GET /api/admin/questions": [
@@ -540,11 +932,13 @@
 "published",
 "hidden"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -552,6 +946,7 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -564,17 +959,20 @@
 "processed",
 "failed"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "max_length": 40,
 "name": "q",
 "required": false,
@@ -583,6 +981,7 @@
 ],
 "GET /api/admin/reports/tcs": [
 {
+"in": "query",
 "name": "month",
 "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
 "required": true,
@@ -591,17 +990,20 @@
 ],
 "GET /api/admin/returns": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "max_length": 60,
 "name": "q",
 "required": false,
@@ -609,6 +1011,7 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller_id",
 "required": false,
 "type": "string"
@@ -621,44 +1024,52 @@
 "pending",
 "hidden"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "rating",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "reported",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "name": "media",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "name": "media_pending",
 "required": false,
 "type": "boolean"
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "seller_id",
 "required": false,
 "type": "string"
@@ -666,6 +1077,7 @@
 ],
 "GET /api/admin/search": [
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -681,11 +1093,13 @@
 "rejected",
 "suspended"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -693,21 +1107,48 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/admin/sellers/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/sellers/{}/documents/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+},
+{
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/shop-assistant/chats": [
 {
 "ge": 1,
+"in": "query",
 "le": 500,
 "name": "page",
 "required": false,
@@ -715,26 +1156,39 @@
 },
 {
 "ge": -1,
+"in": "query",
 "le": 1,
 "name": "feedback",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "name": "escalated",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/admin/shop-assistant/chats/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "chat_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/shop-assistant/stats": [
 {
 "ge": 1,
+"in": "query",
 "le": 365,
 "name": "days",
 "required": false,
@@ -743,47 +1197,64 @@
 ],
 "GET /api/admin/tickets": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "overdue",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "name": "grievance",
 "required": false,
 "type": "boolean"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "max_length": 60,
 "name": "q",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/admin/tickets/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "ticket_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/admin/translations": [
 {
+"in": "query",
 "max_length": 12,
 "name": "lang",
 "required": true,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 100,
 "name": "q",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "origin",
 "pattern": "^(|ai|manual)$",
 "required": false,
@@ -791,6 +1262,7 @@
 },
 {
 "ge": 1,
+"in": "query",
 "le": 10000,
 "name": "page",
 "required": false,
@@ -799,6 +1271,7 @@
 ],
 "GET /api/ads/click": [
 {
+"in": "query",
 "max_length": 400,
 "name": "t",
 "required": true,
@@ -812,17 +1285,20 @@
 "product",
 "home"
 ],
+"in": "query",
 "name": "placement",
 "required": true,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 100,
 "name": "q",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 230,
 "name": "product",
 "required": false,
@@ -830,6 +1306,7 @@
 },
 {
 "ge": 1,
+"in": "query",
 "le": 20,
 "name": "limit",
 "required": false,
@@ -839,6 +1316,7 @@
 "GET /api/alerts": [
 {
 "format": "uuid",
+"in": "query",
 "name": "variant_id",
 "required": false,
 "type": "string"
@@ -846,6 +1324,7 @@
 ],
 "GET /api/catalog/compare": [
 {
+"in": "query",
 "max_length": 200,
 "name": "ids",
 "required": true,
@@ -859,6 +1338,7 @@
 "upcoming",
 "discounts"
 ],
+"in": "query",
 "name": "tab",
 "required": false,
 "type": "string"
@@ -869,11 +1349,13 @@
 "deal_of_day",
 "limited"
 ],
+"in": "query",
 "name": "kind",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 90,
 "name": "category",
 "required": false,
@@ -881,6 +1363,7 @@
 },
 {
 "ge": 0,
+"in": "query",
 "le": 95,
 "name": "min_discount",
 "required": false,
@@ -888,6 +1371,7 @@
 },
 {
 "ge": 0,
+"in": "query",
 "le": 5,
 "name": "min_rating",
 "required": false,
@@ -895,12 +1379,14 @@
 },
 {
 "ge": 0,
+"in": "query",
 "name": "min_price",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 0,
+"in": "query",
 "name": "max_price",
 "required": false,
 "type": "integer"
@@ -914,12 +1400,14 @@
 "price_desc",
 "rating"
 ],
+"in": "query",
 "name": "sort",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 200,
 "name": "page",
 "required": false,
@@ -929,11 +1417,13 @@
 "GET /api/catalog/delivery-estimate": [
 {
 "format": "uuid",
+"in": "query",
 "name": "variant_id",
 "required": true,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 6,
 "min_length": 6,
 "name": "pincode",
@@ -943,24 +1433,28 @@
 ],
 "GET /api/catalog/products": [
 {
+"in": "query",
 "max_length": 100,
 "name": "q",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 90,
 "name": "category",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "item_type": "string",
 "name": "brand",
 "required": false,
 "type": "array"
 },
 {
+"in": "query",
 "max_length": 90,
 "name": "seller",
 "required": false,
@@ -968,18 +1462,21 @@
 },
 {
 "ge": 0,
+"in": "query",
 "name": "min_price",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 0,
+"in": "query",
 "name": "max_price",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 0,
+"in": "query",
 "le": 5,
 "name": "min_rating",
 "required": false,
@@ -987,12 +1484,14 @@
 },
 {
 "ge": 0,
+"in": "query",
 "le": 100,
 "name": "min_discount",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "name": "in_stock",
 "required": false,
 "type": "boolean"
@@ -1007,12 +1506,14 @@
 "discount",
 "popular"
 ],
+"in": "query",
 "name": "sort",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 500,
 "name": "page",
 "required": false,
@@ -1020,12 +1521,14 @@
 },
 {
 "ge": 1,
+"in": "query",
 "le": 60,
 "name": "page_size",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "name": "pincode",
 "pattern": "^[1-9][0-9]{5}$",
 "required": false,
@@ -1033,20 +1536,45 @@
 },
 {
 "ge": 1,
+"in": "query",
 "le": 7,
 "name": "delivery",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "name": "deal",
 "required": false,
 "type": "boolean"
 }
 ],
+"GET /api/catalog/products/{}": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/catalog/products/{}/bought-together": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/catalog/products/{}/media": [
 {
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+},
+{
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page",
 "required": false,
@@ -1055,6 +1583,13 @@
 ],
 "GET /api/catalog/products/{}/questions": [
 {
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+},
+{
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -1065,12 +1600,14 @@
 "helpful",
 "recent"
 ],
+"in": "query",
 "name": "sort",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 200,
 "name": "page",
 "required": false,
@@ -1079,18 +1616,26 @@
 ],
 "GET /api/catalog/products/{}/reviews": [
 {
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+},
+{
 "enum": [
 "recent",
 "helpful",
 "high",
 "low"
 ],
+"in": "query",
 "name": "sort",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 500,
 "name": "page",
 "required": false,
@@ -1098,22 +1643,26 @@
 },
 {
 "ge": 1,
+"in": "query",
 "le": 5,
 "name": "star",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "name": "media",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "name": "verified",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "max_length": 30,
 "name": "topic",
 "required": false,
@@ -1122,6 +1671,7 @@
 ],
 "GET /api/catalog/related": [
 {
+"in": "query",
 "max_length": 800,
 "name": "ids",
 "required": false,
@@ -1129,14 +1679,24 @@
 },
 {
 "ge": 1,
+"in": "query",
 "le": 24,
 "name": "limit",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/catalog/stores/{}": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/catalog/suggest": [
 {
+"in": "query",
 "max_length": 60,
 "min_length": 1,
 "name": "q",
@@ -1150,26 +1710,39 @@
 "bestsellers",
 "new"
 ],
+"in": "query",
 "name": "list",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 90,
 "name": "category",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/credit-notes/{}.pdf": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/delivery/history": [
 {
 "format": "date",
+"in": "query",
 "name": "from",
 "required": false,
 "type": "string"
 },
 {
 "format": "date",
+"in": "query",
 "name": "to",
 "required": false,
 "type": "string"
@@ -1183,20 +1756,58 @@
 "expired",
 "cancelled"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/delivery/me/docs/{}": [
+{
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/delivery/trips/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/delivery/trips/{}/proof": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/invoices/{}.pdf": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/notifications": [
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -1205,12 +1816,14 @@
 "GET /api/orders": [
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 50,
 "name": "page_size",
 "required": false,
@@ -1220,14 +1833,67 @@
 "GET /api/orders/buy-again": [
 {
 "ge": 1,
+"in": "query",
 "le": 24,
 "name": "limit",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/orders/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/orders/{}/delivery-proof/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+},
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/orders/{}/fee-invoice.pdf": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/orders/{}/returnable": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/pages/{}": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/regional": [
 {
+"in": "query",
 "max_length": 2,
 "name": "country",
 "required": false,
@@ -1236,7 +1902,15 @@
 ],
 "GET /api/seller/ads/{}/report": [
 {
+"format": "uuid",
+"in": "path",
+"name": "campaign_id",
+"required": true,
+"type": "string"
+},
+{
 "ge": 1,
+"in": "query",
 "le": 90,
 "name": "days",
 "required": false,
@@ -1246,6 +1920,7 @@
 "GET /api/seller/analytics": [
 {
 "ge": 7,
+"in": "query",
 "le": 365,
 "name": "days",
 "required": false,
@@ -1254,6 +1929,7 @@
 ],
 "GET /api/seller/deals": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
@@ -1261,21 +1937,32 @@
 ],
 "GET /api/seller/deals/options": [
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/seller/documents/{}": [
+{
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/seller/earnings": [
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
@@ -1284,6 +1971,7 @@
 ],
 "GET /api/seller/exports/lookup/category": [
 {
+"in": "query",
 "max_length": 60,
 "name": "q",
 "required": false,
@@ -1292,18 +1980,33 @@
 ],
 "GET /api/seller/exports/{}.{}": [
 {
+"in": "path",
+"name": "name",
+"required": true,
+"type": "string"
+},
+{
+"in": "path",
+"name": "fmt",
+"required": true,
+"type": "string"
+},
+{
 "format": "date",
+"in": "query",
 "name": "from",
 "required": false,
 "type": "string"
 },
 {
 "format": "date",
+"in": "query",
 "name": "to",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 30,
 "name": "status",
 "required": false,
@@ -1311,17 +2014,20 @@
 },
 {
 "format": "uuid",
+"in": "query",
 "name": "category",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 10,
 "name": "payment_method",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
@@ -1329,12 +2035,14 @@
 },
 {
 "ge": 0,
+"in": "query",
 "le": 100000,
 "name": "low_stock",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "item_type": "string",
 "max_items": 60,
 "name": "columns",
@@ -1344,26 +2052,39 @@
 ],
 "GET /api/seller/inventory": [
 {
+"in": "query",
 "max_length": 100,
 "name": "q",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "low_stock",
 "required": false,
 "type": "boolean"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/seller/inventory/{}/movements": [
+{
+"format": "uuid",
+"in": "path",
+"name": "variant_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/seller/ledger": [
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -1372,6 +2093,7 @@
 "GET /api/seller/listing-requirements": [
 {
 "format": "uuid",
+"in": "query",
 "name": "category_id",
 "required": true,
 "type": "string"
@@ -1387,11 +2109,13 @@
 "delivered",
 "cancelled"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 40,
 "name": "q",
 "required": false,
@@ -1399,16 +2123,36 @@
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
 "type": "integer"
+}
+],
+"GET /api/seller/orders/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/seller/orders/{}/invoice.pdf": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
 }
 ],
 "GET /api/seller/product-reports": [
@@ -1418,12 +2162,14 @@
 "resolved",
 "dismissed"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -1438,43 +2184,59 @@
 "rejected",
 "archived"
 ],
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "max_length": 100,
 "name": "q",
 "required": false,
 "type": "string"
 },
 {
+"in": "query",
 "name": "low_stock",
 "required": false,
 "type": "boolean"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 100,
 "name": "page_size",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/seller/products/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/seller/questions": [
 {
+"in": "query",
 "name": "unanswered",
 "required": false,
 "type": "boolean"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
@@ -1482,76 +2244,1371 @@
 ],
 "GET /api/seller/returns": [
 {
+"in": "query",
 "name": "status",
 "required": false,
 "type": "string"
 },
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 }
 ],
+"GET /api/seller/returns/{}/credit-note.pdf": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/seller/reviews": [
 {
 "ge": 1,
+"in": "query",
 "name": "page",
 "required": false,
 "type": "integer"
 },
 {
 "ge": 1,
+"in": "query",
 "le": 5,
 "name": "rating",
 "required": false,
 "type": "integer"
 },
 {
+"in": "query",
 "name": "unanswered",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "name": "media",
 "required": false,
 "type": "boolean"
 },
 {
+"in": "query",
 "max_length": 80,
 "name": "q",
 "required": false,
 "type": "string"
 }
 ],
+"GET /api/shop-assistant/sessions/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "chat_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/support/tickets/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "ticket_id",
+"required": true,
+"type": "string"
+}
+],
+"PATCH /api/addresses/{}/instructions": [
+{
+"format": "uuid",
+"in": "path",
+"name": "address_id",
+"required": true,
+"type": "string"
+}
+],
+"PATCH /api/addresses/{}/location": [
+{
+"format": "uuid",
+"in": "path",
+"name": "address_id",
+"required": true,
+"type": "string"
+}
+],
+"PATCH /api/admin/assistant/conversations/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "conv_id",
+"required": true,
+"type": "string"
+}
+],
+"PATCH /api/admin/customers/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "user_id",
+"required": true,
+"type": "string"
+}
+],
+"PATCH /api/admin/staff/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "user_id",
+"required": true,
+"type": "string"
+}
+],
+"PATCH /api/seller/variants/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "variant_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/ads/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "campaign_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"approve",
+"reject",
+"pause",
+"resume",
+"end"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/ai-providers/connections/{}/test": [
+{
+"in": "path",
+"name": "conn_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/ai/runs/{}/send": [
+{
+"format": "uuid",
+"in": "path",
+"name": "run_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/ai/runs/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "run_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"apply",
+"discard"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/ai/tasks/{}": [
+{
+"in": "path",
+"name": "task",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/assistant/actions/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "action_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"confirm",
+"cancel"
+],
+"in": "path",
+"name": "decision_",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/assistant/conversations/{}/messages": [
+{
+"format": "uuid",
+"in": "path",
+"name": "conv_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/customers/{}/block": [
+{
+"format": "uuid",
+"in": "path",
+"name": "user_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/customers/{}/sign-out": [
+{
+"format": "uuid",
+"in": "path",
+"name": "user_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/customers/{}/unblock": [
+{
+"format": "uuid",
+"in": "path",
+"name": "user_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/deals/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "deal_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"approve",
+"reject",
+"cancel"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
 "POST /api/admin/delivery/app": [
 {
+"in": "query",
 "max_length": 20,
 "name": "version",
 "required": false,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/assignments/{}/cancel": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/assignments/{}/resolve": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/complaints/{}/resolve": [
+{
+"format": "uuid",
+"in": "path",
+"name": "complaint_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/packages/{}/auto-assign": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/packages/{}/courier": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/partners/{}/active": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/partners/{}/deposits": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/partners/{}/docs/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"photo",
+"license",
+"id_proof",
+"vehicle_rc"
+],
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/partners/{}/kyc": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/payouts/{}/paid": [
+{
+"format": "uuid",
+"in": "path",
+"name": "payout_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/returns/{}/assign": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/returns/{}/auto-assign": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/returns/{}/courier": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/zones/{}/partners": [
+{
+"format": "uuid",
+"in": "path",
+"name": "zone_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/integrations/{}/test": [
+{
+"in": "path",
+"name": "key",
+"required": true,
 "type": "string"
 }
 ],
 "POST /api/admin/media": [
 {
+"in": "query",
 "name": "label",
 "required": false,
 "type": "string"
 }
 ],
+"POST /api/admin/orders/{}/check-payment": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/payouts/{}/cancel": [
+{
+"format": "uuid",
+"in": "path",
+"name": "payout_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/payouts/{}/paid": [
+{
+"format": "uuid",
+"in": "path",
+"name": "payout_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/payouts/{}/send": [
+{
+"format": "uuid",
+"in": "path",
+"name": "payout_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/payouts/{}/use-current-bank": [
+{
+"format": "uuid",
+"in": "path",
+"name": "payout_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/product-reports/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "report_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/products/{}/ai-check": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/products/{}/approve": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/products/{}/reject": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/questions/{}/{}/{}": [
+{
+"enum": [
+"question",
+"answer"
+],
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+},
+{
+"format": "uuid",
+"in": "path",
+"name": "post_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"publish",
+"hide"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/refunds/{}/retry": [
+{
+"format": "uuid",
+"in": "path",
+"name": "refund_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/refunds/{}/settle": [
+{
+"format": "uuid",
+"in": "path",
+"name": "refund_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/returns/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/reviews/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "review_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"publish",
+"hide",
+"publish-media",
+"hide-media",
+"dismiss-reports"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/sellers/{}/approve": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/sellers/{}/reject": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/sellers/{}/suspend": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
 "POST /api/admin/shop-app": [
 {
+"in": "query",
 "max_length": 20,
 "name": "version",
 "required": false,
 "type": "string"
 }
 ],
+"POST /api/admin/sub-orders/{}/cancel": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/sub-orders/{}/deliver": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/admin/tickets/{}/reply": [
+{
+"format": "uuid",
+"in": "path",
+"name": "ticket_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/ads/clicks/{}/claim": [
+{
+"format": "uuid",
+"in": "path",
+"name": "click_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/answers/{}/helpful": [
+{
+"format": "uuid",
+"in": "path",
+"name": "answer_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/cart/items/{}/save-for-later": [
+{
+"format": "uuid",
+"in": "path",
+"name": "variant_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/cart/saved/{}/move-to-cart": [
+{
+"format": "uuid",
+"in": "path",
+"name": "variant_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/catalog/products/{}/questions": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/catalog/products/{}/report": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/me/docs/{}": [
+{
+"enum": [
+"photo",
+"license",
+"id_proof",
+"vehicle_rc"
+],
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/offers/{}/accept": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/offers/{}/reject": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/trips/{}/deliver": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/trips/{}/fail": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/trips/{}/returned": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/delivery/trips/{}/status": [
+{
+"format": "uuid",
+"in": "path",
+"name": "assignment_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/orders/{}/cancel": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/orders/{}/delivery-complaint": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/orders/{}/delivery-rating": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/orders/{}/payment-status": [
+{
+"format": "uuid",
+"in": "path",
+"name": "order_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/questions/{}/answers": [
+{
+"format": "uuid",
+"in": "path",
+"name": "question_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/returns/{}/cancel": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/reviews/{}/helpful": [
+{
+"format": "uuid",
+"in": "path",
+"name": "review_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/reviews/{}/report": [
+{
+"format": "uuid",
+"in": "path",
+"name": "review_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/ads/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "campaign_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"pause",
+"resume",
+"end"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/ai/runs/{}/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "run_id",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"apply",
+"discard"
+],
+"in": "path",
+"name": "action",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/ai/tasks/{}": [
+{
+"in": "path",
+"name": "task",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/deals/{}/cancel": [
+{
+"format": "uuid",
+"in": "path",
+"name": "deal_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/documents/{}": [
+{
+"in": "path",
+"name": "kind",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/book-courier": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/confirm": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/deliver": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/pack": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/ready-for-pickup": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/reject": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/rto": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/ship": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/orders/{}/use-courier": [
+{
+"format": "uuid",
+"in": "path",
+"name": "sub_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/product-reports/{}/respond": [
+{
+"format": "uuid",
+"in": "path",
+"name": "report_id",
+"required": true,
+"type": "string"
+}
+],
 "POST /api/seller/products/import": [
 {
+"in": "query",
 "name": "dry_run",
 "required": false,
 "type": "boolean"
+}
+],
+"POST /api/seller/products/{}/archive": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/products/{}/restore": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/products/{}/submit": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/questions/{}/answer": [
+{
+"format": "uuid",
+"in": "path",
+"name": "question_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/returns/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "return_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/seller/reviews/{}/report": [
+{
+"format": "uuid",
+"in": "path",
+"name": "review_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/shop-assistant/actions/{}/confirm": [
+{
+"format": "uuid",
+"in": "path",
+"name": "action_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/shop-assistant/actions/{}/dismiss": [
+{
+"format": "uuid",
+"in": "path",
+"name": "action_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/shop-assistant/sessions/{}/feedback": [
+{
+"format": "uuid",
+"in": "path",
+"name": "chat_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/shop-assistant/sessions/{}/messages": [
+{
+"format": "uuid",
+"in": "path",
+"name": "chat_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/shop-assistant/sessions/{}/ticket": [
+{
+"format": "uuid",
+"in": "path",
+"name": "chat_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/support/tickets/{}/close": [
+{
+"format": "uuid",
+"in": "path",
+"name": "ticket_id",
+"required": true,
+"type": "string"
+}
+],
+"POST /api/support/tickets/{}/messages": [
+{
+"format": "uuid",
+"in": "path",
+"name": "ticket_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/addresses/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "address_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/ai-providers/connections/{}": [
+{
+"in": "path",
+"name": "conn_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/categories/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "category_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/coupons/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "coupon_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/delivery/partners/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "partner_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/delivery/zones/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "zone_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/integrations/{}": [
+{
+"in": "path",
+"name": "key",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/notifications/templates/{}/{}": [
+{
+"in": "path",
+"name": "event",
+"required": true,
+"type": "string"
+},
+{
+"enum": [
+"inapp",
+"email",
+"sms",
+"whatsapp"
+],
+"in": "path",
+"name": "channel",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/products/{}/images": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/products/{}/videos": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/roles/{}": [
+{
+"in": "path",
+"name": "code",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/sellers/{}/bank": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/sellers/{}/business": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/sellers/{}/commission": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/sellers/{}/grievance-officer": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/sellers/{}/pickup-address": [
+{
+"format": "uuid",
+"in": "path",
+"name": "seller_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/shop-assistant/articles/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "article_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/storefront/pages/{}": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/admin/storefront/sections/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "section_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/catalog/products/{}/reviews": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/seller/ads/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "campaign_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/seller/coupons/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "coupon_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/seller/products/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/seller/reviews/{}/reply": [
+{
+"format": "uuid",
+"in": "path",
+"name": "review_id",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/seller/warehouses/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "wid",
+"required": true,
+"type": "string"
+}
+],
+"PUT /api/wishlist/{}": [
+{
+"format": "uuid",
+"in": "path",
+"name": "product_id",
+"required": true,
+"type": "string"
 }
 ]
 }
