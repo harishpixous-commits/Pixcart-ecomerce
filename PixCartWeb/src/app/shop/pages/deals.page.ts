@@ -7,7 +7,6 @@ import { toSignal } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router } from "@angular/router";
 import { Clock, Percent, SlidersHorizontal, Star, X, Zap, type LucideIconData } from "lucide-angular";
 import { api, latestOnly, quietly } from "../../core/api";
-import { setPageTitle } from "../../core/brand";
 import { currencySymbol, paiseToShown, shownToPaise } from "../../core/format";
 import type { ProductCard } from "../../core/types";
 import { ProductTileOutlet } from "../../shared/product/product";
@@ -15,6 +14,7 @@ import { Icon } from "../../shared/ui/icon";
 import { PcLink } from "../../shared/ui/link";
 import { Pagination, Select } from "../../shared/ui/ui";
 import { navigateKeepScroll } from "../browse/keep-scroll";
+import { keepPageTitle } from "../browse/page-title";
 
 type DealsData = {
   items: ProductCard[]; total: number; page: number; page_size: number; tab: "live" | "upcoming" | "discounts"; enabled: boolean;
@@ -189,7 +189,7 @@ export class ShopDealsPage {
   protected readonly departments = computed(() => [{ name: "All", slug: "", count: 0 }, ...(this.data()?.facets.departments ?? [])]);
 
   constructor() {
-    setPageTitle("Today's Deals");
+    keepPageTitle(() => "Today's Deals"); // the reference's deals layout metadata
     const p = this.params();
     this.price.set({ min: p.get("min_price") ? paiseToShown(Number(p.get("min_price"))) : "", max: p.get("max_price") ? paiseToShown(Number(p.get("max_price"))) : "" });
     effect(() => {

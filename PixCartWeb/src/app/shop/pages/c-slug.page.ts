@@ -1,7 +1,7 @@
 /* A category's products: the search view for one category. Port of frontend/src/app/(shop)/c/[slug]/page.tsx. */
 
-import { ChangeDetectionStrategy, Component, effect, input } from "@angular/core";
-import { setPageTitle } from "../../core/brand";
+import { ChangeDetectionStrategy, Component, input } from "@angular/core";
+import { keepPageTitle } from "../browse/page-title";
 import { SearchView } from "../browse/search-view";
 
 @Component({
@@ -14,9 +14,6 @@ import { SearchView } from "../browse/search-view";
 export class ShopCSlugPage {
   readonly slug = input.required<string>();
   constructor() {
-    effect(() => {
-      const name = this.slug().replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-      setPageTitle(`${name} online`);
-    });
+    keepPageTitle(() => `${this.slug().replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} online`);
   }
 }

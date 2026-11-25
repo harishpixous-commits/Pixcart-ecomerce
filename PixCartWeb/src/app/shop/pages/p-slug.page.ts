@@ -3,7 +3,6 @@
 
 import { ChangeDetectionStrategy, Component, computed, effect, input, signal, untracked } from "@angular/core";
 import { ApiError, api } from "../../core/api";
-import { setPageTitle } from "../../core/brand";
 import { date as fmtDate } from "../../core/format";
 import type { ProductPage } from "../../core/types";
 import { ShopNotFound } from "../../shared/chrome/not-found-pages";
@@ -12,6 +11,7 @@ import { PcLink } from "../../shared/ui/link";
 import { ProductPageSkeleton } from "../../shared/ui/skeletons";
 import { BoughtTogether } from "../browse/bought-together";
 import { BrowsingHistory, ProductMain } from "../browse/buy-box";
+import { keepPageTitle } from "../browse/page-title";
 import { SponsoredRail } from "../browse/pdp";
 import { ProductQuestions } from "../browse/qa";
 import { ProductReviews } from "../browse/reviews";
@@ -120,8 +120,10 @@ export class ShopPSlugPage {
     return info;
   });
   private ld: HTMLScriptElement | null = null;
+  private notFound = false;
 
   constructor() {
+    keepPageTitle(() => this.product()?.title ?? (this.state() === "missing" && this.notFound ? "Product not found" : null));
     effect(() => {
       const slug = this.slug();
       untracked(() => {
@@ -133,13 +135,12 @@ export class ShopPSlugPage {
           if (slug !== this.slug()) return;
           this.product.set(p);
           this.state.set("ready");
-          setPageTitle(p.title);
           this.jsonLd(p);
         })
         .catch((e) => {
           if (slug !== this.slug()) return;
           this.state.set("missing");
-          if (e instanceof ApiError && e.status === 404) setPageTitle("Product not found");
+          this.notFound = e instanceof ApiError && e.status === 404;
         });
     });
   }

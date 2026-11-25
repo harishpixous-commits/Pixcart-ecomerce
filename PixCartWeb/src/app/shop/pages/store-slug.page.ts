@@ -2,11 +2,11 @@
 
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from "@angular/core";
 import { api } from "../../core/api";
-import { setPageTitle } from "../../core/brand";
 import { date } from "../../core/format";
 import { SiteService } from "../../core/site";
 import { ShopNotFound } from "../../shared/chrome/not-found-pages";
 import { ShopRouteSkeleton } from "../../shared/ui/skeletons";
+import { keepPageTitle } from "../browse/page-title";
 import { SearchView } from "../browse/search-view";
 
 type Store = { name: string; slug: string; description: string; city: string; state: string; since: string | null; product_count: number };
@@ -42,6 +42,7 @@ export class ShopStoreSlugPage {
   protected readonly fmtDate = date;
 
   constructor() {
+    keepPageTitle(() => (this.store() ? `${this.store()!.name} store` : this.state() === "missing" ? "Store" : null));
     effect(() => {
       const slug = this.slug();
       untracked(() => {
@@ -53,12 +54,10 @@ export class ShopStoreSlugPage {
           if (slug !== this.slug()) return;
           this.store.set(s);
           this.state.set("ready");
-          setPageTitle(`${s.name} store`);
         })
         .catch(() => {
           if (slug !== this.slug()) return;
           this.state.set("missing");
-          setPageTitle("Store");
         });
     });
   }
