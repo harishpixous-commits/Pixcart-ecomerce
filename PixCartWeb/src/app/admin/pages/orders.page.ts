@@ -33,7 +33,7 @@ const PACKAGE_STATUSES = ["placed", "confirmed", "packed", "shipped", "delivered
     </pc-page-header>
     <pc-tabs [value]="f().status" (valueChange)="set({ status: $event, page: 1 })" [items]="tabs" />
     <div class="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      <input pcInput placeholder="Order or package no., AWB, name, mobile or email" [value]="q()" (input)="q.set($any($event.target).value)" class="sm:col-span-2" aria-label="Search orders" />
+      <input pcInput placeholder="Order or package no., AWB, name, mobile or email" [value]="q()" (input)="setQ($any($event.target).value)" class="sm:col-span-2" aria-label="Search orders" />
       <select pcSelect (change)="set({ package_status: $any($event.target).value, page: 1 })" aria-label="Package status">
         <option value="" [selected]="f().package_status === ''">Any package status</option>
         @for (s of packageStatuses; track s) {<option [value]="s" [selected]="f().package_status === s">{{ s[0].toUpperCase() + s.slice(1) }}</option>}
@@ -45,8 +45,8 @@ const PACKAGE_STATUSES = ["placed", "confirmed", "packed", "shipped", "delivered
         <option value="" [selected]="f().payment_status === ''">Any payment status</option>
         @for (p of paymentStatuses; track p[0]) {<option [value]="p[0]" [selected]="f().payment_status === p[0]">{{ p[1] }}</option>}
       </select>
-      <label class="flex items-center gap-2 text-sm text-ink-soft">From <input pcInput type="date" [value]="f().date_from" (change)="set({ date_from: $any($event.target).value, page: 1 })" aria-label="From date" /></label>
-      <label class="flex items-center gap-2 text-sm text-ink-soft">To <input pcInput type="date" [value]="f().date_to" (change)="set({ date_to: $any($event.target).value, page: 1 })" aria-label="To date" /></label>
+      <label class="flex items-center gap-2 text-sm text-ink-soft">From <input pcInput type="date" [value]="f().date_from" (input)="set({ date_from: $any($event.target).value, page: 1 })" aria-label="From date" /></label>
+      <label class="flex items-center gap-2 text-sm text-ink-soft">To <input pcInput type="date" [value]="f().date_to" (input)="set({ date_to: $any($event.target).value, page: 1 })" aria-label="To date" /></label>
       @if (anyFilter()) {
         <button type="button" (click)="clear()" class="inline-flex h-10 items-center gap-1 justify-self-start px-2 text-sm font-semibold text-peacock">
           <svg [pcIcon]="X" class="h-4 w-4" />Clear filters
@@ -93,6 +93,9 @@ export class AdminOrdersPage {
   });
   private readonly page = computed(() => Number(this.route.params().get("page") ?? "1") || 1);
   protected readonly q = signal(untracked(this.f).q);
+  // the filters as they were when the search text last changed: the reference applies the typed text to those (its
+  // effect closure), so "Clear filters" with text in the box brings the other filters back 300 ms later, like there
+  private qBase: Filters = untracked(this.f);
   protected readonly d = signal<Paged<Row> | null>(null);
   protected readonly scoped = computed(() => this.f().seller_id || this.f().customer_id);
   protected readonly anyFilter = computed(() => KEYS.some((k) => k !== "status" && this.f()[k]));
@@ -108,7 +111,7 @@ export class AdminOrdersPage {
       const q = this.q();
       clearTimeout(t);
       t = setTimeout(() => {
-        if (q !== untracked(this.f).q) this.set({ q });
+        if (q !== this.qBase.q) this.set({ q }, this.qBase);
       }, 300);
     });
     inject(DestroyRef).onDestroy(() => clearTimeout(t));
@@ -118,8 +121,12 @@ export class AdminOrdersPage {
     });
   }
 
-  protected set(patch: Partial<Filters> & { page?: number }): void {
-    const f = this.f();
+  protected setQ(v: string): void {
+    this.qBase = this.f();
+    this.q.set(v);
+  }
+
+  protected set(patch: Partial<Filters> & { page?: number }, f: Filters = this.f()): void {
     const next = new URLSearchParams();
     for (const k of KEYS) {
       const v = (k in patch ? patch[k] : f[k]) ?? "";
@@ -130,7 +137,7 @@ export class AdminOrdersPage {
   }
 
   protected clear(): void {
-    this.q.set("");
+    this.setQ("");
     const status = this.f().status;
     void this.router.navigateByUrl(`/admin/orders${status ? `?status=${status}` : ""}`, { replaceUrl: true });
   }

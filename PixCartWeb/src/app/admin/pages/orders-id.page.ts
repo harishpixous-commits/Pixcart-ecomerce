@@ -19,7 +19,7 @@ import { PcLink } from "../../shared/ui/link";
 import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, ErrorNote, Modal, StatusPill, Textarea, TextField, Toast } from "../../shared/ui/ui";
 import { RiskBrief } from "../shared/ai";
-import { ReturnRequestModal } from "../shared/order-returns";
+import { ReturnRequestModal } from "../../shop/customer/order-returns";
 
 /** The own delivery fleet on one package, as the admin order API sends it (lib/types FleetTracking). */
 type Fleet = {

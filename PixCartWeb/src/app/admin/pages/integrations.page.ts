@@ -125,7 +125,8 @@ type D = { environment: string; groups: Record<string, string>; items: Item[]; i
 export class IntegrationEditor {
   readonly item = input.required<Item>();
   readonly close = output<void>();
-  readonly saved = output<string>();
+  /** awaited before the Save button is released, like the reference (the list reloads while it still says Saving…) */
+  readonly onSaved = input.required<(msg: string) => Promise<void>>();
   private readonly admin = inject(AdminContext);
   protected readonly me = this.admin.me;
   protected readonly I = { KeyRound, PlugZap, Copy, ExternalLink };
@@ -194,7 +195,7 @@ export class IntegrationEditor {
       this.password.set("");
       this.totp.set("");
       this.clear.set([]);
-      this.saved.emit(r.changed.length ? `${item.name} saved` : "Nothing changed");
+      await this.onSaved()(r.changed.length ? `${item.name} saved` : "Nothing changed");
     } catch (err) {
       this.error.set(err instanceof ApiError ? err.message : "Could not save");
     } finally {
@@ -274,7 +275,7 @@ export class IntegrationEditor {
           </div>
         </section>
         @if (open(); as o) {
-          <pc-integration-editor [item]="current(o)" (close)="closeEditor()" (saved)="onSaved($event)" />
+          <pc-integration-editor [item]="current(o)" (close)="closeEditor()" [onSaved]="savedFn" />
         }
       </div>
     }
@@ -318,8 +319,12 @@ export class AdminIntegrationsPage {
 
   protected closeEditor(): void {
     this.open.set(null);
-    history.replaceState(history.state, "", " ");
+    // drops the #provider part like the reference replaceState(null, "", " "); spelled out because this app has
+    // <base href="/">, which would resolve " " to the home page
+    history.replaceState(history.state, "", location.pathname + location.search);
   }
+
+  protected readonly savedFn = (msg: string) => this.onSaved(msg);
 
   protected async onSaved(msg: string): Promise<void> {
     this.toast.show(msg);
