@@ -480,12 +480,12 @@ export class ReportReview {
 /* ---------------------------------------------------------------- the reviews section */
 
 @Component({
-  selector: "pc-review-card",
+  selector: "article[pcReviewCard]",
   imports: [Icon, PcLink, Stars, MediaThumb],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: "contents" },
+  // the host is the reference's <article> (so "last:border-0" sees its siblings)
+  host: { class: "border-b border-line pb-5 last:border-0", "data-testid": "review" },
   template: `
-    <article class="border-b border-line pb-5 last:border-0" data-testid="review">
       <div class="flex items-center gap-2">
         <span class="flex h-8 w-8 items-center justify-center rounded-full bg-peacock-light text-sm font-semibold text-peacock">{{ r().author.slice(0, 1).toUpperCase() }}</span>
         <span class="font-semibold">{{ r().author }}</span>
@@ -523,7 +523,6 @@ export class ReportReview {
           <a [pcLink]="loginHref()" class="text-ink-faint hover:text-peacock">Sign in to mark this helpful</a>
         }
       </div>
-    </article>
   `,
 })
 export class ReviewCard {
@@ -664,8 +663,8 @@ export class ReviewCard {
 
             <div class="flex flex-col gap-5">
               @for (r of d.items; track r.id) {
-                <pc-review-card [r]="r" [signedIn]="!!user()" [loginHref]="loginHref()" (vote)="vote(r)" (report)="reporting.set(r.id)"
-                  (edit)="writing.set(true)" (remove)="remove()" (media)="openReviewMedia(r, $event)" />
+                <article pcReviewCard [r]="r" [signedIn]="!!user()" [loginHref]="loginHref()" (vote)="vote(r)" (report)="reporting.set(r.id)"
+                  (edit)="writing.set(true)" (remove)="remove()" (media)="openReviewMedia(r, $event)"></article>
               }
               @if (d.items.length === 0 && d.rating_count > 0) {<p class="text-ink-soft">{{ filtered() ? "No reviews match these filters." : "Customers have rated this product but not written a review yet." }}</p>}
             </div>
