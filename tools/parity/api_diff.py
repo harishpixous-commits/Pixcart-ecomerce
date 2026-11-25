@@ -11,7 +11,7 @@ import urllib.request
 
 PY, NET, GUARDS, PWFILE, OUT = sys.argv[1:6]
 ROLES = (sys.argv[6] if len(sys.argv) > 6 else "guest,customer,seller,partner,admin").split(",")
-ACCOUNTS = {"seller": "9000000001", "partner": "7300000001", "customer": "9999900001"}
+ACCOUNTS = {"seller": "9000000003", "partner": "7300000003", "customer": "9999900001"}  # demo accounts the page agents do not use
 VOLATILE = {"generated_at", "now", "server_time", "elapsed_ms", "took_ms", "request_id"}
 SKIP = re.compile(r"/stream|/events$|/sse|/download|\.pdf$|\.csv$|\.xlsx$|/zip|/export|/invoice|/label|/media/|/proof$|/app/apk|/docs/")
 
