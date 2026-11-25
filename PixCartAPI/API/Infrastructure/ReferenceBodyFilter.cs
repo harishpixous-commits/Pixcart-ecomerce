@@ -45,9 +45,14 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
     [GeneratedRegex(@"^[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")]
     private static partial Regex EmailText();
 
+    /// <summary>Whether this filter checks the body of a route (then path and query errors are reported with it).</summary>
+    internal static bool Checks(string method, string template) =>
+        method is "POST" or "PUT" or "PATCH" && Routes.Value.ContainsKey(ReferenceGuardFilter.Key(method, template));
+
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
         var request = context.HttpContext.Request;
+        var pending = context.HttpContext.Items.TryGetValue(ReferenceQueryFilter.PendingErrors, out var p) ? p as Dictionary<string, string> : null;
         if (request.Method is "POST" or "PUT" or "PATCH"
             && context.ActionDescriptor is ControllerActionDescriptor action && action.AttributeRouteInfo?.Template is { Length: > 0 } template
             && Routes.Value.TryGetValue(ReferenceGuardFilter.Key(request.Method, template), out var route)
@@ -77,10 +82,15 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
                         else Validate(route.Schema, doc.RootElement, [], errors);
                     }
             }
-            if (errors.Count > 0)
+            if (errors.Count > 0 || pending is { Count: > 0 })
             {
                 var fields = new Dictionary<string, string>();
                 var labels = new Dictionary<string, string>();
+                foreach (var (k, m) in pending ?? [])
+                {
+                    fields[k] = m;
+                    labels[k] = ReferenceQueryFilter.Label(k);
+                }
                 foreach (var (loc, msg) in errors)
                 {
                     var parts = loc.Where(p => !Hidden.Contains(p)).ToList();
@@ -92,6 +102,11 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
                 var message = firstKey != "_" ? $"{labels[firstKey]}: {firstMsg}" : firstMsg;
                 throw new AppException(message, "validation_error", 422, fields);
             }
+        }
+        else if (pending is { Count: > 0 })
+        {
+            var (name, msg) = pending.First();
+            throw new AppException($"{ReferenceQueryFilter.Label(name)}: {msg}", "validation_error", 422, pending);
         }
         await next();
     }
