@@ -11,7 +11,7 @@ namespace BAL;
 /// In-app notifications for the storefront's events, with the same built-in texts as the reference version
 /// (services/notify.py EVENTS) and the admin's saved templates taking precedence.
 /// </summary>
-public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL catalog, ISiteBAL site, AppSettings app, INotifyBAL notify) : ICatalogNotifyBAL
+public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL catalog, INotifyBAL notify) : ICatalogNotifyBAL
 {
     /// <summary>event → (in-app title, in-app body).</summary>
     public static readonly IReadOnlyDictionary<string, (string Subject, string Body)> InApp = new Dictionary<string, (string, string)>

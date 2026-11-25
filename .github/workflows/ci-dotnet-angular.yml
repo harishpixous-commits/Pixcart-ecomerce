@@ -82,6 +82,8 @@ jobs:
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File tools\publish-windows.ps1 -Output publish\PixCart
       - uses: actions/upload-artifact@v4
+        # the download is a convenience: a full artifact quota must not fail the check (the package was built above)
+        continue-on-error: true
         with:
           name: pixcart-iis-package
           path: publish/PixCart

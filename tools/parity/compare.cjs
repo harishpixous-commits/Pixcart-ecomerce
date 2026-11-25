@@ -14,6 +14,13 @@
  * Needs: npm install in tools/parity (pixelmatch, pngjs); Playwright from the reference repo's e2e folder.
  */
 
+/** The local demo admin's password: never in the code. Set PARITY_ADMIN_PASSWORD before using --as admin. */
+const ADMIN_PASSWORD = () => {
+  const v = process.env.PARITY_ADMIN_PASSWORD;
+  if (!v) throw new Error("set PARITY_ADMIN_PASSWORD (the local demo admin's password) to compare admin screens");
+  return v;
+};
+
 const fs = require("fs");
 const path = require("path");
 const { PNG } = require("pngjs");
@@ -53,7 +60,7 @@ async function signIn(ctx, base) {
   if (AS === "guest") return;
   const headers = { "X-Requested-With": "pixcart" };
   if (AS === "admin") {
-    const r = await ctx.request.post(`${base}/api/auth/login`, { headers, data: { email: "admin@pixcart.in", password: "Pixcart@Demod9a39b", totp: "" } });
+    const r = await ctx.request.post(`${base}/api/auth/login`, { headers, data: { email: "admin@pixcart.in", password: ADMIN_PASSWORD(), totp: "" } });
     if (!r.ok()) throw new Error(`admin login failed on ${base}: ${r.status()}`);
     if (ADMIN_LAYOUT) {
       const token = (await r.json()).access_token;

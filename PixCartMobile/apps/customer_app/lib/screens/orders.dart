@@ -7,8 +7,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:pixcart_core/pixcart_core.dart';
 import 'package:pixcart_ui/pixcart_ui.dart';
 
-import '../shop/header.dart' show unreadProvider;
 import '../shop/frame.dart';
+import '../shop/header.dart' show unreadProvider;
 import '../shop/links.dart';
 import '../shop/product.dart';
 import '../shop/wishlist.dart';

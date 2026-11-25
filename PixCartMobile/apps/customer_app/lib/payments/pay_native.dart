@@ -38,7 +38,7 @@ Future<PayResult> openCheckout(ApiClient api, CheckoutPayload payment, Map<Strin
   try {
     rzp.open(options);
   } catch (e) {
-    finish(PayResult(failure: 'The payment could not be started'));
+    finish(const PayResult(failure: 'The payment could not be started'));
   }
   return done.future;
 }
