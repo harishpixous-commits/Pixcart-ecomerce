@@ -17,6 +17,15 @@ public class AiDAL(IMySqlDapperHelper db)
         " @Status, @Mode, @Model, @InputTokens, @OutputTokens, @CacheCreationTokens, @CacheReadTokens, @LatencyMs, @Error," +
         " @CreatedBy, @ReviewedBy, @CreatedAt, @ReviewedAt, @Id)", r);
 
+    /// <summary>The usage record of one admin assistant reply, outside any transaction (reference: assistant agent._save).</summary>
+    public Task InsertRunAsync(AiRunModel r) => db.ExecuteAsync(
+        "INSERT INTO ai_runs (task, subject_type, subject_id, seller_id, inputs, output, final_text, status, mode, model," +
+        " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, latency_ms, error, created_by, reviewed_by," +
+        " created_at, reviewed_at, id)" +
+        " VALUES (@Task, @SubjectType, @SubjectId, @SellerId, CAST(@Inputs AS JSON), CAST(@Output AS JSON), @FinalText," +
+        " @Status, @Mode, @Model, @InputTokens, @OutputTokens, @CacheCreationTokens, @CacheReadTokens, @LatencyMs, @Error," +
+        " @CreatedBy, @ReviewedBy, @CreatedAt, @ReviewedAt, @Id)", r);
+
     public Task<AiRunModel?> RunByIdAsync(Guid id) => db.QueryFirstOrDefaultAsync<AiRunModel>(
         "SELECT * FROM ai_runs WHERE id = @id", new { id });
 

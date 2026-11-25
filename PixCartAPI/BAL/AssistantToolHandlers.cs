@@ -6,9 +6,8 @@ using Model.DomainModel;
 using Utils;
 
 /// <summary>
-/// The assistant tool handlers whose backing queries are ported (reference: app/assistant/tools.py).
-/// gst_tcs_report, marketplace_settings, prepare_export and file_overview/file_query/file_compare stay
-/// unregistered until their services (reports, settings/integrations, exports, uploads) are ported.
+/// The assistant tool handlers (reference: app/assistant/tools.py); reports, settings, exports and file analysis are in
+/// AssistantToolHandlersMore.cs.
 /// </summary>
 public partial class AssistantToolsBAL
 {
@@ -17,6 +16,11 @@ public partial class AssistantToolsBAL
     private Dictionary<string, ExecutableTool> BuildRegistry() => new()
     {
         ["file_overview"] = new("file_overview", ["assistant_files"], FileOverviewAsync),
+        ["file_query"] = new("file_query", ["assistant_files"], FileQueryAsync),
+        ["file_compare"] = new("file_compare", ["assistant_files"], FileCompareAsync),
+        ["gst_tcs_report"] = new("gst_tcs_report", ["reports"], GstTcsReportAsync),
+        ["marketplace_settings"] = new("marketplace_settings", ["settings", "integrations"], MarketplaceSettingsAsync),
+        ["prepare_export"] = new("prepare_export", ["orders", "reports", "payouts", "catalog", "sellers", "customers", "support", "settings"], PrepareExportAsync),
         ["business_overview"] = new("business_overview", Dashboard, BusinessOverviewAsync),
         ["sales_breakdown"] = new("sales_breakdown", Dashboard, SalesBreakdownAsync),
         ["work_queue"] = new("work_queue", Dashboard, WorkQueueAsync),

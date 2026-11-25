@@ -9,10 +9,10 @@ using Utils;
 
 /// <summary>
 /// Runs the assistant's read-only tools and builds the screen cards (reference: app/assistant/tools.py).
-/// Only tools whose backing queries are ported are registered for execution; the status endpoint still
-/// reports all 25 from <see cref="AssistantTools"/>. Permissions are re-checked on every execution.
+/// All 25 tools of <see cref="AssistantTools"/> are registered. Permissions are re-checked on every execution.
 /// </summary>
-public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst, AiBAL ai, AssistantActionsBAL actionsBal,AssistantUploadDAL uploads)
+public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst, AiBAL ai, AssistantActionsBAL actionsBal, AssistantUploadDAL uploads,
+    BAL.Interface.IPlatformSettingsBAL platform, BAL.Interface.IIntegrationBAL integrations, TcsReportBAL tcs)
 {
     public sealed record AssistantToolContext(Guid UserId, HashSet<string> Permissions, Guid ConversationId, bool ShareContacts, List<string> UploadIds);
 
@@ -151,7 +151,8 @@ public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst,
     /// <summary>Reference: tools.model_view — JSON the model sees, masked unless contacts may be shared.</summary>
     public static string ModelView(JsonNode? data, bool shareContacts, int limit = 14000)
     {
-        var text = (shareContacts ? data : Mask(data))?.ToJsonString() ?? "null";
+        // json.dumps(..., ensure_ascii=False): ", " and ": " separators, ₹ and Indian scripts as they are
+        var text = AssistantUploadBAL.PythonJson(shareContacts ? data : Mask(data), null, false);
         return text.Length > limit
             ? text[..limit] + "…\" (truncated: the screen shows the full table; summarise what is here)"
             : text;

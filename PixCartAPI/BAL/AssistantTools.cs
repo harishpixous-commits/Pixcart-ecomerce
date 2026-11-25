@@ -92,6 +92,27 @@ public static class AssistantTools
 
     public static readonly IReadOnlyDictionary<string, ToolDef> ByName = All.ToDictionary(t => t.Name);
 
+    /// <summary>
+    /// Reference: Tool.spec() for every tool, in the reference's order: {name, description, input_schema: {type: object,
+    /// properties, required}}. Generated from the reference by tools/schema/assistant_tool_specs.py and embedded
+    /// (BAL/Assets/assistant/tool-specs.json), so every input schema is exactly the one the reference sends to the model.
+    /// </summary>
+    public static readonly IReadOnlyList<System.Text.Json.Nodes.JsonObject> Specs = LoadSpecs();
+
+    private static readonly IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonObject> SpecByName =
+        Specs.ToDictionary(s => s["name"]!.GetValue<string>());
+
+    private static List<System.Text.Json.Nodes.JsonObject> LoadSpecs()
+    {
+        using var stream = typeof(AssistantTools).Assembly.GetManifestResourceStream("BAL.Assets.assistant.tool-specs.json")
+            ?? throw new InvalidOperationException("The assistant tool specs resource is missing");
+        return (System.Text.Json.Nodes.JsonNode.Parse(stream) as System.Text.Json.Nodes.JsonArray ?? [])
+            .OfType<System.Text.Json.Nodes.JsonObject>().ToList();
+    }
+
+    /// <summary>Reference: Tool.spec — a copy of one tool's spec, ready to send to the model.</summary>
+    public static System.Text.Json.Nodes.JsonObject Spec(string name) => (System.Text.Json.Nodes.JsonObject)SpecByName[name].DeepClone();
+
     /// <summary>Reference: tools.available — the tools any of the person's permissions unlock.</summary>
     public static IEnumerable<ToolDef> Available(IReadOnlySet<string> permissions) =>
         All.Where(t => t.AnyOf.Any(permissions.Contains));
