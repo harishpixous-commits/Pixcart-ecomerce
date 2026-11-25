@@ -8,7 +8,7 @@ import { SessionService } from "../../core/session";
 import type { OrderSummary, Paged } from "../../core/types";
 import { PcLink } from "../../shared/ui/link";
 import { PageLoader } from "../../shared/ui/page-loader";
-import { ButtonLink, EmptyState, Pagination, ProductImage, StatusPill } from "../../shared/ui/ui";
+import { ButtonLink, EmptyState, Pagination, StatusPill } from "../../shared/ui/ui";
 
 function overall(o: OrderSummary): { status: string; label: string } {
   if (o.status === "pending_payment") return { status: "pending_payment", label: "Awaiting payment" };
@@ -21,7 +21,7 @@ function overall(o: OrderSummary): { status: string; label: string } {
 
 @Component({
   selector: "pc-shop-orders-page",
-  imports: [PcLink, PageLoader, ButtonLink, EmptyState, Pagination, ProductImage, StatusPill],
+  imports: [PcLink, PageLoader, ButtonLink, EmptyState, Pagination, StatusPill],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -37,7 +37,12 @@ function overall(o: OrderSummary): { status: string; label: string } {
           <a [pcLink]="'/orders/' + o.id" class="flex flex-col gap-3 rounded-xl bg-white p-4 hover:ring-2 hover:ring-peacock/20 sm:flex-row sm:items-center">
             <div class="flex -space-x-3">
               @for (it of o.items.slice(0, 3); track $index) {
-                <pc-product-image [src]="it.image" [alt]="it.title" imgClass="h-16 w-16 rounded-lg border-2 border-white bg-white" />
+                <!-- ProductImage inline: -space-x-3 needs the images as direct children -->
+                @if (!it.image) {
+                  <div class="flex items-center justify-center bg-mist text-sm text-ink-faint h-16 w-16 rounded-lg border-2 border-white bg-white">No image</div>
+                } @else {
+                  <img [src]="it.image" [alt]="it.title" loading="lazy" class="object-contain h-16 w-16 rounded-lg border-2 border-white bg-white" />
+                }
               }
             </div>
             <div class="flex-1">

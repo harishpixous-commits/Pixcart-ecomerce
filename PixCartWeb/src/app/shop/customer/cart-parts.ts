@@ -194,9 +194,9 @@ export class FreeDeliveryProgress {
   selector: "pc-cart-line-row",
   imports: [Icon, PcLink, Price, ProductImage, Qty],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: "contents" },
+  // the host is the row itself: the list's divide-y draws the line between rows
+  host: { "[class]": "l().problem ? 'block p-4 sm:p-5 bg-vermilion-light/40' : 'block p-4 sm:p-5'", "data-testid": "cart-line" },
   template: `
-    <div [class]="l().problem ? 'p-4 sm:p-5 bg-vermilion-light/40' : 'p-4 sm:p-5'" data-testid="cart-line">
       <div class="flex gap-3 sm:gap-4">
         <a [pcLink]="'/p/' + l().product_slug" class="shrink-0" tabindex="-1" aria-hidden="true">
           <pc-product-image [src]="l().image" [alt]="l().title" imgClass="h-20 w-20 rounded-xl bg-white sm:h-24 sm:w-24" />
@@ -213,7 +213,6 @@ export class FreeDeliveryProgress {
         <button type="button" [class]="DELETE_CLS" [disabled]="busy()" (click)="qty.emit(0)"><svg [pcIcon]="Trash2" class="h-4 w-4" /> Delete</button>
         <button type="button" [class]="SAVE_CLS" [disabled]="busy()" (click)="save.emit()"><svg [pcIcon]="Bookmark" class="h-4 w-4" /> Save for later</button>
       </div>
-    </div>
   `,
 })
 export class CartLineRow {
