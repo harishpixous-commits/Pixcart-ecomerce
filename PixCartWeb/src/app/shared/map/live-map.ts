@@ -1,12 +1,13 @@
 /*
  * One map for the whole store, on OpenStreetMap tiles (Admin → Delivery settings → Map tiles can point to another
  * provider). Used by the admin live map, the partner's trip, the customer's tracking and the address pin.
- * Leaflet is loaded in the browser only. Markers are simple coloured badges so they stay sharp on every screen.
- * Port of components/map/live-map.tsx:
- *   <pc-live-map [markers] [lines] tiles attribution fitKey [fitPoints] [center] [zoom] mapClass="h-52" [pickable] (pick) (marker) />
+ * Leaflet is loaded in the browser only (its own chunk). Markers are simple coloured badges so they stay sharp on every
+ * screen. Port of components/map/live-map.tsx:
+ *   <pc-live-map [markers] [lines] [tiles] [attribution] [fitKey] [fitPoints] [center] [zoom] boxClass="h-56 sm:h-72"
+ *     [pickable] (pick)="..." (marker)="..." />
  */
 
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, viewChild } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, afterNextRender, ElementRef, computed, effect, inject, input, output, signal, viewChild } from "@angular/core";
 import type * as LeafletNS from "leaflet";
 import { cx } from "../ui/cx";
 
@@ -15,9 +16,9 @@ export type MapMarker = {
   lat: number;
   lng: number;
   kind: "partner" | "partner-busy" | "partner-stale" | "store" | "home" | "pin";
-  label?: string;
-  title?: string;
-  popup?: string;
+  label?: string; // short text in the badge (initials, a number)
+  title?: string; // tooltip
+  popup?: string; // plain text shown when tapped
 };
 
 export type MapLine = { id: string; points: [number, number][]; color?: string; dashed?: boolean };
@@ -62,7 +63,7 @@ type Drawn = { marker: LeafletNS.Marker; html: string; popup: string };
   `,
 })
 export class LiveMap {
-  readonly markers = input<MapMarker[]>([]);
+  readonly markers = input.required<MapMarker[]>();
   readonly lines = input<MapLine[]>([]);
   readonly tiles = input<string | undefined>(undefined);
   readonly attribution = input<string | undefined>(undefined);
@@ -71,39 +72,39 @@ export class LiveMap {
   readonly fitPoints = input<[number, number][] | undefined>(undefined);
   readonly center = input<[number, number] | undefined>(undefined);
   readonly zoom = input(13);
-  readonly mapClass = input<string | undefined>(undefined);
+  /** the reference's className (default h-80) */
+  readonly boxClass = input<string | undefined>(undefined);
+  /** tap the map to move the pin */
   readonly pickable = input(false);
-  /** tap the map (or drag the pin) to move the pin */
   readonly pick = output<{ lat: number; lng: number }>();
   /** a marker was tapped */
   readonly marker = output<string>();
 
   private readonly box = viewChild.required<ElementRef<HTMLDivElement>>("box");
   protected readonly ready = signal(false);
-  protected readonly cls = computed(() => cx("relative isolate block overflow-hidden rounded-2xl ring-1 ring-black/5", this.mapClass() ?? "h-80"));
-  private lib: typeof LeafletNS | null = null;
+  protected readonly cls = computed(() => cx("relative isolate block overflow-hidden rounded-2xl ring-1 ring-black/5", this.boxClass() ?? "h-80") /* block: a custom tag is inline, and an inline box ignores its height */);
   private map: LeafletNS.Map | null = null;
   private layer: LeafletNS.LayerGroup | null = null;
   private lineLayer: LeafletNS.LayerGroup | null = null;
+  private lib: typeof LeafletNS | null = null;
   private readonly drawn = new Map<string, Drawn>();
   private fitted: string | undefined = undefined;
 
   constructor() {
     let cancelled = false;
-    // create the map once
-    queueMicrotask(() => {
+    // create the map once (after the first render, so the box is there)
+    afterNextRender(() => {
       import("leaflet").then((mod) => {
         const L = ((mod as unknown as { default?: typeof LeafletNS }).default ?? mod) as typeof LeafletNS;
+        const el = this.box().nativeElement;
         if (cancelled || this.map) return;
         this.lib = L;
         const center = this.center();
-        const m = L.map(this.box().nativeElement, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView(center ?? [20.59, 78.96], center ? this.zoom() : 5);
+        const m = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView(center ?? [20.59, 78.96], center ? this.zoom() : 5);
         L.tileLayer(this.tiles() || "https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: this.attribution() || "© OpenStreetMap contributors" }).addTo(m);
         this.lineLayer = L.layerGroup().addTo(m);
         this.layer = L.layerGroup().addTo(m);
-        m.on("click", (e: LeafletNS.LeafletMouseEvent) => {
-          if (this.pickable()) this.pick.emit({ lat: e.latlng.lat, lng: e.latlng.lng });
-        });
+        m.on("click", (e: LeafletNS.LeafletMouseEvent) => this.pick.emit({ lat: e.latlng.lat, lng: e.latlng.lng }));
         m.on("focus", () => m.scrollWheelZoom.enable());
         m.on("blur", () => m.scrollWheelZoom.disable());
         this.map = m;

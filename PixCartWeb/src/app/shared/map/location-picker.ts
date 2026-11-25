@@ -61,7 +61,7 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
     }
     @if (here.status() === "error" || here.status() === "unsupported") {<p class="text-sm text-ink-soft">Could not get your location. Tap the map to place the pin.</p>}
     @if (tiles(); as t) {
-      <pc-live-map [mapClass]="compact() ? 'h-48' : 'h-64'" [tiles]="t.url" [attribution]="t.attribution" [pickable]="true" (pick)="set($event.lat, $event.lng)"
+      <pc-live-map [boxClass]="compact() ? 'h-48' : 'h-64'" [tiles]="t.url" [attribution]="t.attribution" [pickable]="true" (pick)="set($event.lat, $event.lng)"
         [center]="center()" [zoom]="value() ? 17 : 5" [fitKey]="fitKey()" [markers]="markers()" />
     }
     <p class="text-xs text-ink-faint">{{ value() ? "Drag the pin or tap the map to fine-tune it to your door." : "Tap the map to drop a pin, or use your current location." }}</p>

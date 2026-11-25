@@ -3,87 +3,29 @@
  * registration, approved), and the mobile-first shell with the online switch, a bottom tab bar on phones and a side
  * menu on larger screens. Port of components/delivery/app.tsx (the gate itself is delivery-layout.ts):
  *   loadDeliveryOptions(), PartnerService, <pc-full-loader label>, <pc-no-requests-notice [inactive] [carrying]>,
- *   <pc-simple-frame>, <pc-delivery-shell>, <pc-online-switch [large]>, DeliveryFeedService (placeholder).
+ *   <pc-simple-frame>, <pc-delivery-shell>, <pc-online-switch [large]>. The feed (DeliveryFeedService, <pc-offer-popup>)
+ *   is in ../components/feed.ts, the partner and options in ../components/partner.ts (re-exported here).
  */
 
-import { ChangeDetectionStrategy, Component, DestroyRef, Injectable, computed, effect, inject, input, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, DestroyRef, Injector, computed, effect, inject, input, signal } from "@angular/core";
 import { Bell, CircleHelp, History, House, Loader2, LogOut, UserRound, Wallet, type LucideIconData } from "lucide-angular";
 import { ApiError, api } from "../../core/api";
-import type { DeliveryOptions, Partner } from "../../core/delivery-types";
 import { RouteState } from "../../core/route-state";
 import { SessionService } from "../../core/session";
+import { PushPrompt } from "../../shared/chrome/push-prompt";
 import { RegionButton } from "../../shared/chrome/region-picker";
 import { Logo } from "../../shared/shop/shop-chrome";
 import { cx } from "../../shared/ui/cx";
 import { Icon } from "../../shared/ui/icon";
 import { PcLink } from "../../shared/ui/link";
 import { Toast } from "../../shared/ui/ui";
+import { DeliveryFeedService, OfferPopup, unlockAudio } from "../components/feed";
+import { PartnerService } from "../components/partner";
 
-/* ---------------------------------------------------------------- options (cached for the visit) */
+/* ---------------------------------------------------------------- partner, options and feed (in ../components) */
 
-let optionsCache: Promise<DeliveryOptions> | null = null;
-
-export function loadDeliveryOptions(): Promise<DeliveryOptions> {
-  if (!optionsCache) optionsCache = api<DeliveryOptions>("/api/delivery/options").catch((e) => { optionsCache = null; throw e; });
-  return optionsCache;
-}
-
-/** useDeliveryOptions(): call in a field initialiser; the signal fills in once loaded. */
-export function deliveryOptions() {
-  const o = signal<DeliveryOptions | null>(null);
-  loadDeliveryOptions().then((x) => o.set(x)).catch(() => {});
-  return o.asReadonly();
-}
-
-/* ---------------------------------------------------------------- the signed-in partner */
-
-export type PartnerStatus = "loading" | "none" | "ready" | "error";
-
-/** usePartner(): the partner of the signed-in account. DeliveryLayout calls reload() whenever the account changes. */
-@Injectable({ providedIn: "root" })
-export class PartnerService {
-  readonly partner = signal<Partner | null>(null);
-  readonly status = signal<PartnerStatus>("loading");
-  private forUser: string | null = null;
-
-  /** Loads the partner for this account (again only when the account changed). */
-  start(userId: string): void {
-    if (this.forUser === userId) return;
-    this.forUser = userId;
-    this.partner.set(null);
-    this.status.set("loading");
-    void this.reload();
-  }
-
-  reload(): Promise<void> {
-    return api<Partner>("/api/delivery/me")
-      .then((p) => { this.partner.set(p); this.status.set("ready"); })
-      .catch((e) => { this.partner.set(null); this.status.set(e instanceof ApiError && e.code === "not_registered" ? "none" : "error"); });
-  }
-
-  set(p: Partner): void {
-    this.partner.set(p);
-    this.status.set("ready");
-  }
-}
-
-/* ---------------------------------------------------------------- feed (placeholder) */
-
-/**
- * TODO(delivery module): port components/delivery/feed.tsx here — FeedProvider (polling /api/delivery/feed, the new
- * request sound), OfferPopup (the new-request sheet, rendered inside <pc-delivery-shell>) and unlockAudio(). The shell
- * and the online switch already call refresh() and unlockAudio(); until the port they do nothing.
- */
-@Injectable({ providedIn: "root" })
-export class DeliveryFeedService {
-  refresh(): void {
-    /* replaced by the delivery module's feed */
-  }
-}
-
-export function unlockAudio(): void {
-  /* replaced by the delivery module's feed (unlocks the request sound after the first tap) */
-}
+export { DeliveryFeedService, unlockAudio } from "../components/feed";
+export { PartnerService, deliveryOptions, loadDeliveryOptions, type PartnerStatus } from "../components/partner";
 
 /* ---------------------------------------------------------------- loaders and notices */
 
@@ -222,11 +164,11 @@ const TABS: { href: string; label: string; icon: LucideIconData }[] = [
 
 /**
  * The approved partner's app: top bar with the online switch, tabs at the bottom (phones) or on the side. New delivery
- * requests pop up over whichever screen is open (OfferPopup, from the delivery module's feed port).
+ * requests pop up over whichever screen is open (OfferPopup). The feed polls and shares the location while it is on screen.
  */
 @Component({
   selector: "pc-delivery-shell",
-  imports: [Icon, PcLink, Logo, RegionButton, OnlineSwitch],
+  imports: [Icon, PcLink, Logo, RegionButton, OnlineSwitch, PushPrompt, OfferPopup],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block min-h-screen bg-mist pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-10" },
   template: `
@@ -261,7 +203,10 @@ const TABS: { href: string; label: string; icon: LucideIconData }[] = [
         </button>
       </nav>
       <main class="flex min-w-0 flex-1 flex-col gap-4">
-        <!-- TODO(delivery module): on /delivery, the PushPrompt ("Get delivery requests even when the app is closed") goes here. -->
+        @if (path() === "/delivery") {
+          <pc-push-prompt app="delivery" [showBlocked]="true" [title]="'Get delivery requests even when the app is closed'"
+            [text]="'Turn on notifications so a new request rings your phone. You can still only accept from the app.'" />
+        }
         <div><ng-content /></div>
       </main>
     </div>
@@ -277,7 +222,7 @@ const TABS: { href: string; label: string; icon: LucideIconData }[] = [
         }
       </div>
     </nav>
-    <!-- TODO(delivery module): <pc-offer-popup /> (new delivery requests) goes here. -->
+    <pc-offer-popup />
   `,
 })
 export class DeliveryShell {
@@ -292,6 +237,7 @@ export class DeliveryShell {
     return href === "/delivery" ? this.path() === "/delivery" : this.path().startsWith(href);
   }
   constructor() {
+    inject(DeliveryFeedService).connect(inject(Injector));
     effect(() => {
       this.path();
       api<{ unread: number }>("/api/notifications").then((r) => this.unread.set(r.unread)).catch(() => {});
