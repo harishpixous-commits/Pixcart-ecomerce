@@ -26,7 +26,8 @@ class CategoriesScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         ...cats.when(
           loading: () => [const CategoriesSkeleton()],
-          error: (e, _) => [EmptyState(title: 'Categories are unavailable right now', body: ApiError.messageOf(e))],
+          // like the reference: a failed catalog call shows the heading and no cards
+          error: (_, _) => const <Widget>[],
           data: (list) => [
             for (var i = 0; i < list.length; i++) ...[
               if (i > 0) const SizedBox(height: 12),
