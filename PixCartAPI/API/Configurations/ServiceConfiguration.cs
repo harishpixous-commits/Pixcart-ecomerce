@@ -69,6 +69,8 @@ public static class ServiceConfiguration
                 o.Filters.Add<API.Infrastructure.ReferenceJsonFilter>();
                 // query strings checked against the reference rules, with its 422 answers (after sign-in, before the body)
                 o.Filters.Add<API.Infrastructure.ReferenceQueryFilter>();
+                // JSON bodies checked against the reference schemas, with its 422 answers and field order
+                o.Filters.Add<API.Infrastructure.ReferenceBodyFilter>();
             })
             .AddJsonOptions(o =>
             {

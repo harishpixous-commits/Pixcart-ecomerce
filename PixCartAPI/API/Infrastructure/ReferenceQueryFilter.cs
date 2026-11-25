@@ -52,7 +52,7 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
         ["line1"] = "Address", ["state_code"] = "State", ["vehicle_no"] = "Vehicle number",
     };
 
-    private static readonly Dictionary<string, string> PatternHints = new()
+    internal static readonly Dictionary<string, string> PatternHints = new()
     {
         ["hsn_code"] = "use 4, 6 or 8 digits", ["pincode"] = "use the 6-digit PIN code",
         ["ifsc"] = "use the 11-character IFSC, like SBIN0001234", ["phone"] = "use a 10-digit mobile number",
@@ -155,7 +155,7 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
     }
 
     /// <summary>pydantic's date errors (the reference shows them as they are).</summary>
-    private static string? DateMessage(string v)
+    internal static string? DateMessage(string v)
     {
         const string head = "Input should be a valid date or datetime, ";
         if (DateTime.TryParseExact(v, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) return null;
