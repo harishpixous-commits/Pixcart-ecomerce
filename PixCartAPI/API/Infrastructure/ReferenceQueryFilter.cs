@@ -19,7 +19,7 @@ namespace API.Infrastructure;
 public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
 {
     private sealed record Rule(
-        string Name, bool Required, string Type, string? Format, List<JsonElement>? Enum, int? MinLength, int? MaxLength,
+        string Name, string In, bool Required, string Type, string? Format, List<JsonElement>? Enum, int? MinLength, int? MaxLength,
         JsonElement? Ge, JsonElement? Le, JsonElement? Gt, JsonElement? Lt, string? Pattern, int? MaxItems, string? ItemType);
 
     private static readonly Lazy<Dictionary<string, List<Rule>>> Rules = new(Load);
@@ -37,7 +37,7 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
         JsonElement? Num(string n) => e.TryGetProperty(n, out var v) ? v : null;
         int? Int(string n) => e.TryGetProperty(n, out var v) ? v.GetInt32() : null;
         string? Str(string n) => e.TryGetProperty(n, out var v) ? v.GetString() : null;
-        return new Rule(e.GetProperty("name").GetString()!, e.GetProperty("required").GetBoolean(), Str("type") ?? "string",
+        return new Rule(e.GetProperty("name").GetString()!, Str("in") ?? "query", e.GetProperty("required").GetBoolean(), Str("type") ?? "string",
             Str("format"), e.TryGetProperty("enum", out var en) ? en.EnumerateArray().ToList() : null,
             Int("min_length"), Int("max_length"), Num("ge"), Num("le"), Num("gt"), Num("lt"), Str("pattern"), Int("max_items"),
             Str("item_type"));
@@ -70,6 +70,12 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
     [GeneratedRegex(@"^\s*[+-]?\d+\s*$")]
     private static partial Regex IntText();
 
+    [GeneratedRegex(@"\{\**([A-Za-z0-9_]+)[^}]*\}")]
+    private static partial Regex PathParam();
+
+    /// <summary>HttpContext.Items key: path and query errors waiting for the body check.</summary>
+    internal const string PendingErrors = "reference.param.errors";
+
     private static readonly HashSet<string> TrueWords = ["1", "on", "t", "true", "y", "yes"];
     private static readonly HashSet<string> FalseWords = ["0", "off", "f", "false", "n", "no"];
 
@@ -80,7 +86,18 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
         {
             var fields = new Dictionary<string, string>();
             var query = context.HttpContext.Request.Query;
-            foreach (var r in rules)
+            // path values: the reference names them in its own words (order_id); .NET in its route template (orderId).
+            // Both list them in the same order, so they are matched by position.
+            var netNames = PathParam().Matches(template).Select(m => m.Groups[1].Value).ToList();
+            var pathIndex = 0;
+            foreach (var r in rules.Where(r => r.In == "path"))
+            {
+                var netName = pathIndex < netNames.Count ? netNames[pathIndex] : r.Name;
+                pathIndex++;
+                if (context.RouteData.Values.TryGetValue(netName, out var raw) && raw?.ToString() is { } pv && Check(r, pv) is { } pmsg)
+                    fields[r.Name] = pmsg;
+            }
+            foreach (var r in rules.Where(r => r.In == "query"))
             {
                 var present = query.TryGetValue(r.Name, out var values) && values.Count > 0;
                 if (!present)
@@ -97,8 +114,15 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
             }
             if (fields.Count > 0)
             {
-                var (name, msg) = fields.First();
-                throw new AppException($"{Label(name)}: {msg}", "validation_error", 422, fields);
+                // the reference reports path, query and body errors in one answer: when the body is checked next, it adds
+                // its errors and answers (ReferenceBodyFilter)
+                if (ReferenceBodyFilter.Checks(context.HttpContext.Request.Method, template))
+                    context.HttpContext.Items[PendingErrors] = fields;
+                else
+                {
+                    var (name, msg) = fields.First();
+                    throw new AppException($"{Label(name)}: {msg}", "validation_error", 422, fields);
+                }
             }
         }
         await next();
