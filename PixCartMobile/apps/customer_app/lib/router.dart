@@ -14,11 +14,9 @@ import 'screens/categories.dart';
 import 'screens/checkout.dart';
 import 'screens/home.dart';
 import 'screens/listing.dart';
-import 'screens/notifications.dart';
 import 'screens/order.dart';
 import 'screens/orders.dart';
 import 'screens/product.dart';
-import 'screens/wishlist.dart';
 import 'shop/frame.dart';
 
 /// Pages that need a signed-in shopper: signed-out visitors go to /login?next=... (like the website's layouts).

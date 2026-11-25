@@ -23,8 +23,9 @@ void main() {
     await expectLater(find.byType(PixCartApp), matchesGoldenFile('goldens/categories.png'));
     await tester.tap(find.text('Synthetic child'));
     await settle(tester);
-    final context = tester.element(find.text('child'));
-    expect(GoRouterState.of(context).uri.path, '/c/child');
+    // the route the tap opened, read from the router itself (not from a widget's text)
+    final router = GoRouter.of(tester.element(find.byType(CategoriesScreen, skipOffstage: false)));
+    expect(router.routerDelegate.currentConfiguration.last.matchedLocation, '/c/child'); // a push lies on top of /categories
   });
 
   testWidgets('catalog failure matches the empty directory fallback', (tester) async {
