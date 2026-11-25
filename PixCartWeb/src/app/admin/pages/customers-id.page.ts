@@ -57,13 +57,8 @@ export class CustomerCard {
         <pc-page-header [title]="d()!.name || 'No name yet'" [sub]="sub()" [withActions]="true">
           @if (!d()!.is_admin) {<button actions pcButton variant="secondary" (click)="openEdit()"><svg [pcIcon]="Pencil" class="h-4 w-4" />Edit</button>}
           <button actions pcButton variant="secondary" (click)="signOut()" [disabled]="!d()!.sessions.length"><svg [pcIcon]="LogOut" class="h-4 w-4" />Sign out everywhere</button>
-          @if (!d()!.is_admin) {
-            @if (d()!.is_active) {
-              <button actions pcButton variant="danger" (click)="blocking.set(true)"><svg [pcIcon]="ShieldOff" class="h-4 w-4" />Block</button>
-            } @else {
-              <button actions pcButton (click)="unblock()"><svg [pcIcon]="ShieldCheck" class="h-4 w-4" />Unblock</button>
-            }
-          }
+          @if (!d()!.is_admin && d()!.is_active) {<button actions pcButton variant="danger" (click)="blocking.set(true)"><svg [pcIcon]="ShieldOff" class="h-4 w-4" />Block</button>}
+          @if (!d()!.is_admin && !d()!.is_active) {<button actions pcButton (click)="unblock()"><svg [pcIcon]="ShieldCheck" class="h-4 w-4" />Unblock</button>}
         </pc-page-header>
         <div class="flex flex-wrap items-center gap-2">
           @if (d()!.is_active) {<pc-pill tone="green">Active</pc-pill>} @else {<pc-pill tone="red">Blocked</pc-pill>}
