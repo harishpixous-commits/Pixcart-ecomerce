@@ -15,6 +15,7 @@ import { AdminShell, EMPTY_COUNTS, adminNav, type NavCounts } from "../shared/ad
 import { AdminPrefsService } from "../shared/admin-shell/prefs";
 import { Icon } from "../shared/ui/icon";
 import { PageLoader } from "../shared/ui/page-loader";
+import { AssistantDock } from "./assistant/dock";
 
 type Dashboard = {
   sellers_pending_review: number; products_pending_review: number; refunds_needing_attention: number; reviews_needing_attention?: number;
@@ -24,7 +25,7 @@ type Dashboard = {
 
 @Component({
   selector: "pc-admin-layout",
-  imports: [RouterOutlet, Icon, AdminShell, PageLoader],
+  imports: [RouterOutlet, Icon, AdminShell, PageLoader, AssistantDock],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -44,7 +45,7 @@ type Dashboard = {
       </div>
     } @else {
       <pc-admin-shell [title]="'Admin, ' + me()!.role_label" [items]="items()"><router-outlet /></pc-admin-shell>
-      <!-- TODO(admin module): the AI assistant dock (components/assistant/dock.tsx) when me().permissions has "assistant". -->
+      @if (me()!.permissions.includes("assistant")) {<pc-assistant-dock />}
     }
   `,
 })
