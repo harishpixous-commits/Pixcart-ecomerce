@@ -66,8 +66,8 @@ export const SHOP_ROUTES: Routes = [
   { path: "signup", component: SignupPage, title: "Create account" },
   { path: "store/:slug", component: ShopStoreSlugPage },
   { path: "support", component: ShopSupportPage },
-  { path: "support/:id", component: ShopSupportIdPage },
   { path: "support/new", component: ShopSupportNewPage },
+  { path: "support/:id", component: ShopSupportIdPage },
   { path: "wishlist", component: ShopWishlistPage },
   { path: "**", component: ShopNotFound, title: "Page not found" },
 ];
