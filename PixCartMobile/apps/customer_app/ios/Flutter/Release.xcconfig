@@ -1,0 +1,4 @@
+#include "Generated.xcconfig"
+
+// The name under the icon (CI: set APP_DISPLAY_NAME in the environment or edit here).
+APP_DISPLAY_NAME=PixCart
