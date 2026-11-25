@@ -23,7 +23,11 @@ namespace Tests;
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string Database = "pixcart_test_auth";
-    public static readonly string ConnectionString = $"Server=127.0.0.1;Port=3307;Database={Database};User=root;Password=pixcart;";
+    /// <summary>The MySQL server for tests: TEST_MYSQL (CI) or the local development server on port 3307.</summary>
+    public static readonly string Server = Environment.GetEnvironmentVariable("TEST_MYSQL") is { Length: > 0 } t
+        ? t.TrimEnd(';') + ";"
+        : "Server=127.0.0.1;Port=3307;User=root;Password=pixcart;";
+    public static readonly string ConnectionString = $"{Server}Database={Database};";
     private static bool _migrated;
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
