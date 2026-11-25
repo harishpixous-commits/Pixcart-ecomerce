@@ -8,6 +8,8 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from "@angular/core";
 import { CheckCircle2, Download, ShieldCheck, Smartphone } from "lucide-angular";
 import type { DeliveryOptions } from "../../core/delivery-types";
+import { SiteService } from "../../core/site";
+import { appIcon } from "../../shared/chrome/app-icon";
 import { Logo } from "../../shared/shop/shop-chrome";
 import { Icon } from "../../shared/ui/icon";
 import { PcLink } from "../../shared/ui/link";
@@ -44,7 +46,8 @@ const PERKS = ["New delivery requests ring your phone, even with the screen off"
         <main class="mx-auto grid max-w-5xl gap-6 px-4 py-8 lg:grid-cols-[1.2fr_1fr] lg:items-start lg:py-12">
           <section class="flex flex-col gap-5">
             <div class="flex items-center gap-4">
-              <img src="/app-icon/partner-192" alt="" width="72" height="72" class="h-[72px] w-[72px] rounded-2xl shadow-md" />
+              <!-- the reference's /app-icon/partner-192, drawn here (shared/chrome/app-icon.ts) -->
+              <img [attr.src]="icon()" alt="" width="72" height="72" class="h-[72px] w-[72px] rounded-2xl shadow-md" />
               <div>
                 <h1 class="font-display text-3xl font-bold text-ink">Get the partner app</h1>
                 <p class="text-ink-soft">{{ o()?.app_version ? "Version " + o()!.app_version + " · " : "" }}Android 8 and above</p>
@@ -112,6 +115,7 @@ export class DeliveryDownloadPage {
   protected readonly o = signal<DeliveryOptions | null>(null);
   protected readonly failed = signal(false);
   protected readonly qr = signal<string | null>(null);
+  protected readonly icon = signal<string | null>(null);
   protected readonly steps = STEPS;
   protected readonly perks = PERKS;
   protected readonly CheckCircle2 = CheckCircle2;
@@ -129,6 +133,7 @@ export class DeliveryDownloadPage {
     let live = true;
     inject(DestroyRef).onDestroy(() => (live = false));
     loadDeliveryOptions().then((x) => { if (live) this.o.set(x); }).catch(() => { if (live) this.failed.set(true); });
+    appIcon("partner-192", inject(SiteService).site()).then((u) => { if (live) this.icon.set(u); }).catch(() => {});
     import("qrcode")
       .then((m) => ((m as unknown as { default?: typeof m }).default ?? m).toDataURL(`${window.location.origin}/delivery/download`, { margin: 1, width: 220, color: { dark: "#1B2430", light: "#FFFFFF" } }))
       .then((u) => { if (live) this.qr.set(u); })
