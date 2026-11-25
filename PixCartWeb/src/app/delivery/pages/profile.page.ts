@@ -203,16 +203,17 @@ export class PartnerAddressForm {
           <a [href]="'tel:' + options()!.support_phone" class="flex items-center justify-center gap-2 text-sm font-semibold text-peacock"><svg [pcIcon]="Phone" class="h-4 w-4" /> Delivery team: {{ options()!.support_phone }}</a>
         }
 
-        <pc-modal [open]="photo()" (close)="photo.set(false)" title="Your photo">
-          <pc-upload-tile kind="photo" label="Take a new photo" [done]="!!p.photo" [preview]="p.photo || undefined" (uploaded)="partners.set($event); photo.set(false)" />
-        </pc-modal>
-        <pc-modal [open]="bank()" (close)="bank.set(false)" title="Change payout account">
-          @if (bank()) {<pc-partner-bank-form [partner]="p" (done)="partners.set($event); bank.set(false)" />}
-        </pc-modal>
-        <pc-modal [open]="address()" (close)="address.set(false)" title="Home address">
-          @if (address()) {<pc-partner-address-form [partner]="p" (done)="partners.set($event); address.set(false)" />}
-        </pc-modal>
       </div>
+      <!-- outside the column: a dialog's host element would otherwise take a gap -->
+      <pc-modal [open]="photo()" (close)="photo.set(false)" title="Your photo">
+        <pc-upload-tile kind="photo" label="Take a new photo" [done]="!!p.photo" [preview]="p.photo || undefined" (uploaded)="partners.set($event); photo.set(false)" />
+      </pc-modal>
+      <pc-modal [open]="bank()" (close)="bank.set(false)" title="Change payout account">
+        @if (bank()) {<pc-partner-bank-form [partner]="p" (done)="partners.set($event); bank.set(false)" />}
+      </pc-modal>
+      <pc-modal [open]="address()" (close)="address.set(false)" title="Home address">
+        @if (address()) {<pc-partner-address-form [partner]="p" (done)="partners.set($event); address.set(false)" />}
+      </pc-modal>
     }
   `,
 })

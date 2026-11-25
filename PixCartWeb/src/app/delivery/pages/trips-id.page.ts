@@ -540,9 +540,9 @@ export class FailDialog {
             </ol>
           </details>
         }
-
-        <pc-fail-dialog [open]="failing()" [tripId]="t.id" [collecting]="collecting()" (closed)="failing.set(false)" (done)="failed($event)" [last]="feeds.location.last()" />
       </div>
+      <!-- outside the column: the dialog's host element would otherwise take a gap -->
+      <pc-fail-dialog [open]="failing()" [tripId]="t.id" [collecting]="collecting()" (closed)="failing.set(false)" (done)="failed($event)" [last]="feeds.location.last()" />
     } @else if (!error()) {
       <pc-full-loader label="Opening the trip" />
     } @else {

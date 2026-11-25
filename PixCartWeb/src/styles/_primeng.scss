@@ -28,3 +28,10 @@
 
 // data tables: sortable headers show a pointer
 .p-datatable-sortable-column { cursor: pointer; user-select: none; }
+
+// the shared Modal is a bottom sheet on phones and centred from sm up (the reference's "items-end sm:items-center");
+// the Dialog writes align-items: center on its mask inline, so the classes alone would not take effect
+.pc-modal-mask { align-items: flex-end !important; }
+@media (min-width: 640px) {
+  .pc-modal-mask { align-items: center !important; }
+}
