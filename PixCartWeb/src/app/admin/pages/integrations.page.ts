@@ -131,7 +131,7 @@ export class IntegrationEditor {
   protected readonly I = { KeyRound, PlugZap, Copy, ExternalLink };
   protected readonly dateTime = dateTime;
   protected readonly values = signal<Record<string, string | number | boolean>>({});
-  protected readonly secrets = signal<Record<string, string>>({});
+  protected readonly secrets = signal<Record<string, string | undefined>>({});
   protected readonly clear = signal<string[]>([]);
   protected readonly enabled = signal(false);
   protected readonly password = signal("");
@@ -185,7 +185,7 @@ export class IntegrationEditor {
     const values = this.values(), secrets = this.secrets();
     const changed: Record<string, unknown> = {};
     for (const f of item.fields) {
-      if (f.kind === "secret") { if (secrets[f.key]?.trim()) changed[f.key] = secrets[f.key].trim(); }
+      if (f.kind === "secret") { const sv = secrets[f.key]?.trim(); if (sv) changed[f.key] = sv; }
       else if (values[f.key] !== (f.value ?? "") && !(values[f.key] === "" && !f.set)) changed[f.key] = f.kind === "number" ? Number(values[f.key]) : values[f.key];
     }
     try {

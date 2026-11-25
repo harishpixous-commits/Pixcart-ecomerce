@@ -26,7 +26,7 @@ type K = {
   top_products: { product_id: string; title: string; units: number; revenue: number }[];
   top_sellers?: { name: string; gmv: number; packages: number }[];
   top_categories?: { name: string; gmv: number }[];
-  payment_mix?: Record<string, number>;
+  payment_mix?: Record<string, number | undefined>;
   new_customers?: number; buyers?: number; repeat_buyer_rate?: number; tickets_ack_overdue?: number;
 };
 

@@ -11,7 +11,7 @@ import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, ErrorNote, Field, Pill, Textarea, TextField, Toast } from "../../shared/ui/ui";
 
 type T = { event: string; channel: "inapp" | "email" | "sms" | "whatsapp"; customised: boolean; subject: string; body: string; provider_template: string; is_active: boolean };
-type D = { items: T[]; delivery: Record<string, number>; channels: { email: boolean; sms: boolean; whatsapp: boolean } };
+type D = { items: T[]; delivery: Record<string, number | undefined>; channels: { email: boolean; sms: boolean; whatsapp: boolean } };
 
 const CHANNEL: Record<string, string> = { inapp: "In the app", email: "Email", sms: "SMS", whatsapp: "WhatsApp" };
 const EVENT: Record<string, string> = {

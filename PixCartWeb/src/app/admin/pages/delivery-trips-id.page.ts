@@ -154,7 +154,7 @@ export class CancelTrip {
                 @for (x of log(); track $index) {
                   <li class="relative text-sm">
                     <span class="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-peacock ring-2 ring-white" aria-hidden="true"></span>
-                    <p><span class="font-semibold">{{ words(x.status) }}</span> <span class="text-ink-faint">· {{ actor[x.actor ?? ""] ?? x.actor }} · {{ dateTime(x.at) }}</span></p>
+                    <p><span class="font-semibold">{{ words(x.status) }}</span>&ngsp;<span class="text-ink-faint">· {{ actor[x.actor ?? ""] ?? x.actor }} · {{ dateTime(x.at) }}</span></p>
                     @if (x.note) {<p class="text-ink-soft">{{ x.note }}</p>}
                     @if (x.lat != null && x.lng != null) {
                       <a [href]="'https://www.google.com/maps?q=' + x.lat + ',' + x.lng" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-peacock">
