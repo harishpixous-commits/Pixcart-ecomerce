@@ -496,8 +496,7 @@ export class ReportReview {
         @if (r().title) {<p class="font-semibold">{{ r().title }}</p>}
       </div>
       <p class="mt-0.5 text-xs text-ink-faint">
-        Reviewed on {{ date(r().created_at) }}
-        @if (r().verified) {<span class="ml-2 inline-flex items-center gap-0.5 font-semibold text-leaf"><svg [pcIcon]="BadgeCheck" class="h-3.5 w-3.5" /> Verified purchase</span>}
+        Reviewed on {{ date(r().created_at) }}@if (r().verified) {<span class="ml-2 inline-flex items-center gap-0.5 font-semibold text-leaf"><svg [pcIcon]="BadgeCheck" class="h-3.5 w-3.5" /> Verified purchase</span>}
       </p>
       @if (r().body) {
         <p class="mt-2 whitespace-pre-line text-ink-soft">{{ long() && !more() ? r().body.slice(0, 400) + "…" : r().body }}@if (long()) {<button type="button" (click)="more.set(!more())" class="ml-1 text-sm font-semibold text-peacock">{{ more() ? "Show less" : "Read more" }}</button>}</p>
@@ -633,7 +632,7 @@ export class ReviewCard {
                 @if (d.media_total > d.media.length) {<p class="mt-1 text-sm text-ink-faint">{{ d.media_total }} in all; open one to browse them.</p>}
               </div>
             }
-            @if (d.media_hidden) {<p class="text-sm text-ink-soft"><svg [pcIcon]="Camera" class="mr-1 inline h-4 w-4" /> <a [pcLink]="loginHref()" class="font-semibold text-peacock">Sign in</a> to see customer photos and videos.</p>}
+            @if (d.media_hidden) {<p class="text-sm text-ink-soft"><svg [pcIcon]="Camera" class="mr-1 inline h-4 w-4" />{{ " " }}<a [pcLink]="loginHref()" class="font-semibold text-peacock">Sign in</a> to see customer photos and videos.</p>}
 
             @if (d.rating_count > 0) {
               <div class="flex flex-wrap items-center gap-2 border-y border-line py-3">
