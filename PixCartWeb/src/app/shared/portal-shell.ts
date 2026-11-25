@@ -104,13 +104,15 @@ export class PortalShell {
       <h1 class="text-2xl font-semibold sm:text-3xl">{{ title() }}</h1>
       @if (sub()) {<p class="text-ink-soft">{{ sub() }}</p>}
     </div>
-    <div #actions [class]="hasActions() ? 'flex flex-wrap gap-2' : 'hidden'"><ng-content select="[actions]" /></div>
+    <div #actions [class]="(withActions() ?? hasActions()) ? 'flex flex-wrap gap-2' : 'hidden'"><ng-content select="[actions]" /></div>
   `,
 })
 export class PageHeader {
   readonly title = input.required<string>();
   readonly sub = input<string | undefined>(undefined);
   readonly back = input<{ href: string; label?: string } | undefined>(undefined);
+  /** true when the page passes actions (the reference shows the actions box even when every action is hidden); left out: shown when something is projected */
+  readonly withActions = input<boolean | undefined>(undefined);
   protected readonly hasActions = signal(false);
   constructor() {
     const el = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
