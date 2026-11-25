@@ -20,6 +20,8 @@
   <ItemGroup>
     <!-- the reference API's sign-in/permission rule per route (tools/schema/route_guards.py) -->
     <EmbeddedResource Include="Infrastructure/route-guards.json" LogicalName="API.Infrastructure.route-guards.json" />
+    <!-- the reference API's query-string rules per route (tools/schema/query_rules.py) -->
+    <EmbeddedResource Include="Infrastructure/query-rules.json" LogicalName="API.Infrastructure.query-rules.json" />
   </ItemGroup>
 
 </Project>

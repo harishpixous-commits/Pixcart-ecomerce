@@ -82,7 +82,7 @@ apply themselves on start.
 
 ## 8. Checks and troubleshooting
 
-- `https://<domain>/api/health` → `{"ok":true}` (database reachable).
+- `https://<domain>/api/health` → `{"status":"ok"}` (database reachable).
 - HTTP 500.30 / 502.5: the app did not start; set `stdoutLogEnabled="true"` in web.config and read `logs\stdout*.log`.
 - Pages work but refresh on a deep link (e.g. /orders/…) shows 404: `wwwroot\index.html` is missing; rebuild the package.
 - Uploads fail: check the `var` folder permission (step 4.4) and `maxAllowedContentLength` in web.config.

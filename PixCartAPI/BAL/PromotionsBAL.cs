@@ -47,7 +47,7 @@ public class PromotionsBAL(PromotionsDAL promotions, ICatalogBAL catalog, IPlatf
             for (var i = 0; i < rows.Count; i++)
             {
                 var card = cards[i].DeepClone() as JsonObject ?? [];
-                card["starts_at"] = rows[i].StartsAt.ToString("yyyy-MM-ddTHH:mm:ss");
+                card["starts_at"] = DateTimeFunctions.Iso(rows[i].StartsAt);
                 items.Add(card);
             }
             return new JsonObject
@@ -204,7 +204,7 @@ public class PromotionsBAL(PromotionsDAL promotions, ICatalogBAL catalog, IPlatf
                 ["shop_link"] = shop,
                 ["min_order_paise"] = c.MinOrderPaise,
                 ["first_order_only"] = c.FirstOrderOnly,
-                ["ends_at"] = c.EndsAt?.ToString("yyyy-MM-ddTHH:mm:ss"),
+                ["ends_at"] = DateTimeFunctions.Iso(c.EndsAt),
             });
         }
         return new JsonObject { ["items"] = items, ["enabled"] = true };

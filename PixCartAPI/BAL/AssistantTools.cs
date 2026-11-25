@@ -78,10 +78,12 @@ public static class AssistantTools
             "Matches each row of the uploaded file to live orders, packages, products (SKU), payouts, customers or sellers and lists missing records and differences (amounts in rupees, stock, status). Columns are detected from the headers unless given.",
             ["assistant_files"], "files"),
         new("propose_action", "Preparing the change",
-            "Prepares a change for the person to confirm with a button. Nothing changes until they press Confirm.",
+            // the reference lists every change kind, so the model asks for one that exists
+            "Prepares a change for the person to confirm with a button. Nothing changes until they press Confirm. "
+            + $"kinds: {string.Join(", ", AssistantActionDefs.All.Select(x => x.Kind))}. Look records up first so the params are exact.",
             ["assistant_actions"], "actions"),
         new("open_page", "Finding the page",
-            "Gives a link to an admin page.",
+            "Gives a link to an admin page. Pages: " + string.Join(", ", AssistantToolsBAL.Pages.Keys),
             ["dashboard"], "help"),
         new("remember", "Saving to memory",
             "Saves a short note the person asked you to remember for future chats (preferences, standing instructions). Use forget with the note's number to remove one.",

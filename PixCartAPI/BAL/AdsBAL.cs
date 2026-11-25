@@ -255,7 +255,7 @@ public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimi
             ["id"] = c.Id.ToString(), ["name"] = c.Name, ["status"] = c.Status, ["note"] = c.Note,
             ["placements"] = JsonNode.Parse(c.PlacementsJson), ["keywords"] = JsonNode.Parse(c.KeywordsJson),
             ["bid_paise"] = c.BidPaise, ["daily_budget_paise"] = c.DailyBudgetPaise, ["total_budget_paise"] = c.TotalBudgetPaise,
-            ["starts_at"] = c.StartsAt.ToString("yyyy-MM-ddTHH:mm:ss"), ["ends_at"] = c.EndsAt?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            ["starts_at"] = DateTimeFunctions.Iso(c.StartsAt), ["ends_at"] = DateTimeFunctions.Iso(c.EndsAt),
             ["spend_paise"] = c.SpendPaise, ["spent_today_paise"] = spentToday.GetValueOrDefault(c.Id),
             ["products"] = new JsonArray(prods.Select(p => (JsonNode)new JsonObject
             {
@@ -263,7 +263,7 @@ public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimi
                 ["image"] = imgs.GetValueOrDefault(p.ProductId)?.FirstOrDefault() ?? "",
             }).ToArray()),
             ["stats"] = statsJson,
-            ["created_at"] = c.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+            ["created_at"] = DateTimeFunctions.Iso(c.CreatedAt),
         };
     }
 
@@ -305,7 +305,7 @@ public partial class AdsBAL(AdsDAL ads, IPlatformSettingsBAL platform, IRateLimi
             ["totals_30d"] = totals,
             ["billing"] = new JsonArray(billing.Select(e => (JsonNode)new JsonObject
             {
-                ["amount"] = e.Amount, ["description"] = e.Description, ["at"] = e.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+                ["amount"] = e.Amount, ["description"] = e.Description, ["at"] = DateTimeFunctions.Iso(e.CreatedAt),
             }).ToArray()),
         };
     }

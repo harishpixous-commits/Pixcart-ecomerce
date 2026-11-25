@@ -1,0 +1,1557 @@
+{
+"DELETE /api/admin/translations": [
+{
+"max_length": 12,
+"name": "lang",
+"required": true,
+"type": "string"
+},
+{
+"max_length": 40,
+"name": "id",
+"required": false,
+"type": "string"
+},
+{
+"name": "only_ai",
+"required": false,
+"type": "boolean"
+}
+],
+"GET /api/admin/ads": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/ai/runs": [
+{
+"name": "task",
+"required": false,
+"type": "string"
+},
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/analytics": [
+{
+"ge": 7,
+"le": 365,
+"name": "days",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/assistant/conversations": [
+{
+"name": "archived",
+"required": false,
+"type": "boolean"
+},
+{
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/audit": [
+{
+"max_length": 64,
+"name": "entity_id",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/customers": [
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+},
+{
+"enum": [
+"all",
+"customers",
+"sellers",
+"staff",
+"blocked"
+],
+"name": "kind",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/deals": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/delivery/feedback": [
+{
+"enum": [
+"ratings",
+"complaints"
+],
+"name": "kind",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"",
+"open",
+"resolved"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/delivery/partners": [
+{
+"max_length": 12,
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "zone_id",
+"required": false,
+"type": "string"
+},
+{
+"name": "online",
+"required": false,
+"type": "boolean"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/delivery/payouts": [
+{
+"enum": [
+"",
+"pending",
+"paid"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/delivery/queue": [
+{
+"enum": [
+"waiting",
+"offered",
+"failed",
+"returns"
+],
+"name": "tab",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/delivery/reports": [
+{
+"ge": 7,
+"le": 180,
+"name": "days",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/delivery/trips": [
+{
+"max_length": 12,
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 60,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "partner_id",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/exports/lookup/{}": [
+{
+"max_length": 60,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/exports/{}.{}": [
+{
+"format": "date",
+"name": "from",
+"required": false,
+"type": "string"
+},
+{
+"format": "date",
+"name": "to",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 30,
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 7,
+"name": "month",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "seller",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "category",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 10,
+"name": "payment_method",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 0,
+"le": 100000,
+"name": "low_stock",
+"required": false,
+"type": "integer"
+},
+{
+"item_type": "string",
+"max_items": 60,
+"name": "columns",
+"required": false,
+"type": "array"
+}
+],
+"GET /api/admin/media": [
+{
+"enum": [
+"image",
+"video"
+],
+"name": "kind",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/orders": [
+{
+"enum": [
+"pending_payment",
+"placed",
+"cancelled"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 60,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"cod",
+"online"
+],
+"name": "payment_method",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"pending",
+"paid",
+"cod",
+"failed",
+"refunded",
+"partially_refunded"
+],
+"name": "payment_status",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"pending_payment",
+"placed",
+"confirmed",
+"packed",
+"shipped",
+"delivered",
+"cancelled"
+],
+"name": "package_status",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "seller_id",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "customer_id",
+"required": false,
+"type": "string"
+},
+{
+"name": "date_from",
+"pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+"required": false,
+"type": "string"
+},
+{
+"name": "date_to",
+"pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/payouts": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"format": "uuid",
+"name": "seller_id",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/product-reports": [
+{
+"enum": [
+"open",
+"resolved",
+"dismissed"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"name": "reason",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "seller_id",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/products": [
+{
+"enum": [
+"draft",
+"pending",
+"approved",
+"rejected",
+"archived"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 100,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "seller_id",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/questions": [
+{
+"enum": [
+"pending",
+"published",
+"hidden"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/refunds": [
+{
+"enum": [
+"pending",
+"processed",
+"failed"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 40,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/reports/tcs": [
+{
+"name": "month",
+"pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/admin/returns": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 60,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "seller_id",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/reviews": [
+{
+"enum": [
+"published",
+"pending",
+"hidden"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"name": "rating",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"name": "reported",
+"required": false,
+"type": "boolean"
+},
+{
+"name": "media",
+"required": false,
+"type": "boolean"
+},
+{
+"name": "media_pending",
+"required": false,
+"type": "boolean"
+},
+{
+"format": "uuid",
+"name": "seller_id",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/search": [
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/sellers": [
+{
+"enum": [
+"draft",
+"submitted",
+"approved",
+"rejected",
+"suspended"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/shop-assistant/chats": [
+{
+"ge": 1,
+"le": 500,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": -1,
+"le": 1,
+"name": "feedback",
+"required": false,
+"type": "integer"
+},
+{
+"name": "escalated",
+"required": false,
+"type": "boolean"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/shop-assistant/stats": [
+{
+"ge": 1,
+"le": 365,
+"name": "days",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/admin/tickets": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"name": "overdue",
+"required": false,
+"type": "boolean"
+},
+{
+"name": "grievance",
+"required": false,
+"type": "boolean"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 60,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/admin/translations": [
+{
+"max_length": 12,
+"name": "lang",
+"required": true,
+"type": "string"
+},
+{
+"max_length": 100,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"name": "origin",
+"pattern": "^(|ai|manual)$",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 10000,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/ads/click": [
+{
+"max_length": 400,
+"name": "t",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/ads/serve": [
+{
+"enum": [
+"search",
+"product",
+"home"
+],
+"name": "placement",
+"required": true,
+"type": "string"
+},
+{
+"max_length": 100,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 230,
+"name": "product",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 20,
+"name": "limit",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/alerts": [
+{
+"format": "uuid",
+"name": "variant_id",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/catalog/compare": [
+{
+"max_length": 200,
+"name": "ids",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/catalog/deals": [
+{
+"enum": [
+"live",
+"upcoming",
+"discounts"
+],
+"name": "tab",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"lightning",
+"deal_of_day",
+"limited"
+],
+"name": "kind",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 90,
+"name": "category",
+"required": false,
+"type": "string"
+},
+{
+"ge": 0,
+"le": 95,
+"name": "min_discount",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 0,
+"le": 5,
+"name": "min_rating",
+"required": false,
+"type": "number"
+},
+{
+"ge": 0,
+"name": "min_price",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 0,
+"name": "max_price",
+"required": false,
+"type": "integer"
+},
+{
+"enum": [
+"featured",
+"ending",
+"discount",
+"price_asc",
+"price_desc",
+"rating"
+],
+"name": "sort",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 200,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/catalog/delivery-estimate": [
+{
+"format": "uuid",
+"name": "variant_id",
+"required": true,
+"type": "string"
+},
+{
+"max_length": 6,
+"min_length": 6,
+"name": "pincode",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/catalog/products": [
+{
+"max_length": 100,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 90,
+"name": "category",
+"required": false,
+"type": "string"
+},
+{
+"item_type": "string",
+"name": "brand",
+"required": false,
+"type": "array"
+},
+{
+"max_length": 90,
+"name": "seller",
+"required": false,
+"type": "string"
+},
+{
+"ge": 0,
+"name": "min_price",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 0,
+"name": "max_price",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 0,
+"le": 5,
+"name": "min_rating",
+"required": false,
+"type": "number"
+},
+{
+"ge": 0,
+"le": 100,
+"name": "min_discount",
+"required": false,
+"type": "integer"
+},
+{
+"name": "in_stock",
+"required": false,
+"type": "boolean"
+},
+{
+"enum": [
+"relevance",
+"price_asc",
+"price_desc",
+"newest",
+"rating",
+"discount",
+"popular"
+],
+"name": "sort",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 500,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 60,
+"name": "page_size",
+"required": false,
+"type": "integer"
+},
+{
+"name": "pincode",
+"pattern": "^[1-9][0-9]{5}$",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 7,
+"name": "delivery",
+"required": false,
+"type": "integer"
+},
+{
+"name": "deal",
+"required": false,
+"type": "boolean"
+}
+],
+"GET /api/catalog/products/{}/media": [
+{
+"ge": 1,
+"le": 100,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/catalog/products/{}/questions": [
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"helpful",
+"recent"
+],
+"name": "sort",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 200,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/catalog/products/{}/reviews": [
+{
+"enum": [
+"recent",
+"helpful",
+"high",
+"low"
+],
+"name": "sort",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 500,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 5,
+"name": "star",
+"required": false,
+"type": "integer"
+},
+{
+"name": "media",
+"required": false,
+"type": "boolean"
+},
+{
+"name": "verified",
+"required": false,
+"type": "boolean"
+},
+{
+"max_length": 30,
+"name": "topic",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/catalog/related": [
+{
+"max_length": 800,
+"name": "ids",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"le": 24,
+"name": "limit",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/catalog/suggest": [
+{
+"max_length": 60,
+"min_length": 1,
+"name": "q",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/catalog/top": [
+{
+"enum": [
+"bestsellers",
+"new"
+],
+"name": "list",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 90,
+"name": "category",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/delivery/history": [
+{
+"format": "date",
+"name": "from",
+"required": false,
+"type": "string"
+},
+{
+"format": "date",
+"name": "to",
+"required": false,
+"type": "string"
+},
+{
+"enum": [
+"",
+"delivered",
+"failed",
+"rejected",
+"expired",
+"cancelled"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/notifications": [
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/orders": [
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 50,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/orders/buy-again": [
+{
+"ge": 1,
+"le": 24,
+"name": "limit",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/regional": [
+{
+"max_length": 2,
+"name": "country",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/seller/ads/{}/report": [
+{
+"ge": 1,
+"le": 90,
+"name": "days",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/analytics": [
+{
+"ge": 7,
+"le": 365,
+"name": "days",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/deals": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/seller/deals/options": [
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/seller/earnings": [
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/exports/lookup/category": [
+{
+"max_length": 60,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"GET /api/seller/exports/{}.{}": [
+{
+"format": "date",
+"name": "from",
+"required": false,
+"type": "string"
+},
+{
+"format": "date",
+"name": "to",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 30,
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"format": "uuid",
+"name": "category",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 10,
+"name": "payment_method",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 0,
+"le": 100000,
+"name": "low_stock",
+"required": false,
+"type": "integer"
+},
+{
+"item_type": "string",
+"max_items": 60,
+"name": "columns",
+"required": false,
+"type": "array"
+}
+],
+"GET /api/seller/inventory": [
+{
+"max_length": 100,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"name": "low_stock",
+"required": false,
+"type": "boolean"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/ledger": [
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/listing-requirements": [
+{
+"format": "uuid",
+"name": "category_id",
+"required": true,
+"type": "string"
+}
+],
+"GET /api/seller/orders": [
+{
+"enum": [
+"placed",
+"confirmed",
+"packed",
+"shipped",
+"delivered",
+"cancelled"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 40,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/product-reports": [
+{
+"enum": [
+"open",
+"resolved",
+"dismissed"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/products": [
+{
+"enum": [
+"draft",
+"pending",
+"approved",
+"rejected",
+"archived"
+],
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 100,
+"name": "q",
+"required": false,
+"type": "string"
+},
+{
+"name": "low_stock",
+"required": false,
+"type": "boolean"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 100,
+"name": "page_size",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/questions": [
+{
+"name": "unanswered",
+"required": false,
+"type": "boolean"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/returns": [
+{
+"name": "status",
+"required": false,
+"type": "string"
+},
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+}
+],
+"GET /api/seller/reviews": [
+{
+"ge": 1,
+"name": "page",
+"required": false,
+"type": "integer"
+},
+{
+"ge": 1,
+"le": 5,
+"name": "rating",
+"required": false,
+"type": "integer"
+},
+{
+"name": "unanswered",
+"required": false,
+"type": "boolean"
+},
+{
+"name": "media",
+"required": false,
+"type": "boolean"
+},
+{
+"max_length": 80,
+"name": "q",
+"required": false,
+"type": "string"
+}
+],
+"POST /api/admin/delivery/app": [
+{
+"max_length": 20,
+"name": "version",
+"required": false,
+"type": "string"
+}
+],
+"POST /api/admin/media": [
+{
+"name": "label",
+"required": false,
+"type": "string"
+}
+],
+"POST /api/admin/shop-app": [
+{
+"max_length": 20,
+"name": "version",
+"required": false,
+"type": "string"
+}
+],
+"POST /api/seller/products/import": [
+{
+"name": "dry_run",
+"required": false,
+"type": "boolean"
+}
+]
+}

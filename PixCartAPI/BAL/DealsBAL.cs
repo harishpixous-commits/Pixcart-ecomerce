@@ -164,9 +164,9 @@ public class DealsBAL(CatalogSupportDAL support, DealsDAL deals, CatalogDAL cata
             ["seller"] = d.SellerName, ["seller_id"] = d.SellerId.ToString(),
             ["deal_price"] = d.DealPricePaise, ["regular_price"] = regular, ["mrp"] = d.VariantMrp,
             ["discount_pct"] = d.VariantMrp > 0 ? (long)Math.Round(100.0 * (d.VariantMrp - d.DealPricePaise) / d.VariantMrp) : 0,
-            ["starts_at"] = d.StartsAt.ToString("yyyy-MM-ddTHH:mm:ss"), ["ends_at"] = d.EndsAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+            ["starts_at"] = DateTimeFunctions.Iso(d.StartsAt), ["ends_at"] = DateTimeFunctions.Iso(d.EndsAt),
             ["qty_limit"] = d.QtyLimit, ["sold_qty"] = d.SoldQty,
-            ["created_at"] = d.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+            ["created_at"] = DateTimeFunctions.Iso(d.CreatedAt),
         };
     }
 

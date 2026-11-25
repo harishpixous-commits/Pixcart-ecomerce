@@ -19,7 +19,7 @@ public class CustomerExtrasBAL(NotificationDAL notifications, ProductEventDAL ev
             ["items"] = new JsonArray(rows.Select(n => (JsonNode)new JsonObject
             {
                 ["id"] = n.Id.ToString(), ["title"] = n.Subject, ["body"] = n.Body, ["link"] = n.Link,
-                ["read"] = n.ReadAt is not null, ["at"] = n.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss"),
+                ["read"] = n.ReadAt is not null, ["at"] = DateTimeFunctions.Iso(n.CreatedAt),
             }).ToArray()),
         };
     }

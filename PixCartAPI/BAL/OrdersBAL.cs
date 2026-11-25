@@ -553,7 +553,7 @@ public class OrdersBAL(
                 ["id"] = s.Id.ToString(),
                 ["number"] = s.Number,
                 ["status"] = s.Status,
-                ["invoice_number"] = s.InvoiceNumber.Length > 0 ? s.InvoiceNumber : null,
+                ["invoice_number"] = s.InvoiceNumber, // the reference sends "" before the invoice exists
                 ["expected_delivery_at"] = s.ExpectedDeliveryAt?.ToString("o"),
                 ["platform_discount"] = s.PlatformDiscount,
                 ["seller_discount"] = s.SellerDiscount,
