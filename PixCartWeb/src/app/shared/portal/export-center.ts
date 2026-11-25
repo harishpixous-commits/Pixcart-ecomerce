@@ -242,10 +242,8 @@ export class ExportCard {
   host: { class: "flex flex-col gap-4" },
   template: `
     <pc-page-header [title]="title()" [sub]="sub()" [withActions]="!!d() && d()!.items.length > 1">
-      @if (d(); as d) {
-        @if (d.items.length > 1) {
-          <button actions pcButton variant="secondary" (click)="toggleAll()">{{ order().length === d.items.length ? "Clear selection" : "Select all" }}</button>
-        }
+      @if (d() && d()!.items.length > 1) {
+        <button actions pcButton variant="secondary" (click)="toggleAll()">{{ order().length === d()!.items.length ? "Clear selection" : "Select all" }}</button>
       }
     </pc-page-header>
     <pc-error-note [message]="error()" />

@@ -1,16 +1,13 @@
-/* Placeholder for frontend/src/app/seller/exports/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* Seller reports and exports. Port of frontend/src/app/seller/exports/page.tsx. */
 
 import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { PageHeader } from "../../shared/portal-shell";
+import { ExportCenter } from "../../shared/portal/export-center";
 
 @Component({
   selector: "pc-seller-exports-page",
-  imports: [PageHeader],
+  imports: [ExportCenter],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
-  template: `
-    <pc-page-header title="Exports" sub="Reference: frontend/src/app/seller/exports/page.tsx" />
-    <div class="rounded-xl bg-white p-6 text-ink-soft" data-testid="placeholder-page">This page is ported by its module.</div>
-  `,
+  template: `<pc-export-center base="/api/seller/exports" title="Reports and exports" sub="Download your orders, GST line items for GSTR-1, returns, statement and stock as CSV." />`,
 })
 export class SellerExportsPage {}

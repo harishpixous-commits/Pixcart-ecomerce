@@ -1,16 +1,19 @@
-/* Placeholder for frontend/src/app/seller/earnings/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/*
+ * Earnings moved into Payouts (balances, payouts and the full statement). Port of frontend/src/app/seller/earnings/page.tsx,
+ * which only redirects to /seller/payouts.
+ */
 
-import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { PageHeader } from "../../shared/portal-shell";
+import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { Router } from "@angular/router";
 
 @Component({
   selector: "pc-seller-earnings-page",
-  imports: [PageHeader],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
-  template: `
-    <pc-page-header title="Earnings" sub="Reference: frontend/src/app/seller/earnings/page.tsx" />
-    <div class="rounded-xl bg-white p-6 text-ink-soft" data-testid="placeholder-page">This page is ported by its module.</div>
-  `,
+  template: ``,
 })
-export class SellerEarningsPage {}
+export class SellerEarningsPage {
+  constructor() {
+    void inject(Router).navigateByUrl("/seller/payouts", { replaceUrl: true });
+  }
+}
