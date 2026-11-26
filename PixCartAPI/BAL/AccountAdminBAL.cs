@@ -66,7 +66,7 @@ public class AccountAdminBAL(
         };
     }
 
-    private static string PyRepr(JsonNode? v) => v?.GetValueKind() switch
+    private static string LiteralOf(JsonNode? v) => v?.GetValueKind() switch
     {
         null or JsonValueKind.Null => "None",
         JsonValueKind.True => "True",
@@ -80,7 +80,7 @@ public class AccountAdminBAL(
         if (body["staff_require_two_step"]?.GetValueKind() == JsonValueKind.True && !admin.TotpEnabled)
             throw new AppException("Turn on two-step sign-in for your own account first (My account), so you are not locked out.", "two_step_self");
         var cfg = await authSettings.UpdateAsync(body);
-        await audit.AuditAsync(admin, "auth.settings", "settings", AuthSettingsBAL.Key, string.Join(", ", body.Select(kv => $"{kv.Key}={PyRepr(kv.Value)}")));
+        await audit.AuditAsync(admin, "auth.settings", "settings", AuthSettingsBAL.Key, string.Join(", ", body.Select(kv => $"{kv.Key}={LiteralOf(kv.Value)}")));
         var outp = await GetAuthSettingsAsync();
         outp["settings"] = cfg;
         return outp;
@@ -408,7 +408,7 @@ public class AccountAdminBAL(
 
     private async Task<SellerModel> SellerForEditAsync(Guid id, IUnitOfWork uow) => await sellers.GetForUpdateAsync(id, uow.Transaction) ?? throw new NotFoundException("Seller");
 
-    private static string PyTuple(params string?[] xs) => "(" + string.Join(", ", xs.Select(x => x is null ? "None" : $"'{x}'")) + ")";
+    private static string TupleText(params string?[] xs) => "(" + string.Join(", ", xs.Select(x => x is null ? "None" : $"'{x}'")) + ")";
 
     /// <summary>Corrects business, GSTIN and PAN details, also while under review or approved (the seller cannot then).</summary>
     public async Task<Dictionary<string, object?>> SellerBusinessAsync(UserModel admin, Guid sellerId, SellerProfileIn body)
@@ -419,7 +419,7 @@ public class AccountAdminBAL(
         await using (var uow = await db.BeginAsync())
         {
             s = await SellerForEditAsync(sellerId, uow);
-            var before = PyTuple(s.LegalName, s.Gstin, s.DisplayName);
+            var before = TupleText(s.LegalName, s.Gstin, s.DisplayName);
             if (gstin[2..12] != pan)
                 throw new AppException("The PAN inside your GSTIN (characters 3 to 12) must match the PAN you entered", "pan_gstin_mismatch",
                     fields: new Dictionary<string, string> { ["pan"] = "Does not match GSTIN" });
@@ -435,7 +435,7 @@ public class AccountAdminBAL(
             s.ContactPhone = IndianFormats.NormalizeMobile(body.ContactPhone);
             s.UpdatedAt = DateTimeFunctions.UtcNow();
             await sellers.UpdateKycAsync(s, uow.Transaction);
-            await audit.AuditAsync(admin, "seller.edit_business", "seller", s.Id, $"{before} → {PyTuple(s.LegalName, s.Gstin, s.DisplayName)}", uow);
+            await audit.AuditAsync(admin, "seller.edit_business", "seller", s.Id, $"{before} → {TupleText(s.LegalName, s.Gstin, s.DisplayName)}", uow);
             await uow.CommitAsync();
         }
         return await SellerProfileAsync(s);

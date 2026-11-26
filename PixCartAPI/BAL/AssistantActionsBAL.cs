@@ -102,7 +102,7 @@ public class AssistantActionsBAL(
             throw new AssistantActionException($"Unknown action. Available: {string.Join(", ", AssistantActionDefs.All.Select(a => a.Kind))}");
         if (!Kinds.TryGetValue(kind, out var spec))
             throw new AssistantActionException(
-                $"Preparing {kind} is not available in this build yet; its admin operation has not been ported.");
+                $"Preparing {kind} is not available in this build yet.");
         if (!permissions.Contains(spec.Permission))
             throw new AssistantActionException($"Your role cannot do this ({spec.Permission}). Ask an owner to change your role.");
         var missing = spec.Required.Where(r => Str(prms, r).Length == 0).ToList();
@@ -292,7 +292,7 @@ public class AssistantActionsBAL(
                     clean["description"] = desc[..Math.Min(200, desc.Length)];
                     Detail("Code", code);
                     Detail("Discount", ck == "percent" ? $"{rawValue:0.##}%" : Money.Rupees(storeValue));
-                    if (ck == "percent") Detail("Note", "Stored as-is (reference behavior); percent conversion is pending owner approval");
+                    if (ck == "percent") Detail("Note", "Stored as entered; percent conversion is pending owner approval");
                     Detail("Minimum order", Money.Rupees(RupeesToPaise(prms, "min_order_rupees") ?? 0));
                     Detail("Cap", maxDisc is null ? "None" : Money.Rupees(maxDisc.Value));
                     Detail("Total uses", clean["usage_limit"]?.GetValue<int>().ToString() ?? "Unlimited");
@@ -493,7 +493,7 @@ public class AssistantActionsBAL(
                 p["internal"] is JsonValue iv && iv.TryGetValue<bool>(out var ib) && ib,
                 Str(p, "status") is { Length: > 0 } st ? st : null, null, null),
             "set_announcement" => await SetAnnouncementAsync(user, Str(p, "text"), Str(p, "link")),
-            _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet; its admin operation has not been ported.",
+            _ => throw new AppException($"Preparing {act.Kind} is not available in this build yet.",
                 "action_unavailable", 400),
         };
     }

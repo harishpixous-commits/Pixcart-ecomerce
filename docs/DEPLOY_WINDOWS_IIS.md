@@ -87,3 +87,23 @@ apply themselves on start.
 - Pages work but refresh on a deep link (e.g. /orders/…) shows 404: `wwwroot\index.html` is missing; rebuild the package.
 - Uploads fail: check the `var` folder permission (step 4.4) and `maxAllowedContentLength` in web.config.
 - Jobs not running at night: app pool Start Mode AlwaysRunning + Idle Time-out 0 + Preload Enabled.
+
+## 9. Moving the data from the Python version (once, when switching over)
+
+Copies every table, the public files (product photos and videos) and the private files (seller and delivery partner
+KYC documents, delivery proof photos) from the Python version to this one. Stop both sites first so nothing changes
+during the copy, and start the new site once so it creates the empty schema.
+
+```
+dotnet run --project tools/DataMigrator -- ^
+  --from "Host=<pg host>;Port=5432;Database=<db>;Username=<user>;Password=<password>" ^
+  --to   "Server=127.0.0.1;Port=3306;Database=pixcart;User=pixcart;Password=<password>" ^
+  --media-from   <python backend>\var\media    --media-to   <site>\var\media ^
+  --private-from <python backend>\var\private  --private-to <site>\var\private
+```
+
+- Set `App__FieldEncryptionKey` to the Python version's `FIELD_ENCRYPTION_KEY` before the copy: encrypted PAN, bank
+  numbers and saved integration keys are copied as they are and only decrypt with the same key.
+- The target tables are emptied first: run it on the new, empty database only.
+- Check afterwards: the admin dashboard totals, a few orders and invoices, a seller's bank details (masked), and a
+  delivery proof photo on a delivered order.

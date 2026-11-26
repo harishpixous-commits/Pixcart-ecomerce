@@ -15,7 +15,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
 {
     public const int MaxLines = 50;
     public const int MaxSaved = 100;
-    public const int MaxQty = 10; // request cap, as in the reference SetQty
+    public const int MaxQty = 10; // most of one item a cart line can hold
 
     /// <summary>One cart line with what the view needs (reference: services/orders.py CartLine).</summary>
     public sealed record CartLine(CartItemModel Item, VariantModel Variant, ProductModel Product, SellerModel Seller, string Image)
@@ -256,7 +256,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         {
             if (qty < 1) continue;
             try { await SetAsync(userId, variantId, qty, add: true); }
-            catch (AppException) { /* unavailable items are skipped, as in the reference */ }
+            catch (AppException) { /* unavailable items are skipped */ }
         }
         return await ViewAsync(userId);
     }

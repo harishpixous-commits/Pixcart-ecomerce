@@ -37,7 +37,7 @@ public class ReportWorkbookTests
     }
 
     [Fact]
-    public void Empty_workbook_has_reference_note_and_filterable_header()
+    public void Empty_workbook_has_note_and_filterable_header()
     {
         using var workbook = new XLWorkbook(new MemoryStream(ReportWorkbook.Build([])));
         Assert.Equal("Data", workbook.Worksheet(1).Name);

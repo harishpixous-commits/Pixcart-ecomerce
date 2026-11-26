@@ -49,7 +49,7 @@ public class AssistantUploadTests(ApiFactory f):ApiTest(f)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Excel_time_duration_epoch_and_millisecond_values_match_reference(bool epoch1904)
+    public async Task Excel_time_duration_epoch_and_millisecond_values_are_exact(bool epoch1904)
     {
         var admin = await Admin();
         using var memory = new MemoryStream();

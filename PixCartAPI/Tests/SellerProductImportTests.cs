@@ -15,7 +15,7 @@ public class SellerProductImportTests(ApiFactory f):ApiTest(f)
     {var b=new MultipartFormDataContent();b.Add(new ByteArrayContent(bytes),"file","synthetic.csv");return b;}
     private static Task<Res> Upload(Api u,string rows,string query="")=>u.Post("/api/seller/products/import"+query,Body(Encoding.UTF8.GetBytes("\ufeff"+Header+rows)));
     [Fact]
-    public async Task Template_dry_run_mixed_errors_create_and_duplicate_are_reference_shaped()
+    public async Task Template_dry_run_mixed_errors_create_and_duplicate_are_well_shaped()
     {
         var (u,s)=await Seed();var t=await u.Get("/api/seller/products/import-template.csv");Assert.Equal(200,t.Status);Assert.StartsWith("product_key,title,category",t.Text.TrimStart('\ufeff'));Assert.Contains("\r\n",t.Text);
         const string bad="PHONE-1,Feature phone,Nowhere,,,,8517,,,,FP-1,,,,,999,1200,5,\r\nSHIRT-2,Imported Linen Casual Shirt,mens-shirts,,,,62,5,,,BAD,,,,,abc,500,x,\r\n";

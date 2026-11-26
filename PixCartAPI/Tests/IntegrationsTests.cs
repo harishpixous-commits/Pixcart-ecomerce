@@ -370,7 +370,7 @@ public class IntegrationsTests(ApiFactory f) : ApiTest(f)
     [InlineData(400, "Invalid REGISTRATION TOKEN", "gone")]
     [InlineData(400, "other invalid request", "error")]
     [InlineData(503, "unavailable", "error")]
-    public async Task Fcm_payload_and_status_mapping_are_reference_compatible(int status, string body, string expected)
+    public async Task Fcm_payload_and_status_mapping_are_compatible(int status, string body, string expected)
     {
         using var rsa = RSA.Create(2048);
         var cfg = new Model.DomainModel.Integrations.IntegrationSettings

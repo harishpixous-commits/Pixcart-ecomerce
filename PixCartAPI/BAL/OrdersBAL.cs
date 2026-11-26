@@ -868,8 +868,8 @@ public class OrdersBAL(
             {
                 if (JsonNode.Parse(metaText) is JsonObject meta)
                 {
-                    rzpOrder = Cut(PyText(meta["order_id"]), 40);
-                    rzpPayment = Cut(PyText(meta["payment_id"]), 40);
+                    rzpOrder = Cut(NodeText(meta["order_id"]), 40);
+                    rzpPayment = Cut(NodeText(meta["payment_id"]), 40);
                 }
             }
             catch (System.Text.Json.JsonException) { }
@@ -925,7 +925,7 @@ public class OrdersBAL(
     }
 
     /// <summary>Python's str(x or ""): a JSON string as itself, a number or true/false as text, null or "" as "".</summary>
-    private static string PyText(JsonNode? n) => n switch
+    private static string NodeText(JsonNode? n) => n switch
     {
         null => "",
         JsonValue v when v.TryGetValue<string>(out var t) => t,

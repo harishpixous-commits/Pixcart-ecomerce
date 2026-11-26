@@ -4,7 +4,7 @@ using Model.CustomeAttributes;
 namespace Model.DomainModel.Auth;
 
 // Request bodies of the sign-in and account endpoints (/api/auth, /api/addresses, /api/push, /api/account ...).
-// Field rules and messages follow the reference API's Pydantic models.
+// Field rules and messages of the sign-in requests.
 
 /// <summary>POST /api/auth/otp/request. purpose: signin (an existing account), signup (a new one) or any (older clients).</summary>
 public record OtpRequestIn
