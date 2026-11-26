@@ -11,7 +11,7 @@ public class StorefrontBAL(
     IPlatformSettingsBAL platform,
     IReviewSettingsBAL reviewSettings,
     ICatalogBAL catalog,
-    IRazorpayClient razorpay,
+    IRazorpayBAL razorpay,
     SettingsDAL settings,
     CmsDAL cms,
     AppSettings app,
