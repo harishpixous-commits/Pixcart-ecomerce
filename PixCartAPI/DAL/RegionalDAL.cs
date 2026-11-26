@@ -45,7 +45,7 @@ public class RegionalDAL(IMySqlDapperHelper db)
     {
         var w = "lang = @lang";
         p.Add("lang", lang);
-        if (q.Length > 0) { w += " AND (source LIKE @like OR text LIKE @like)"; p.Add("like", SqlHelpers.Contains(q)); }
+        if (q.Length > 0) { w += " AND (source LIKE @like OR text LIKE @like)"; p.Add("like", "%" + q + "%"); } // a pattern: % and _ match anything
         if (origin.Length > 0) { w += " AND origin = @origin"; p.Add("origin", origin); }
         return w;
     }
