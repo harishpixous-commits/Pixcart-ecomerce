@@ -238,6 +238,19 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   Allow (`UnmatchedRouteMiddleware`; the SPA fallback no longer catches /api).
 - Next: resume the workflow (it continues at cart-checkout-orders), fix each confirmed finding with a test, ship.
 
+### 6.6b Differential and visual checks after the fixes (2026-11-26, data refreshed with DataMigrator first)
+- `tools/parity/api_diff.py` (every GET route, 5 roles): 668 identical, 17 different, all understood: session
+  times and ids of the tool's own sign-ins; the Sentry setup text (names ASP.NET Core on purpose); the GET of the
+  payment callback (both redirect; only the redirect target differs per server); lists the Python version leaves
+  unordered (staff role choices and deal variants: no ORDER BY, physical row order; seller analytics and campaign
+  products: hash aggregate or join order); and the seller dashboard's daily dates, where Python labels each Indian
+  day one day early (date_trunc in the server's Asia/Calcutta zone, read back in UTC, then .date()): .NET keeps the
+  correct Indian day, like every other daily figure in both versions.
+- `scenario_diff.py` (cash-on-delivery journey, 23 steps), `payment_scenario.py` (Razorpay: paid, failed, approved
+  later; 20 steps) and `body_diff.py` (validation of 119 write routes): all identical.
+- `compare.cjs` shop sweep (21 routes x 390/1366, full pages): 42 of 42 within 0.19% (most about 0.03%); search and
+  category pages within 0.09%.
+
 ### 6.7 Storefront search reproduces the Python search exactly (2026-11-26)
 - Engine `PixCartAPI/Utils/TextSearch/` is PostgreSQL's text search as the Python version uses it, written in C#
   (company-facing comments are neutral on purpose; this mapping lives only here):
