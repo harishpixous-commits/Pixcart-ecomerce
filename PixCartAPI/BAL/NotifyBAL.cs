@@ -19,7 +19,7 @@ public record PushItem(Guid UserId, string Title, string Body, string Link, IRea
 
 /// <inheritdoc cref="INotifyBAL"/>
 public class NotifyBAL(
-    NotificationDAL dal, AccountDAL accounts, StaffDAL staff, SettingsDAL settings, IIntegrationBAL integrations, IAccessBAL access,
+    NotificationDAL dal, AccountDAL accounts, StaffDAL staff, ISiteBAL site, IIntegrationBAL integrations, IAccessBAL access,
     IMailHelper mail, ISMSHelper sms, IHttpClientFactory http, IServiceScopeFactory scopes, AppSettings env, IMySqlDapperHelper db,
     ILogger<NotifyBAL> log) : INotifyBAL, IAsyncDisposable, IDisposable
 {
@@ -29,7 +29,7 @@ public class NotifyBAL(
     /// <summary>Fills {{name}} placeholders; unknown names become empty.</summary>
     public static string Render(string text, IReadOnlyDictionary<string, string> variables) => EmailSMSTemplate.Render(text, variables);
 
-    /// <summary>Python's str() for variable values (True/False/None, invariant numbers).</summary>
+    /// <summary>A variable value as the templates show it (True/False/None, invariant numbers).</summary>
     public static string TextOf(object? v) => v switch
     {
         null => "None",
@@ -60,11 +60,24 @@ public class NotifyBAL(
         return "\n\n--\n" + string.Join("\n", lines.Where(x => x.Length > 0));
     }
 
+    /// <summary>
+    /// The operator's details for the footer, from the storefront settings as the site shows them (saved values over
+    /// the configured defaults for the legal name, GSTIN and grievance officer).
+    /// </summary>
+    private async Task<BusinessInfo> BusinessAsync()
+    {
+        var p = site.PublicBusiness(await site.GetSiteAsync());
+        var g = p["grievance"] as JsonObject ?? [];
+        static string S(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+        return new BusinessInfo(S(p["brand"]), S(p["legal_name"]), S(p["gstin"]), S(p["cin"]), S(p["registered_address"]),
+            S(g["name"]), S(g["email"]), S(g["phone"]), S(p["support_email"]), S(p["support_phone"]));
+    }
+
     public async Task NotifyAsync(string evt, UserModel? user, IDictionary<string, object?> variables, string link = "", IEnumerable<string>? channels = null,
         IUnitOfWork? uow = null)
     {
         if (user is null || user.DeletedAt is not null) return;
-        var business = await SiteSettingsReader.PublicBusinessAsync(settings, env);
+        var business = await BusinessAsync();
         var cfg = await integrations.GetAsync();
         var vars = new Dictionary<string, string>
         {
