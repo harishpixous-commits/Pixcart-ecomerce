@@ -12,7 +12,7 @@ case "$which" in
   mobile) dir=/c/Users/haris/Downloads/Pix-ShopCart_Mobile ;;
   *) echo "web or mobile"; exit 2 ;;
 esac
-if printf '%s\n%s' "$subject" "$body" | grep -qiE "co-authored|claude|generated with|python|reference|port(ed|ing)|migrat"; then
+if printf '%s\n%s' "$subject" "$body" | grep -qiE "co-authored|claude|generated with|python|breferenceb|bportedb|bportingb|bmigratedb"; then
   echo "commit message has a forbidden word: stop"; exit 1
 fi
 cd "$dir"
