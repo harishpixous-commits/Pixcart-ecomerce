@@ -90,9 +90,9 @@ public class PromotionsDAL(IMySqlDapperHelper db)
         return db.QueryAsync<ProductModel>(
             "SELECT p.*, COALESCE(recent.units, 0) AS units FROM products p LEFT JOIN (" +
             "SELECT i.product_id, SUM(i.qty) AS units FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id " +
-            "WHERE s.status IN ('confirmed','packed','shipped','delivered') AND s.created_at >= @since GROUP BY i.product_id" +
+            "WHERE s.status IN @live AND s.created_at >= @since GROUP BY i.product_id" +
             $") recent ON recent.product_id = p.id WHERE {where} ORDER BY {order} LIMIT {limit}",
-            new { categoryIds, newSince, since = DateTime.UtcNow.AddDays(-30) });
+            new { categoryIds, newSince, live = CatalogDAL.LivePackage, since = DateTime.UtcNow.AddDays(-30) });
     }
 
     /// <summary>A category's breadcrumb ancestors and children (reference: top_lists).</summary>
