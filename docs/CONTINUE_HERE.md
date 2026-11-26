@@ -163,39 +163,40 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   .NET controller -> BAL -> DAL, list divergences with Python file:line, .NET file:line and a concrete scenario, then
   double-check each finding before fixing it with a test).
 
-### 6.2 Angular website — 21 pages still to verify (delivery and seller-b groups; all already written)
-- Done and verified (pixel parity at 390/1366 and interactions): every shop page (browse, product, cart, checkout,
-  account, orders...), seller group A (home, orders, inventory, deals, exports...), admin group A (customers,
-  categories, coupons, deals, checkout settings, live partners...). These are merged into `port/company`.
-- 2026-11-26: admin groups B and C (34 pages) checked and MERGED into `port/company` (commit "Merge branch
-  'port/pages-admin-c'"): every page's main view within 0.14% of the reference at 390 and 1366 px with the Python API,
-  and within 0.044% at 1366 px when the Angular app runs on the .NET API (5180, fresh copy of the demo data). Still to
-  do for the admin pages: click-through of every dialog/form/second tab (the page agents did part of it; no ledger).
-- In `port/company` the remaining 21 pages (delivery + seller-b) are still placeholders
-  (`data-testid="placeholder-page"`). Each has a written, unverified implementation on its group branch (latest
-  commits "WIP ... progress saved", then a merge of port/company on 2026-11-26):
+### 6.2 Angular website — every page built and merged (2026-11-26)
+- All pages are real (0 placeholders in `port/company`): shop, seller hub, delivery partner app and admin panel.
+  The last four groups (admin-b, admin-c, seller-b, delivery: 55 pages) were pixel-checked against the reference at
+  390 and 1366 px (main view of every page within 0.5%, most under 0.05%) and merged on 2026-11-26. The 34 admin pages
+  were also compared with the Angular app running on the .NET API (within 0.044%).
+- Full flows on the real deployment shape (the IIS package from `tools/publish-windows.ps1`, API and website on one
+  address, MySQL): the reference Playwright suite `pixcart-marketplace\e2e` passes 45/45, and
+  `tools/handover-kit/flow_product_to_order.cjs` passes 9/9 (seller adds a product with a photo -> admin approves ->
+  a new customer finds it and buys it -> seller confirms -> admin and seller exports).
+- How to rerun them: seed a fresh PostgreSQL database with the reference seed (`DATABASE_URL=...pixcart_e2e_net`,
+  `MEDIA_ROOT=C:/Users/haris/pixcart-tools/e2e-net-media`, then `alembic upgrade head` and `python -m scripts.seed --demo`
+  in `pixcart-marketplace\backend`; pixcart_e2e_net already exists and is clean), copy it to MySQL `pixcart_e2e` with
+  tools/DataMigrator, `ADMIN_PASSWORD=PixCart@Admin2026 dotnet API.dll create-admin --email admin@pixcart.in`, build the
+  package to `C:\Users\haris\pixcart-tools\e2e-site`, start it with `tools/handover-kit/run-e2e-site.ps1` (port 5300,
+  sign-in codes in `C:\Users\haris\pixcart-tools\e2e-api-net.log`), then in `pixcart-marketplace\e2e`:
+  `BASE_URL=http://localhost:5300 API_LOG=C:/Users/haris/pixcart-tools/e2e-api-net.log RAZORPAY_SIM=1
+  CHROME_PATH=<playwright chromium> npx playwright test --output C:/Users/haris/pixcart-tools/e2e-results`.
+- Not yet done for the newly merged pages: a click-through of every dialog, form and second tab against the reference
+  (the e2e suite covers the main ones). Use `tools/agent-briefs/page-brief-v3.md` for that work.
 
-| Group (branch, worktree, port) | Pages |
-|---|---|
-| delivery (`port/pages-delivery`, `PixCart-pg-delivery`, 4215) | home, join, register, profile, trips-id, history, earnings, notifications, help, download |
-| seller-b (`port/pages-seller-b`, `PixCart-pg-seller-b`, 4216) | products, products-new, products-id, products-import, product-reports, payouts, questions, returns, reviews, settings, warehouses |
-| admin-b (`port/pages-admin-b`, `PixCart-pg-admin-b`, 4217) | home, orders, orders-id, payouts, integrations, notifications, go-live, exports, product-page, product-reports, delivery, delivery-queue, delivery-trips, delivery-trips-id, delivery-zones, delivery-reports, delivery-settings |
-| admin-c (`port/pages-admin-c`, `PixCart-pg-admin-c`, 4218) | storefront, settings, regional, staff, sign-in, sellers, sellers-id, products, products-id, questions, reviews, returns, refunds, reports, support, support-id, shop-assistant |
+### 6.3 Backend fixes found by the full flows (2026-11-26, shipped)
+- The customer's order page had no delivery tracking (`fleet` was always empty): new `DeliveryTrackingBAL` (partner,
+  trip steps, delivery code only while the package is with the partner, live position only when recent).
+- Cancelling a package our partners carry did not stop the trip: `DeliveryFleetBAL.OnCancelledAsync` (stop before
+  pickup, return trip to the store after pickup), called from `OrdersBAL.CancelSubOrderAsync`.
+- Sponsored products never appeared in search: the `ISponsoredProducts` hook had no implementation (`SponsoredProducts`).
+- AI availability and AI translation of shop texts had no implementation (`BAL/AI/AiHooks.cs`).
+- Staff messages to a customer were in-app only: now also by email through `INotifyBAL`.
+- The visitor's country never reached the regional suggestion on the Angular site: the API now reads the
+  Cloudflare/Vercel country header when the page sends none.
+- Missing pages carry `noindex`; every dialog is named by its title (accessibility).
+- Tests: `DeliveryTrackingTests` (3) and the region header cases; 251 backend tests pass.
 
-- How to finish them: follow `tools/agent-briefs/page-brief-v3.md` exactly (it is the brief the previous agent gave
-  its page agents). Work in chunks of 3-4 pages per group (the chunk list is in `tools/agent-briefs/pages-v3-workflow.js`,
-  GROUPS.*.chunks). For each chunk: port anything missing; pixel-compare against the reference with
-  `node tools/parity/compare.cjs --ng http://localhost:<port> --routes <real URLs> --as <role> --viewports
-  390x844,1366x900 --themes classic --full --out <dir>`; fix every real difference until each page is <= 0.5% at both
-  widths; click through every control on both sites (same request, same texts); `npx ng build` 0 errors; commit;
-  update the group ledger `<worktree>\parity-out\status.json`. Then have the chunk checked independently (a second
-  pass that only looks, never edits), fix what it finds.
-- When all pages of a group are verified: merge the group branch into `port/company` (`git -C
-  C:\Users\haris\Downloads\PixCart-company merge --no-edit port/pages-<group>` with the neutral identity), run the
-  .NET tests and `npx ng build` + `npm run test:shop-contracts`, push `port/company`, then ship (section 3).
-- Placeholders in `port/company` show "Coming soon"-style text in the company export until merged.
-
-### 6.3 Flutter apps
+### 6.4 Flutter apps
 - `apps/customer_app` is largely built (26 files: home, categories, listing, product with gallery, cart, checkout
   with Razorpay native/web, orders, order, account, auth); verify it against the website at 390x844.
 - `apps/partner_app` and `apps/seller_app` are skeletons (one main.dart each). They must be built screen by screen
@@ -207,24 +208,20 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   compare with `node PixCartMobile/tools/parity/compare.cjs --ref http://localhost:3100 --app http://localhost:<port>
   --routes <urls> [--login <phone>] --out <dir>`. One Flutter build at a time (memory).
 
-### 6.4 Database hand-over package (done 2026-11-26, NOT pushed: the owner wants to check it first)
+### 6.5 Database hand-over package (done and shipped 2026-11-26)
 - `db/pixcart_demo_db.sql` (one file: CREATE DATABASE pixcart_demo + 79 tables + all data, as it is in the .NET demo
   database), `db/media/` (61 files), `db/private/` (13 files), `db/README.md` (import command, image folders,
   connection string, migrations, sign-ins). Built by `tools/handover-kit/make_demo_db.py` (as-is by default;
   `--sanitize` also empties logs/sessions and anonymises test accounts); checked by
-  `tools/handover-kit/verify_demo_db.cjs`. The admin password in the package is the documented `PixCart@Demo2026`;
-  encrypted values use the development key of appsettings.json.
-- Verified on a brand-new MySQL 8.4 server (port 3308, data folder C:\Users\haris\pixcart-tools\mysql-verify): one
-  command import, images copied, API on 5190 with only the connection string set, Angular on 4239: storefront,
-  listing, search, product detail, my orders, customer sign-in (code on screen), admin sign-in and admin pages, all
-  images loading, no console errors.
-- The web export now includes `db/` (tools/company-export/export_company.py). Ship it with the rest once the owner
-  says so.
+  `tools/handover-kit/verify_demo_db.cjs`. Admin password in the package: `PixCart@Demo2026`. The owner also has
+  `C:\Users\haris\Downloads\pixcart_demo_db.zip` (the same folder) to send to the team.
+- Verified on a brand-new MySQL 8.4 server: one-command import, images copied, API with only the connection string
+  set: storefront, listing, search, product detail, my orders, customer and admin sign-in, all images loading.
 
-### 6.5 Not started
-- Run the reference Playwright e2e suite (`pixcart-marketplace\e2e`, 45 tests) against Angular + .NET: build the IIS
-  package with `tools/publish-windows.ps1` (or run the .NET API on 5180 and serve the Angular build), point the suite
-  at it, fix every failure in the .NET/Angular code.
+### 6.6 Not started
+- Backend review of every module against the Python code (business logic). Use
+  `tools/agent-briefs/review-backend-sequential.js` as the checklist (one module at a time; running 20 reviewers at once
+  used up the usage limit three times before any finished).
 - Record the five demo videos (web order, mobile order, admin, seller, delivery partner) on the new version, like the
   reference videos in `C:\Users\haris\Downloads\AI-Multivendor-Shopping-Cart-Demo-Videos\01..05*.mp4`. The recording
   scripts are in `tools/handover-kit/video/` (`chain_net.sh` runs them against the .NET version, `assemble.py` joins
@@ -234,13 +231,11 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
 
 ## 7. Order of work from here
 
-1. Angular pages: finish and verify the 4 groups (admin-b and admin-c first: the admin panel is the most visible),
-   merge each verified group into `port/company`, test, push, ship to the company web repo.
-2. Backend review against the Python code (section 6.1), fixing every confirmed divergence with a test.
-3. Flutter: verify the customer app, build the partner app and the seller app.
-4. E2E suite on the new stack, fix failures.
-5. The five videos.
-6. At the very end: `python -I tools/handover-kit/otp_limits.py restore` (product sign-in limits back), stop the
+1. Backend review against the Python code (section 6.6), fixing every confirmed divergence with a test.
+2. Flutter: verify the customer app, build the partner app and the seller app (section 6.4).
+3. Click-through of every dialog, form and second tab of the last 55 pages (section 6.2).
+4. The five videos.
+5. At the very end: `python -I tools/handover-kit/otp_limits.py restore` (product sign-in limits back), stop the
    dev servers you started, final ship to both company repos.
 
 After every step: commit (neutral identity, no trailers), push `port/company` (and the branch you worked on) to the
