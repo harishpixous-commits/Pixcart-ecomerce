@@ -18,6 +18,7 @@ foreach ($line in Get-Content $envFile) {
 $env:App__ConnectionString = "Server=127.0.0.1;Port=3307;Database=pixcart_parity;User=root;Password=pixcart;"
 $env:App__RunJobs = "false"
 $env:App__MediaRoot = "C:\Users\haris\pixcart-tools\parity-media"
+$env:App__PrivateRoot = "C:\Users\haris\pixcart-tools\parity-private"
 $env:App__PublicWebUrl = "http://localhost:3100"
 $env:App__CorsOrigins = "http://localhost:3100,http://localhost:4300"
 $env:App__RazorpayApiBase = "http://127.0.0.1:8790/v1"

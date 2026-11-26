@@ -1,0 +1,7 @@
+*.pdf  binary
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.webp binary
+*.webm binary
+*.sql  text eol=lf

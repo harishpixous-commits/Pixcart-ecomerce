@@ -163,13 +163,17 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   .NET controller -> BAL -> DAL, list divergences with Python file:line, .NET file:line and a concrete scenario, then
   double-check each finding before fixing it with a test).
 
-### 6.2 Angular website — 55 pages still to verify (all already written, none verified)
+### 6.2 Angular website — 21 pages still to verify (delivery and seller-b groups; all already written)
 - Done and verified (pixel parity at 390/1366 and interactions): every shop page (browse, product, cart, checkout,
   account, orders...), seller group A (home, orders, inventory, deals, exports...), admin group A (customers,
   categories, coupons, deals, checkout settings, live partners...). These are merged into `port/company`.
-- In `port/company` the remaining 55 pages are still placeholders (`data-testid="placeholder-page"`). Each has a
-  written, unverified implementation on its group branch (latest commits "WIP ... progress saved", then a merge of
-  port/company on 2026-11-26):
+- 2026-11-26: admin groups B and C (34 pages) checked and MERGED into `port/company` (commit "Merge branch
+  'port/pages-admin-c'"): every page's main view within 0.14% of the reference at 390 and 1366 px with the Python API,
+  and within 0.044% at 1366 px when the Angular app runs on the .NET API (5180, fresh copy of the demo data). Still to
+  do for the admin pages: click-through of every dialog/form/second tab (the page agents did part of it; no ledger).
+- In `port/company` the remaining 21 pages (delivery + seller-b) are still placeholders
+  (`data-testid="placeholder-page"`). Each has a written, unverified implementation on its group branch (latest
+  commits "WIP ... progress saved", then a merge of port/company on 2026-11-26):
 
 | Group (branch, worktree, port) | Pages |
 |---|---|
@@ -203,7 +207,21 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   compare with `node PixCartMobile/tools/parity/compare.cjs --ref http://localhost:3100 --app http://localhost:<port>
   --routes <urls> [--login <phone>] --out <dir>`. One Flutter build at a time (memory).
 
-### 6.4 Not started
+### 6.4 Database hand-over package (done 2026-11-26, NOT pushed: the owner wants to check it first)
+- `db/pixcart_demo_db.sql` (one file: CREATE DATABASE pixcart_demo + 79 tables + all data, as it is in the .NET demo
+  database), `db/media/` (61 files), `db/private/` (13 files), `db/README.md` (import command, image folders,
+  connection string, migrations, sign-ins). Built by `tools/handover-kit/make_demo_db.py` (as-is by default;
+  `--sanitize` also empties logs/sessions and anonymises test accounts); checked by
+  `tools/handover-kit/verify_demo_db.cjs`. The admin password in the package is the documented `PixCart@Demo2026`;
+  encrypted values use the development key of appsettings.json.
+- Verified on a brand-new MySQL 8.4 server (port 3308, data folder C:\Users\haris\pixcart-tools\mysql-verify): one
+  command import, images copied, API on 5190 with only the connection string set, Angular on 4239: storefront,
+  listing, search, product detail, my orders, customer sign-in (code on screen), admin sign-in and admin pages, all
+  images loading, no console errors.
+- The web export now includes `db/` (tools/company-export/export_company.py). Ship it with the rest once the owner
+  says so.
+
+### 6.5 Not started
 - Run the reference Playwright e2e suite (`pixcart-marketplace\e2e`, 45 tests) against Angular + .NET: build the IIS
   package with `tools/publish-windows.ps1` (or run the .NET API on 5180 and serve the Angular build), point the suite
   at it, fix every failure in the .NET/Angular code.

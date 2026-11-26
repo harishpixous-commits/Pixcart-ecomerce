@@ -495,7 +495,7 @@ def main():
     which = sys.argv[1]
     target = TARGETS[which]
     if which == "web":
-        files = tracked(["PixCartAPI", "PixCartWeb"]) + ["tools/publish-windows.ps1"] + [f"docs/{d}" for d in WEB_DOCS]
+        files = tracked(["PixCartAPI", "PixCartWeb", "db"]) + ["tools/publish-windows.ps1"] + [f"docs/{d}" for d in WEB_DOCS]
         mapping = {f: f for f in files if not EXCLUDE.match(f)}
     else:
         files = tracked(["PixCartMobile"])
