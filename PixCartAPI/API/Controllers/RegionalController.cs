@@ -15,8 +15,24 @@ namespace API.Controllers;
 [ApiController]
 public class RegionalController(IRegionalBAL regional, ITranslateBAL translate, ICurrentUser me) : ControllerBase
 {
+    /// <summary>The shop's currencies, languages and the suggestion for the visitor's country. Without a country in the
+    /// query, the country the hosting edge reports (Cloudflare or Vercel) is used; nothing is asked or stored.</summary>
     [HttpGet("/api/regional")]
-    public Task<JsonObject> Public([FromQuery, Len(0, 2)] string country = "") => regional.PublicAsync(country);
+    public Task<JsonObject> Public([FromQuery, Len(0, 2)] string country = "") =>
+        regional.PublicAsync(country.Length > 0 ? country : EdgeCountry());
+
+    /// <summary>The visitor's country from the edge's header, when it is a real two-letter code ("XX" means unknown and
+    /// "T1" Tor at Cloudflare; anything else that is not a country code is ignored).</summary>
+    private string EdgeCountry()
+    {
+        foreach (var header in new[] { "CF-IPCountry", "X-Vercel-IP-Country" })
+        {
+            var value = Request.Headers[header].ToString().Trim().ToUpperInvariant();
+            if (value.Length == 2 && char.IsAsciiLetterUpper(value[0]) && char.IsAsciiLetterUpper(value[1]) && value is not ("XX" or "T1"))
+                return value;
+        }
+        return "";
+    }
 
     /// <summary>The words on a page in the visitor's language. Lines nobody has translated yet come back missing (English).</summary>
     [HttpPost("/api/i18n/translate")]

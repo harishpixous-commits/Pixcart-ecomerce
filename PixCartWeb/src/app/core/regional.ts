@@ -52,7 +52,7 @@ export class RegionalService {
     });
   }
 
-  /** Reads /api/regional and the visitor's cookies (country detection happens at the edge, not here). */
+  /** Reads /api/regional (the API takes the visitor's country from the hosting edge's header) and the visitor's cookies. */
   async load(): Promise<void> {
     let data: RegionalPublic | null = null;
     try {

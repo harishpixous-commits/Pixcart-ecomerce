@@ -293,7 +293,7 @@ export class RegionalLanguages {
     <section class="rounded-xl bg-white p-5">
       <h2 class="mb-1 text-lg font-semibold">Regions</h2>
       <p class="mb-3 text-sm text-ink-soft">On their first visit, a shopper from a country below sees its currency and language. They can always change it.</p>
-      <pc-regional-check [checked]="cfg.detect_region" (changed)="change()({ detect_region: $event })" hint="The country comes from the hosting service (Vercel); nothing is asked or stored">Pick currency and language from the visitor's country</pc-regional-check>
+      <pc-regional-check [checked]="cfg.detect_region" (changed)="change()({ detect_region: $event })" hint="The country comes from the hosting service (for example Cloudflare); nothing is asked or stored">Pick currency and language from the visitor's country</pc-regional-check>
       <div class="mt-2 overflow-x-auto">
         <table class="w-full min-w-[560px] text-sm">
           <thead><tr class="text-left text-ink-soft"><th class="py-2">Country</th><th>Currency</th><th>Language</th><th></th></tr></thead>

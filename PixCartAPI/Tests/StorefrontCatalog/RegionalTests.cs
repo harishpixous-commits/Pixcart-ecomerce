@@ -31,6 +31,10 @@ public class RegionalTests(CatalogFactory factory) : CatalogTestBase(factory)
         Assert.True(pub["languages"]!.AsArray().First(x => x!["code"]!.GetValue<string>() == "ar")!["rtl"]!.GetValue<bool>());
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"currency": "INR", "language": "en"}"""), (await Visitor.Get("/api/regional?country=FR"))["suggest"]));
         Assert.Equal(422, (await Visitor.Get("/api/regional?country=KWT")).Status);
+        // with no country in the query, the hosting edge's country header decides (unknown codes are ignored)
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"currency": "KWD", "language": "ar"}"""), await EdgeSuggestAsync("CF-IPCountry", "kw")));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"currency": "USD", "language": "en"}"""), await EdgeSuggestAsync("X-Vercel-IP-Country", "US")));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"currency": "INR", "language": "en"}"""), await EdgeSuggestAsync("CF-IPCountry", "XX")));
         // mistakes are explained
         var bad = await admin.Put("/api/admin/regional", JsonNode.Parse("""{"currencies": [{"code": "US", "rate": "1"}]}""")!);
         Assert.Equal(400, bad.Status);
@@ -152,5 +156,14 @@ public class RegionalTests(CatalogFactory factory) : CatalogTestBase(factory)
         // a staff correction wins over the built-in line
         await admin.Put("/api/admin/translations", new { lang = "ta", source = "Buy now", text = "உடனே வாங்கு" });
         Assert.Equal("உடனே வாங்கு", (await Visitor.Post("/api/i18n/translate", new { lang = "ta", texts = new[] { "Buy now" } }))["translations"]["Buy now"]!.GetValue<string>());
+    }
+
+    /// <summary>GET /api/regional with no country in the query and the given edge header; the suggestion it returns.</summary>
+    private async Task<JsonNode?> EdgeSuggestAsync(string header, string country)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/regional");
+        request.Headers.Add(header, country);
+        using var response = await Http.SendAsync(request);
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!["suggest"];
     }
 }
