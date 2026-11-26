@@ -1,16 +1,13 @@
-/* Placeholder for frontend/src/app/admin/exports/page.tsx. The module that owns this page replaces this component (keep the file and class name). */
+/* Admin → Exports: every CSV/Excel export the admin can download. Port of frontend/src/app/admin/exports/page.tsx. */
 
 import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { PageHeader } from "../../shared/portal-shell";
+import { ExportCenter } from "../../shared/portal/export-center";
 
 @Component({
   selector: "pc-admin-exports-page",
-  imports: [PageHeader],
+  imports: [ExportCenter],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: "block" },
-  template: `
-    <pc-page-header title="Exports" sub="Reference: frontend/src/app/admin/exports/page.tsx" />
-    <div class="rounded-xl bg-white p-6 text-ink-soft" data-testid="placeholder-page">This page is ported by its module.</div>
-  `,
+  host: { class: "contents" },
+  template: `<pc-export-center base="/api/admin/exports" title="Exports" sub="Download orders, GST lines, returns, payouts, catalogue and more as CSV for your accountant or your own analysis." />`,
 })
 export class AdminExportsPage {}
