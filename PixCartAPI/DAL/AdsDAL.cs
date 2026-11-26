@@ -331,7 +331,7 @@ public class AdsDAL(IMySqlDapperHelper db)
             "SELECT p.title, COALESCE(SUM(s.impressions), 0) AS impressions, COALESCE(SUM(s.clicks), 0) AS clicks, " +
             "COALESCE(SUM(s.invalid_clicks), 0) AS invalid_clicks, COALESCE(SUM(s.spend_paise), 0) AS spend " +
             "FROM ad_stats s JOIN products p ON p.id = s.product_id " +
-            "WHERE s.campaign_id = @campaignId AND s.day >= @since GROUP BY p.title ORDER BY SUM(s.clicks) DESC",
+            "WHERE s.campaign_id = @campaignId AND s.day >= @since GROUP BY p.title ORDER BY SUM(s.clicks) DESC, SUM(s.impressions) DESC, p.title",
             new { campaignId, since });
 
     // ------------------------------------------------------------------ admin / billing
