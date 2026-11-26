@@ -84,7 +84,7 @@ public class AssistantActionsTests : ApiTest
     }
 
     [Fact]
-    public async Task Create_coupon_percent_is_reference_exact_and_confirm_fails_at_endpoint()
+    public async Task Create_coupon_percent_is_exact_and_confirm_fails_at_endpoint()
     {
         // HELD reference defect: the reference prepare stores a percent value unconverted, and its endpoint
         // (100..9000 bps) then rejects it at confirm. We keep reference behavior until the owner approves
