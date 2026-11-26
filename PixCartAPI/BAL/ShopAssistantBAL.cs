@@ -22,7 +22,7 @@ namespace BAL;
 /// customer always gets an answer.
 /// </remarks>
 public partial class ShopAssistantBAL(
-    ShopAssistantDAL dal, OrdersDAL orders, ReturnsDAL returns, SupportTicketDAL tickets, CatalogDAL catalog,
+    ShopAssistantDAL dal, OrdersDAL orders, ReturnsDAL returns, SupportTicketDAL tickets,
     SettingsDAL settings, IRateLimitBAL rateLimit, PlatformSettingsBAL platform, SiteBAL site, FeesBAL fees,
     ISupportTicketBAL support, OrdersBAL ordersBal, ReturnsBAL returnsBal, CatalogBAL catalogBal, IMySqlDapperHelper db,
     IAccessBAL access, IAuditBAL audit, BAL.AI.ILlmConfigBAL llmConfig, BAL.AI.ILlmRouterBAL llmRouter,

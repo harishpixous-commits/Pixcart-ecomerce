@@ -115,9 +115,9 @@ public static class ReportPdf
                         canvas.DrawRect(x, y, usable / 4, h, paint); paint.Style = SKPaintStyle.Fill;
                         if (i >= group.Count) continue;
                         font.Typeface = regular; font.Size = 7; paint.Color = new SKColor(0x66, 0x66, 0x66);
-                        for (var j = 0; j < labelLines[i].Count; j++) canvas.DrawText(labelLines[i][j], x + 5, y + 12 + j * 9, font, paint);
+                        for (var j = 0; j < labelLines[i].Count; j++) canvas.DrawText(labelLines[i][j], x + 5, y + 12 + j * 9, SKTextAlign.Left, font, paint);
                         font.Typeface = bold; font.Size = 9.5f; paint.Color = SKColors.Black;
-                        for (var j = 0; j < valueLines[i].Count; j++) canvas.DrawText(valueLines[i][j], x + 5, y + 12 + labelLines.Max(l => l.Count) * 9 + j * 13, font, paint);
+                        for (var j = 0; j < valueLines[i].Count; j++) canvas.DrawText(valueLines[i][j], x + 5, y + 12 + labelLines.Max(l => l.Count) * 9 + j * 13, SKTextAlign.Left, font, paint);
                     }
                     y += h;
                 }
@@ -162,7 +162,7 @@ public static class ReportPdf
                     if (series.Count > 1)
                     {
                         font.Size = 7;
-                        canvas.DrawText(series[n].Name, margin + 50 + n * (chartWidth - 50) / series.Count, y + 9, font, paint);
+                        canvas.DrawText(series[n].Name, margin + 50 + n * (chartWidth - 50) / series.Count, y + 9, SKTextAlign.Left, font, paint);
                     }
                 }
                 paint.Color = SKColors.Black; font.Size = 6;

@@ -51,7 +51,7 @@ public partial class AssistantToolsBAL
     /// person presses Confirm.</summary>
     private async Task<AssistantToolOutput> ProposeActionAsync(AssistantToolContext ctx, JsonObject a)
     {
-        var kind = Str(a, "kind");
+        var kind = Str(a, "kind") ?? ""; // a missing kind is an unknown action
         var prms = a["params"] as JsonObject ?? new JsonObject();
         AssistantActionModel act;
         try

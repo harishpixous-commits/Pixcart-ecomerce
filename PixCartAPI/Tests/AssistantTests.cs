@@ -341,7 +341,7 @@ public class AssistantTests(ApiFactory f) : ApiTest(f)
             var table = ev.First(e => Type(e) == "card" && e["card"]!["type"]!.GetValue<string>() == "table")["card"]!;
             Assert.Equal(number, table["rows"]![0]![1]!.GetValue<string>());
             // first key was rate limited, second key answered; the tool result went back to the model
-            Assert.Equal(["sk-ant-bad", "sk-ant-good"], calls.Take(2).Select(c => c.Headers.GetValueOrDefault("x-api-key")).ToArray());
+            Assert.Equal(["sk-ant-bad", "sk-ant-good"], calls.Take(2).Select(c => c.Headers.GetValueOrDefault("x-api-key") ?? "").ToArray());
             var toolResult = calls[^1].Body["messages"]!.AsArray()[^1]!["content"]![0]!;
             Assert.True(toolResult["type"]!.GetValue<string>() == "tool_result" && toolResult["content"]!.GetValue<string>().Contains(number), toolResult.ToJsonString());
             var system = calls[^1].Body["system"]!.AsArray();

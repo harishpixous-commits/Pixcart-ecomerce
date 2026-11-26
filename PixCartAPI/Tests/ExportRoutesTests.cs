@@ -30,7 +30,7 @@ public class ExportRoutesTests(ApiFactory f):ApiTest(f)
             var csv=await Download(actor,root+".csv"+dates,"text/csv","synthetic-"+spec.Name+"-"+period+".csv");Assert.Equal(new byte[]{0xef,0xbb,0xbf},csv.Take(3));Assert.Contains(spec.Headers[0],Encoding.UTF8.GetString(csv));
             // Rate limits are tested separately; keep each format loop independent.
             await ApiFactory.DbExecAsync("DELETE FROM rate_limit_events WHERE `key`=@key",new{key="export:"+actor.Id});
-            var xlsx=await Download(actor,root+".xlsx"+dates,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","synthetic-"+spec.Name+"-"+period+".xlsx");using var book=new XLWorkbook(new MemoryStream(xlsx));Assert.Equal(spec.Headers[0],book.Worksheet(1).Cell(1,1).GetString());Assert.True(book.Worksheets.Any(w=>w.Name=="About"));
+            var xlsx=await Download(actor,root+".xlsx"+dates,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","synthetic-"+spec.Name+"-"+period+".xlsx");using var book=new XLWorkbook(new MemoryStream(xlsx));Assert.Equal(spec.Headers[0],book.Worksheet(1).Cell(1,1).GetString());Assert.Contains(book.Worksheets,w=>w.Name=="About");
             var pdf=await Download(actor,root+".pdf"+dates,"application/pdf","synthetic-"+spec.Name+"-"+period+".pdf");Assert.Equal("%PDF",Encoding.ASCII.GetString(pdf,0,4));
         }
         Assert.Equal(57,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'export.%'"));

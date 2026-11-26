@@ -250,7 +250,7 @@ public class NotifyBAL(
         // a configured "Name <address>" wins; a bare address gets the storefront's brand name
         if (sender.Contains('<') && MimeKit.MailboxAddress.TryParse(sender, out var parsed))
         {
-            fromName = parsed.Name;
+            fromName = parsed.Name ?? ""; // "<address>" alone: no name
             from = parsed.Address;
         }
         return mail.SendAsync(

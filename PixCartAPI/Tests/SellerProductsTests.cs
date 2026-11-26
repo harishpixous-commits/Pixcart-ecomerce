@@ -64,7 +64,7 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
         var r=await u.Post("/api/seller/products",payload);Assert.True(r.Status==201,r.ToString());
         var id=r.Json["id"]!.GetValue<string>();var vid=r.Json["variants"]![0]!["id"]!.GetValue<string>();
         Assert.Equal("draft",r.Json["status"]!.GetValue<string>());Assert.Equal(10000,r.Json["price_from"]!.GetValue<long>());
-        Assert.Equal(0,(await u.Post($"/api/seller/products/{id}/submit")).Json["missing_details"]!.AsArray().Count);
+        Assert.Empty((await u.Post($"/api/seller/products/{id}/submit")).Json["missing_details"]!.AsArray());
         await ApiFactory.DbExecAsync("UPDATE products SET status='approved' WHERE id=@id",new {id});
         payload["details"]=r.Json["details"]!.DeepClone();payload["return_window_days"]=7;
         payload["variants"]![0]!["id"]=vid;payload["variants"]![0]!["price_paise"]=9000;

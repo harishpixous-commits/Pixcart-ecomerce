@@ -248,7 +248,7 @@ public class ShopAssistantLiveTests(ApiFactory f) : ApiTest(f)
             Assert.False(upstream.Release.Task.IsCompleted);
             upstream.Release.TrySetResult();
             var tail = await reader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds(10));
-            var done = Assert.Single(Events(tail.TrimStart()).Where(e => e["type"]!.GetValue<string>() == "done"));
+            var done = Assert.Single(Events(tail.TrimStart()), e => e["type"]!.GetValue<string>() == "done");
             Assert.Equal("First words.", done["message"]!["text"]!.GetValue<string>());
         }
         finally { upstream.Release.TrySetResult(); LlmTransport.TestHandler = null; }
@@ -300,7 +300,7 @@ public class ShopAssistantLiveTests(ApiFactory f) : ApiTest(f)
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => events.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
             await upstream.Stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var rows = await scope.ServiceProvider.GetRequiredService<DAL.ShopAssistantDAL>().MessagesAsync(Guid.Parse(chatId));
-            var reply = Assert.Single(rows.Where(m => m.Role == "assistant"));
+            var reply = Assert.Single(rows, m => m.Role == "assistant");
             Assert.Equal("stopped", reply.Status);
             Assert.Equal("live", reply.Mode);
         }

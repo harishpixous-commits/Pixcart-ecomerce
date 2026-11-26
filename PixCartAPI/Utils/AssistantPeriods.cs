@@ -80,14 +80,14 @@ public static class AssistantPeriods
             }
             if (first is null && last is null)
                 throw new AppException("Give date_from and/or date_to for a custom period", "bad_period");
-            first ??= last;
-            last ??= t;
-            if (first > last) (first, last) = (last, first);
-            if (last > t) last = t;
-            if (last.Value.DayNumber - first.Value.DayNumber >= MaxDays)
+            var from = first ?? last!.Value; // one of the two is given (checked above)
+            var to = last ?? t;
+            if (from > to) (from, to) = (to, from);
+            if (to > t) to = t;
+            if (to.DayNumber - from.DayNumber >= MaxDays)
                 throw new AppException($"Ask for at most {MaxDays} days at a time", "bad_period");
-            var label = first == last ? Fmt(first.Value) : $"{Fmt(first.Value)} to {Fmt(last.Value)}";
-            return Make(first.Value, last.Value, label, p);
+            var label = from == to ? Fmt(from) : $"{Fmt(from)} to {Fmt(to)}";
+            return Make(from, to, label, p);
         }
         if (p == "today") return Make(t, t, $"Today, {Fmt(t)}", p);
         if (p == "yesterday")

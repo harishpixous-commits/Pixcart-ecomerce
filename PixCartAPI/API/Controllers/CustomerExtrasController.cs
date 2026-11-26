@@ -9,8 +9,7 @@ namespace API.Controllers;
 /// <summary>Notifications inbox, delivery estimates, checkout coupons and the analytics beacon
 /// (reference: routers/customer.py).</summary>
 [ApiController]
-public class CustomerExtrasController(ICustomerExtrasBAL extras, ICatalogBAL catalog, ICouponsBAL coupons,
-    IPlatformSettingsBAL platform, ICurrentUser current) : ControllerBase
+public class CustomerExtrasController(ICouponsBAL coupons, IPlatformSettingsBAL platform) : ControllerBase
 {
     /// <summary>Reference: checkout_coupons.</summary>
     [HttpGet("/api/checkout/coupons")]

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Nullable warnings point at real crashes (a missing phone number, a missing template value): they stop the build. -->
+    <WarningsAsErrors>$(WarningsAsErrors);nullable</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

@@ -7,7 +7,7 @@ public class AssistantDownloadsTests
 {
     private static List<JsonObject> Messages() => [JsonNode.Parse("""
         {"role":"user","text":"Saved question","blocks":[]}
-        """).AsObject(), JsonNode.Parse("""
+        """)!.AsObject(), JsonNode.Parse("""
         {"role":"assistant","text":"ignored raw answer","blocks":[
           {"type":"text","text":"Saved **bold** answer ₹123.45"},
           {"type":"table","title":"Sales","columns":["Name","Amount"],"rows":[["=BAD",123.45],["-7",null],["-cmd","line\nbreak"]]},
@@ -17,7 +17,7 @@ public class AssistantDownloadsTests
           {"type":"file","title":"Saved file","format":"csv","detail":"Details"},
           {"type":"error","text":"Saved warning"}
         ]}
-        """).AsObject()];
+        """)!.AsObject()];
     [Fact]
     public void Json_and_markdown_preserve_saved_roles_blocks_and_action_status()
     {
