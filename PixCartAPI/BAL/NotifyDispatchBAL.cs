@@ -133,7 +133,7 @@ public class NotifyDispatchBAL(NotificationDAL dal, IntegrationBAL integrations,
         if (Restricted && !IsLoopbackLiteral(cfg.WhatsappApiBase))
             throw new InvalidOperationException("External provider calls are restricted to a local mock in this environment");
         var vars = Vars(n);
-        var parameters = vars.GetValueOrDefault("_params").Split('|', StringSplitOptions.RemoveEmptyEntries);
+        var parameters = (vars.GetValueOrDefault("_params") ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries);
         if (parameters.Length == 0) parameters = [n.Body[..Math.Min(1000, n.Body.Length)]];
         var body = new JsonObject
         {

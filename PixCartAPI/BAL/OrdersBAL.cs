@@ -20,7 +20,6 @@ namespace BAL;
 /// </summary>
 public class OrdersBAL(
     OrdersDAL orders,
-    CartDAL cartDal,
     AddressDAL addresses,
     CatalogDAL catalog,
     ICartBAL cart,
@@ -655,7 +654,7 @@ public class OrdersBAL(
             ["prefill"] = new JsonObject
             {
                 ["name"] = user.Name,
-                ["contact"] = user.Phone.Length > 0 ? $"+91{user.Phone}" : "",
+                ["contact"] = string.IsNullOrEmpty(user.Phone) ? "" : $"+91{user.Phone}",
                 ["email"] = user.Email ?? "",
             },
             ["expires_at"] = order.PaymentExpiresAt?.ToString("o"),
@@ -663,13 +662,13 @@ public class OrdersBAL(
         var reg = await regional.GetAsync();
         data["methods"] = reg["pay_methods"]?.DeepClone();
         data["card_networks"] = reg["card_networks"]?.DeepClone();
-        if (reg["save_cards"]?.GetValue<bool>() == true && (user.Phone.Length > 0 || (user.Email ?? "").Length > 0))
+        if (reg["save_cards"]?.GetValue<bool>() == true && (!string.IsNullOrEmpty(user.Phone) || !string.IsNullOrEmpty(user.Email)))
         {
             if (user.RazorpayCustomerId is null)
             {
                 try
                 {
-                    var cust = await razorpay.CreateCustomerAsync(user.Name, user.Phone.Length > 0 ? $"+91{user.Phone}" : "", user.Email ?? "");
+                    var cust = await razorpay.CreateCustomerAsync(user.Name, string.IsNullOrEmpty(user.Phone) ? "" : $"+91{user.Phone}", user.Email ?? "");
                     var cid = cust["id"]?.GetValue<string>() ?? "";
                     if (cid.Length > 0)
                     {
