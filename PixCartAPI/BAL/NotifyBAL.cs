@@ -30,7 +30,7 @@ public class NotifyBAL(
     public static string Render(string text, IReadOnlyDictionary<string, string> variables) => EmailSMSTemplate.Render(text, variables);
 
     /// <summary>Python's str() for variable values (True/False/None, invariant numbers).</summary>
-    public static string PyStr(object? v) => v switch
+    public static string TextOf(object? v) => v switch
     {
         null => "None",
         bool b => b ? "True" : "False",
@@ -72,7 +72,7 @@ public class NotifyBAL(
             ["brand"] = business.Brand,
             ["link"] = link.StartsWith('/') ? $"{env.PublicWebUrl}{link}" : link,
         };
-        foreach (var (k, v) in variables) vars[k] = PyStr(v);
+        foreach (var (k, v) in variables) vars[k] = TextOf(v);
         var now = DateTimeFunctions.UtcNow();
         var pushes = new List<PushItem>();
         foreach (var channel in channels ?? INotifyBAL.AllChannels)

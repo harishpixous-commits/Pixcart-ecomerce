@@ -1,5 +1,5 @@
 """The path- and query-parameter rules of every route of the reference API, read from its OpenAPI schema.
-The .NET API checks them before the request is read (API/Infrastructure/ReferenceQueryFilter.cs), with the reference's
+The .NET API checks them before the request is read (API/Infrastructure/QueryRulesFilter.cs), with the reference's
 messages, so a missing or invalid query value gets the same 422 answer as the reference.
 Regenerate after the reference changes:
   cd <reference backend> && PYTHONPATH=. .venv/Scripts/python <this file> <repo>/PixCartAPI/API/Infrastructure/query-rules.json

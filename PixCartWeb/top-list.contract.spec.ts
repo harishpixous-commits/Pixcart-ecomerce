@@ -21,7 +21,7 @@ async function setup(list = 'bestsellers', response: unknown = {category:null,tr
   return {fixture,element:fixture.nativeElement as HTMLElement,fetcher,search};
 }
 describe('ranked lists', () => {
-  it('loads the selected list, renders departments and the reference empty state', async () => {
+  it('loads the selected list, renders departments and the empty state', async () => {
     const {element,fetcher} = await setup();
     expect(fetcher.mock.calls[0][0]).toBe('/api/catalog/top?list=bestsellers');
     expect(element.querySelector('h1')?.textContent).toBe('Bestsellers');

@@ -141,7 +141,7 @@ public class IntegrationBAL(
         _ => true,
     };
 
-    private static string PyStr(object? v) => v switch
+    private static string TextOf(object? v) => v switch
     {
         null => "None",
         bool b => b ? "True" : "False",
@@ -157,7 +157,7 @@ public class IntegrationBAL(
             if (part.Contains("=="))
             {
                 var bits = part.Split("==", 2);
-                if (PyStr(EnvValue(bits[0])) == bits[1]) return true;
+                if (TextOf(EnvValue(bits[0])) == bits[1]) return true;
             }
             else if (part.Length > 0 && Truthy(EnvValue(part))) return true;
         }
@@ -209,7 +209,7 @@ public class IntegrationBAL(
                 ["placeholder"] = f.Placeholder, ["pattern_hint"] = f.PatternHint, ["min"] = f.Min, ["max"] = f.Max, ["set"] = isSet, ["source"] = source,
                 ["undecryptable"] = undecryptable,
             };
-            if (f.Secret) item["hint"] = isSet ? Hint(PyStr(value)) : "";
+            if (f.Secret) item["hint"] = isSet ? Hint(TextOf(value)) : "";
             else item["value"] = value ?? "";
             fields.Add(item);
         }

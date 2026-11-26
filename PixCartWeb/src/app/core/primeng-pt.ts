@@ -1,7 +1,7 @@
 /*
- * PrimeNG runs unstyled (no PrimeNG theme CSS). This pass-through preset gives PrimeNG's parts the reference site's
- * classes (styles/_site.scss), so a PrimeNG control looks like the reference control it replaces. Components can add
- * or override classes per use with [pt] or styleClass. Keep these in step with components/ui.tsx in the reference.
+ * PrimeNG runs unstyled (no PrimeNG theme CSS). This pass-through preset gives PrimeNG's parts the site's own
+ * classes (styles/_site.scss), so a PrimeNG control looks like the rest of the site. Components can add or override
+ * classes per use with [pt] or styleClass. Keep these in step with shared/ui/ui.ts.
  */
 
 import type { GlobalPassThrough } from "primeng/config";

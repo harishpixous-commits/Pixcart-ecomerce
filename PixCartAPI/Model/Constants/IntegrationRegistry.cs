@@ -215,10 +215,10 @@ public static class IntegrationRegistry
             ],
             Off = new Dictionary<string, object> { ["sentry_dsn"] = "" },
             DefaultOn = "sentry_dsn",
-            DocsUrl = "https://docs.sentry.io/platforms/python/integrations/fastapi/",
+            DocsUrl = "https://docs.sentry.io/platforms/dotnet/guides/aspnetcore/",
             SetupSteps =
             [
-                "Create a Python/FastAPI project in Sentry and copy its DSN here.",
+                "Create an ASP.NET Core project in Sentry and copy its DSN here.",
                 "Save; the server starts reporting within a minute.",
             ],
         },

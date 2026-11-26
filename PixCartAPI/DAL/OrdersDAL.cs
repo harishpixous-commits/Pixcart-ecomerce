@@ -432,6 +432,7 @@ public class OrdersDAL(IMySqlDapperHelper db)
     public async Task<IReadOnlyList<(string Date, long Amount, long Orders)>> DailySalesSinceAsync(Guid sellerId, DateTime since)
     {
         var rows = await db.QueryAsync<(DateTime Date, long Amount, long Orders)>(
+            // days are UTC days: times are stored in UTC and the day is taken in the database's UTC session
             @"SELECT DATE(created_at) AS Date, COALESCE(SUM(total), 0) AS Amount, COUNT(*) AS Orders
               FROM sub_orders
               WHERE seller_id = @sellerId AND created_at >= @since AND status NOT IN ('pending_payment', 'cancelled')

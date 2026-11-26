@@ -14,9 +14,9 @@ namespace API.Infrastructure;
 /// core/errors.py friendly_error words them) and the same first message ("Variant id: is required").
 ///
 /// The rules come from <c>query-rules.json</c>, generated from the reference's OpenAPI schema by
-/// tools/schema/query_rules.py. Sign-in is checked first (<see cref="ReferenceGuardFilter"/>), like the reference.
+/// tools/schema/query_rules.py. Sign-in is checked first (<see cref="RouteGuardFilter"/>), like the reference.
 /// </summary>
-public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
+public sealed partial class QueryRulesFilter : IAsyncResourceFilter
 {
     private sealed record Rule(
         string Name, string In, bool Required, string Type, string? Format, List<JsonElement>? Enum, int? MinLength, int? MaxLength,
@@ -74,7 +74,7 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
     private static partial Regex PathParam();
 
     /// <summary>HttpContext.Items key: path and query errors waiting for the body check.</summary>
-    internal const string PendingErrors = "reference.param.errors";
+    internal const string PendingErrors = "request.param.errors";
 
     private static readonly HashSet<string> TrueWords = ["1", "on", "t", "true", "y", "yes"];
     private static readonly HashSet<string> FalseWords = ["0", "off", "f", "false", "n", "no"];
@@ -82,7 +82,7 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
         if (context.ActionDescriptor is ControllerActionDescriptor action && action.AttributeRouteInfo?.Template is { Length: > 0 } template
-            && Rules.Value.TryGetValue(ReferenceGuardFilter.Key(context.HttpContext.Request.Method, template), out var rules))
+            && Rules.Value.TryGetValue(RouteGuardFilter.Key(context.HttpContext.Request.Method, template), out var rules))
         {
             var fields = new Dictionary<string, string>();
             var query = context.HttpContext.Request.Query;
@@ -115,8 +115,8 @@ public sealed partial class ReferenceQueryFilter : IAsyncResourceFilter
             if (fields.Count > 0)
             {
                 // the reference reports path, query and body errors in one answer: when the body is checked next, it adds
-                // its errors and answers (ReferenceBodyFilter)
-                if (ReferenceBodyFilter.Checks(context.HttpContext.Request.Method, template))
+                // its errors and answers (BodyRulesFilter)
+                if (BodyRulesFilter.Checks(context.HttpContext.Request.Method, template))
                     context.HttpContext.Items[PendingErrors] = fields;
                 else
                 {

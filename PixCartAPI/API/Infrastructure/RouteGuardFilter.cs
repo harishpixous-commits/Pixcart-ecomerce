@@ -17,7 +17,7 @@ namespace API.Infrastructure;
 /// public | optional | signed_in | admin | perm:&lt;code&gt; | seller | approved_seller | partner:&lt;rule&gt;.
 /// The business layer still checks permissions itself (defence in depth); this filter only makes the order right.
 /// </summary>
-public sealed partial class ReferenceGuardFilter : IAsyncAuthorizationFilter
+public sealed partial class RouteGuardFilter : IAsyncAuthorizationFilter
 {
     private static readonly Lazy<Dictionary<string, string>> Rules = new(Load);
 

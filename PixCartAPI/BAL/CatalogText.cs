@@ -38,8 +38,8 @@ internal static partial class CatalogText
     /// <summary>A string value or null when the value is not a JSON string.</summary>
     public static string? AsString(JsonNode? n) => n is JsonValue v && v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : null;
 
-    /// <summary>Python's int(x) for JSON values; ArgumentException like int() raising ValueError/TypeError.</summary>
-    public static long PyInt(JsonNode? n)
+    /// <summary>A whole number from a JSON value (number, numeric text or true/false); ArgumentException otherwise.</summary>
+    public static long LenientInt(JsonNode? n)
     {
         switch (n?.GetValueKind())
         {
@@ -50,9 +50,9 @@ internal static partial class CatalogText
             case JsonValueKind.String:
                 var s = n!.GetValue<string>().Trim().Replace("_", "");
                 if (long.TryParse(s, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var i)) return i;
-                throw new ArgumentException($"invalid literal for int() with base 10: '{n.GetValue<string>()}'");
+                throw new ArgumentException($"'{n.GetValue<string>()}' is not a whole number");
             default:
-                throw new ArgumentException("int() argument must be a string, a bytes-like object or a real number, not 'NoneType'");
+                throw new ArgumentException("A whole number is required");
         }
     }
 
@@ -66,7 +66,7 @@ internal static partial class CatalogText
     public static string PlainText(JsonNode? value, int limit) => Cut(ControlRx().Replace(OrEmpty(value), "").Trim(), limit);
 
     /// <summary>Python's datetime.isoformat() for an aware time (microseconds only when not zero).</summary>
-    public static string PyIso(DateTimeOffset t)
+    public static string IsoText(DateTimeOffset t)
     {
         var frac = t.Ticks % TimeSpan.TicksPerSecond / 10;
         var main = t.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture) + (frac != 0 ? "." + frac.ToString("D6") : "");

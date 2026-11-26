@@ -1,5 +1,5 @@
 /*
- * Page titles like the reference's Next metadata: a route's `title` becomes "<title> | <brand>", pages without one
+ * Page titles: a route's `title` becomes "<title> | <brand>", pages without one
  * keep the site's SEO title. Pages can also call setPageTitle() (core/brand.ts) once their data has loaded.
  */
 

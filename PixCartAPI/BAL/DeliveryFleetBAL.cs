@@ -1278,9 +1278,10 @@ public partial class DeliveryFleetBAL(
                 ["vehicle_no"] = boy.VehicleNo, ["lat"] = boy.Lat, ["lng"] = boy.Lng,
                 ["location_at"] = boy.LocationAt?.ToString("o"),
             },
-            ["pickup_code"] = !forPartner ? sub.PickupCode : null,
         })
             view[kv.Key] = kv.Value?.DeepClone();
+        // staff only, and the key is left out for the partner, like the reference: the partner gets the code from the seller
+        if (!forPartner) view["pickup_code"] = sub.PickupCode;
         return view;
     }
 
@@ -1478,7 +1479,9 @@ public partial class DeliveryFleetBAL(
     {
         await access.RequireAsync(admin, "delivery");
         await using var uow = await db.BeginAsync();
-        var (ret, sub) = await ApprovedPickupAsync(returnId, uow);
+        // any return, whatever its status, like the reference (it only needs the return to exist)
+        var ret = await returnsDal.ReturnForUpdateAsync(returnId, uow) ?? throw new NotFoundException("Return");
+        var sub = await orders.GetSubAsync(ret.SubOrderId) ?? throw new NotFoundException("Return");
         var order = await orders.GetOrderAsync(sub.OrderId) ?? throw new NotFoundException("Order");
         var cfg = await deliverySettings.GetAsync();
         var cands = await CandidatesAsync(sub, order, cfg, uow, onlineOnly: false, ret: ret);

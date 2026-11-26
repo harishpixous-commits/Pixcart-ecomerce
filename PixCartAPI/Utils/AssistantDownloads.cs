@@ -18,7 +18,7 @@ public static class AssistantDownloads
     private static IEnumerable<JsonNode> Items(JsonNode? n) => (n as JsonArray ?? []).OfType<JsonNode>();
     private static object? Cell(JsonNode? n) => n is null ? null : n is JsonValue v && v.TryGetValue<string>(out var s) ? s : n.DeepClone();
     private static string Display(object? v) => v is null ? "" : v is JsonNode n ? Str(n) : Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
-    private static string PyStr(object? v) => v is null ? "None" : v is JsonValue j && j.TryGetValue<bool>(out var b) ? b ? "True" : "False" : Display(v);
+    private static string TextOf(object? v) => v is null ? "None" : v is JsonValue j && j.TryGetValue<bool>(out var b) ? b ? "True" : "False" : Display(v);
     private static string DefaultTitle(JsonNode b, string fallback) => Str(b["title"]) is { Length: > 0 } s ? s : fallback;
     private static IEnumerable<Table> Tables(IEnumerable<JsonNode> blocks)
     {
@@ -40,7 +40,7 @@ public static class AssistantDownloads
     }
     private static DateTime IstNow => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
     private static string Exported => IstNow.ToString("dd MMM yyyy, hh:mm tt", CultureInfo.InvariantCulture) + " IST";
-    private static string EscapeMd(object? v) => PyStr(v).Replace("|", "\\|").Replace("\n", " ");
+    private static string EscapeMd(object? v) => TextOf(v).Replace("|", "\\|").Replace("\n", " ");
     public static string Markdown(IReadOnlyList<JsonObject> messages, string title)
     {
         var p = new List<string> { "# " + title, "_Exported " + Exported + "_", "" };
@@ -83,7 +83,7 @@ public static class AssistantDownloads
             {
                 string Field(object? value)
                 {
-                    var s = value is null ? "" : PyStr(value);
+                    var s = value is null ? "" : TextOf(value);
                     if (guard && s.Length > 0 && ("=+@".Contains(s[0]) || s[0] == '-' && (s.Length < 2 || !char.IsDigit(s[1])))) s = "'" + s;
                     return s.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
                 }
