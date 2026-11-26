@@ -10,8 +10,8 @@ namespace API.Controllers;
 
 /// <summary>
 /// Staff delivery-fleet operations (reference: routers/delivery_admin.py — same paths and payloads). Every
-/// endpoint needs the "delivery" staff permission. KYC review, zones, the live map, cash/payouts, reports,
-/// feedback and the app upload are later slices.
+/// endpoint needs the "delivery" staff permission: the queue, partners and their KYC, zones, the live map, trips,
+/// cash and payouts, reports, feedback and the partner app upload.
 /// </summary>
 [ApiController]
 [Route("/api/admin/delivery")]

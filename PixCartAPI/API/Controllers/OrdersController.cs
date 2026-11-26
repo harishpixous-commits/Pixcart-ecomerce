@@ -9,8 +9,8 @@ namespace API.Controllers;
 
 /// <summary>
 /// The shopper's orders (reference: routers/orders.py — same paths, bodies and payload). Placement is one
-/// transaction with the stock moves and coupon use; the list, cancellation, delivery rating and payment routes land
-/// with the next commerce slices.
+/// transaction with the stock moves and coupon use; also the orders list, cancellation, delivery rating and
+/// complaints, and the Razorpay payment routes.
 /// </summary>
 [ApiController]
 [Route("/api/orders")]

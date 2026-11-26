@@ -11,7 +11,7 @@ namespace API.Controllers;
 
 /// <summary>
 /// The shopper's returns (reference: routers/customer.py returns endpoints — same paths, bodies and payloads).
-/// Seller and staff decisions land with the seller/admin returns slices.
+/// Seller and staff decisions are in the seller and admin returns controllers.
 /// </summary>
 [ApiController]
 public class ReturnsController(IReturnsBAL returns, ICurrentUser current) : ControllerBase

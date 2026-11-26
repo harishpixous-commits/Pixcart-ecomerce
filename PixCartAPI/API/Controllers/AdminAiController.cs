@@ -18,8 +18,8 @@ namespace API.Controllers;
 [Route("/api/admin/ai")]
 [SignedIn]
 public class AdminAiController(
-    IAiBAL ai, IAccessBAL access, ICurrentUser current, ICatalogNotifyBAL notify,
-    AiDAL aiDal, OrdersDAL orders, AuditDAL audit) : ControllerBase
+    IAiBAL ai, IAccessBAL access, ICurrentUser current, INotifyBAL notifier,
+    AiDAL aiDal, OrdersDAL orders, AccountDAL accounts, AuditDAL audit) : ControllerBase
 {
     /// <summary>Studio home: settings, status, models, this month's usage and per-task stats (reference: GET /api/admin/ai).</summary>
     [HttpGet("")]
@@ -85,8 +85,8 @@ public class AdminAiController(
     }
 
     /// <summary>
-    /// Send a reviewed customer message (reference: POST /api/admin/ai/runs/{run_id}/send). The reference also
-    /// sends an email; the email channel is not ported, so the message reaches the customer in-app only.
+    /// Send a reviewed customer message (reference: POST /api/admin/ai/runs/{run_id}/send): in the customer's
+    /// notifications and by email. The text sent is exactly what the staff member approved.
     /// </summary>
     [HttpPost("runs/{runId:guid}/send")]
     public async Task<JsonObject> Send(Guid runId, AiSendIn body)
@@ -102,10 +102,10 @@ public class AdminAiController(
             throw new AppException("The customer's account is closed", "customer_gone", 409);
         var subject = body.Subject.Trim();
         var text = body.Text.Trim();
-        await notify.NotifyUserAsync(customer.Id, "staff_message", new Dictionary<string, string>
+        await notifier.NotifyAsync("staff_message", await accounts.GetUserAsync(customer.Id), new Dictionary<string, object?>
         {
             ["subject"] = subject, ["message"] = text, ["order_number"] = order!.Number,
-        }, $"/orders/{order!.Id}");
+        }, $"/orders/{order!.Id}", channels: ["inapp", "email"]);
         r = await ai.FinishAsync(runId.ToString(), "sent", user, $"{subject}\n\n{text}") ?? r;
         await audit.InsertAsync(new AuditLogModel
         {

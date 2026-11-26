@@ -12,7 +12,7 @@ namespace BAL;
 /// Delivery partner registration and profile (reference: routers/delivery.py registration/profile endpoints with
 /// services/fleet.py partner_out/checklist/zone_of/partner_for_user). Aadhaar numbers are never stored (only the
 /// last 4 digits and the photo); other ID numbers and bank account numbers are encrypted (reference: _apply_id and
-/// set_bank). Offers, trips and the fleet come with the delivery module's assignment slice.
+/// set_bank). Offers and trips are in DeliveryFleetBAL.
 /// </summary>
 public partial class DeliveryBAL(
     DeliveryDAL delivery,
@@ -309,7 +309,7 @@ public partial class DeliveryBAL(
         return PartnerOut(b, await ZoneOfAsync(b), await deliverySettings.GetAsync());
     }
 
-    /// <summary>The partner reads their own document (reference: my_doc; the admin read comes with delivery_admin).</summary>
+    /// <summary>The partner reads their own document (reference: my_doc; staff read the documents through the delivery admin endpoints).</summary>
     public async Task<(byte[] Data, string Media, string FileName)> ReadDocAsync(UserModel user, string kind)
     {
         var b = await RequirePartnerAsync(user);

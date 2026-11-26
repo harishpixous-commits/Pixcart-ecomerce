@@ -5,8 +5,8 @@ using Model.DomainModel;
 namespace BAL.Interface;
 
 /// <summary>The own delivery fleet pipeline: route, seller hand-off, offers, trips and delivery (reference:
-/// services/fleet.py plus the trip endpoints of routers/delivery.py). Return pickups, payouts, the stuck sweep job
-/// and the admin queue come with later slices.</summary>
+/// services/fleet.py plus the trip endpoints of routers/delivery.py), return pickups, staff assignment and the
+/// stuck-trip check.</summary>
 public interface IDeliveryFleetBAL
 {
     Task<JsonObject> EarningsAsync(UserModel user);
@@ -83,6 +83,8 @@ public interface IDeliveryFleetBAL
     Task<JsonObject> AssignByStaffAsync(UserModel admin, Guid subOrderId, Guid partnerId, bool direct, bool force);
     Task<JsonObject> AutoAssignByStaffAsync(UserModel admin, Guid subOrderId);
     Task CancelByStaffAsync(UserModel admin, Guid assignmentId, string reason);
+    /// <summary>Stops (or turns back) the trip of a fleet package that was just cancelled, inside the cancelling unit of work.</summary>
+    Task OnCancelledAsync(SubOrderModel sub, string reason, IUnitOfWork uow);
     Task<JsonObject> ResolveFailedAsync(UserModel admin, Guid assignmentId, string action);
     Task ToCourierByStaffAsync(UserModel admin, Guid subOrderId);
     Task<JsonObject> TripViewStaffAsync(Guid assignmentId);

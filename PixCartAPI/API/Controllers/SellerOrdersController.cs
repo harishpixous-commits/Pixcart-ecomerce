@@ -8,9 +8,8 @@ using Utils;
 namespace API.Controllers;
 
 /// <summary>
-/// The seller's order queues (reference: routers/seller_orders.py — same paths and payload). This slice: list,
-/// detail, confirm and pack. Ship/deliver arrive with their invoice and payout companions; the fleet endpoints come
-/// with the delivery module.
+/// The seller's order queues (reference: routers/seller_orders.py — same paths and payload): list, detail, confirm,
+/// pack, ship with their own courier or hand the package to our delivery partners, deliver, invoices and labels.
 /// </summary>
 [ApiController]
 [Route("/api/seller")]

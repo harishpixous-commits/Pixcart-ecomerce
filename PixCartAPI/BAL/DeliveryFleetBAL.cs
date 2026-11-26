@@ -12,8 +12,9 @@ namespace BAL;
 /// <summary>
 /// The own delivery fleet pipeline (reference: services/fleet.py route/ready_for_pickup/use_courier/offer/
 /// auto_assign/sweep/accept/reject/advance/deliver/fail/trip_view plus routers/delivery.py location/feed/offers/
-/// trips). Every step writes order_status_logs. Return pickups (kind 'pickup'), payouts, the stuck-check job and
-/// the admin queue are later slices; customer tracking comes with the order-view slice.
+/// trips). Every step writes order_status_logs. Return pickups (kind 'pickup'), trips back to the store after a
+/// cancellation (kind 'return'), staff assignment and the stuck-trip check are here as well; the customer's
+/// tracking view is in DeliveryTrackingBAL.
 /// </summary>
 public partial class DeliveryFleetBAL(
     DeliveryFleetDAL fleet,
@@ -427,7 +428,7 @@ public partial class DeliveryFleetBAL(
         (await orders.ItemsAsync([sub.Id], uow)).FirstOrDefault()?.Title ?? "";
 
     /// <summary>Partners who could take this package, best first, each with why they can or cannot
-    /// (reference: candidates; the return-pickup branch comes with returns).</summary>
+    /// (reference: candidates; return pickups use ReturnCandidatesAsync).</summary>
     public async Task<List<JsonObject>> CandidatesAsync(SubOrderModel sub, OrderModel order, JsonObject cfg,
         IUnitOfWork uow, bool onlineOnly = true, ReturnRequestModel? ret = null)
     {
@@ -1225,7 +1226,7 @@ public partial class DeliveryFleetBAL(
     };
 
     /// <summary>Everything a partner needs for one trip (reference: trip_view; customer details only while the trip
-    /// is theirs, staff views come with the admin slice).</summary>
+    /// is theirs; staff see every trip through the delivery admin views).</summary>
     private async Task<JsonObject> TripViewCoreAsync(DeliveryAssignmentModel a, IUnitOfWork uow, bool forPartner)
     {
         var sub = await orders.GetSubAsync(a.SubOrderId) ?? throw new NotFoundException("Order");
@@ -1521,6 +1522,33 @@ public partial class DeliveryFleetBAL(
         return new JsonObject { ["ok"] = true };
     }
 
+
+    /// <summary>
+    /// A package the fleet carries was cancelled (by the customer, the seller or staff), inside the cancelling unit of
+    /// work: a request or a trip before pickup simply stops and the partner is told not to pick it up; a package the
+    /// partner already has ends its delivery and goes back to the store on a new return trip.
+    /// </summary>
+    public async Task OnCancelledAsync(SubOrderModel sub, string reason, IUnitOfWork uow)
+    {
+        var a = await fleet.ActiveForSubAsync(sub.Id, uow);
+        if (a is null) return;
+        if (a.Status is "offered" or "accepted" or "at_store")
+        {
+            await EndAsync(a, "cancelled", $"Order cancelled ({reason}). Do not pick it up.", uow, tellPartner: true);
+            return;
+        }
+        if (a.Kind == "return") return; // already on its way back to the store
+        await EndAsync(a, "cancelled", $"Order cancelled ({reason}). Bring the package back to the store.", uow, tellPartner: true);
+        var now = DateTimeFunctions.UtcNow();
+        var back = new DeliveryAssignmentModel
+        {
+            Id = Guid.NewGuid(), OrderId = a.OrderId, SubOrderId = sub.Id, DeliveryBoyId = a.DeliveryBoyId,
+            Mode = "manual", Kind = "return", Status = "picked", AssignedAt = now, AcceptedAt = now, StatusAt = now, CreatedAt = now,
+        };
+        await fleet.InsertAsync(back, uow);
+        back.PickedAt = now; back.PickedLat = a.PickedLat; back.PickedLng = a.PickedLng;
+        await fleet.UpdateAsync(back, uow); // the insert covers the offer fields; the pickup fields go in with the update
+    }
 
     /// <summary>Reference: delivery_admin.cancel_assignment + fleet.cancel_by_staff.</summary>
     public async Task CancelByStaffAsync(UserModel admin, Guid assignmentId, string reason)

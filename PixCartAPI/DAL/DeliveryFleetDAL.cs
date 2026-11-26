@@ -20,6 +20,14 @@ public partial class DeliveryFleetDAL(IMySqlDapperHelper db)
         (await uow.QueryAsync<DeliveryAssignmentModel>(
             "SELECT * FROM delivery_assignments WHERE sub_order_id = @subOrderId AND status IN ('offered','accepted','at_store','picked','on_the_way','reached') ORDER BY created_at DESC LIMIT 1", new { subOrderId })).FirstOrDefault();
 
+    /// <summary>The latest delivery trip of a package that a partner took on: on the way, delivered or failed (offers
+    /// that were declined or expired are not trips). Used for the customer's tracking view.</summary>
+    public Task<DeliveryAssignmentModel?> LatestDeliveryTripAsync(Guid subOrderId) =>
+        db.QueryFirstOrDefaultAsync<DeliveryAssignmentModel>(
+            "SELECT * FROM delivery_assignments WHERE sub_order_id = @subOrderId AND kind = 'delivery' " +
+            "AND status IN ('accepted','at_store','picked','on_the_way','reached','delivered','failed') " +
+            "ORDER BY created_at DESC LIMIT 1", new { subOrderId });
+
     public Task<int> InsertAsync(DeliveryAssignmentModel a, IUnitOfWork uow) =>
         uow.ExecuteAsync(
             """

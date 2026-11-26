@@ -4,7 +4,7 @@ namespace BAL.Interface;
 
 /// <summary>
 /// Razorpay REST client boundary (reference: services/razorpay.py). Amounts are integer paise; auth is HTTP Basic
-/// (key id/secret). Payments (verify, refunds, webhooks) land with the payments slice.
+/// (key id/secret). Payment verification, refunds and webhooks use it from the orders and refund services.
 /// </summary>
 public interface IRazorpayBAL
 {

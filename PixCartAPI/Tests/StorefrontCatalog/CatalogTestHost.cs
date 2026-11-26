@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 using Utils;
@@ -51,6 +52,9 @@ public sealed class CatalogFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddHttpClient("razorpay").ConfigurePrimaryHttpMessageHandler(() => Gateway);
+            // the fake AI replaces the real model-backed services (no model is connected in tests)
+            services.RemoveAll<IAiAvailability>();
+            services.RemoveAll<ITranslationEngine>();
             services.AddSingleton<IAiAvailability>(Ai);
             services.AddSingleton<ITranslationEngine>(Ai);
         });

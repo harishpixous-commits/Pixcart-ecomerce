@@ -50,6 +50,11 @@ public static class ServiceConfiguration
         RegisterByName(services, typeof(BAL.AccessBAL).Assembly, "BAL");
         // The storefront's optional deal-timer hook is the same DealsBAL instance as IDealsBAL.
         services.AddScoped<BAL.Interface.IDealSync>(sp => sp.GetRequiredService<BAL.DealsBAL>());
+        // Sponsored products in the storefront search, from the advertising module.
+        services.AddScoped<BAL.Interface.ISponsoredProducts, BAL.SponsoredProducts>();
+        // AI for the storefront and translations: whether a model is connected for a route, and the translation engine.
+        services.AddScoped<BAL.Interface.IAiAvailability, BAL.AI.AiAvailability>();
+        services.AddScoped<BAL.Interface.ITranslationEngine, BAL.AI.AiTranslationEngine>();
         services.AddScoped<IRazorpayClient, BAL.RazorpayClient>(); // customers and saved-card tokens (payments may replace it)
 
         // background workers (BAL/BackgroundWorkerService): scheduled jobs, notifications, refunds ...

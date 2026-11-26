@@ -382,13 +382,14 @@ export class Pagination {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
-    <p-dialog class="contents" [visible]="open()" (visibleChange)="!$event && close.emit()" [modal]="true" [closeOnEscape]="true" [dismissableMask]="true"
+    <p-dialog #dialog class="contents" [visible]="open()" (visibleChange)="!$event && close.emit()" [modal]="true" [closeOnEscape]="true" [dismissableMask]="true"
       [blockScroll]="true" [draggable]="false" [resizable]="false" appendTo="body"
       [maskStyleClass]="'pc-modal-mask fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-0 sm:items-center sm:p-4'"
-      [styleClass]="dialogCls()" [attr.aria-label]="title()">
+      [styleClass]="dialogCls()">
       <ng-template #headless>
         <div class="mb-4 flex items-start justify-between gap-4">
-          <h2 class="font-display text-xl font-semibold text-ink">{{ title() }}</h2>
+          <!-- the dialog is named by its title (the dialog's aria-labelledby points at this id) -->
+          <h2 [id]="dialog.ariaLabelledBy" class="font-display text-xl font-semibold text-ink">{{ title() }}</h2>
           <button type="button" (click)="close.emit()" class="rounded-full p-1 text-ink-soft hover:bg-mist" aria-label="Close">
             <svg [pcIcon]="X" class="h-5 w-5" />
           </button>

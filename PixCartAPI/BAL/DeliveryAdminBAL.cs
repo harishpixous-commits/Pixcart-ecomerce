@@ -9,16 +9,9 @@ using Utils.Interface;
 namespace BAL;
 
 /// <summary>
-/// The own delivery fleet pipeline (reference: services/fleet.py route/ready_for_pickup/use_courier/offer/
-/// auto_assign/sweep/accept/reject/advance/deliver/fail/trip_view plus routers/delivery.py location/feed/offers/
-/// trips). Every step writes order_status_logs. Return pickups (kind 'pickup'), payouts, the stuck-check job and
-/// the admin queue are later slices; customer tracking comes with the order-view slice.
-
-/// <summary>
 /// Staff delivery-fleet operations (reference: routers/delivery_admin.py queue/candidates/assign/auto-assign/
-/// cancel/resolve/to_courier/trips/overview/settings). Every endpoint needs the "delivery" permission. KYC review,
-/// zones CRUD, the live map, cash/payouts, reports and feedback are the next admin slices; the returns tab of the
-/// queue arrives with the returns module.
+/// cancel/resolve/to_courier/trips/overview/settings), plus partner KYC review, zones, the live map, cash and
+/// payouts, reports, feedback and the returns tab of the queue. Every endpoint needs the "delivery" permission.
 /// </summary>
 public class DeliveryAdminBAL(
     DeliveryFleetDAL fleet,

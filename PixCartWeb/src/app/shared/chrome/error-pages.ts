@@ -5,7 +5,8 @@
  * <pc-not-found-view area="shop|admin|seller|delivery" />, <pc-error-view [error] (retry) area="..." />.
  */
 
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, input, output, signal } from "@angular/core";
+import { Meta } from "@angular/platform-browser";
 import { Router } from "@angular/router";
 import { House, RotateCcw, Search, SearchX, TriangleAlert } from "lucide-angular";
 import { api } from "../../core/api";
@@ -86,6 +87,14 @@ export class NotFoundView {
   protected readonly SearchX = SearchX;
   protected readonly Search = Search;
   protected readonly House = House;
+
+  constructor() {
+    // a missing page must never be indexed by search engines; the tag goes again when the visitor moves on
+    const meta = inject(Meta);
+    meta.updateTag({ name: "robots", content: "noindex" });
+    inject(DestroyRef).onDestroy(() => meta.removeTag('name="robots"'));
+  }
+
   protected search(e: Event): void {
     e.preventDefault();
     if (this.q().trim()) void this.router.navigateByUrl(`/search?q=${encodeURIComponent(this.q().trim())}`);

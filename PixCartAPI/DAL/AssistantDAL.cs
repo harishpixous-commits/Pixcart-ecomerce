@@ -44,7 +44,7 @@ public partial class AssistantDAL(IMySqlDapperHelper db)
             "SELECT * FROM assistant_actions WHERE conversation_id = @conversationId", new { conversationId }))
         .ToDictionary(a => a.Id, a => a.Status);
 
-    // ------------------------------------------------------------------ action rows (assistant actions slice)
+    // ------------------------------------------------------------------ action rows (changes the assistant proposes)
 
     public Task InsertActionAsync(AssistantActionModel a) =>
         db.ExecuteAsync(

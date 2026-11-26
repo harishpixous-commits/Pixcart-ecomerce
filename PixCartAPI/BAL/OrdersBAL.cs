@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using BAL.Interface;
 using DAL;
+using Microsoft.Extensions.DependencyInjection;
 using Model.Constants;
 using Model.DomainModel;
 using MySqlConnector;
@@ -39,8 +40,13 @@ public class OrdersBAL(
     SettingsDAL settings,
     Utils.AppSettings app,
     IMySqlDapperHelper db,
-    INotifyBAL notifier) : IOrdersBAL
+    INotifyBAL notifier,
+    IDeliveryTrackingBAL deliveryTracking,
+    IServiceProvider services) : IOrdersBAL
 {
+    // The delivery fleet service also uses this one, so it is resolved when needed (no constructor cycle).
+    private IDeliveryFleetBAL Fleet => services.GetRequiredService<IDeliveryFleetBAL>();
+
     private static readonly char[] NumberAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray(); // no O, I
 
     /// <summary>The package steps a customer can still cancel at, ever (reference: CUSTOMER_CANCELLABLE).</summary>
@@ -624,8 +630,8 @@ public class OrdersBAL(
                 ["amount"] = r.AmountPaise, ["status"] = r.Status, ["reason"] = r.Reason, ["created_at"] = r.CreatedAt.ToString("o"),
             });
         outp["refunds"] = refundArr;
-        // Packages carried by the own delivery fleet arrive with the delivery module; no fleet package means {}.
-        outp["fleet"] = new JsonObject();
+        // packages carried by the own delivery fleet: partner, trip steps, delivery code while on the way, live position
+        outp["fleet"] = await deliveryTracking.CustomerTrackingAsync(o, subs);
         return outp;
     }
 
@@ -1104,7 +1110,8 @@ public class OrdersBAL(
             FromStatus = src, ToStatus = "cancelled", Actor = actor, Note = sub.CancelReason, CreatedAt = now,
         }, uow);
         await ReleaseStockAsync(sub, uow);
-        // reference: fleet.on_cancelled when the own fleet carries the package — the delivery module owns that hook.
+        // a package our delivery partners carry: the request or trip stops, or the package goes back to the store
+        if (sub.ShippingProvider == "fleet") await Fleet.OnCancelledAsync(sub, reason, uow);
 
         var othersLive = await orders.CountLiveOtherSubsAsync(order.Id, sub.Id, uow);
         var feesBack = (await fees.GetAsync()).Bool("fees_refund_on_cancel");
@@ -1408,7 +1415,7 @@ public class OrdersBAL(
 
     /// <summary>The package's next step (reference: transition()). Shipped assigns the seller's invoice number and
     /// tells the customer; delivered opens the settlement window, posts the ledger and issues the marketplace's fee
-    /// invoice. The fleet checks come with the delivery module.</summary>
+    /// invoice.</summary>
     public async Task TransitionAsync(SubOrderModel sub, string dst, string actor, string note, IUnitOfWork uow,
         bool announce = true)
     {

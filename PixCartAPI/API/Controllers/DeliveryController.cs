@@ -8,8 +8,8 @@ using Utils;
 namespace API.Controllers;
 
 /// <summary>
-/// Delivery partner registration and profile (reference: routers/delivery.py — same paths and payload). Offers,
-/// trips and the fleet arrive with the assignment slice.
+/// The delivery partner app (reference: routers/delivery.py — same paths and payload): registration and profile,
+/// the request feed and offers, trips step by step, live location, earnings and history.
 /// </summary>
 [ApiController]
 [Route("/api/delivery")]

@@ -1,9 +1,9 @@
 namespace BAL;
 
 /// <summary>
-/// The staff assistant's tool registry: metadata (reference: app/assistant/tools.py TOOLS). Tool execution
-/// lands with the ask-engine slice; the registry drives the status/settings payloads and the decision layer's
-/// available-tool sets now.
+/// The staff assistant's tool registry (reference: app/assistant/tools.py TOOLS): each tool's name, label,
+/// description, permissions and group. It drives the status and settings payloads, the decision layer's tool sets
+/// and the tools offered to the model, which AssistantToolsBAL runs.
 /// </summary>
 public static class AssistantTools
 {

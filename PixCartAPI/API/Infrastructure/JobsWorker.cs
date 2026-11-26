@@ -10,9 +10,7 @@ using Utils.Interface;
 /// Scheduled background jobs (reference: jobs.py) with the same cadences. Each run takes a MySQL named lock so a
 /// second instance skips instead of double-running; a failed run is logged and the next one still happens. Every
 /// provider call a job makes goes through the same fail-closed gateway clients as request handling, so jobs stay
-/// on the local mock in this environment. Reference jobs whose modules are not ported (push dispatch, ads billing
-/// and prune, shopper engagement alerts, assistant session cleanup, AI review summaries) are omitted on purpose
-/// and tracked as module gaps.
+/// on the local mock in this environment.
 /// </summary>
 public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILogger<JobsWorker> log) : BackgroundService
 {

@@ -92,7 +92,7 @@ public interface IOrdersBAL
     /// <summary>Tells the customer a refund settled by hand has gone through (reference: notify_refund).</summary>
     Task NotifyRefundProcessedAsync(RefundModel refund);
 
-    /// <summary>confirm / pack (reference: _act). ship/deliver arrive with their invoice/payout companions.</summary>
+    /// <summary>The seller's dashboard: today's figures, the order queues and the sales of recent days.</summary>
     Task<JsonObject> SellerDashboardAsync(SellerModel seller);
 
     Task<JsonObject> SellerEarningsAsync(SellerModel seller, int page, int pageSize);
