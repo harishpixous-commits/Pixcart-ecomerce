@@ -180,9 +180,10 @@ public static class ServiceConfiguration
         app.MapControllers();
 
         // Windows hosting (one IIS site): the built Angular app is published into wwwroot and served from here, so the
-        // site and the API share one address (same-origin cookies, no proxy). Unknown non-API paths get index.html
-        // (Angular's router shows the page); API and media paths are left to the router (404 or 405, see
-        // UnmatchedRouteMiddleware).
+        // site and the API share one address (same-origin cookies, no proxy). A page path (GET or HEAD, no endpoint, no
+        // file extension, not an API or media path) gets index.html and Angular's router shows the page. This is a
+        // middleware, not a fallback route: a fallback route would also be a candidate for API paths and turn a wrong
+        // method (405) into a 404 (API and media paths: UnmatchedRouteMiddleware).
         var web = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
         if (File.Exists(Path.Combine(web, "index.html")))
         {
@@ -196,12 +197,20 @@ public static class ServiceConfiguration
                         System.Text.RegularExpressions.Regex.IsMatch(name, @"-[A-Z0-9]{8}\.(js|css)$") ? "public, max-age=31536000, immutable" : "public, max-age=3600";
                 },
             });
-            var mediaSegment = System.Text.RegularExpressions.Regex.Escape(settings.MediaBaseUrl.Trim('/'));
-            app.MapFallback($"{{**path:regex(^(?!(api|{mediaSegment})(/|$)))}}", async ctx =>
+            var index = Path.Combine(web, "index.html");
+            app.Use(async (ctx, next) =>
             {
+                var path = ctx.Request.Path;
+                var page = ctx.GetEndpoint() is null && (HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method))
+                           && !Path.HasExtension(path.Value) && !path.StartsWithSegments("/api") && !path.StartsWithSegments(settings.MediaBaseUrl);
+                if (!page)
+                {
+                    await next(ctx);
+                    return;
+                }
                 ctx.Response.ContentType = "text/html; charset=utf-8";
                 ctx.Response.Headers.CacheControl = "no-cache";
-                await ctx.Response.SendFileAsync(Path.Combine(web, "index.html"));
+                await ctx.Response.SendFileAsync(index);
             });
         }
     }
