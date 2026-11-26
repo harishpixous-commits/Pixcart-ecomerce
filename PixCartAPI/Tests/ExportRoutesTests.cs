@@ -43,7 +43,7 @@ public class ExportRoutesTests(ApiFactory f):ApiTest(f)
         for(var i=1;i<30;i++)await ApiFactory.DbExecAsync("INSERT INTO rate_limit_events(`key`,created_at)VALUES(@key,UTC_TIMESTAMP(6))",new{key="export:"+admin.Id});Assert.Equal(429,(await admin.Get("/api/admin/exports/orders.csv")).Status);Assert.Equal(1,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action='export.orders'"));
     }
     [Fact]
-    public void Csv_has_reference_guard_cr_normalization_boolean_and_rowcap_selection()
+    public void Csv_has_formula_guard_cr_normalization_boolean_and_rowcap_selection()
     {
         var csv=Encoding.UTF8.GetString(ExportCsv.Encode([new object?[]{"=SUM(A1)","+12","-12.3","-cmd","@bad","\tbad","a\r\nb\rc\nd",true,null}]));Assert.Equal("'=SUM(A1),'+12,-12.3,'-cmd,'@bad,'\tbad,\"a b c\nd\",yes,\r\n",csv);Assert.Equal(new object?[]{"cap note"},ExportCsv.Pick(new object?[]{"cap note"},new[]{2,3}));
     }

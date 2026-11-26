@@ -187,7 +187,7 @@ public class AdsDAL(IMySqlDapperHelper db)
         campaignIds.Count == 0
             ? Task.FromResult(Enumerable.Empty<CampaignProductRow>())
             : db.QueryAsync<CampaignProductRow>(
-                "SELECT cp.campaign_id, p.id AS product_id, p.title, p.slug FROM ad_campaign_products cp JOIN products p ON p.id = cp.product_id WHERE cp.campaign_id IN @campaignIds",
+                "SELECT cp.campaign_id, p.id AS product_id, p.title, p.slug FROM ad_campaign_products cp JOIN products p ON p.id = cp.product_id WHERE cp.campaign_id IN @campaignIds ORDER BY cp.seq",
                 new { campaignIds });
 
     /// <summary>Approved products the seller owns, of the given ids (reference: _check_campaign ownership check).</summary>

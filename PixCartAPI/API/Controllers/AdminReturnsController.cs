@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using API.Infrastructure;
 using BAL.Interface;
@@ -28,12 +29,10 @@ public class AdminReturnsController(IReturnsBAL returns, ICurrentUser current) :
     public async Task<JsonObject> Returnable(Guid orderId) =>
         await returns.AdminReturnableAsync(await current.RequireAsync(), orderId);
 
-    public sealed record CreateLine([param: Required] Guid OrderItemId, [param: Range(1, 1000)] int Qty);
-
     public sealed record CreateIn(
         [param: Required] Guid SubOrderId,
-        [param: Required, MinLength(1), MaxLength(50)] List<CreateLine> Items,
-        [param: Required, MaxLength(60)] string Reason,
+        [param: Required, MinLength(1), MaxLength(50)] List<JsonElement> Items, // free-form objects, checked by ReturnLines.Parse
+        [param: Required] string Reason, // checked against the return reasons by the business layer, like the reference
         [param: MaxLength(2000)] string Comment = "",
         [param: MaxLength(60)] string RefundUpi = "");
 
@@ -41,9 +40,9 @@ public class AdminReturnsController(IReturnsBAL returns, ICurrentUser current) :
     [HttpPost("returns")]
     public async Task<JsonObject> Create(CreateIn body)
     {
-        var lines = body.Items.Select(i => (i.OrderItemId, i.Qty)).ToList();
+        var lines = API.Helpers.ReturnLines.Parse(body.Items); // the reference's ReturnIn.lines()
         return await returns.AdminCreateAsync(await current.RequireAsync(), body.SubOrderId, lines,
-            body.Reason.Trim(), body.Comment.Trim(), body.RefundUpi.Trim());
+            body.Reason, body.Comment, body.RefundUpi.Trim());
     }
 
     public sealed record ActIn(

@@ -31,7 +31,7 @@ describe('wishlist page', () => {
     const {navigate,fetcher,element} = await setup([],false);
     expect(navigate).toHaveBeenCalledWith('/login?next=/wishlist',{replaceUrl:true});expect(fetcher).not.toHaveBeenCalled();expect(element.querySelector('h1')).toBeNull();
   });
-  it('loads API data and reproduces the reference empty state',async () => {
+  it('loads API data and renders the empty state',async () => {
     const {element,fetcher}=await setup();expect(fetcher.mock.calls[0][0]).toBe('/api/wishlist');expect(element.textContent).toContain('Your wishlist');expect(element.textContent).toContain('(0)');expect(element.textContent).toContain('Nothing saved yet');expect(element.querySelector('a')?.getAttribute('href')).toBe('/');expect(element.querySelector('[data-testid="placeholder-page"]')).toBeNull();
   });
   it('filters by current saved ids, updates count immediately and passes dense products to the grid boundary',async () => {

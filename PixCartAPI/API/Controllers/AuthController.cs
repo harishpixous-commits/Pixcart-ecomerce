@@ -13,7 +13,7 @@ public class AuthController(IAuthBAL auth, ICurrentUser me, TokenService tokens,
 {
     private string? CookieToken => Request.Cookies[settings.RefreshCookieName];
 
-    /// <summary>The refresh cookie, written exactly as the reference API writes it (HttpOnly, SameSite=lax, path /api/auth).</summary>
+    /// <summary>The refresh cookie (HttpOnly, SameSite=lax, path /api/auth).</summary>
     private void SetRefreshCookie(string token, int days) =>
         Response.Headers.Append("Set-Cookie",
             $"{settings.RefreshCookieName}={token}; HttpOnly; Max-Age={days * 86400}; Path=/api/auth; SameSite=lax{(settings.CookieSecure ? "; Secure" : "")}");

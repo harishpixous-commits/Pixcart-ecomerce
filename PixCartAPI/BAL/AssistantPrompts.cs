@@ -104,18 +104,18 @@ public static class AssistantPrompts
             $"You are helping {(userName.Length > 0 ? userName : "a staff member")} (role: {roleName}). " +
             $"Their permissions: {string.Join(", ", permissions.OrderBy(p => p, StringComparer.Ordinal))}.",
         };
-        if (page is not null && PyTruthy(page["path"]))
-            lines.Add($"They opened you from the page {(PyTruthy(page["title"]) ? PyStr(page["title"]) : "")} ({PyStr(page["path"])})"
-                      + (PyTruthy(page["filters"]) ? $" with filters {PyStr(page["filters"])}" : "") + ". 'This', 'these' or 'here' may refer to it.");
+        if (page is not null && IsTruthy(page["path"]))
+            lines.Add($"They opened you from the page {(IsTruthy(page["title"]) ? TextOf(page["title"]) : "")} ({TextOf(page["path"])})"
+                      + (IsTruthy(page["filters"]) ? $" with filters {TextOf(page["filters"])}" : "") + ". 'This', 'these' or 'here' may refer to it.");
         if (memories.Count > 0)
             lines.Add("Things they asked you to remember:\n" + string.Join("\n", memories.Select((m, i) => $"{i + 1}. {m}")));
         if (files.Count > 0)
             lines.Add("Files attached to this message: " + string.Join("; ", files.OfType<JsonObject>().Select(f =>
-                $"{PyStr(f["filename"])} (id {PyStr(f["id"])}, {(f.ContainsKey("rows") ? PyStr(f["rows"]) : "0")} rows)")));
+                $"{TextOf(f["filename"])} (id {TextOf(f["id"])}, {(f.ContainsKey("rows") ? TextOf(f["rows"]) : "0")} rows)")));
         if (earlier.Length > 0)
             lines.Add("Earlier in this chat (condensed):\n" + earlier);
         if (decision is not null)
-            lines.Add($"Quick reading of the latest message (may be wrong): intent {PyStr(decision["intent"])}, areas {PyStr(decision["areas"])}, period {PyStr(decision["period"])}.");
+            lines.Add($"Quick reading of the latest message (may be wrong): intent {TextOf(decision["intent"])}, areas {TextOf(decision["areas"])}, period {TextOf(decision["period"])}.");
         if (voice)
             lines.Add("VOICE MODE: your reply is spoken aloud. Answer in 1–3 short, natural sentences that sound good when heard. " +
                       "Say amounts the way people speak (\"one lakh twenty thousand rupees\" style is fine), no markdown, no bullet lists, no tables, " +
@@ -125,19 +125,19 @@ public static class AssistantPrompts
 
     // ---------------------------------------------------------------- Python's str()/repr() of JSON values (the prompt text is built with f-strings)
 
-    private static bool PyTruthy(JsonNode? n) => BAL.AI.J.Truthy(n);
+    private static bool IsTruthy(JsonNode? n) => BAL.AI.J.Truthy(n);
 
     /// <summary>Python's str(value) for a JSON value: strings as they are, None, True/False, lists and dicts as repr.</summary>
-    public static string PyStr(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : PyRepr(n);
+    public static string TextOf(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : LiteralOf(n);
 
     /// <summary>Python's repr(value) for a JSON value: ['a', 'b'], {'k': 1}, None, True.</summary>
-    public static string PyRepr(JsonNode? n)
+    public static string LiteralOf(JsonNode? n)
     {
         switch (n)
         {
             case null: return "None";
-            case JsonArray a: return "[" + string.Join(", ", a.Select(PyRepr)) + "]";
-            case JsonObject o: return "{" + string.Join(", ", o.Select(kv => QuoteRepr(kv.Key) + ": " + PyRepr(kv.Value))) + "}";
+            case JsonArray a: return "[" + string.Join(", ", a.Select(LiteralOf)) + "]";
+            case JsonObject o: return "{" + string.Join(", ", o.Select(kv => QuoteRepr(kv.Key) + ": " + LiteralOf(kv.Value))) + "}";
             case JsonValue v:
                 if (v.TryGetValue<string>(out var s)) return QuoteRepr(s);
                 return v.GetValueKind() switch

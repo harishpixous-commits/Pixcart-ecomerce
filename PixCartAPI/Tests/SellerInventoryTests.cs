@@ -37,7 +37,7 @@ public class SellerInventoryTests(ApiFactory f):ApiTest(f)
         await u.Post($"/api/seller/products/{p}/archive");Assert.Empty((await u.Get("/api/seller/inventory")).Json["items"]!.AsArray());
     }
     [Fact]
-    public async Task Transfer_into_inactive_warehouse_preserves_reference_aggregate_gap()
+    public async Task Transfer_into_inactive_warehouse_preserves_aggregate_gap()
     {
         var(u,s,p,v,a,b)=await Seed();await Adjust(u,v,a,"set",5);await ApiFactory.DbExecAsync("UPDATE warehouses SET is_active=0 WHERE id=@b",new{b});
         var r=await u.Post("/api/seller/inventory/transfer",new{variant_id=v,from_warehouse_id=a,to_warehouse_id=b,quantity=5});Assert.True(r.Status==200,r.ToString());Assert.Equal(0,r.Json["total"]!.GetValue<int>());Assert.Equal(0,await ApiFactory.DbScalarAsync<long>("SELECT stock FROM variants WHERE id=@v",new{v}));

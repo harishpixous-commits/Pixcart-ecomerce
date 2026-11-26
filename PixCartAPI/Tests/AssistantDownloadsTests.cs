@@ -31,7 +31,7 @@ public class AssistantDownloadsTests
         Assert.DoesNotContain("ignored raw answer", md);
     }
     [Fact]
-    public void Csv_has_bom_multiple_tables_rfc_quoting_and_reference_formula_guard()
+    public void Csv_has_bom_multiple_tables_rfc_quoting_and_formula_guard()
     {
         var bytes = AssistantDownloads.Build("csv", Messages(), "Synthetic", "Brand");
         Assert.Equal(new byte[] { 0xef, 0xbb, 0xbf }, bytes.Take(3));

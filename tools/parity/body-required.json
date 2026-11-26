@@ -1,0 +1,967 @@
+[
+{
+"method": "POST",
+"path": "/api/auth/otp/request",
+"required": [
+"phone"
+]
+},
+{
+"method": "POST",
+"path": "/api/auth/otp/verify",
+"required": [
+"phone",
+"code"
+]
+},
+{
+"method": "POST",
+"path": "/api/auth/login",
+"required": [
+"email",
+"password"
+]
+},
+{
+"method": "POST",
+"path": "/api/auth/password",
+"required": [
+"current_password",
+"new_password"
+]
+},
+{
+"method": "POST",
+"path": "/api/auth/totp/enable",
+"required": [
+"code"
+]
+},
+{
+"method": "POST",
+"path": "/api/auth/totp/disable",
+"required": [
+"code"
+]
+},
+{
+"method": "POST",
+"path": "/api/addresses",
+"required": [
+"full_name",
+"phone",
+"line1",
+"city",
+"state_code",
+"pincode"
+]
+},
+{
+"method": "PUT",
+"path": "/api/addresses/{address_id}",
+"required": [
+"full_name",
+"phone",
+"line1",
+"city",
+"state_code",
+"pincode"
+]
+},
+{
+"method": "PUT",
+"path": "/api/catalog/products/{slug}/reviews",
+"required": [
+"rating"
+]
+},
+{
+"method": "POST",
+"path": "/api/reviews/{review_id}/report",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/catalog/products/{slug}/report",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/returns",
+"required": [
+"sub_order_id",
+"items",
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/support/tickets",
+"required": [
+"category",
+"subject",
+"message"
+]
+},
+{
+"method": "POST",
+"path": "/api/support/tickets/{ticket_id}/messages",
+"required": [
+"body"
+]
+},
+{
+"method": "POST",
+"path": "/api/events",
+"required": [
+"type",
+"product_id"
+]
+},
+{
+"method": "PUT",
+"path": "/api/account/consent",
+"required": [
+"marketing_opt_in"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/deals",
+"required": [
+"variant_id",
+"kind",
+"deal_price_paise",
+"starts_at",
+"ends_at"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/ads",
+"required": [
+"name",
+"product_ids",
+"placements",
+"bid_paise",
+"daily_budget_paise"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/ads/{campaign_id}",
+"required": [
+"name",
+"product_ids",
+"placements",
+"bid_paise",
+"daily_budget_paise"
+]
+},
+{
+"method": "POST",
+"path": "/api/catalog/products/{slug}/questions",
+"required": [
+"text"
+]
+},
+{
+"method": "POST",
+"path": "/api/questions/{question_id}/answers",
+"required": [
+"text"
+]
+},
+{
+"method": "POST",
+"path": "/api/qa/report",
+"required": [
+"kind",
+"id"
+]
+},
+{
+"method": "POST",
+"path": "/api/alerts/stock",
+"required": [
+"variant_id"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/questions/{question_id}/answer",
+"required": [
+"text"
+]
+},
+{
+"method": "PUT",
+"path": "/api/cart/items",
+"required": [
+"variant_id",
+"qty"
+]
+},
+{
+"method": "POST",
+"path": "/api/cart/items",
+"required": [
+"variant_id",
+"qty"
+]
+},
+{
+"method": "POST",
+"path": "/api/cart/merge",
+"required": [
+"items"
+]
+},
+{
+"method": "POST",
+"path": "/api/checkout/quote",
+"required": [
+"address_id"
+]
+},
+{
+"method": "POST",
+"path": "/api/orders",
+"required": [
+"address_id",
+"idempotency_key"
+]
+},
+{
+"method": "POST",
+"path": "/api/orders/{order_id}/delivery-rating",
+"required": [
+"sub_order_id",
+"rating"
+]
+},
+{
+"method": "POST",
+"path": "/api/orders/{order_id}/delivery-complaint",
+"required": [
+"sub_order_id",
+"category"
+]
+},
+{
+"method": "POST",
+"path": "/api/payments/razorpay/verify",
+"required": [
+"razorpay_order_id",
+"razorpay_payment_id",
+"razorpay_signature"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/register",
+"required": [
+"display_name"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/profile",
+"required": [
+"display_name",
+"legal_name",
+"business_type",
+"gstin",
+"pan",
+"contact_email",
+"contact_phone"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/store",
+"required": [
+"display_name",
+"contact_email",
+"contact_phone"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/pickup-address",
+"required": [
+"line1",
+"city",
+"state_code",
+"pincode"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/bank",
+"required": [
+"holder_name",
+"account_number",
+"confirm_account_number",
+"ifsc"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/grievance-officer",
+"required": [
+"name",
+"email",
+"phone"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/products",
+"required": [
+"category_id",
+"title",
+"hsn_code",
+"gst_bps",
+"variants"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/products/{product_id}",
+"required": [
+"category_id",
+"title",
+"hsn_code",
+"gst_bps",
+"variants"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/ship",
+"required": [
+"courier_name",
+"tracking_number"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/orders/{sub_id}/reject",
+"required": [
+"reason"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/preferences",
+"required": [
+"dispatch_days",
+"holiday_mode"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/warehouses",
+"required": [
+"code",
+"name",
+"line1",
+"city",
+"state_code",
+"pincode"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/warehouses/{wid}",
+"required": [
+"code",
+"name",
+"line1",
+"city",
+"state_code",
+"pincode"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/inventory/adjust",
+"required": [
+"variant_id",
+"warehouse_id",
+"mode",
+"quantity"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/inventory/transfer",
+"required": [
+"variant_id",
+"from_warehouse_id",
+"to_warehouse_id",
+"quantity"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/returns/{return_id}",
+"required": [
+"action"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/coupons",
+"required": [
+"code",
+"kind",
+"value"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/coupons/{coupon_id}",
+"required": [
+"code",
+"kind",
+"value"
+]
+},
+{
+"method": "POST",
+"path": "/api/seller/product-reports/{report_id}/respond",
+"required": [
+"note"
+]
+},
+{
+"method": "PUT",
+"path": "/api/seller/reviews/{review_id}/reply",
+"required": [
+"reply"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers",
+"required": [
+"phone",
+"name",
+"store_name"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers/{seller_id}/reject",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/sellers/{seller_id}/suspend",
+"required": [
+"reason"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/products/{product_id}/images",
+"required": [
+"images"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/products/{product_id}/reject",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/categories",
+"required": [
+"name",
+"commission_bps",
+"default_gst_bps"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/categories/{category_id}",
+"required": [
+"name",
+"commission_bps",
+"default_gst_bps"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/sub-orders/{sub_id}/cancel",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/refunds/{refund_id}/settle",
+"required": [
+"method",
+"reference"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/customers",
+"required": [
+"name",
+"phone"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/customers/{user_id}/block",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/coupons",
+"required": [
+"code",
+"kind",
+"value"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/coupons/{coupon_id}",
+"required": [
+"code",
+"kind",
+"value"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/product-reports/{report_id}",
+"required": [
+"status"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/returns",
+"required": [
+"sub_order_id",
+"items",
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/returns/{return_id}",
+"required": [
+"action"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/payouts/{payout_id}/paid",
+"required": [
+"utr"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/tickets/{ticket_id}/reply",
+"required": [
+"body"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/notifications/templates/{event}/{channel}",
+"required": [
+"body"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/theme",
+"required": [
+"theme"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/storefront/sections",
+"required": [
+"kind"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/sections/{section_id}",
+"required": [
+"kind"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/sections-order",
+"required": [
+"ids"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/storefront/pages/{slug}",
+"required": [
+"slug",
+"title",
+"body"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/business",
+"required": [
+"display_name",
+"legal_name",
+"business_type",
+"gstin",
+"pan",
+"contact_email",
+"contact_phone"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/pickup-address",
+"required": [
+"line1",
+"city",
+"state_code",
+"pincode"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/bank",
+"required": [
+"holder_name",
+"account_number",
+"confirm_account_number",
+"ifsc"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/sellers/{seller_id}/grievance-officer",
+"required": [
+"name",
+"email",
+"phone"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/roles",
+"required": [
+"name"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/roles/{code}",
+"required": [
+"name"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/staff",
+"required": [
+"email",
+"name",
+"role",
+"password"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/integrations/{key}",
+"required": [
+"password"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/exports/bulk",
+"required": [
+"items"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/ai/runs/{run_id}/send",
+"required": [
+"subject",
+"text"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/decision-test",
+"required": [
+"text"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/assistant/conversations/{conv_id}/messages",
+"required": [
+"text"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/ai-providers/connections",
+"required": [
+"type"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/ai-providers/connections/{conn_id}",
+"required": [
+"type"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/ai-providers/routes",
+"required": [
+"routes"
+]
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions/{chat_id}/messages",
+"required": [
+"text"
+]
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions/{chat_id}/ticket",
+"required": [
+"category",
+"subject",
+"message"
+]
+},
+{
+"method": "POST",
+"path": "/api/shop-assistant/sessions/{chat_id}/feedback",
+"required": [
+"value"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/shop-assistant/articles",
+"required": [
+"title",
+"body"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/shop-assistant/articles/{article_id}",
+"required": [
+"title",
+"body"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/shop-assistant/articles/try",
+"required": [
+"question"
+]
+},
+{
+"method": "PUT",
+"path": "/api/delivery/me/bank",
+"required": [
+"holder"
+]
+},
+{
+"method": "POST",
+"path": "/api/delivery/me/online",
+"required": [
+"online"
+]
+},
+{
+"method": "POST",
+"path": "/api/delivery/me/location",
+"required": [
+"lat",
+"lng"
+]
+},
+{
+"method": "POST",
+"path": "/api/delivery/trips/{assignment_id}/status",
+"required": [
+"to"
+]
+},
+{
+"method": "POST",
+"path": "/api/delivery/trips/{assignment_id}/fail",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/returns/{return_id}/assign",
+"required": [
+"partner_id"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/assign",
+"required": [
+"sub_order_id",
+"partner_id"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/assignments/{assignment_id}/cancel",
+"required": [
+"reason"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/assignments/{assignment_id}/resolve",
+"required": [
+"action"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/deposits",
+"required": [
+"amount_paise"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/payouts/{payout_id}/paid",
+"required": [
+"reference"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/complaints/{complaint_id}/resolve",
+"required": [
+"note"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners",
+"required": [
+"name",
+"phone"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/kyc",
+"required": [
+"action"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/partners/{partner_id}/active",
+"required": [
+"active"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/zones",
+"required": [
+"name",
+"city",
+"pincodes"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/delivery/zones/{zone_id}",
+"required": [
+"name",
+"city",
+"pincodes"
+]
+},
+{
+"method": "POST",
+"path": "/api/admin/delivery/zones/{zone_id}/partners",
+"required": [
+"partner_ids"
+]
+},
+{
+"method": "POST",
+"path": "/api/push/tokens",
+"required": [
+"token"
+]
+},
+{
+"method": "POST",
+"path": "/api/push/tokens/remove",
+"required": [
+"token"
+]
+},
+{
+"method": "POST",
+"path": "/api/i18n/translate",
+"required": [
+"lang",
+"texts"
+]
+},
+{
+"method": "PUT",
+"path": "/api/admin/translations",
+"required": [
+"lang",
+"source",
+"text"
+]
+}
+]

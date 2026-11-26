@@ -64,13 +64,13 @@ public static class ServiceConfiguration
             {
                 o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
                 // the reference API's sign-in/permission rule per route, applied before the body is read
-                o.Filters.Add<API.Infrastructure.ReferenceGuardFilter>();
-                // times in answers written like the reference (datetime.isoformat(): "...56.101216+00:00")
-                o.Filters.Add<API.Infrastructure.ReferenceJsonFilter>();
+                o.Filters.Add<API.Infrastructure.RouteGuardFilter>();
+                // times in answers as ISO 8601 with microseconds and the offset ("...56.101216+00:00")
+                o.Filters.Add<API.Infrastructure.ApiJsonFilter>();
                 // query strings checked against the reference rules, with its 422 answers (after sign-in, before the body)
-                o.Filters.Add<API.Infrastructure.ReferenceQueryFilter>();
+                o.Filters.Add<API.Infrastructure.QueryRulesFilter>();
                 // JSON bodies checked against the reference schemas, with its 422 answers and field order
-                o.Filters.Add<API.Infrastructure.ReferenceBodyFilter>();
+                o.Filters.Add<API.Infrastructure.BodyRulesFilter>();
             })
             .AddJsonOptions(o =>
             {
@@ -78,7 +78,7 @@ public static class ServiceConfiguration
                 o.JsonSerializerOptions.PropertyNamingPolicy = j.PropertyNamingPolicy;
                 o.JsonSerializerOptions.DictionaryKeyPolicy = j.DictionaryKeyPolicy;
                 o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-                o.JsonSerializerOptions.Converters.Add(new API.Infrastructure.ReferenceDateTimeConverter());
+                o.JsonSerializerOptions.Converters.Add(new API.Infrastructure.IsoDateTimeConverter());
                 o.JsonSerializerOptions.Encoder = j.Encoder;
             })
             .ConfigureApiBehaviorOptions(o =>

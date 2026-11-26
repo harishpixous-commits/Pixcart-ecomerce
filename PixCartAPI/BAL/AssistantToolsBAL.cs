@@ -152,7 +152,7 @@ public partial class AssistantToolsBAL(AssistantQueriesDAL q, AssistantBAL asst,
     public static string ModelView(JsonNode? data, bool shareContacts, int limit = 14000)
     {
         // json.dumps(..., ensure_ascii=False): ", " and ": " separators, ₹ and Indian scripts as they are
-        var text = AssistantUploadBAL.PythonJson(shareContacts ? data : Mask(data), null, false);
+        var text = AssistantUploadBAL.SpacedJson(shareContacts ? data : Mask(data), null, false);
         return text.Length > limit
             ? text[..limit] + "…\" (truncated: the screen shows the full table; summarise what is here)"
             : text;

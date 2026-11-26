@@ -111,7 +111,7 @@ public partial class RegionalBAL(
     {
         try
         {
-            return SettingsJson.Truthy(v) ? CatalogText.PyInt(v) : 0;
+            return SettingsJson.Truthy(v) ? CatalogText.LenientInt(v) : 0;
         }
         catch (ArgumentException e)
         {

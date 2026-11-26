@@ -37,7 +37,7 @@ public sealed class LenAttribute(int min = 0, int max = int.MaxValue) : Validati
     }
 }
 
-/// <summary>An email address (like Pydantic's EmailStr: one @, a dotted domain, no spaces).</summary>
+/// <summary>An email address (one @, a dotted domain, no spaces).</summary>
 public sealed partial class EmailAttribute : ValidationAttribute
 {
     [GeneratedRegex(@"^[^@\s<>()\[\],;:""]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$")]
@@ -52,7 +52,7 @@ public sealed partial class EmailAttribute : ValidationAttribute
             : new ValidationResult("is not a valid email address", context.MemberName is { } m ? [m] : null);
 }
 
-/// <summary>One of the listed values (Pydantic's Literal).</summary>
+/// <summary>One of the listed values.</summary>
 public sealed class OneOfAttribute(params string[] choices) : ValidationAttribute
 {
     public string[] Choices { get; } = choices;
@@ -66,7 +66,7 @@ public sealed class OneOfAttribute(params string[] choices) : ValidationAttribut
             : new ValidationResult($"must be one of: {Expected(Choices)}", context.MemberName is { } m ? [m] : null);
 }
 
-/// <summary>A number within limits (Pydantic's ge/le), with the limits written as the reference shows them.</summary>
+/// <summary>A number within limits (greater or equal / less or equal), with the limits shown in the message.</summary>
 public sealed class BetweenAttribute(double min, double max) : ValidationAttribute
 {
     /// <summary>Write the limits like Python floats ("6.0") instead of integers ("6").</summary>

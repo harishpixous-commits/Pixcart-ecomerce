@@ -2,13 +2,16 @@
 //
 //   dotnet run --project tools/DataMigrator -- --from "Host=localhost;Port=5433;Database=pixcart;Username=postgres;Password=..."
 //                                             --to   "Server=127.0.0.1;Port=3307;Database=pixcart;User=pixcart;Password=..."
-//                                             [--media-from <python backend var/media> --media-to <.NET var/media>] [--yes]
+//                                             [--media-from <python backend var/media> --media-to <.NET var/media>]
+//                                             [--private-from <python backend var/private> --private-to <.NET var/private>] [--yes]
 //
 // Copies every row of every table (same table and column names on both sides), converting UUIDs, JSON, times (UTC)
 // and booleans; the MySQL schema must exist first (start the .NET API once, or run `dotnet API.dll migrate`).
 // The target tables are emptied first, so run it on a new database or one you are happy to replace.
 // Keep App:FieldEncryptionKey equal to the Python FIELD_ENCRYPTION_KEY: encrypted PAN, bank numbers and API keys are
 // copied as they are and decrypt with the same key.
+// Files: --media-* copies the public files (product photos, videos); --private-* copies the private ones (seller and
+// partner KYC documents, delivery proof photos), which are only served to people allowed to see them.
 using System.Text.Json;
 using MySqlConnector;
 using Npgsql;
@@ -19,6 +22,8 @@ var from = Arg("--from") ?? throw new ArgumentException("--from <PostgreSQL conn
 var to = Arg("--to") ?? throw new ArgumentException("--to <MySQL connection string> is required");
 var mediaFrom = Arg("--media-from");
 var mediaTo = Arg("--media-to");
+var privateFrom = Arg("--private-from");
+var privateTo = Arg("--private-to");
 
 if (!args.Contains("--yes"))
 {
@@ -84,18 +89,8 @@ foreach (var table in tables)
 await Exec(my, "SET FOREIGN_KEY_CHECKS = 1");
 Console.WriteLine($"Copied {total} rows from {tables.Count} tables.");
 
-if (!string.IsNullOrEmpty(mediaFrom) && !string.IsNullOrEmpty(mediaTo) && Directory.Exists(mediaFrom))
-{
-    var n = 0;
-    foreach (var file in Directory.EnumerateFiles(mediaFrom, "*", SearchOption.AllDirectories))
-    {
-        var dest = Path.Combine(mediaTo, Path.GetRelativePath(mediaFrom, file));
-        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-        File.Copy(file, dest, overwrite: true);
-        n++;
-    }
-    Console.WriteLine($"Copied {n} media files to {mediaTo}");
-}
+CopyFiles(mediaFrom, mediaTo, "media");
+CopyFiles(privateFrom, privateTo, "private");
 return 0;
 
 static async Task Flush(MySqlConnection my, string sqlHead, List<string> cols, Dictionary<string, string> myCols, List<object?[]> batch)
@@ -119,6 +114,20 @@ static async Task Flush(MySqlConnection my, string sqlHead, List<string> cols, D
     await ins.ExecuteNonQueryAsync();
     await tx.CommitAsync();
     batch.Clear();
+}
+
+static void CopyFiles(string? from, string? to, string what)
+{
+    if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to) || !Directory.Exists(from)) return;
+    var n = 0;
+    foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+    {
+        var dest = Path.Combine(to, Path.GetRelativePath(from, file));
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        File.Copy(file, dest, overwrite: true);
+        n++;
+    }
+    Console.WriteLine($"Copied {n} {what} files to {to}");
 }
 
 static object? ToMySql(NpgsqlDataReader r, int i, string mysqlType)

@@ -11,7 +11,7 @@ namespace Tests;
 /// FastAPI dependencies by tools/schema/route_guards.py) and is applied before the request is read, so a visitor always
 /// gets 401 and a customer 403, never a 404/415/422 that would reveal the route's input rules first.
 /// </summary>
-public partial class ReferenceGuardTests(ApiFactory f) : ApiTest(f)
+public partial class RouteGuardTests(ApiFactory f) : ApiTest(f)
 {
     [GeneratedRegex(@"\{[^}]+\}")]
     private static partial Regex Param();
@@ -25,19 +25,19 @@ public partial class ReferenceGuardTests(ApiFactory f) : ApiTest(f)
             .ToList();
 
     [Fact]
-    public void Every_route_has_the_reference_rule_and_every_reference_route_exists()
+    public void Every_route_has_its_rule_and_every_rule_has_a_route()
     {
         var routes = Routes();
         Assert.NotEmpty(routes);
         var unguarded = routes
-            .Where(r => ReferenceGuardFilter.RuleFor(r.Method, r.Template) is null
+            .Where(r => RouteGuardFilter.RuleFor(r.Method, r.Template) is null
                         && r.Action.MethodInfo.GetCustomAttributes(typeof(RouteGuardAttribute), false).Length == 0)
             .Select(r => r.Method + " /" + r.Template).ToList();
-        Assert.True(unguarded.Count == 0, "routes without a reference rule:\n" + string.Join("\n", unguarded));
+        Assert.True(unguarded.Count == 0, "routes without a rule:\n" + string.Join("\n", unguarded));
 
-        var ours = routes.Select(r => ReferenceGuardFilter.Key(r.Method, r.Template)).ToHashSet();
-        var missing = ReferenceGuardFilter.All.Keys.Where(k => !ours.Contains(k)).ToList();
-        Assert.True(missing.Count == 0, "reference routes missing here:\n" + string.Join("\n", missing));
+        var ours = routes.Select(r => RouteGuardFilter.Key(r.Method, r.Template)).ToHashSet();
+        var missing = RouteGuardFilter.All.Keys.Where(k => !ours.Contains(k)).ToList();
+        Assert.True(missing.Count == 0, "rules whose route is missing here:\n" + string.Join("\n", missing));
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public partial class ReferenceGuardTests(ApiFactory f) : ApiTest(f)
         var customer = await LoginPhone("9765000001", "Guard Probe");
         var visitor = Factory.Browser();
         var wrong = new List<string>();
-        foreach (var (key, rule) in ReferenceGuardFilter.All)
+        foreach (var (key, rule) in RouteGuardFilter.All)
         {
             if (rule is "public" or "optional") continue;
             var method = key[..key.IndexOf(' ')];
@@ -76,7 +76,7 @@ public partial class ReferenceGuardTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
-    public async Task An_ai_draft_action_outside_apply_or_discard_is_a_422_after_sign_in_like_the_reference()
+    public async Task An_ai_draft_action_outside_apply_or_discard_is_a_422_after_sign_in()
     {
         var visitor = Factory.Browser();
         var path = $"/api/admin/ai/runs/{Guid.NewGuid()}/zzz";

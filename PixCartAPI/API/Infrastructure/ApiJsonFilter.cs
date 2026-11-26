@@ -15,12 +15,12 @@ namespace API.Infrastructure;
 ///
 /// Answers built as JsonObject/JsonArray can hold DateTime values (written by System.Text.Json as "...1012160Z") and
 /// strings made with ToString("o"); both are rewritten here, just before the answer is sent. Plain objects and records
-/// get the same format from <see cref="ReferenceDateTimeConverter"/>.
+/// get the same format from <see cref="IsoDateTimeConverter"/>.
 /// </summary>
-public sealed partial class ReferenceJsonFilter : IAsyncResultFilter
+public sealed partial class ApiJsonFilter : IAsyncResultFilter
 {
-    // a UTC instant (Z or +00:00). A time without a zone is left as it is: the reference writes naive times that way
-    // too (Excel cells in uploads, "1900-01-01T00:00:00"); so are a date alone and another zone ("+05:30").
+    // a UTC instant (Z or +00:00). A time without a zone is left as it is (Excel cells in uploads,
+    // "1900-01-01T00:00:00"), and so are a date alone and a time in another zone ("+05:30").
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|\+00:00)$")]
     private static partial Regex UtcInstant();
 
@@ -96,8 +96,8 @@ public sealed partial class ReferenceJsonFilter : IAsyncResultFilter
     }
 }
 
-/// <summary>DateTime in plain objects and records, written like the reference (see <see cref="ReferenceJsonFilter"/>).</summary>
-public sealed class ReferenceDateTimeConverter : JsonConverter<DateTime>
+/// <summary>DateTime in plain objects and records, in the API's time format (see <see cref="ApiJsonFilter"/>).</summary>
+public sealed class IsoDateTimeConverter : JsonConverter<DateTime>
 {
     public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
         reader.GetDateTime();

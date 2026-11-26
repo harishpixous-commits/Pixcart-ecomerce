@@ -19,7 +19,7 @@ public partial class AssistantToolsBAL
 
     private static AssistantToolOutput Error(string message) => new(new JsonObject { ["error"] = message }, []);
 
-    private static string PyStr(JsonNode? n) => AssistantPrompts.PyStr(n);
+    private static string TextOf(JsonNode? n) => AssistantPrompts.TextOf(n);
 
     private static JsonArray Cells(params object?[] cells) => new(cells.Select(J.Node).ToArray());
 
@@ -28,7 +28,7 @@ public partial class AssistantToolsBAL
     /// <summary>Reference: tools.gst_tcs_report.</summary>
     private async Task<AssistantToolOutput> GstTcsReportAsync(AssistantToolContext ctx, JsonObject a)
     {
-        var month = a.ContainsKey("month") ? PyStr(a["month"]) : "";
+        var month = a.ContainsKey("month") ? TextOf(a["month"]) : "";
         if (!Regex.IsMatch(month, @"^\d{4}-(0[1-9]|1[0-2])$"))
             return Error("month must look like 2026-10");
         var data = await tcs.DataAsync(month);
@@ -61,7 +61,7 @@ public partial class AssistantToolsBAL
             var value = k.EndsWith("_paise") ? AssistantQueriesDAL.Inr(J.Double(v) ?? 0)
                 : k.EndsWith("_bps") ? G((J.Double(v) ?? 0) / 100) + "%"
                 : J.IsBool(v) ? (J.Truthy(v) ? "on" : "off")
-                : PyStr(v);
+                : TextOf(v);
             return Cells(k.Replace("_", " "), value);
         }).ToList();
         var cards = new List<JsonObject> { TableCard("Marketplace settings", ["Setting", "Value"], show, link: "/admin/settings") };
@@ -94,17 +94,17 @@ public partial class AssistantToolsBAL
     private async Task<AssistantToolOutput> PrepareExportAsync(AssistantToolContext ctx, JsonObject a)
     {
         var admin = ExportDefinitions.All.Where(s => s.Scope == "admin").ToList();
-        var name = PyStr(a["name"]);
+        var name = TextOf(a["name"]);
         var spec = admin.FirstOrDefault(s => s.Name == name);
         if (spec is null)
             return Error($"Unknown export. Choose from: {string.Join(", ", admin.Select(s => s.Name))}");
         if (!ctx.Permissions.Contains(spec.Permission))
             return Error($"Your role cannot download {spec.Label}.");
-        var fmt = J.Truthy(a["format"]) ? PyStr(a["format"]) : "xlsx";
+        var fmt = J.Truthy(a["format"]) ? TextOf(a["format"]) : "xlsx";
         var query = new List<(string Key, string Value)>();
         if (spec.NeedsMonth)
         {
-            query.Add(("month", J.Truthy(a["month"]) ? PyStr(a["month"]) : ""));
+            query.Add(("month", J.Truthy(a["month"]) ? TextOf(a["month"]) : ""));
         }
         else if (spec.DateLabel.Length > 0)
         {
@@ -114,8 +114,8 @@ public partial class AssistantToolsBAL
         }
         foreach (var k in new[] { "status", "q", "payment_method", "low_stock" })
             if (a[k] is { } v && !(v is JsonValue sv && sv.TryGetValue<string>(out var s0) && s0.Length == 0) && (k == "status" || spec.Filters.Contains(k)))
-                query.Add((k, PyStr(v)));
-        if (J.Truthy(a["seller"]) && spec.Filters.Contains("seller") && await q.ResolveSellerAsync(PyStr(a["seller"])) is { } seller)
+                query.Add((k, TextOf(v)));
+        if (J.Truthy(a["seller"]) && spec.Filters.Contains("seller") && await q.ResolveSellerAsync(TextOf(a["seller"])) is { } seller)
             query.Add(("seller", seller.Id));
         foreach (var c in a["columns"] as JsonArray ?? [])
             if (c is JsonValue cv && cv.TryGetValue<string>(out var col) && spec.Headers.Contains(col))
@@ -162,12 +162,12 @@ public partial class AssistantToolsBAL
         var up = await UploadArgAsync(ctx, a);
         if (up is null) return Error("No uploaded file found.");
         JsonObject outp;
-        var groupBy = J.Truthy(a["group_by"]) ? PyStr(a["group_by"]) : null;
+        var groupBy = J.Truthy(a["group_by"]) ? TextOf(a["group_by"]) : null;
         try
         {
             outp = AssistantUploadAnalysis.Query(up, a["filters"] as JsonArray, groupBy,
-                a.ContainsKey("metric") ? PyStr(a["metric"]) : "count", J.Truthy(a["value_column"]) ? PyStr(a["value_column"]) : null,
-                a.ContainsKey("sort") ? PyStr(a["sort"]) : "desc", LimitArg(a, 50, 500));
+                a.ContainsKey("metric") ? TextOf(a["metric"]) : "count", J.Truthy(a["value_column"]) ? TextOf(a["value_column"]) : null,
+                a.ContainsKey("sort") ? TextOf(a["sort"]) : "desc", LimitArg(a, 50, 500));
         }
         catch (ArgumentException exc)
         {
@@ -203,7 +203,7 @@ public partial class AssistantToolsBAL
     {
         var up = await UploadArgAsync(ctx, a);
         if (up is null) return Error("No uploaded file found.");
-        var entity = PyStr(a["entity"]);
+        var entity = TextOf(a["entity"]);
         var need = entity switch
         {
             "orders" or "packages" => "orders", "products" => "catalog", "payouts" => "payouts", "customers" => "customers", "sellers" => "sellers", _ => "",
@@ -213,7 +213,7 @@ public partial class AssistantToolsBAL
         JsonObject outp;
         try
         {
-            outp = await AssistantUploadAnalysis.CompareAsync(q, up, entity, J.Truthy(a["key_column"]) ? PyStr(a["key_column"]) : null, a["columns"] as JsonObject);
+            outp = await AssistantUploadAnalysis.CompareAsync(q, up, entity, J.Truthy(a["key_column"]) ? TextOf(a["key_column"]) : null, a["columns"] as JsonObject);
         }
         catch (ArgumentException exc)
         {
@@ -227,7 +227,7 @@ public partial class AssistantToolsBAL
         };
         foreach (var (f, v) in outp["totals"]!.AsObject())
             items.Add(($"{f} total (file / live)", $"{v!["file"]} / {v["live"]}", $"difference {v["difference"]}"));
-        var compared = string.Join(", ", outp["compared_columns"]!.AsObject().Select(kv => $"{kv.Key} ← {PyStr(kv.Value)}"));
+        var compared = string.Join(", ", outp["compared_columns"]!.AsObject().Select(kv => $"{kv.Key} ← {TextOf(kv.Value)}"));
         var cards = new List<JsonObject>
         {
             MetricsCard($"{up.Filename} vs live {outp["entity"]}", items,
@@ -273,7 +273,7 @@ public static class AssistantUploadAnalysis
 
     private static readonly HashSet<string> MoneyFields = ["total", "price", "mrp", "amount"];
 
-    private static string S(JsonNode? n) => AssistantPrompts.PyStr(n);
+    private static string S(JsonNode? n) => AssistantPrompts.TextOf(n);
 
     private static decimal? Dec(JsonNode? n) => AssistantUploadBAL.Number(n);
 
