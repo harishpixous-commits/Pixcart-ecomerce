@@ -46,7 +46,7 @@ const ICON = "h-[1.25em] w-[1.25em] shrink-0";
   selector: "div[pcThemeMock]",
   imports: [Icon, MockBar, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { "aria-hidden": "true", "[class]": "outer()", "[style.container-type]": "'inline-size'" },
+  host: { "aria-hidden": "true", "[class]": "outer()", style: "container-type: inline-size" },
   template: `
     <div class="h-full bg-mist font-sans leading-tight text-ink" [style]="vars()">
       <!-- header -->
