@@ -18,17 +18,20 @@ import { DeliveryProfilePage } from "./pages/profile.page";
 import { DeliveryRegisterPage } from "./pages/register.page";
 import { DeliveryTripsIdPage } from "./pages/trips-id.page";
 
+/** the reference delivery layout's default title ("Delivery partner | <brand>") */
+const TITLE = "Delivery partner";
+
 export const DELIVERY_ROUTES: Routes = [
-  { path: "", component: DeliveryHomePage },
-  { path: "download", component: DeliveryDownloadPage },
-  { path: "earnings", component: DeliveryEarningsPage },
-  { path: "help", component: DeliveryHelpPage },
-  { path: "history", component: DeliveryHistoryPage },
+  { path: "", component: DeliveryHomePage, title: TITLE },
+  { path: "download", component: DeliveryDownloadPage, title: TITLE },
+  { path: "earnings", component: DeliveryEarningsPage, title: TITLE },
+  { path: "help", component: DeliveryHelpPage, title: TITLE },
+  { path: "history", component: DeliveryHistoryPage, title: TITLE },
   { path: "join", component: DeliveryJoinPage, title: "Become a delivery partner" },
-  { path: "login", component: DeliveryLogin },
-  { path: "notifications", component: DeliveryNotificationsPage },
-  { path: "profile", component: DeliveryProfilePage },
-  { path: "register", component: DeliveryRegisterPage },
-  { path: "trips/:id", component: DeliveryTripsIdPage },
+  { path: "login", component: DeliveryLogin, title: TITLE },
+  { path: "notifications", component: DeliveryNotificationsPage, title: TITLE },
+  { path: "profile", component: DeliveryProfilePage, title: TITLE },
+  { path: "register", component: DeliveryRegisterPage, title: TITLE },
+  { path: "trips/:id", component: DeliveryTripsIdPage, title: TITLE },
   { path: "**", component: DeliveryNotFound, title: "Page not found" },
 ];
