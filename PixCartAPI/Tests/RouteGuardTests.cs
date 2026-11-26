@@ -33,11 +33,11 @@ public partial class RouteGuardTests(ApiFactory f) : ApiTest(f)
             .Where(r => RouteGuardFilter.RuleFor(r.Method, r.Template) is null
                         && r.Action.MethodInfo.GetCustomAttributes(typeof(RouteGuardAttribute), false).Length == 0)
             .Select(r => r.Method + " /" + r.Template).ToList();
-        Assert.True(unguarded.Count == 0, "routes without a reference rule:\n" + string.Join("\n", unguarded));
+        Assert.True(unguarded.Count == 0, "routes without a rule:\n" + string.Join("\n", unguarded));
 
         var ours = routes.Select(r => RouteGuardFilter.Key(r.Method, r.Template)).ToHashSet();
         var missing = RouteGuardFilter.All.Keys.Where(k => !ours.Contains(k)).ToList();
-        Assert.True(missing.Count == 0, "reference routes missing here:\n" + string.Join("\n", missing));
+        Assert.True(missing.Count == 0, "rules whose route is missing here:\n" + string.Join("\n", missing));
     }
 
     [Fact]

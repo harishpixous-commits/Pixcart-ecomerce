@@ -31,7 +31,7 @@ public class AdminReturnsController(IReturnsBAL returns, ICurrentUser current) :
 
     public sealed record CreateIn(
         [param: Required] Guid SubOrderId,
-        [param: Required, MinLength(1), MaxLength(50)] List<JsonElement> Items, // free-form objects, like the reference's list[dict]
+        [param: Required, MinLength(1), MaxLength(50)] List<JsonElement> Items, // free-form objects, checked by ReturnLines.Parse
         [param: Required] string Reason, // checked against the return reasons by the business layer, like the reference
         [param: MaxLength(2000)] string Comment = "",
         [param: MaxLength(60)] string RefundUpi = "");

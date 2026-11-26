@@ -1,7 +1,7 @@
 /*
  * A page title that stays put while the page's query string changes (filters, sort, pages). The router applies the
  * route's title (or the site's default) on every navigation, so pages whose title comes from their data set it again
- * after each one, as the reference's generateMetadata title stays for the page. Call in a constructor:
+ * after each one, so the page keeps its own title. Call in a constructor:
  *   keepPageTitle(() => this.product()?.title ?? null)   (null: leave the title as it is)
  */
 

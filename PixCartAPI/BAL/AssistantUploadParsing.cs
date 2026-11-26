@@ -15,11 +15,11 @@ public partial class AssistantUploadBAL
             if(c=='"'&&cell.Length==0){quoted=true;started=true;continue;}if(c==delimiter){fields.Add(cell.ToString());cell.Clear();started=true;continue;}if(c is '\r' or '\n'){if(c=='\r'&&i+1<text.Length&&text[i+1]=='\n')i++;if(started||cell.Length>0||fields.Count>0)fields.Add(cell.ToString());yield return fields;fields=[];cell.Clear();started=false;continue;}cell.Append(c);started=true;
         }if(started||cell.Length>0||fields.Count>0){fields.Add(cell.ToString());yield return fields;}
     }
-    internal static string PythonJson(JsonNode? value,int? indent,bool ascii,int depth=0)
+    internal static string SpacedJson(JsonNode? value,int? indent,bool ascii,int depth=0)
     {
         string Quote(string text){var encoded=JsonSerializer.Serialize(text,new JsonSerializerOptions{Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping});if(!ascii)return encoded;var b=new StringBuilder();foreach(var c in encoded)if(c>127)b.Append("\\u").Append(((int)c).ToString("x4"));else b.Append(c);return b.ToString();}
-        if(value is JsonObject obj){if(obj.Count==0)return "{}";var entries=obj.Select(k=>Quote(k.Key)+": "+PythonJson(k.Value,indent,ascii,depth+1));return indent is {} n?"{\n"+string.Join(",\n",entries.Select(e=>new string(' ',(depth+1)*n)+e))+"\n"+new string(' ',depth*n)+"}":"{"+string.Join(", ",entries)+"}";}
-        if(value is JsonArray a){if(a.Count==0)return "[]";var entries=a.Select(v=>PythonJson(v,indent,ascii,depth+1));return indent is {} n?"[\n"+string.Join(",\n",entries.Select(e=>new string(' ',(depth+1)*n)+e))+"\n"+new string(' ',depth*n)+"]":"["+string.Join(", ",entries)+"]";}
+        if(value is JsonObject obj){if(obj.Count==0)return "{}";var entries=obj.Select(k=>Quote(k.Key)+": "+SpacedJson(k.Value,indent,ascii,depth+1));return indent is {} n?"{\n"+string.Join(",\n",entries.Select(e=>new string(' ',(depth+1)*n)+e))+"\n"+new string(' ',depth*n)+"}":"{"+string.Join(", ",entries)+"}";}
+        if(value is JsonArray a){if(a.Count==0)return "[]";var entries=a.Select(v=>SpacedJson(v,indent,ascii,depth+1));return indent is {} n?"[\n"+string.Join(",\n",entries.Select(e=>new string(' ',(depth+1)*n)+e))+"\n"+new string(' ',depth*n)+"]":"["+string.Join(", ",entries)+"]";}
         if(value is JsonValue v&&v.TryGetValue<string>(out var s))return Quote(s);return value?.ToJsonString()??"null";
     }
     private static Dictionary<int, bool> DateStyles(ZipArchive zip, Func<string, XDocument> xml, XNamespace ns)

@@ -6,7 +6,7 @@ import 'package:http/testing.dart';
 import 'package:pixcart_core/pixcart_core.dart';
 
 void main() {
-  group('format (same output as frontend/src/lib/format.ts)', () {
+  group('format', () {
     tearDown(() => setDisplayCurrency(null));
 
     test('rupees in Indian grouping, paise only when present', () {

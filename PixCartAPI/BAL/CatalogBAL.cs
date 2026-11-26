@@ -619,7 +619,7 @@ public class CatalogBAL(
     public async Task<List<JsonObject>> ProductsForAsync(JsonObject config)
     {
         var source = config.TryGetPropertyValue("source", out var s) ? CatalogText.Str(s) : "deals";
-        var limit = (int)CatalogText.PyInt(config.TryGetPropertyValue("limit", out var l) ? l : 12);
+        var limit = (int)CatalogText.LenientInt(config.TryGetPropertyValue("limit", out var l) ? l : 12);
         IEnumerable<ProductModel> rows;
         switch (source)
         {

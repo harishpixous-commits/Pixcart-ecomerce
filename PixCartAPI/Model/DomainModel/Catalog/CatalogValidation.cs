@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace Model.DomainModel.Catalog;
 
-// Validation attributes whose messages read like the reference API's friendly validation messages
+// Validation attributes with friendly messages
 // ("needs at least 10 characters", "must be at most 5", "must be one of: 'question' or 'answer'").
 
 /// <summary>Text length (null is left to [Required]).</summary>

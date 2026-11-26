@@ -65,7 +65,7 @@ public static class ServiceConfiguration
                 o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
                 // the reference API's sign-in/permission rule per route, applied before the body is read
                 o.Filters.Add<API.Infrastructure.RouteGuardFilter>();
-                // times in answers written like the reference (datetime.isoformat(): "...56.101216+00:00")
+                // times in answers as ISO 8601 with microseconds and the offset ("...56.101216+00:00")
                 o.Filters.Add<API.Infrastructure.ApiJsonFilter>();
                 // query strings checked against the reference rules, with its 422 answers (after sign-in, before the body)
                 o.Filters.Add<API.Infrastructure.QueryRulesFilter>();

@@ -20,7 +20,7 @@ public partial class AssistantUploadBAL(AssistantUploadDAL data,IAccessBAL acces
     private static readonly string[] Extensions=[".csv",".tsv",".xlsx",".txt",".md",".json"];
     private static string Cut(string s,int length)=>s[..Math.Min(s.Length,length)];
     private static string Str(JsonNode? n)=>n is JsonValue v&&v.TryGetValue<string>(out var s)?s:n is JsonValue b&&b.TryGetValue<bool>(out var yes)?(yes?"True":"False"):n?.ToJsonString()??"";
-    private static JsonNode Cell(JsonNode? n)=>n is null?JsonValue.Create("")!:n is JsonObject or JsonArray?JsonValue.Create(Cut(PythonJson(n,null,true),500))!:n is JsonValue v&&v.TryGetValue<string>(out var text)?JsonValue.Create(text.Trim())!:n.DeepClone();
+    private static JsonNode Cell(JsonNode? n)=>n is null?JsonValue.Create("")!:n is JsonObject or JsonArray?JsonValue.Create(Cut(SpacedJson(n,null,true),500))!:n is JsonValue v&&v.TryGetValue<string>(out var text)?JsonValue.Create(text.Trim())!:n.DeepClone();
     private static void Table(AssistantUploadModel up,List<string> header,List<JsonArray> rows,bool truncated)
     {
         var width=Math.Max(header.Count,rows.Take(1000).Select(r=>r.Count).DefaultIfEmpty(0).Max());var names=new List<string>();var seen=new Dictionary<string,int>();for(var i=0;i<width;i++){var name=Cut(Regex.Replace(i<header.Count?header[i].Trim():"",@"\s+"," "),80);if(name.Length==0)name=$"Column {i+1}";seen[name]=seen.GetValueOrDefault(name)+1;names.Add(seen[name]>1?$"{name} ({seen[name]})":name);}if(names.Count==0)throw Bad("The file has no header row.");foreach(var row in rows)while(row.Count<width)row.Add("");up.Columns=JsonSerializer.Serialize(names);up.Rows=new JsonArray(rows.Select(r=>(JsonNode)r).ToArray()).ToJsonString();up.RowCount=rows.Count;up.Truncated=truncated;up.Text="";
@@ -62,7 +62,7 @@ public partial class AssistantUploadBAL(AssistantUploadDAL data,IAccessBAL acces
         }
         if(name.EndsWith(".json"))
         {
-            JsonNode? parsed;try{parsed=JsonNode.Parse(text);}catch(JsonException){throw Bad("This JSON file is not valid.");}if(parsed is JsonArray array&&array.Count>0&&array.Take(50).All(x=>x is JsonObject)){var keys=array.Take(500).OfType<JsonObject>().SelectMany(x=>x.Select(k=>k.Key)).Distinct().Take(MaxCols).ToList();var rows=array.Take(MaxRows).Select(x=>new JsonArray(keys.Select(k=>Cell(x![k])).ToArray())).ToList();Table(up,keys,rows,array.Count>MaxRows);return;}up.Text=Cut(PythonJson(parsed,1,false),TextLimit);up.Truncated=text.Length>TextLimit;return;
+            JsonNode? parsed;try{parsed=JsonNode.Parse(text);}catch(JsonException){throw Bad("This JSON file is not valid.");}if(parsed is JsonArray array&&array.Count>0&&array.Take(50).All(x=>x is JsonObject)){var keys=array.Take(500).OfType<JsonObject>().SelectMany(x=>x.Select(k=>k.Key)).Distinct().Take(MaxCols).ToList();var rows=array.Take(MaxRows).Select(x=>new JsonArray(keys.Select(k=>Cell(x![k])).ToArray())).ToList();Table(up,keys,rows,array.Count>MaxRows);return;}up.Text=Cut(SpacedJson(parsed,1,false),TextLimit);up.Truncated=text.Length>TextLimit;return;
         }up.Text=Cut(text,TextLimit);up.Truncated=text.Length>TextLimit;
     }
     internal static decimal? Number(JsonNode? node)

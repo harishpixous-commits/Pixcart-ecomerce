@@ -131,7 +131,7 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
             foreach (var (key, value) in body.Page)
                 if (key is "path" or "title" or "filters")
                 {
-                    var v = BAL.AssistantPrompts.PyStr(value);
+                    var v = BAL.AssistantPrompts.TextOf(value);
                     page[key] = v.Length > 300 ? v[..300] : v;
                 }
             if (page.Count == 0) page = null;

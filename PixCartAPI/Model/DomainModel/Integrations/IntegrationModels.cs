@@ -58,7 +58,7 @@ public sealed class FieldDef
             return isRate ? num : (object)(long)num;
         }
         if (kindOf != System.Text.Json.JsonValueKind.String) throw new ArgumentException($"{Label}: enter text");
-        var v = PyStrip(value!.GetValue<string>());
+        var v = StripControl(value!.GetValue<string>());
         if (v.Any(c => c < 32)) throw new ArgumentException($"{Label}: remove line breaks and hidden characters");
         if (v.Length > MaxLen) throw new ArgumentException($"{Label}: too long");
         if (Kind == "select" && !Options.Contains(v)) throw new ArgumentException($"{Label}: choose one of {string.Join(", ", Options)}");
@@ -72,7 +72,7 @@ public sealed class FieldDef
     private static string G(double? v) => v is null ? "None" : v.Value.ToString("G6", CultureInfo.InvariantCulture);
 
     /// <summary>str.strip(): whitespace and control characters at both ends.</summary>
-    private static string PyStrip(string s) => s.Trim().Trim('\x1c', '\x1d', '\x1e', '\x1f', '\x0b', '\x0c');
+    private static string StripControl(string s) => s.Trim().Trim('\x1c', '\x1d', '\x1e', '\x1f', '\x0b', '\x0c');
 }
 
 /// <summary>A provider in Admin → Integrations (Razorpay, MSG91, email ...).</summary>

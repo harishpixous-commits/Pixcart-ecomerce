@@ -94,7 +94,7 @@ public partial class ShopAssistantBAL
         };
     }
 
-    /// <summary>Reference: settings.validate + update. Field-by-field port, same error texts.</summary>
+    /// <summary>Validates the settings field by field and saves them; each field has its own error text.</summary>
     internal static JsonObject ValidateSettings(JsonObject data, JsonObject current)
     {
         static string Text(JsonNode? v, int limit)

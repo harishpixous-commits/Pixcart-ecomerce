@@ -74,7 +74,7 @@ public sealed partial class QueryRulesFilter : IAsyncResourceFilter
     private static partial Regex PathParam();
 
     /// <summary>HttpContext.Items key: path and query errors waiting for the body check.</summary>
-    internal const string PendingErrors = "reference.param.errors";
+    internal const string PendingErrors = "request.param.errors";
 
     private static readonly HashSet<string> TrueWords = ["1", "on", "t", "true", "y", "yes"];
     private static readonly HashSet<string> FalseWords = ["0", "off", "f", "false", "n", "no"];

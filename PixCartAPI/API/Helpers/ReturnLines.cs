@@ -14,7 +14,7 @@ namespace API.Helpers;
 public static partial class ReturnLines
 {
     [GeneratedRegex(@"^[+-]?\d+(_\d+)*$")]
-    private static partial Regex PyIntText();
+    private static partial Regex WholeNumberText();
 
     public static List<(Guid OrderItemId, int Qty)> Parse(IEnumerable<JsonElement> items)
     {
@@ -23,15 +23,15 @@ public static partial class ReturnLines
         {
             if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("order_item_id", out var id) || !item.TryGetProperty("qty", out var qty))
                 throw Invalid();
-            lines.Add((PyUuid(id) ?? throw Invalid(), PyInt(qty) ?? throw Invalid()));
+            lines.Add((LenientUuid(id) ?? throw Invalid(), LenientInt(qty) ?? throw Invalid()));
         }
         return lines;
     }
 
     private static AppException Invalid() => new("Choose the items and quantities to return", "invalid_items", 400);
 
-    /// <summary>Python's uuid.UUID(str(v)): braces, "urn:uuid:" and dashes anywhere are allowed; 32 hex digits.</summary>
-    private static Guid? PyUuid(JsonElement v)
+    /// <summary>A lenient UUID: braces, a "urn:uuid:" prefix and dashes anywhere are allowed; 32 hex digits.</summary>
+    private static Guid? LenientUuid(JsonElement v)
     {
         var text = v.ValueKind == JsonValueKind.String ? v.GetString()! : v.GetRawText(); // str() of a number never parses
         var hex = text.Replace("urn:", "").Replace("uuid:", "").Trim('{', '}').Replace("-", "");
@@ -40,7 +40,7 @@ public static partial class ReturnLines
 
     /// <summary>Python's int(v) on a JSON value: whole numbers, decimals truncated (int(2.9) == 2), true/false as 1/0,
     /// numeric strings (spaces around and single underscores between digits allowed); null, lists and objects fail.</summary>
-    private static int? PyInt(JsonElement v)
+    private static int? LenientInt(JsonElement v)
     {
         switch (v.ValueKind)
         {
@@ -53,7 +53,7 @@ public static partial class ReturnLines
                 return v.TryGetDouble(out var d) && double.IsFinite(d) ? Clamp((long)Math.Truncate(Math.Clamp(d, long.MinValue, long.MaxValue))) : null;
             case JsonValueKind.String:
                 var t = v.GetString()!.Trim();
-                return PyIntText().IsMatch(t) && long.TryParse(t.Replace("_", ""), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var p)
+                return WholeNumberText().IsMatch(t) && long.TryParse(t.Replace("_", ""), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var p)
                     ? Clamp(p) : null;
             default:
                 return null;

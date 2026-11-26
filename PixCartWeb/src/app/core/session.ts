@@ -1,7 +1,7 @@
 /*
- * The signed-in person, their cart count and the guest cart. Port of frontend/src/lib/session.tsx with the same restore
- * order: (1) if the "probably signed in" hint is set, refresh the access token and read /api/auth/me; (2) merge a guest
- * cart into the account; (3) ready; (4) count the cart. useSession() → inject(SessionService).
+ * The signed-in person, their cart count and the guest cart. Restore order: (1) if the "probably signed in" hint is
+ * set, refresh the access token and read /api/auth/me; (2) merge a guest cart into the account; (3) ready; (4) count
+ * the cart.
  */
 
 import { Injectable, signal } from "@angular/core";
