@@ -18,8 +18,8 @@ public partial class CmsAdminController
     }
     [HttpGet("/api/admin/storefront/sections")]public async Task<object> Sections()=>await bal.SectionsAsync(await me.RequireAsync());
     [HttpPost("/api/admin/storefront/sections")]public async Task<IActionResult> AddSection(SectionIn b)=>StatusCode(201,await bal.SaveSectionAsync(await me.RequireAsync(),null,b.Model()));
-    [HttpPut("/api/admin/storefront/sections/{id:guid}")]public async Task<object> SaveSection(Guid id,SectionIn b)=>await bal.SaveSectionAsync(await me.RequireAsync(),id,b.Model());
-    [HttpDelete("/api/admin/storefront/sections/{id:guid}")]public async Task<object> DeleteSection(Guid id)=>await bal.DeleteSectionAsync(await me.RequireAsync(),id);
+    [HttpPut("/api/admin/storefront/sections/{id}")]public async Task<object> SaveSection(Guid id,SectionIn b)=>await bal.SaveSectionAsync(await me.RequireAsync(),id,b.Model());
+    [HttpDelete("/api/admin/storefront/sections/{id}")]public async Task<object> DeleteSection(Guid id)=>await bal.DeleteSectionAsync(await me.RequireAsync(),id);
     public record OrderIn{[Required]public Guid[] Ids{get;init;}=null!;}
     [HttpPut("/api/admin/storefront/sections-order")]public async Task<object> Reorder(OrderIn b)=>await bal.ReorderAsync(await me.RequireAsync(),b.Ids);
 }

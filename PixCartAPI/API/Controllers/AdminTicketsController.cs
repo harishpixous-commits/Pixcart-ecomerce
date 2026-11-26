@@ -15,12 +15,12 @@ public class AdminTicketsController(ISupportDeskBAL bal, ICurrentUser current) :
     private static readonly HashSet<string> Priorities = ["low", "normal", "high", "urgent"];
 
     /// <summary>Ticket with messages and customer (reference: GET /api/admin/tickets/{ticket_id}).</summary>
-    [HttpGet("{ticket_id:guid}")]
+    [HttpGet("{ticket_id}")]
     public async Task<JsonObject> Get(Guid ticket_id) =>
         await bal.GetAsync(await current.RequireAsync(), ticket_id);
 
     /// <summary>Staff reply or internal note (reference: POST /api/admin/tickets/{ticket_id}/reply).</summary>
-    [HttpPost("{ticket_id:guid}/reply")]
+    [HttpPost("{ticket_id}/reply")]
     [Consumes("application/json")]
     public async Task<JsonObject> Reply(Guid ticket_id, [FromBody] StaffReplyIn body)
     {

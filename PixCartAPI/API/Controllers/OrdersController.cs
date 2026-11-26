@@ -71,12 +71,12 @@ public class OrdersController(IOrdersBAL orders, IPlatformSettingsBAL platform, 
     }
 
     /// <summary>One order as its shopper sees it (reference: GET /api/orders/{order_id}).</summary>
-    [HttpGet("{orderId:guid}")]
+    [HttpGet("{orderId}")]
     public async Task<JsonObject> GetOrder(Guid orderId) =>
         await orders.GetShopperOrderAsync(await current.RequireAsync(), orderId);
 
     /// <summary>Cancel the order's cancellable packages, all or one (reference: POST /api/orders/{order_id}/cancel).</summary>
-    [HttpPost("{orderId:guid}/cancel")]
+    [HttpPost("{orderId}/cancel")]
     public async Task<JsonObject> Cancel(Guid orderId, CancelIn body) =>
         await orders.CancelAsync(await current.RequireAsync(), orderId, body.Reason, body.SubOrderId);
 
@@ -101,7 +101,7 @@ public class OrdersController(IOrdersBAL orders, IPlatformSettingsBAL platform, 
         [param: Required, MaxLength(128)] string RazorpaySignature = "");
 
     /// <summary>The shopper's "did my payment go through?" (reference: POST /api/orders/{order_id}/payment-status).</summary>
-    [HttpPost("{orderId:guid}/payment-status")]
+    [HttpPost("{orderId}/payment-status")]
     public async Task<JsonObject> PaymentStatus(Guid orderId) =>
         await orders.PaymentStatusAsync(await current.RequireAsync(), orderId);
 }

@@ -12,7 +12,7 @@ public class AdminReviewsController(IReviewModerationBAL bal, ICurrentUser curre
     private static readonly HashSet<string> Actions = ["publish", "hide", "publish-media", "hide-media", "dismiss-reports"];
 
     /// <summary>Moderate a review (reference: POST /api/admin/reviews/{review_id}/{action}).</summary>
-    [HttpPost("{review_id:guid}/{review_action}")]
+    [HttpPost("{review_id}/{review_action}")]
     public async Task<JsonObject> Moderate(Guid review_id, string review_action)
     {
         if (!Actions.Contains(review_action))

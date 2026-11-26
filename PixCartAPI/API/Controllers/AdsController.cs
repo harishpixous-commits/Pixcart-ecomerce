@@ -59,7 +59,7 @@ public partial class AdsController(IAdsBAL ads, ICatalogBAL catalog, ICurrentUse
 
     /// <summary>Reference: POST /api/ads/clicks/{click_id}/claim.</summary>
     [SignedIn]
-    [HttpPost("clicks/{clickId:guid}/claim")]
+    [HttpPost("clicks/{clickId}/claim")]
     public async Task<JsonObject> Claim(Guid clickId)
     {
         await ads.ClaimAsync(clickId, (await current.RequireAsync()).Id);

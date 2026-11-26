@@ -20,5 +20,5 @@ public partial class SellerHubController(ISellerHubBAL bal,IOrdersBAL orders,ICu
     [HttpPut("preferences")]public async Task<object> Preferences(PrefsIn b)=>await bal.PreferencesAsync(await me.RequireAsync(),await Seller(),b.DispatchDays!.Value,b.HolidayMode!.Value,b.InvoicePrefix,b.DispatchCutoff);
     [HttpGet("warehouses")]public async Task<object> Warehouses()=>await bal.WarehousesAsync(await Seller());
     [HttpPost("warehouses")]public async Task<IActionResult> Warehouse([FromBody]JsonObject b)=>StatusCode(201,await bal.WarehouseAsync(await me.RequireAsync(),await Seller(true),null,b));
-    [HttpPut("warehouses/{id:guid}")]public async Task<object> Warehouse(Guid id,[FromBody]JsonObject b)=>await bal.WarehouseAsync(await me.RequireAsync(),await Seller(true),id,b);
+    [HttpPut("warehouses/{id}")]public async Task<object> Warehouse(Guid id,[FromBody]JsonObject b)=>await bal.WarehouseAsync(await me.RequireAsync(),await Seller(true),id,b);
 }

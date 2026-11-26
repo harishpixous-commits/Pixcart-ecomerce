@@ -28,7 +28,7 @@ public partial class SellerHubController
     {if(b.Mode is not ("set" or "add" or "remove"))throw new AppException("Invalid adjustment mode","validation",422);return await bal.AdjustAsync(await me.RequireAsync(),await Seller(),b.VariantId!.Value,b.WarehouseId!.Value,b.Mode,b.Quantity!.Value,b.Note);}
     [HttpPost("inventory/transfer")]
     public async Task<object> Transfer(TransferIn b)=>await bal.TransferAsync(await me.RequireAsync(),await Seller(),b.VariantId!.Value,b.FromWarehouseId!.Value,b.ToWarehouseId!.Value,b.Quantity!.Value);
-    [HttpGet("inventory/{id:guid}/movements")]
+    [HttpGet("inventory/{id}/movements")]
     public async Task<object> Movements(Guid id)=>await bal.MovementsAsync(await Seller(),id);
     [HttpPost("inventory/import")]
     public async Task<object> ImportStock(IFormFile file,CancellationToken ct)

@@ -27,16 +27,16 @@ public class SellerAdsController(IAdsBAL ads, ICurrentUser current) : Controller
         return StatusCode(201, outp);
     }
 
-    [HttpPut("{campaignId:guid}")]
+    [HttpPut("{campaignId}")]
     public async Task<JsonObject> Update(Guid campaignId, [FromBody] CampaignRequest body) =>
         await ads.SellerUpsertAsync(await Seller(true), await current.RequireAsync(), body.ToBody(), campaignId);
 
-    [HttpPost("{campaignId:guid}/{campaignAction}")]
+    [HttpPost("{campaignId}/{campaignAction}")]
     public async Task<JsonObject> Action(Guid campaignId,
         [RegularExpression("^(pause|resume|end)$", ErrorMessage = "campaignAction must be pause, resume or end")] string campaignAction) =>
         await ads.SellerActionAsync(await Seller(false), await current.RequireAsync(), campaignId, campaignAction);
 
-    [HttpGet("{campaignId:guid}/report")]
+    [HttpGet("{campaignId}/report")]
     public async Task<JsonObject> Report(Guid campaignId, [FromQuery, Range(1, 90)] int days = 30) =>
         await ads.SellerReportAsync(await Seller(false), campaignId, days);
 

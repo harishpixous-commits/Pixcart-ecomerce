@@ -77,17 +77,17 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
     }
 
     /// <summary>Rename or archive (reference: PATCH /api/admin/assistant/conversations/{conv_id}).</summary>
-    [HttpPatch("assistant/conversations/{convId:guid}")]
+    [HttpPatch("assistant/conversations/{convId}")]
     public async Task<JsonObject> PatchConversation(Guid convId, AssistantConvPatch body) =>
         await assistant.PatchConversationAsync(await RequireAsync("assistant"), convId, body.Title, body.Archived);
 
     /// <summary>Delete a conversation (reference: DELETE /api/admin/assistant/conversations/{conv_id}).</summary>
-    [HttpDelete("assistant/conversations/{convId:guid}")]
+    [HttpDelete("assistant/conversations/{convId}")]
     public async Task<JsonObject> DeleteConversation(Guid convId) =>
         await assistant.DeleteConversationAsync(await RequireAsync("assistant"), convId);
 
     /// <summary>A conversation with its messages (reference: GET /api/admin/assistant/conversations/{conv_id}).</summary>
-    [HttpGet("assistant/conversations/{convId:guid}")]
+    [HttpGet("assistant/conversations/{convId}")]
     public async Task<JsonObject> GetConversation(Guid convId) =>
         await assistant.GetConversationAsync(await RequireAsync("assistant"), convId);
 
@@ -97,11 +97,11 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
         return File(download.Bytes, download.ContentType, download.FileName);
     }
 
-    [HttpGet("assistant/messages/{messageId:guid}/download.{format}")]
+    [HttpGet("assistant/messages/{messageId}/download.{format}")]
     public async Task<IActionResult> DownloadMessage(Guid messageId, string format) =>
         SavedDownload(await assistant.DownloadMessageAsync(await RequireAsync("assistant"), messageId, format));
 
-    [HttpGet("assistant/conversations/{convId:guid}/download.{format}")]
+    [HttpGet("assistant/conversations/{convId}/download.{format}")]
     public async Task<IActionResult> DownloadConversation(Guid convId, string format) =>
         SavedDownload(await assistant.DownloadConversationAsync(await RequireAsync("assistant"), convId, format));
 
@@ -110,7 +110,7 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
     /// /api/admin/assistant/conversations/{conv_id}/messages). Live mode (a model connected in Admin → AI providers)
     /// answers on the assistant route's fallback chain; otherwise the sandbox engine answers.
     /// </summary>
-    [HttpPost("assistant/conversations/{convId:guid}/messages")]
+    [HttpPost("assistant/conversations/{convId}/messages")]
     public async Task Ask(Guid convId, AssistantAskIn body, CancellationToken cancellationToken)
     {
         var user = await RequireAsync("assistant");
@@ -150,7 +150,7 @@ public class AdminAssistantController(IAssistantBAL assistant, IAccessBAL access
         }
     }
     /// <summary>Confirm or cancel a proposed change (reference: POST /api/admin/assistant/actions/{action_id}/{decision_}).</summary>
-    [HttpPost("assistant/actions/{actionId:guid}/{decision}")]
+    [HttpPost("assistant/actions/{actionId}/{decision}")]
     public async Task<JsonObject> DecideAction(Guid actionId, string decision)
     {
         if (decision is not ("confirm" or "cancel"))

@@ -25,5 +25,5 @@ public class AdminCategoriesController(IAdminCategoriesBAL bal,ICurrentUser me):
     [HttpGet("requirements")]public async Task<object> Requirements()=>await bal.RequirementsAsync(await me.RequireAsync());
     [HttpGet("")]public async Task<object> List()=>await bal.ListAsync(await me.RequireAsync());
     [HttpPost("")]public async Task<IActionResult> Add(CategoryIn body)=>StatusCode(201,await bal.SaveAsync(await me.RequireAsync(),null,body.Model()));
-    [HttpPut("{id:guid}")]public async Task<object> Save(Guid id,CategoryIn body)=>await bal.SaveAsync(await me.RequireAsync(),id,body.Model());
+    [HttpPut("{id}")]public async Task<object> Save(Guid id,CategoryIn body)=>await bal.SaveAsync(await me.RequireAsync(),id,body.Model());
 }

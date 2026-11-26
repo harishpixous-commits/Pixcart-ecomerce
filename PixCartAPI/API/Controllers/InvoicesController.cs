@@ -10,7 +10,7 @@ namespace API.Controllers;
 [SignedIn]
 public class InvoicesController(IInvoicesBAL bal, ICurrentUser current) : ControllerBase
 {
-    [HttpGet("/api/invoices/{subId:guid}.pdf")]
+    [HttpGet("/api/invoices/{subId}.pdf")]
     public async Task<IActionResult> Invoice(Guid subId)
     {
         var (pdf, filename) = await bal.InvoicePdfAsync((await current.RequireAsync()).Id, subId);
@@ -19,7 +19,7 @@ public class InvoicesController(IInvoicesBAL bal, ICurrentUser current) : Contro
         return File(pdf, "application/pdf");
     }
 
-    [HttpGet("/api/orders/{orderId:guid}/fee-invoice.pdf")]
+    [HttpGet("/api/orders/{orderId}/fee-invoice.pdf")]
     public async Task<IActionResult> FeeInvoice(Guid orderId)
     {
         var (pdf, filename) = await bal.FeeInvoicePdfAsync((await current.RequireAsync()).Id, orderId);
@@ -28,7 +28,7 @@ public class InvoicesController(IInvoicesBAL bal, ICurrentUser current) : Contro
         return File(pdf, "application/pdf");
     }
 
-    [HttpGet("/api/credit-notes/{returnId:guid}.pdf")]
+    [HttpGet("/api/credit-notes/{returnId}.pdf")]
     public async Task<IActionResult> CreditNote(Guid returnId)
     {
         var (pdf, filename) = await bal.CreditNotePdfAsync((await current.RequireAsync()).Id, returnId);

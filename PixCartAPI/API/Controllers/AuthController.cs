@@ -79,8 +79,7 @@ public class AuthController(IAuthBAL auth, ICurrentUser me, TokenService tokens,
         }
         catch (RefreshRefusedException e)
         {
-            // answered here (not by the error middleware) so the cookie removal reaches the browser
-            if (e.DeleteCookie) DeleteRefreshCookie();
+            // answered here, not by the error middleware, so the response keeps its headers; the cookie stays as it is
             return new ObjectResult(new { error = new { code = e.Code, message = e.Message, fields = new Dictionary<string, string>() } }) { StatusCode = 401 };
         }
     }

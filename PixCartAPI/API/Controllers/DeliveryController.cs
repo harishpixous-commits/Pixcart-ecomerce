@@ -130,7 +130,7 @@ public class DeliveryController(
     }
 
     /// <summary>Accept a request (reference: POST /api/delivery/offers/{assignment_id}/accept).</summary>
-    [HttpPost("offers/{assignmentId:guid}/accept"), SignedIn]
+    [HttpPost("offers/{assignmentId}/accept"), SignedIn]
     public async Task<JsonObject> Accept(Guid assignmentId)
     {
         var user = await current.RequireAsync();
@@ -138,7 +138,7 @@ public class DeliveryController(
     }
 
     /// <summary>Decline a request (reference: POST /api/delivery/offers/{assignment_id}/reject).</summary>
-    [HttpPost("offers/{assignmentId:guid}/reject"), SignedIn]
+    [HttpPost("offers/{assignmentId}/reject"), SignedIn]
     public async Task<JsonObject> Reject(Guid assignmentId, RejectIn body)
     {
         var user = await current.RequireAsync();
@@ -146,7 +146,7 @@ public class DeliveryController(
     }
 
     /// <summary>One trip with its status log (reference: GET /api/delivery/trips/{assignment_id}).</summary>
-    [HttpGet("trips/{assignmentId:guid}"), SignedIn]
+    [HttpGet("trips/{assignmentId}"), SignedIn]
     public async Task<JsonObject> Trip(Guid assignmentId)
     {
         var user = await current.RequireAsync();
@@ -154,7 +154,7 @@ public class DeliveryController(
     }
 
     /// <summary>Advance a trip one step (reference: POST /api/delivery/trips/{assignment_id}/status).</summary>
-    [HttpPost("trips/{assignmentId:guid}/status"), SignedIn]
+    [HttpPost("trips/{assignmentId}/status"), SignedIn]
     public async Task<JsonObject> TripStep(Guid assignmentId, StepIn body)
     {
         var user = await current.RequireAsync();
@@ -162,7 +162,7 @@ public class DeliveryController(
     }
 
     /// <summary>Hand the package over (reference: POST /api/delivery/trips/{assignment_id}/deliver — multipart).</summary>
-    [HttpPost("trips/{assignmentId:guid}/deliver"), SignedIn]
+    [HttpPost("trips/{assignmentId}/deliver"), SignedIn]
     public async Task<JsonObject> TripDeliver(Guid assignmentId, [FromForm] DeliverIn body)
     {
         var user = await current.RequireAsync();
@@ -179,7 +179,7 @@ public class DeliveryController(
     }
 
     /// <summary>A delivery attempt that failed (reference: POST /api/delivery/trips/{assignment_id}/fail).</summary>
-    [HttpPost("trips/{assignmentId:guid}/fail"), SignedIn]
+    [HttpPost("trips/{assignmentId}/fail"), SignedIn]
     public async Task<JsonObject> TripFail(Guid assignmentId, FailIn body)
     {
         var user = await current.RequireAsync();
@@ -192,7 +192,7 @@ public class DeliveryController(
         [param: Range(-180, 180)] decimal? Lng = null);
 
     /// <summary>Hand a package back to the seller (reference: POST /api/delivery/trips/{assignment_id}/returned).</summary>
-    [HttpPost("trips/{assignmentId:guid}/returned"), SignedIn]
+    [HttpPost("trips/{assignmentId}/returned"), SignedIn]
     public async Task<JsonObject> TripReturned(Guid assignmentId, ReturnedIn body)
     {
         var user = await current.RequireAsync();
@@ -200,7 +200,7 @@ public class DeliveryController(
     }
 
     /// <summary>The partner's own delivery proof photo (reference: GET /api/delivery/trips/{assignment_id}/proof).</summary>
-    [HttpGet("trips/{assignmentId:guid}/proof"), SignedIn]
+    [HttpGet("trips/{assignmentId}/proof"), SignedIn]
     public async Task<FileContentResult> TripProof(Guid assignmentId)
     {
         var user = await current.RequireAsync();

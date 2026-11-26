@@ -19,8 +19,8 @@ public class AdminProductMediaController(IAdminProductMediaBAL bal,ICurrentUser 
         public ProductVideoModel Model()=>new(){Url=Url,PosterUrl=PosterUrl,Title=Title,DurationS=DurationS};
     }
     public record VideosIn{[MaxLength(10)]public VideoIn[] Videos{get;init;}=[];}
-    [HttpPut("{id:guid}/images")]public async Task<object> Images(Guid id,ImagesIn body)=>await bal.SaveAsync(await me.RequireAsync(),id,body.Images,null);
-    [HttpPut("{id:guid}/videos")]public async Task<object> Videos(Guid id,VideosIn body)=>await bal.SaveAsync(await me.RequireAsync(),id,null,body.Videos.Select(v=>v.Model()).ToArray());
+    [HttpPut("{id}/images")]public async Task<object> Images(Guid id,ImagesIn body)=>await bal.SaveAsync(await me.RequireAsync(),id,body.Images,null);
+    [HttpPut("{id}/videos")]public async Task<object> Videos(Guid id,VideosIn body)=>await bal.SaveAsync(await me.RequireAsync(),id,null,body.Videos.Select(v=>v.Model()).ToArray());
     private static async Task<byte[]> Bytes(IFormFile file,long max,CancellationToken ct){using var output=new MemoryStream();await using var input=file.OpenReadStream();var buffer=new byte[81920];while(output.Length<=max){var n=await input.ReadAsync(buffer.AsMemory(0,(int)Math.Min(buffer.Length,max+1-output.Length)),ct);if(n==0)break;await output.WriteAsync(buffer.AsMemory(0,n),ct);}return output.ToArray();}
     [HttpPost("images")]public async Task<IActionResult> Image(IFormFile file,CancellationToken ct){await access.RequireAsync(await me.RequireAsync(),"catalog");return StatusCode(201,new{url=await storage.SaveImageAsync(await Bytes(file,app.MaxImageBytes,ct),"products",ct)});}
     [HttpPost("videos")]public async Task<IActionResult> Video(IFormFile file,CancellationToken ct){await access.RequireAsync(await me.RequireAsync(),"catalog");var max=(await settings.GetAsync()).Long("max_video_mb")*1024*1024;return StatusCode(201,new{url=await storage.SaveVideoAsync(await Bytes(file,max,ct),max,ct:ct)});}

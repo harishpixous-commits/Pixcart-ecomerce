@@ -32,7 +32,7 @@ public class SellerReturnsController(IReturnsBAL returns, ICurrentUser current) 
         [param: MaxLength(100)] List<ItemCondition> Items = null!);
 
     /// <summary>Decide on a return (reference: POST /api/seller/returns/{return_id}).</summary>
-    [HttpPost("{returnId:guid}")]
+    [HttpPost("{returnId}")]
     public async Task<JsonObject> Act(Guid returnId, ActIn body)
     {
         var conditions = (body.Items ?? []).Where(c => c.Condition is "sellable" or "damaged")

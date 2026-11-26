@@ -25,7 +25,7 @@ public class AdminReturnsController(IReturnsBAL returns, ICurrentUser current) :
         await returns.AdminListAsync(await current.RequireAsync(), status, q, sellerId, page);
 
     /// <summary>What can still be returned from an order (reference: GET /api/admin/orders/{order_id}/returnable).</summary>
-    [HttpGet("orders/{orderId:guid}/returnable")]
+    [HttpGet("orders/{orderId}/returnable")]
     public async Task<JsonObject> Returnable(Guid orderId) =>
         await returns.AdminReturnableAsync(await current.RequireAsync(), orderId);
 
@@ -52,7 +52,7 @@ public class AdminReturnsController(IReturnsBAL returns, ICurrentUser current) :
 
     /// <summary>Decide on a return, or mark a COD refund paid with its reference
     /// (reference: POST /api/admin/returns/{return_id}).</summary>
-    [HttpPost("returns/{returnId:guid}")]
+    [HttpPost("returns/{returnId}")]
     public async Task<JsonObject> Act(Guid returnId, ActIn body) =>
         await returns.AdminActAsync(await current.RequireAsync(), returnId, body.Action, body.Note, body.Reference);
 }

@@ -30,7 +30,7 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     }
 
     /// <summary>One package (reference: GET /api/seller/orders/{sub_id}).</summary>
-    [HttpGet("orders/{subId:guid}")]
+    [HttpGet("orders/{subId}")]
     public async Task<JsonObject> Get(Guid subId)
     {
         var user = await current.RequireAsync();
@@ -41,7 +41,7 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     }
 
     /// <summary>Hand the packed order to the own delivery fleet (reference: POST /api/seller/orders/{sub_id}/ready-for-pickup).</summary>
-    [HttpPost("orders/{subId:guid}/ready-for-pickup")]
+    [HttpPost("orders/{subId}/ready-for-pickup")]
     public async Task<JsonObject> ReadyForPickup(Guid subId)
     {
         var user = await current.RequireAsync();
@@ -49,29 +49,29 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     }
 
     /// <summary>Take the order back from the fleet before pickup (reference: POST /api/seller/orders/{sub_id}/use-courier).</summary>
-    [HttpPost("orders/{subId:guid}/use-courier")]
+    [HttpPost("orders/{subId}/use-courier")]
     public async Task<JsonObject> UseCourier(Guid subId)
     {
         var user = await current.RequireAsync();
         return await fleet.UseCourierAsync(user, await orders.RequireSellerAsync(user, approved: true), subId);
     }
 
-    [HttpPost("orders/{subId:guid}/book-courier")]
+    [HttpPost("orders/{subId}/book-courier")]
     public async Task<JsonObject> BookCourier(Guid subId)
     {
         var user=await current.RequireAsync();return await shipping.BookAsync(user,await orders.RequireSellerAsync(user,true),subId);
     }
 
     /// <summary>Accept the order (reference: POST /api/seller/orders/{sub_id}/confirm).</summary>
-    [HttpPost("orders/{subId:guid}/confirm")]
+    [HttpPost("orders/{subId}/confirm")]
     public Task<JsonObject> Confirm(Guid subId) => Act(subId, "confirmed");
 
     /// <summary>Mark it packed (reference: POST /api/seller/orders/{sub_id}/pack).</summary>
-    [HttpPost("orders/{subId:guid}/pack")]
+    [HttpPost("orders/{subId}/pack")]
     public Task<JsonObject> Pack(Guid subId) => Act(subId, "packed");
 
     /// <summary>Hand it to a courier (reference: POST /api/seller/orders/{sub_id}/ship).</summary>
-    [HttpPost("orders/{subId:guid}/ship")]
+    [HttpPost("orders/{subId}/ship")]
     public Task<JsonObject> Ship(Guid subId, ShipIn body) =>
         Act(subId, "shipped", $"{body.CourierName.Trim()} {body.TrackingNumber.Trim()}", body);
 
@@ -94,7 +94,7 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     }
 
     /// <summary>Cancel a package not yet shipped (reference: POST /api/seller/orders/{sub_id}/reject).</summary>
-    [HttpPost("orders/{subId:guid}/reject")]
+    [HttpPost("orders/{subId}/reject")]
     public async Task<JsonObject> Reject(Guid subId, RejectIn body)
     {
         var user = await current.RequireAsync();
@@ -103,7 +103,7 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     }
 
     /// <summary>The seller's own courier brought a shipped package back (reference: POST /api/seller/orders/{sub_id}/rto).</summary>
-    [HttpPost("orders/{subId:guid}/rto")]
+    [HttpPost("orders/{subId}/rto")]
     public async Task<JsonObject> Rto(Guid subId, RtoIn body)
     {
         var user = await current.RequireAsync();
@@ -111,7 +111,7 @@ public class SellerOrdersController(IOrdersBAL orders, IDeliveryFleetBAL fleet, 
     }
 
     /// <summary>Mark it delivered (reference: POST /api/seller/orders/{sub_id}/deliver).</summary>
-    [HttpPost("orders/{subId:guid}/deliver")]
+    [HttpPost("orders/{subId}/deliver")]
     public Task<JsonObject> Deliver(Guid subId) => Act(subId, "delivered", "Marked delivered by seller");
 
     private async Task<JsonObject> Act(Guid subId, string dst, string note = "", ShipIn? ship = null)

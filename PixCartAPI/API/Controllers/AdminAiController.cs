@@ -51,7 +51,7 @@ public class AdminAiController(
     }
 
     /// <summary>One run with its inputs (reference: GET /api/admin/ai/runs/{run_id}).</summary>
-    [HttpGet("runs/{runId:guid}")]
+    [HttpGet("runs/{runId}")]
     public async Task<JsonObject> RunDetail(Guid runId)
     {
         var user = await current.RequireAsync();
@@ -88,7 +88,7 @@ public class AdminAiController(
     /// Send a reviewed customer message (reference: POST /api/admin/ai/runs/{run_id}/send): in the customer's
     /// notifications and by email. The text sent is exactly what the staff member approved.
     /// </summary>
-    [HttpPost("runs/{runId:guid}/send")]
+    [HttpPost("runs/{runId}/send")]
     public async Task<JsonObject> Send(Guid runId, AiSendIn body)
     {
         var user = await current.RequireAsync();
@@ -117,7 +117,7 @@ public class AdminAiController(
     }
 
     /// <summary>Apply or discard a draft (reference: POST /api/admin/ai/runs/{run_id}/{action}).</summary>
-    [HttpPost("runs/{runId:guid}/{act}")]
+    [HttpPost("runs/{runId}/{act}")]
     public async Task<JsonObject> Finish(Guid runId, string act, AiFinishIn body)
     {
         API.Helpers.PathChoice.Require(act, "action", "apply", "discard");
@@ -129,7 +129,7 @@ public class AdminAiController(
     }
 
     /// <summary>Deterministic seller risk brief (reference: GET /api/admin/ai/briefs/seller/{seller_id}).</summary>
-    [HttpGet("briefs/seller/{sellerId:guid}")]
+    [HttpGet("briefs/seller/{sellerId}")]
     public async Task<JsonObject> SellerBrief(Guid sellerId)
     {
         var user = await current.RequireAsync();
@@ -138,7 +138,7 @@ public class AdminAiController(
     }
 
     /// <summary>Deterministic order risk brief (reference: GET /api/admin/ai/briefs/order/{order_id}).</summary>
-    [HttpGet("briefs/order/{orderId:guid}")]
+    [HttpGet("briefs/order/{orderId}")]
     public async Task<JsonObject> OrderBrief(Guid orderId)
     {
         var user = await current.RequireAsync();

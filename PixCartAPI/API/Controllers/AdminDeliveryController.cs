@@ -24,12 +24,12 @@ public class AdminDeliveryController(
         await admin.QueueAsync(await current.RequireAsync(), tab);
 
     /// <summary>Partners who could take a package, best first (reference: GET .../packages/{sub_id}/candidates).</summary>
-    [HttpGet("packages/{subOrderId:guid}/candidates"), SignedIn]
+    [HttpGet("packages/{subOrderId}/candidates"), SignedIn]
     public async Task<JsonArray> Candidates(Guid subOrderId) =>
         await admin.CandidatesAsync(await current.RequireAsync(), subOrderId);
 
     /// <summary>Partners who could fetch a return, best first (reference: GET .../returns/{return_id}/candidates).</summary>
-    [HttpGet("returns/{returnId:guid}/candidates"), SignedIn]
+    [HttpGet("returns/{returnId}/candidates"), SignedIn]
     public async Task<JsonArray> ReturnCandidates(Guid returnId) =>
         await fleet.ReturnCandidatesAsync(await current.RequireAsync(), returnId);
 
@@ -48,7 +48,7 @@ public class AdminDeliveryController(
     public sealed record PickupAssignIn(Guid? PartnerId,bool Direct=false,bool Force=false);
 
     /// <summary>Reference route: the return ID is in the URL, not in the request body.</summary>
-    [HttpPost("returns/{returnId:guid}/assign"), SignedIn]
+    [HttpPost("returns/{returnId}/assign"), SignedIn]
     public async Task<JsonObject> AssignReturn(Guid returnId,PickupAssignIn body)
     {
         var user=await current.RequireAsync();
@@ -67,17 +67,17 @@ public class AdminDeliveryController(
     }
 
         /// <summary>Run auto-assignment now (reference: POST .../packages/{sub_id}/auto-assign).</summary>
-    [HttpPost("packages/{subOrderId:guid}/auto-assign"), SignedIn]
+    [HttpPost("packages/{subOrderId}/auto-assign"), SignedIn]
     public async Task<JsonObject> RunAuto(Guid subOrderId) =>
         await fleet.AutoAssignByStaffAsync(await current.RequireAsync(), subOrderId);
 
     /// <summary>Run return-pickup auto-assignment now (reference: POST .../returns/{return_id}/auto-assign).</summary>
-    [HttpPost("returns/{returnId:guid}/auto-assign"), SignedIn]
+    [HttpPost("returns/{returnId}/auto-assign"), SignedIn]
     public async Task<JsonObject> RunReturnAuto(Guid returnId) =>
         await fleet.AutoAssignPickupByStaffAsync(await current.RequireAsync(), returnId);
 
     /// <summary>Move a return pickup to a courier (reference: POST .../returns/{return_id}/courier).</summary>
-    [HttpPost("returns/{returnId:guid}/courier"), SignedIn]
+    [HttpPost("returns/{returnId}/courier"), SignedIn]
     public async Task<JsonObject> ReturnToCourier(Guid returnId)
     {
         await fleet.PickupToCourierByStaffAsync(await current.RequireAsync(), returnId);
@@ -85,7 +85,7 @@ public class AdminDeliveryController(
     }
 
     /// <summary>Take a request or trip off a partner before pickup (reference: POST .../assignments/{id}/cancel).</summary>
-    [HttpPost("assignments/{assignmentId:guid}/cancel"), SignedIn]
+    [HttpPost("assignments/{assignmentId}/cancel"), SignedIn]
     public async Task<JsonObject> Cancel(Guid assignmentId, ReasonIn body)
     {
         await fleet.CancelByStaffAsync(await current.RequireAsync(), assignmentId, body.Reason);
@@ -93,12 +93,12 @@ public class AdminDeliveryController(
     }
 
     /// <summary>Retry a failed delivery or send the partner back to the store (reference: POST .../resolve).</summary>
-    [HttpPost("assignments/{assignmentId:guid}/resolve"), SignedIn]
+    [HttpPost("assignments/{assignmentId}/resolve"), SignedIn]
     public async Task<JsonObject> Resolve(Guid assignmentId, ResolveIn body) =>
         await fleet.ResolveFailedAsync(await current.RequireAsync(), assignmentId, body.Action);
 
     /// <summary>Move a package to a courier (reference: POST .../packages/{sub_id}/courier).</summary>
-    [HttpPost("packages/{subOrderId:guid}/courier"), SignedIn]
+    [HttpPost("packages/{subOrderId}/courier"), SignedIn]
     public async Task<JsonObject> ToCourier(Guid subOrderId)
     {
         await fleet.ToCourierByStaffAsync(await current.RequireAsync(), subOrderId);
@@ -112,12 +112,12 @@ public class AdminDeliveryController(
         await admin.TripsAsync(await current.RequireAsync(), status, q, partnerId, page);
 
     /// <summary>One trip with its status log (reference: GET .../trips/{assignment_id}).</summary>
-    [HttpGet("trips/{assignmentId:guid}"), SignedIn]
+    [HttpGet("trips/{assignmentId}"), SignedIn]
     public async Task<JsonObject> TripDetail(Guid assignmentId) =>
         await admin.TripDetailAsync(await current.RequireAsync(), assignmentId);
 
     /// <summary>The delivery photo (reference: GET .../trips/{assignment_id}/proof).</summary>
-    [HttpGet("trips/{assignmentId:guid}/proof"), SignedIn]
+    [HttpGet("trips/{assignmentId}/proof"), SignedIn]
     public async Task<IActionResult> TripProof(Guid assignmentId)
     {
         await current.RequireAsync();
@@ -148,7 +148,7 @@ public class AdminDeliveryController(
     public async Task<JsonObject> Cash() => await admin.CashAsync(await current.RequireAsync());
 
     /// <summary>Record a cash deposit (reference: POST .../partners/{id}/deposits).</summary>
-    [HttpPost("partners/{partnerId:guid}/deposits"), SignedIn]
+    [HttpPost("partners/{partnerId}/deposits"), SignedIn]
     public async Task<JsonObject> AddDeposit(Guid partnerId, DepositIn body) =>
         await admin.AddDepositAsync(await current.RequireAsync(), partnerId, body.AmountPaise, body.Method,
             body.Reference, body.Note);
@@ -165,7 +165,7 @@ public class AdminDeliveryController(
         await admin.GeneratePayoutsAsync(await current.RequireAsync(), body.WeekStart);
 
     /// <summary>Mark a payout paid (reference: POST .../payouts/{id}/paid; payouts permission).</summary>
-    [HttpPost("payouts/{payoutId:guid}/paid"), SignedIn]
+    [HttpPost("payouts/{payoutId}/paid"), SignedIn]
     public async Task<JsonObject> MarkPaid(Guid payoutId, PaidIn body) =>
         await admin.MarkPayoutPaidAsync(await current.RequireAsync(), payoutId, body.Reference);
 
@@ -182,7 +182,7 @@ public class AdminDeliveryController(
         await admin.FeedbackAsync(await current.RequireAsync(), kind, status, page);
 
     /// <summary>Resolve a complaint (reference: POST .../complaints/{id}/resolve).</summary>
-    [HttpPost("complaints/{complaintId:guid}/resolve"), SignedIn]
+    [HttpPost("complaints/{complaintId}/resolve"), SignedIn]
     public async Task<JsonObject> ResolveComplaint(Guid complaintId, ResolveComplaintIn body) =>
         await admin.ResolveComplaintAsync(await current.RequireAsync(), complaintId, body.Note);
 
@@ -216,22 +216,22 @@ public class AdminDeliveryController(
     }
 
     /// <summary>One partner with the decrypted ID number for verification (reference: GET .../partners/{id}).</summary>
-    [HttpGet("partners/{partnerId:guid}"), SignedIn]
+    [HttpGet("partners/{partnerId}"), SignedIn]
     public async Task<JsonObject> Partner(Guid partnerId) =>
         await admin.PartnerDetailAsync(await current.RequireAsync(), partnerId);
 
     /// <summary>Edit a partner's profile (reference: PUT .../partners/{id}).</summary>
-    [HttpPut("partners/{partnerId:guid}"), SignedIn]
+    [HttpPut("partners/{partnerId}"), SignedIn]
     public async Task<JsonObject> EditPartner(Guid partnerId, ProfileFieldsIn body) =>
         await admin.PartnerUpdateAsync(await current.RequireAsync(), partnerId, body.Profile());
 
     /// <summary>The full bank account, for paying the partner (reference: GET .../partners/{id}/bank; payouts permission).</summary>
-    [HttpGet("partners/{partnerId:guid}/bank"), SignedIn]
+    [HttpGet("partners/{partnerId}/bank"), SignedIn]
     public async Task<JsonObject> PartnerBank(Guid partnerId) =>
         await admin.PartnerBankAsync(await current.RequireAsync(), partnerId);
 
     /// <summary>Read a partner's KYC document, audited (reference: GET .../partners/{partner_id}/docs/{kind}).</summary>
-    [HttpGet("partners/{partnerId:guid}/docs/{kind}"), SignedIn]
+    [HttpGet("partners/{partnerId}/docs/{kind}"), SignedIn]
     public async Task<IActionResult> PartnerDoc(Guid partnerId, string kind)
     {
         var (data, media, fileName) = await admin.PartnerDocAsync(await current.RequireAsync(), partnerId, kind);
@@ -242,7 +242,7 @@ public class AdminDeliveryController(
     }
 
     /// <summary>Upload or replace a partner's document (reference: POST .../partners/{partner_id}/docs/{kind}).</summary>
-    [HttpPost("partners/{partnerId:guid}/docs/{kind}"), SignedIn]
+    [HttpPost("partners/{partnerId}/docs/{kind}"), SignedIn]
     public async Task<JsonObject> UploadPartnerDoc(Guid partnerId, string kind, IFormFile file)
     {
         if (kind is not ("photo" or "license" or "id_proof" or "vehicle_rc"))
@@ -272,12 +272,12 @@ public class AdminDeliveryController(
     }
 
     /// <summary>Approve or reject a registration (reference: POST .../partners/{id}/kyc).</summary>
-    [HttpPost("partners/{partnerId:guid}/kyc"), SignedIn]
+    [HttpPost("partners/{partnerId}/kyc"), SignedIn]
     public async Task<JsonObject> ReviewKyc(Guid partnerId, KycIn body) =>
         await admin.KycReviewAsync(await current.RequireAsync(), partnerId, body.Action, body.Note, body.ZoneId);
 
     /// <summary>Switch a partner on or off (reference: POST .../partners/{id}/active).</summary>
-    [HttpPost("partners/{partnerId:guid}/active"), SignedIn]
+    [HttpPost("partners/{partnerId}/active"), SignedIn]
     public async Task<JsonObject> SetActive(Guid partnerId, ActiveIn body) =>
         await admin.SetActiveAsync(await current.RequireAsync(), partnerId, body.Active, body.Reason);
 
@@ -298,18 +298,18 @@ public class AdminDeliveryController(
     }
 
     /// <summary>Edit a zone (reference: PUT .../zones/{id}).</summary>
-    [HttpPut("zones/{zoneId:guid}"), SignedIn]
+    [HttpPut("zones/{zoneId}"), SignedIn]
     public async Task<JsonObject> UpdateZone(Guid zoneId, ZoneIn body) =>
         await admin.ZoneUpdateAsync(await current.RequireAsync(), zoneId, body.Name, body.City, body.Pincodes,
             body.IsActive, body.CenterLat, body.CenterLng);
 
     /// <summary>Remove an empty zone (reference: DELETE .../zones/{id}).</summary>
-    [HttpDelete("zones/{zoneId:guid}"), SignedIn]
+    [HttpDelete("zones/{zoneId}"), SignedIn]
     public async Task<JsonObject> DeleteZone(Guid zoneId) =>
         await admin.ZoneDeleteAsync(await current.RequireAsync(), zoneId);
 
     /// <summary>Move partners into a zone (reference: POST .../zones/{id}/partners).</summary>
-    [HttpPost("zones/{zoneId:guid}/partners"), SignedIn]
+    [HttpPost("zones/{zoneId}/partners"), SignedIn]
     public async Task<JsonObject> AssignZone(Guid zoneId, AssignZoneIn body) =>
         await admin.ZoneAssignAsync(await current.RequireAsync(), zoneId, body.PartnerIds);
 

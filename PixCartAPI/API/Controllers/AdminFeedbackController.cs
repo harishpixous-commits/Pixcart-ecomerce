@@ -19,5 +19,5 @@ public class AdminFeedbackController(IAdminFeedbackBAL bal,ICurrentUser me):Cont
         public bool TakeDown{get;init;}
         public bool NotifySeller{get;init;}=true;
     }
-    [HttpPost("product-reports/{id:guid}")]public async Task<object> Resolve(Guid id,ResolveIn b)=>await bal.ResolveAsync(await me.RequireAsync(),id,b.Status,b.AdminNote,b.TakeDown,b.NotifySeller);
+    [HttpPost("product-reports/{id}")]public async Task<object> Resolve(Guid id,ResolveIn b)=>await bal.ResolveAsync(await me.RequireAsync(),id,b.Status,b.AdminNote,b.TakeDown,b.NotifySeller);
 }

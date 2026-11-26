@@ -16,18 +16,18 @@ public class AddressesController(IAddressBAL addresses, ICurrentUser me) : Contr
     [HttpPost("/api/addresses")]
     public async Task<IActionResult> Create([FromBody] AddressIn body) => StatusCode(201, await addresses.CreateAsync(await me.RequireAsync(), body));
 
-    [HttpPatch("/api/addresses/{addressId:guid}/instructions")]
+    [HttpPatch("/api/addresses/{addressId}/instructions")]
     public async Task<object> Instructions(Guid addressId, [FromBody] InstructionsIn body) =>
         await addresses.SetInstructionsAsync(await me.RequireAsync(), addressId, body.Instructions);
 
-    [HttpPatch("/api/addresses/{addressId:guid}/location")]
+    [HttpPatch("/api/addresses/{addressId}/location")]
     public async Task<object> Location(Guid addressId, [FromBody] LocationIn body) =>
         await addresses.SetLocationAsync(await me.RequireAsync(), addressId, body.Lat, body.Lng);
 
-    [HttpPut("/api/addresses/{addressId:guid}")]
+    [HttpPut("/api/addresses/{addressId}")]
     public async Task<object> Update(Guid addressId, [FromBody] AddressIn body) => await addresses.UpdateAsync(await me.RequireAsync(), addressId, body);
 
-    [HttpDelete("/api/addresses/{addressId:guid}")]
+    [HttpDelete("/api/addresses/{addressId}")]
     public async Task<object> Delete(Guid addressId)
     {
         await addresses.DeleteAsync(await me.RequireAsync(), addressId);
@@ -70,14 +70,14 @@ public class CustomerAccountController(
     [HttpGet("/api/wishlist"), SignedIn]
     public async Task<object> Wishlist() => await wishlist.ListAsync(await me.RequireAsync());
 
-    [HttpPut("/api/wishlist/{productId:guid}"), SignedIn]
+    [HttpPut("/api/wishlist/{productId}"), SignedIn]
     public async Task<object> WishlistAdd(Guid productId)
     {
         await wishlist.AddAsync(await me.RequireAsync(), productId);
         return new { ok = true };
     }
 
-    [HttpDelete("/api/wishlist/{productId:guid}"), SignedIn]
+    [HttpDelete("/api/wishlist/{productId}"), SignedIn]
     public async Task<object> WishlistRemove(Guid productId)
     {
         await wishlist.RemoveAsync(await me.RequireAsync(), productId);
@@ -117,13 +117,13 @@ public class CustomerAccountController(
         return StatusCode(201, support.TicketOut(t, []));
     }
 
-    [HttpGet("/api/support/tickets/{ticketId:guid}"), SignedIn]
+    [HttpGet("/api/support/tickets/{ticketId}"), SignedIn]
     public async Task<object> GetTicket(Guid ticketId) => await support.GetTicketAsync(await me.RequireAsync(), ticketId);
 
-    [HttpPost("/api/support/tickets/{ticketId:guid}/messages"), SignedIn]
+    [HttpPost("/api/support/tickets/{ticketId}/messages"), SignedIn]
     public async Task<object> Reply(Guid ticketId, [FromBody] TicketMessageIn body) => await support.ReplyAsync(await me.RequireAsync(), ticketId, body.Body!);
 
-    [HttpPost("/api/support/tickets/{ticketId:guid}/close"), SignedIn]
+    [HttpPost("/api/support/tickets/{ticketId}/close"), SignedIn]
     public async Task<object> Close(Guid ticketId) => await support.CloseAsync(await me.RequireAsync(), ticketId);
 
     // ---------------------------------------------------------------- analytics beacon

@@ -46,14 +46,14 @@ public class AdminShopAssistantController(BAL.ShopAssistantBAL bal, ICurrentUser
     }
 
     /// <summary>Update an article (reference: PUT /articles/{article_id}).</summary>
-    [HttpPut("articles/{articleId:guid}")]
+    [HttpPut("articles/{articleId}")]
     [Consumes("application/json")]
     public async Task<JsonResult> UpdateArticle(Guid articleId, [FromBody] ArticleIn body) =>
         new(await bal.AdminUpdateArticleAsync(await current.RequireAsync(), articleId, body.Title, body.Body,
             body.Keywords ?? [], body.Topic, body.Link, body.IsPublished, body.Position));
 
     /// <summary>Delete an article (reference: DELETE /articles/{article_id}).</summary>
-    [HttpDelete("articles/{articleId:guid}")]
+    [HttpDelete("articles/{articleId}")]
     public async Task<JsonResult> DeleteArticle(Guid articleId) =>
         new(await bal.AdminDeleteArticleAsync(await current.RequireAsync(), articleId));
 
@@ -73,7 +73,7 @@ public class AdminShopAssistantController(BAL.ShopAssistantBAL bal, ICurrentUser
         new(await bal.AdminListChatsAsync(await current.RequireAsync(), page, feedback, escalated, q));
 
     /// <summary>One customer chat with its messages (reference: GET /chats/{chat_id}; audited).</summary>
-    [HttpGet("chats/{chatId:guid}")]
+    [HttpGet("chats/{chatId}")]
     public async Task<JsonResult> GetChat(Guid chatId) =>
         new(await bal.AdminGetChatAsync(await current.RequireAsync(), chatId));
 

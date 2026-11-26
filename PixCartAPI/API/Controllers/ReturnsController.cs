@@ -30,7 +30,7 @@ public class ReturnsController(IReturnsBAL returns, ICurrentUser current) : Cont
 
     /// <summary>What can still be returned from the order, and its returns so far
     /// (reference: GET /api/orders/{order_id}/returnable).</summary>
-    [HttpGet("/api/orders/{orderId:guid}/returnable")]
+    [HttpGet("/api/orders/{orderId}/returnable")]
     [SignedIn]
     public async Task<JsonObject> Returnable(Guid orderId) =>
         await returns.ReturnableAsync(await current.RequireAsync(), orderId);
@@ -55,7 +55,7 @@ public class ReturnsController(IReturnsBAL returns, ICurrentUser current) : Cont
     }
 
     /// <summary>Cancel your own return request (reference: POST /api/returns/{return_id}/cancel).</summary>
-    [HttpPost("/api/returns/{returnId:guid}/cancel")]
+    [HttpPost("/api/returns/{returnId}/cancel")]
     [SignedIn]
     public async Task<JsonObject> Cancel(Guid returnId) =>
         await returns.CancelAsync(await current.RequireAsync(), returnId);

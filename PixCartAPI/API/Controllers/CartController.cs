@@ -52,13 +52,13 @@ public class CartController(ICartBAL cart, ICurrentUser current) : ControllerBas
     [HttpGet("saved")]
     public async Task<JsonObject> Saved() => await cart.SavedViewAsync(await UserId());
 
-    [HttpPost("items/{variantId:guid}/save-for-later")]
+    [HttpPost("items/{variantId}/save-for-later")]
     public async Task<JsonObject> SaveForLater(Guid variantId) => await cart.SaveForLaterAsync(await UserId(), variantId);
 
-    [HttpPost("saved/{variantId:guid}/move-to-cart")]
+    [HttpPost("saved/{variantId}/move-to-cart")]
     public async Task<JsonObject> MoveToCart(Guid variantId) => await cart.MoveToCartAsync(await UserId(), variantId);
 
-    [HttpDelete("saved/{variantId:guid}")]
+    [HttpDelete("saved/{variantId}")]
     public async Task<JsonObject> DeleteSaved(Guid variantId) => await cart.DeleteSavedAsync(await UserId(), variantId);
 
     private async Task<Guid> UserId() => (await current.RequireAsync()).Id;

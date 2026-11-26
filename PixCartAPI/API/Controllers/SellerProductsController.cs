@@ -9,7 +9,7 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
 {
     private async Task<Model.DomainModel.SellerModel> Seller()=>await orders.RequireSellerAsync(await me.RequireAsync(),false);
     [HttpPost("products")] public async Task<IActionResult> Create([FromBody]System.Text.Json.Nodes.JsonObject body)=>StatusCode(201,await bal.SaveAsync(await me.RequireAsync(),await Seller(),null,body));
-    [HttpPut("products/{id:guid}")] public async Task<object> Update(Guid id,[FromBody]System.Text.Json.Nodes.JsonObject body)=>await bal.SaveAsync(await me.RequireAsync(),await Seller(),id,body);
+    [HttpPut("products/{id}")] public async Task<object> Update(Guid id,[FromBody]System.Text.Json.Nodes.JsonObject body)=>await bal.SaveAsync(await me.RequireAsync(),await Seller(),id,body);
     [HttpGet("products")]
     public async Task<object> List([FromQuery]string? status,[FromQuery]string q="",[FromQuery(Name="low_stock")]bool lowStock=false,[FromQuery]int page=1,[FromQuery(Name="page_size")]int pageSize=20)
     {
@@ -21,13 +21,13 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
     [HttpPost("products/import")]
     public async Task<object> Import(IFormFile file,[FromQuery(Name="dry_run")]bool dryRun=true,CancellationToken ct=default)
     {var seller=await Seller();return await bal.ImportAsync(await me.RequireAsync(),seller,await ReadBoundedAsync(file,2*1024*1024,ct),file.FileName,dryRun);}
-    [HttpGet("products/{id:guid}")] public async Task<object> Detail(Guid id)=>await bal.DetailAsync(await Seller(),id);
+    [HttpGet("products/{id}")] public async Task<object> Detail(Guid id)=>await bal.DetailAsync(await Seller(),id);
     [HttpGet("listing-requirements")] public async Task<object> Requirements([FromQuery(Name="category_id")]Guid category)=>await bal.RequirementsAsync(await Seller(),category);
     [HttpGet("categories")] public async Task<object> Categories()=>await bal.CategoriesAsync(await Seller());
     [HttpGet("fees")] public async Task<object> Fees() { await Seller(); return await bal.FeesAsync(); }
-    [HttpPost("products/{id:guid}/submit")] public async Task<object> Submit(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"submit");
-    [HttpPost("products/{id:guid}/archive")] public async Task<object> Archive(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"archive");
-    [HttpPost("products/{id:guid}/restore")] public async Task<object> Restore(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"restore");
+    [HttpPost("products/{id}/submit")] public async Task<object> Submit(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"submit");
+    [HttpPost("products/{id}/archive")] public async Task<object> Archive(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"archive");
+    [HttpPost("products/{id}/restore")] public async Task<object> Restore(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"restore");
     public record VariantPatch
     {
         [Range(1,100000000)]public long? PricePaise {get;init;}
@@ -35,7 +35,7 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
         [Range(0,1000000)]public int? Stock {get;init;}
         public bool? IsActive {get;init;}
     }
-    [HttpPatch("variants/{id:guid}")] public async Task<object> Patch(Guid id,VariantPatch b)=>await bal.PatchAsync(await Seller(),id,b.PricePaise,b.MrpPaise,b.Stock,b.IsActive);
+    [HttpPatch("variants/{id}")] public async Task<object> Patch(Guid id,VariantPatch b)=>await bal.PatchAsync(await Seller(),id,b.PricePaise,b.MrpPaise,b.Stock,b.IsActive);
     private static async Task<byte[]> ReadBoundedAsync(IFormFile file,long max,CancellationToken ct)
     {
         using var output=new MemoryStream();await using var input=file.OpenReadStream();var buffer=new byte[81920];

@@ -37,7 +37,7 @@ public class StaffController(IStaffBAL staff, ICurrentUser me) : ControllerBase
     [HttpPost("/api/admin/staff")]
     public async Task<IActionResult> AddStaff([FromBody] StaffIn body) => StatusCode(201, await staff.AddStaffAsync(await me.RequireAsync(), body));
 
-    [HttpPatch("/api/admin/staff/{userId:guid}")]
+    [HttpPatch("/api/admin/staff/{userId}")]
     public async Task<object> EditStaff(Guid userId, [FromBody] StaffPatchIn body)
     {
         await staff.EditStaffAsync(await me.RequireAsync(), userId, body);
@@ -61,28 +61,28 @@ public class AdminAccountsController(IAccountAdminBAL admin, ICurrentUser me) : 
     [HttpPost("/api/admin/customers"), Perm("customers")]
     public async Task<IActionResult> CreateCustomer([FromBody] CustomerIn body) => StatusCode(201, await admin.CreateCustomerAsync(await me.RequireAsync(), body));
 
-    [HttpGet("/api/admin/customers/{userId:guid}"), Perm("customers")]
+    [HttpGet("/api/admin/customers/{userId}"), Perm("customers")]
     public Task<Dictionary<string, object?>> CustomerDetail(Guid userId) => admin.CustomerDetailAsync(userId);
 
-    [HttpPatch("/api/admin/customers/{userId:guid}"), Perm("customers")]
+    [HttpPatch("/api/admin/customers/{userId}"), Perm("customers")]
     public async Task<object> EditCustomer(Guid userId, [FromBody] CustomerPatchIn body) => await admin.EditCustomerAsync(await me.RequireAsync(), userId, body);
 
-    [HttpPost("/api/admin/customers/{userId:guid}/sign-out"), Perm("customers")]
+    [HttpPost("/api/admin/customers/{userId}/sign-out"), Perm("customers")]
     public async Task<object> SignOutCustomer(Guid userId) => await admin.SignOutCustomerAsync(await me.RequireAsync(), userId);
 
     [HttpPost("/api/admin/sellers"), Perm("sellers")]
     public async Task<IActionResult> CreateSeller([FromBody] SellerCreateIn body) => StatusCode(201, await admin.CreateSellerAsync(await me.RequireAsync(), body));
 
-    [HttpPut("/api/admin/sellers/{sellerId:guid}/business"), Perm("sellers")]
+    [HttpPut("/api/admin/sellers/{sellerId}/business"), Perm("sellers")]
     public async Task<object> SellerBusiness(Guid sellerId, [FromBody] SellerProfileIn body) => await admin.SellerBusinessAsync(await me.RequireAsync(), sellerId, body);
 
-    [HttpPut("/api/admin/sellers/{sellerId:guid}/pickup-address"), Perm("sellers")]
+    [HttpPut("/api/admin/sellers/{sellerId}/pickup-address"), Perm("sellers")]
     public async Task<object> SellerPickup(Guid sellerId, [FromBody] SellerPickupIn body) => await admin.SellerPickupAsync(await me.RequireAsync(), sellerId, body);
 
-    [HttpPut("/api/admin/sellers/{sellerId:guid}/bank"), Perm("sellers")]
+    [HttpPut("/api/admin/sellers/{sellerId}/bank"), Perm("sellers")]
     public async Task<object> SellerBank(Guid sellerId, [FromBody] SellerBankIn body) => await admin.SellerBankAsync(await me.RequireAsync(), sellerId, body);
 
-    [HttpPut("/api/admin/sellers/{sellerId:guid}/grievance-officer"), Perm("sellers")]
+    [HttpPut("/api/admin/sellers/{sellerId}/grievance-officer"), Perm("sellers")]
     public async Task<object> SellerGrievance(Guid sellerId, [FromBody] SellerGrievanceIn body) =>
         await admin.SellerGrievanceAsync(await me.RequireAsync(), sellerId, body);
 

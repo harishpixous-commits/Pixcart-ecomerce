@@ -49,7 +49,7 @@ public class SellerOnboardingController(ISellerOnboardingBAL bal, ICurrentUser c
         Response.Headers.ContentDisposition = $"inline; filename=\"{d.Name}\"";
         return File(d.Bytes,d.Type);
     }
-    [HttpGet("/api/admin/sellers/{sellerId:guid}/documents/{kind}")]
+    [HttpGet("/api/admin/sellers/{sellerId}/documents/{kind}")]
     public async Task<IActionResult> AdminDocument(Guid sellerId,string kind,CancellationToken ct)
     {
         var d = await bal.AdminDocumentAsync(await current.RequireAsync(),sellerId,kind,ct);

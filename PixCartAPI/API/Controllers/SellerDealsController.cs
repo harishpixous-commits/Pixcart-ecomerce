@@ -32,7 +32,7 @@ public class SellerDealsController(IDealsBAL deals, ICurrentUser current) : Cont
         return StatusCode(201, item);
     }
 
-    [HttpPost("{dealId:guid}/cancel")]
+    [HttpPost("{dealId}/cancel")]
     public async Task<JsonObject> Cancel(Guid dealId)
     {
         await deals.SellerCancelAsync(await current.RequireSellerAsync(approved: false), await current.RequireAsync(), dealId);

@@ -33,7 +33,7 @@ public class ShopAssistantController(IShopAssistantBAL bal, ICurrentUser current
     [SignedIn]
     public async Task<JsonObject> MyChats() => await bal.MyChatsAsync(await current.RequireAsync());
 
-    [HttpGet("sessions/{chatId:guid}")]
+    [HttpGet("sessions/{chatId}")]
     public async Task<JsonObject> GetChat(Guid chatId) =>
         await bal.GetChatAsync(await current.GetAsync(), chatId, ChatKey);
 
@@ -43,7 +43,7 @@ public class ShopAssistantController(IShopAssistantBAL bal, ICurrentUser current
         JsonObject? Page = null);
 
     /// <summary>One customer message; the reply streams as server-sent events (reference: send -> agent.run).</summary>
-    [HttpPost("sessions/{chatId:guid}/messages")]
+    [HttpPost("sessions/{chatId}/messages")]
     public async Task Send(Guid chatId, [FromBody] MessageIn body, CancellationToken cancellationToken)
     {
         var user = await current.GetAsync();
@@ -74,7 +74,7 @@ public class ShopAssistantController(IShopAssistantBAL bal, ICurrentUser current
         bool Grievance = false);
 
     /// <summary>Sends the support request the assistant prepared, with the chat attached (reference: raise_ticket).</summary>
-    [HttpPost("sessions/{chatId:guid}/ticket")]
+    [HttpPost("sessions/{chatId}/ticket")]
     [SignedIn]
     public async Task<IActionResult> RaiseTicket(Guid chatId, [FromBody] TicketIn body)
     {
@@ -84,19 +84,19 @@ public class ShopAssistantController(IShopAssistantBAL bal, ICurrentUser current
     }
 
     /// <summary>The customer pressed Confirm on a prepared change (reference: confirm).</summary>
-    [HttpPost("actions/{actionId:guid}/confirm")]
+    [HttpPost("actions/{actionId}/confirm")]
     [SignedIn]
     public async Task<JsonObject> Confirm(Guid actionId) =>
         await bal.ConfirmActionAsync(await current.RequireAsync(), actionId);
 
-    [HttpPost("actions/{actionId:guid}/dismiss")]
+    [HttpPost("actions/{actionId}/dismiss")]
     [SignedIn]
     public async Task<JsonObject> Dismiss(Guid actionId) =>
         await bal.DismissActionAsync(await current.RequireAsync(), actionId);
 
     public sealed record FeedbackIn([Range(-1, 1)] int Value);
 
-    [HttpPost("sessions/{chatId:guid}/feedback")]
+    [HttpPost("sessions/{chatId}/feedback")]
     public async Task<JsonObject> Feedback(Guid chatId, [FromBody] FeedbackIn body) =>
         await bal.FeedbackAsync(await current.GetAsync(), chatId, ChatKey, body.Value);
 }

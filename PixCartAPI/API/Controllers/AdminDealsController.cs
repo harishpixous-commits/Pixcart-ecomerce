@@ -17,7 +17,7 @@ public class AdminDealsController(IDealsBAL deals, ICurrentUser current) : Contr
         [FromQuery, StringLength(80)] string q = "", [FromQuery, Range(1, int.MaxValue)] int page = 1) =>
         await deals.AdminListAsync(await current.RequireAsync(), status, q, page);
 
-    [HttpPost("{dealId:guid}/{dealAction}")]
+    [HttpPost("{dealId}/{dealAction}")]
     [Consumes("application/json")]
     public async Task<JsonObject> Action(Guid dealId,
         [RegularExpression("^(approve|reject|cancel)$", ErrorMessage = "dealAction must be approve, reject or cancel")] string dealAction,

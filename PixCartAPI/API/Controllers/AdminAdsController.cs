@@ -20,7 +20,7 @@ public class AdminAdsController(IAdsBAL ads, ICurrentUser current) : ControllerB
     [HttpPost("bill")]
     public async Task<JsonObject> Bill() => await ads.AdminBillAsync(await current.RequireAsync());
 
-    [HttpPost("{campaignId:guid}/{campaignAction}")]
+    [HttpPost("{campaignId}/{campaignAction}")]
     [Consumes("application/json")]
     public async Task<JsonObject> Action(Guid campaignId,
         [RegularExpression("^(approve|reject|pause|resume|end)$", ErrorMessage = "campaignAction must be approve, reject, pause, resume or end")] string campaignAction,
