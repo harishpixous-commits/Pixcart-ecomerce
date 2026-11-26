@@ -50,9 +50,13 @@ public partial class CatalogController(ICatalogBAL catalog, AppSettings settings
         [FromQuery, Between(1, 7)] int? delivery = null,
         [FromQuery] bool deal = false)
     {
+        // q, category and seller exactly as sent (model binding turns empty and blank values into null): an empty
+        // category or seller means none, a blank one is looked up and found nowhere
+        string? Sent(string name) => Request.Query.TryGetValue(name, out var v) && v.Count > 0 ? v[^1] : null;
         var vid = VisitorId();
         var (result, served) = await catalog.SearchAsync(
-            new ProductSearch(q, category, brand, seller, minPrice, maxPrice, minRating, minDiscount, inStock, sort, page, pageSize, pincode, delivery, deal),
+            new ProductSearch(Sent("q") ?? "", Sent("category"), brand, Sent("seller"), minPrice, maxPrice, minRating, minDiscount,
+                inStock, sort, page, pageSize, pincode, delivery, deal),
             vid, ClientIpHelper.Get(HttpContext, settings));
         if (served)
             Response.Cookies.Append(VisitorCookie, vid, new CookieOptions
@@ -63,7 +67,7 @@ public partial class CatalogController(ICatalogBAL catalog, AppSettings settings
     }
 
     [HttpGet("/api/catalog/suggest")]
-    public Task<JsonObject> Suggest([FromQuery, Required(ErrorMessage = "is required"), Len(1, 60)] string q) => catalog.SuggestAsync(q);
+    public Task<JsonObject> Suggest([FromQuery, Len(1, 60)] string? q) => catalog.SuggestAsync(q ?? ""); // presence is checked by the query rules
 
     [HttpGet("/api/catalog/products/{slug}")]
     public Task<JsonObject> Product(string slug) => catalog.ProductPageAsync(slug);

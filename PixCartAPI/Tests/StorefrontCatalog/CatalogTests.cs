@@ -94,6 +94,36 @@ public class CatalogTests(CatalogFactory factory) : CatalogTestBase(factory)
     }
 
     [Fact]
+    public async Task Search_reads_text_filters_switches_slugs_and_brands_as_sent()
+    {
+        var cats = await ThreeProductsAsync();
+        // an empty or blank search lists everything; an empty category means none, a blank one is looked up and not found
+        Assert.Equal(3, (await Visitor.Get("/api/catalog/products?q="))["total"].GetValue<long>());
+        Assert.Equal(3, (await Visitor.Get("/api/catalog/products?q=%20%20"))["total"].GetValue<long>());
+        Assert.Equal(3, (await Visitor.Get("/api/catalog/products?category="))["total"].GetValue<long>());
+        Assert.Equal(404, (await Visitor.Get("/api/catalog/products?category=%20")).Status);
+        Assert.Equal(0, (await Visitor.Get("/api/catalog/products?seller=%20"))["total"].GetValue<long>());
+        // switches take 1/0, yes/no and on/off
+        Assert.Equal(3, (await Visitor.Get("/api/catalog/products?in_stock=1"))["total"].GetValue<long>());
+        Assert.Equal(3, (await Visitor.Get("/api/catalog/products?in_stock=no"))["total"].GetValue<long>());
+        Assert.Equal(200, (await Visitor.Get("/api/catalog/products?deal=on")).Status);
+        Assert.Equal(422, (await Visitor.Get("/api/catalog/products?in_stock=maybe")).Status);
+        // a blank suggestion text gives no products, only categories; an empty one is refused
+        var blank = (await Visitor.Get("/api/catalog/suggest?q=%20")).Body!;
+        Assert.Empty(blank["products"]!.AsArray());
+        Assert.NotEmpty(blank["categories"]!.AsArray());
+        Assert.Equal(422, (await Visitor.Get("/api/catalog/suggest?q=")).Status);
+        // slugs and brands are exact: another case is another value, and brands that differ in case are two brands
+        Assert.Equal(404, (await Visitor.Get("/api/catalog/products?category=Electronics")).Status);
+        Assert.Equal(0, (await Visitor.Get("/api/catalog/products?brand=samsung"))["total"].GetValue<long>());
+        Assert.Equal(1, (await Visitor.Get("/api/catalog/products?brand=Samsung"))["total"].GetValue<long>());
+        var other = await Seed.SellerAsync("9100000005", "Linen House");
+        await Seed.ProductAsync(other, cats["shirts"], "Linen Shirt Phone Pocket", [new("L1", 99900, 59900, 5)], brand: "KAVI");
+        var facets = (await Visitor.Get("/api/catalog/products?q=pocket")).Body!["facets"]!["brands"]!.AsArray();
+        Assert.Equal(new HashSet<string> { "Kavi", "KAVI" }, facets.Select(b => b!["name"]!.GetValue<string>()).ToHashSet());
+    }
+
+    [Fact]
     public async Task Search_ordering_filters_and_validation()
     {
         await ThreeProductsAsync();

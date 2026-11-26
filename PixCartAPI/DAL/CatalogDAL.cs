@@ -1,10 +1,10 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using Dapper;
 using DAL.Helpers;
 using Model.DomainModel;
 using Utils;
 using Utils.Interface;
+using Utils.TextSearch;
 
 namespace DAL;
 
@@ -14,10 +14,11 @@ public sealed class ProductFilter
     /// <summary>The category and its active sub-categories.</summary>
     public List<Guid>? CategoryIds { get; set; }
     public string? SellerSlug { get; set; }
-    /// <summary>The shopper's words (already trimmed).</summary>
-    public string Text { get; set; } = "";
-    /// <summary>Products matched by the typo-tolerant comparison (added to the text matches).</summary>
-    public List<Guid> FuzzyIds { get; set; } = [];
+    /// <summary>
+    /// For a text search: the products in scope that match the words, each with the order key of its relevance
+    /// (<see cref="ProductTextQuery"/>). Null when there are no words.
+    /// </summary>
+    public IReadOnlyList<(Guid Id, int Key)>? TextMatches { get; set; }
     public List<string>? Brands { get; set; }
     public long? MinPrice { get; set; }
     public long? MaxPrice { get; set; }
@@ -29,14 +30,16 @@ public sealed class ProductFilter
     public List<Guid>? SellerIds { get; set; }
 
     /// <summary>The conditions facets are computed with: category, seller and text (before brand and price filters).</summary>
-    public ProductFilter FacetScope() => new() { CategoryIds = CategoryIds, SellerSlug = SellerSlug, Text = Text, FuzzyIds = FuzzyIds };
+    public ProductFilter FacetScope() => new() { CategoryIds = CategoryIds, SellerSlug = SellerSlug, TextMatches = TextMatches };
 }
 
 /// <summary>
 /// Products, variants, categories, images, videos and the read-only parts of deals, coupons and orders the storefront
-/// shows. Search uses the FULLTEXT index ft_products_search (title, brand, description) plus LIKE for prefixes.
+/// shows. Text search reads the products' search documents from <see cref="SearchDocumentCache"/>, decides matches and
+/// relevance in memory (<see cref="ProductTextQuery"/>) and joins the result into the SQL as a JSON table, so filters,
+/// facets, sorting and paging stay in the database.
 /// </summary>
-public partial class CatalogDAL(IMySqlDapperHelper db)
+public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
 {
     /// <summary>A product customers may see and buy (approved, priced, from an approved seller not on holiday). Alias p.</summary>
     public const string PublicFilter =
@@ -55,7 +58,7 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
 
     public Task<CategoryModel?> CategoryBySlugAsync(string slug, bool activeOnly) =>
         db.QueryFirstOrDefaultAsync<CategoryModel>(
-            "SELECT * FROM categories WHERE slug = @slug" + (activeOnly ? " AND is_active = 1" : ""), new { slug });
+            "SELECT * FROM categories WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug" + (activeOnly ? " AND is_active = 1" : ""), new { slug });
 
     public Task<CategoryModel?> GetCategoryAsync(Guid id) =>
         db.QueryFirstOrDefaultAsync<CategoryModel>("SELECT * FROM categories WHERE id = @id", new { id });
@@ -78,9 +81,14 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
         return outp;
     }
 
+    /// <summary>
+    /// Active categories whose name contains the text, oldest first. The text is a LIKE pattern: its % and _ match
+    /// anything.
+    /// </summary>
     public Task<IEnumerable<(string Name, string Slug)>> CategoriesNamedLikeAsync(string text, int limit) =>
-        db.QueryAsync<(string, string)>("SELECT name, slug FROM categories WHERE is_active = 1 AND name LIKE @like LIMIT @limit",
-            new { like = SqlHelpers.Contains(text), limit });
+        db.QueryAsync<(string, string)>(
+            "SELECT name, slug FROM categories WHERE is_active = 1 AND name LIKE @like ORDER BY created_at, position, name LIMIT @limit",
+            new { like = "%" + text + "%", limit });
 
     // ------------------------------------------------------------------------- products
 
@@ -88,10 +96,10 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
         db.QueryFirstOrDefaultAsync<ProductModel>("SELECT * FROM products WHERE id = @id", new { id });
 
     public Task<ProductModel?> ProductBySlugAsync(string slug) =>
-        db.QueryFirstOrDefaultAsync<ProductModel>("SELECT * FROM products WHERE slug = @slug", new { slug });
+        db.QueryFirstOrDefaultAsync<ProductModel>("SELECT * FROM products WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug", new { slug });
 
     public Task<ProductModel?> PublicProductBySlugAsync(string slug) =>
-        db.QueryFirstOrDefaultAsync<ProductModel>($"SELECT p.* FROM products p WHERE p.slug = @slug AND {PublicFilter}", new { slug });
+        db.QueryFirstOrDefaultAsync<ProductModel>($"SELECT p.* FROM products p WHERE p.slug = @slug AND p.slug COLLATE utf8mb4_0900_bin = @slug AND {PublicFilter}", new { slug });
 
     public Task<IEnumerable<ProductModel>> PublicProductsByIdsAsync(IEnumerable<Guid> ids, bool inStockOnly = false) =>
         db.QueryAsync<ProductModel>($"SELECT p.* FROM products p WHERE p.id IN @ids AND {PublicFilter}" + (inStockOnly ? " AND p.in_stock = 1" : ""),
@@ -182,7 +190,9 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
             var cheapest = (stocked.Count > 0 ? stocked : variants).OrderBy(v => v.PricePaise).First();
             (price, mrp, inStock) = (cheapest.PricePaise, cheapest.MrpPaise, stocked.Count > 0);
         }
-        const string write = "UPDATE products SET price_from = @price, mrp_from = @mrp, in_stock = @inStock, updated_at = @now WHERE id = @productId";
+        // only a real change is written (and moves updated_at)
+        const string write = "UPDATE products SET price_from = @price, mrp_from = @mrp, in_stock = @inStock, updated_at = @now " +
+                             "WHERE id = @productId AND NOT (price_from = @price AND mrp_from = @mrp AND in_stock = @inStock)";
         var args = new { price, mrp, inStock, productId, now = DateTimeFunctions.UtcNow() };
         if (uow != null) await uow.ExecuteAsync(write, args);
         else await db.ExecuteAsync(write, args);
@@ -217,7 +227,7 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
         db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE user_id = @userId", new { userId });
 
     public Task<SellerModel?> ApprovedSellerBySlugAsync(string slug) =>
-        db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE slug = @slug AND status = 'approved'", new { slug });
+        db.QueryFirstOrDefaultAsync<SellerModel>("SELECT * FROM sellers WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug AND status = 'approved'", new { slug });
 
     public Task<IEnumerable<WarehouseModel>> ActiveWarehousesAsync(IEnumerable<Guid> sellerIds) =>
         db.QueryAsync<WarehouseModel>("SELECT * FROM warehouses WHERE seller_id IN @ids AND is_active = 1 ORDER BY is_default DESC",
@@ -282,18 +292,43 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
 
     // ------------------------------------------------------------------------- search
 
-    [GeneratedRegex(@"[^\w]+")]
-    private static partial Regex NonWord();
+    /// <summary>A product a text search considers: its id, units sold and cached search document.</summary>
+    public sealed record SearchCandidate(Guid Id, long SoldCount, SearchEntry Entry);
 
-    /// <summary>The shopper's words for the full-text index: lower case, at most 8 (the reference's prefix tsquery).</summary>
-    public static List<string> Tokens(string text) =>
-        NonWord().Split(text.ToLowerInvariant()).Where(t => t.Length > 0).Take(8).ToList();
-
-    /// <summary>A BOOLEAN MODE query: every word required, each as a prefix ("+phon* +5g*"); null when no word is long enough to be indexed.</summary>
-    public static string? BooleanQuery(string text)
+    /// <summary>
+    /// The public products in the scope's category and seller (the words and the other filters aside) with their search
+    /// documents: ids, versions and sales come from MySQL, documents from the cache, and only the texts of new or
+    /// changed products are read.
+    /// </summary>
+    public async Task<List<SearchCandidate>> SearchCandidatesAsync(ProductFilter scope)
     {
-        var words = Tokens(text).Where(t => t.Length >= 3).ToList();
-        return words.Count == 0 ? null : string.Join(" ", words.Select(w => $"+{w}*"));
+        var p = new DynamicParameters();
+        var where = Where(new ProductFilter { CategoryIds = scope.CategoryIds, SellerSlug = scope.SellerSlug }, p, true);
+        var rows = (await db.QueryAsync<(Guid Id, DateTime UpdatedAt, long SoldCount)>(
+            $"SELECT p.id, p.updated_at, p.sold_count FROM products p WHERE {where}", p)).ToList();
+        var stale = rows.Where(r => searchDocs.Get(r.Id, r.UpdatedAt) is null).Select(r => r.Id).ToList();
+        foreach (var ids in stale.Chunk(500))
+            foreach (var t in await db.QueryAsync<(Guid Id, DateTime UpdatedAt, string Title, string Brand, string Slug, string Description)>(
+                         "SELECT id, updated_at, title, brand, slug, description FROM products WHERE id IN @ids", new { ids }))
+                searchDocs.Put(t.Id, new SearchEntry(t.UpdatedAt, t.Slug, SearchDocument.Build(t.Title, t.Brand, t.Description)));
+        var outp = new List<SearchCandidate>(rows.Count);
+        foreach (var r in rows)
+            if (searchDocs.Get(r.Id, r.UpdatedAt) is { } entry) outp.Add(new SearchCandidate(r.Id, r.SoldCount, entry));
+        return outp;
+    }
+
+    /// <summary>
+    /// The rows a filter reads: <c>products p</c>, and for a text search joined with the matching products and their
+    /// relevance keys as <c>rk</c> (a JSON table: one parameter, however many products match).
+    /// </summary>
+    private static string Source(ProductFilter f, DynamicParameters p)
+    {
+        if (f.TextMatches is null) return "products p";
+        var json = new StringBuilder(f.TextMatches.Count * 48 + 2).Append('[');
+        foreach (var (id, key) in f.TextMatches)
+            json.Append(json.Length > 1 ? ",[\"" : "[\"").Append(id.ToString("D")).Append("\",").Append(key).Append(']');
+        p.Add("textMatches", json.Append(']').ToString());
+        return "products p JOIN JSON_TABLE(@textMatches, '$[*]' COLUMNS (id CHAR(36) PATH '$[0]', k INT PATH '$[1]')) rk ON rk.id = p.id";
     }
 
     private static string Where(ProductFilter f, DynamicParameters p, bool facets)
@@ -306,31 +341,13 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
         }
         if (f.SellerSlug != null)
         {
-            conds.Add("p.seller_id IN (SELECT s2.id FROM sellers s2 WHERE s2.slug = @sellerSlug)");
+            conds.Add("p.seller_id IN (SELECT s2.id FROM sellers s2 WHERE s2.slug = @sellerSlug AND s2.slug COLLATE utf8mb4_0900_bin = @sellerSlug)");
             p.Add("sellerSlug", f.SellerSlug);
-        }
-        if (f.Text.Length > 0)
-        {
-            var ftq = BooleanQuery(f.Text);
-            var parts = new List<string> { "p.title LIKE @textLike", "p.brand = @text" };
-            if (ftq != null)
-            {
-                parts.Insert(0, "MATCH(p.title, p.brand, p.description) AGAINST (@ftq IN BOOLEAN MODE)");
-                p.Add("ftq", ftq);
-            }
-            if (f.FuzzyIds.Count > 0)
-            {
-                parts.Add("p.id IN @fuzzy");
-                p.Add("fuzzy", f.FuzzyIds);
-            }
-            conds.Add("(" + string.Join(" OR ", parts) + ")");
-            p.Add("text", f.Text);
-            p.Add("textLike", SqlHelpers.Contains(f.Text));
         }
         if (facets) return string.Join(" AND ", conds);
         if (f.Brands is { Count: > 0 })
         {
-            conds.Add("p.brand IN @brands");
+            conds.Add("p.brand COLLATE utf8mb4_0900_bin IN @brands");
             p.Add("brands", f.Brands);
         }
         if (f.MinPrice != null) { conds.Add("p.price_from >= @minPrice"); p.Add("minPrice", f.MinPrice); }
@@ -347,30 +364,21 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
         return string.Join(" AND ", conds);
     }
 
-    /// <summary>Relevance: exact title, title prefix, a word of the title starting with the words, then the full-text score.</summary>
-    private static string Rank(ProductFilter f, DynamicParameters p)
-    {
-        // MySQL reads an integer literal in ORDER BY as a column ordinal ("Unknown column '0'");
-        // the reference emits literal(0.0), a constant expression.
-        if (f.Text.Length == 0) return "0.0";
-        p.Add("textPrefix", SqlHelpers.StartsWith(f.Text));
-        p.Add("textWord", "% " + SqlHelpers.StartsWith(f.Text));
-        var sb = new StringBuilder("((p.title = @text) * 4 + (p.title LIKE @textPrefix) * 2 + (p.title LIKE @textWord)");
-        if (BooleanQuery(f.Text) != null) sb.Append(" + MATCH(p.title, p.brand, p.description) AGAINST (@ftq IN BOOLEAN MODE)");
-        return sb.Append(')').ToString();
-    }
-
-    public async Task<long> SearchCountAsync(ProductFilter f, bool facetScope = false)
+    public async Task<long> SearchCountAsync(ProductFilter f)
     {
         var p = new DynamicParameters();
-        var where = Where(f, p, facetScope);
-        return await db.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM products p WHERE {where}", p);
+        var from = Source(f, p);
+        return await db.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM {from} WHERE {Where(f, p, false)}", p);
     }
 
-    /// <summary>One page of results. Sorts: relevance, price_asc, price_desc, newest, rating, discount, popular.</summary>
+    /// <summary>
+    /// One page of results. Sorts: relevance (in stock first, then the text relevance, then units sold), price_asc,
+    /// price_desc, newest, rating, discount, popular.
+    /// </summary>
     public Task<IEnumerable<ProductModel>> SearchPageAsync(ProductFilter f, string sort, int take, int skip)
     {
         var p = new DynamicParameters();
+        var from = Source(f, p);
         var where = Where(f, p, false);
         var order = sort switch
         {
@@ -380,67 +388,51 @@ public partial class CatalogDAL(IMySqlDapperHelper db)
             "rating" => "p.rating_avg DESC, p.rating_count DESC, p.id",
             "discount" => "(p.mrp_from - p.price_from) * 100 / NULLIF(p.mrp_from, 0) DESC, p.id",
             "popular" => "p.sold_count DESC, p.id",
-            _ => f.Text.Length > 0 ? $"p.in_stock DESC, {Rank(f, p)} DESC, p.sold_count DESC, p.id" : "p.in_stock DESC, p.sold_count DESC, p.id",
+            _ => f.TextMatches is not null ? "p.in_stock DESC, rk.k DESC, p.sold_count DESC, p.id" : "p.in_stock DESC, p.sold_count DESC, p.id",
         };
         p.Add("take", take);
         p.Add("skip", skip);
-        return db.QueryAsync<ProductModel>($"SELECT p.* FROM products p WHERE {where} ORDER BY {order} LIMIT @take OFFSET @skip", p);
+        return db.QueryAsync<ProductModel>($"SELECT p.* FROM {from} WHERE {where} ORDER BY {order} LIMIT @take OFFSET @skip", p);
     }
 
-    /// <summary>Brands with their counts in the facet scope, most products first.</summary>
-    public Task<IEnumerable<(string Name, long Count)>> FacetBrandsAsync(ProductFilter f, int limit)
+    /// <summary>
+    /// Every brand in the facet scope with its product count. Names are grouped byte for byte (a binary, no-pad
+    /// collation): "Tamra" and "TAMRA" stay two brands. The caller orders and limits.
+    /// </summary>
+    public Task<IEnumerable<(string Name, long Count)>> FacetBrandsAsync(ProductFilter f)
     {
         var p = new DynamicParameters();
+        var from = Source(f, p);
         var where = Where(f, p, true);
-        p.Add("limit", limit);
         return db.QueryAsync<(string, long)>(
-            $"SELECT p.brand, COUNT(*) AS n FROM products p WHERE {where} AND p.brand <> '' GROUP BY p.brand ORDER BY n DESC LIMIT @limit", p);
+            $"SELECT p.brand COLLATE utf8mb4_0900_bin AS b, COUNT(*) AS n FROM {from} WHERE {where} AND p.brand <> '' GROUP BY b", p);
     }
 
     public async Task<(long Min, long Max)> FacetPriceRangeAsync(ProductFilter f)
     {
         var p = new DynamicParameters();
+        var from = Source(f, p);
         var where = Where(f, p, true);
-        var r = await db.QueryFirstOrDefaultAsync<(long?, long?)>($"SELECT MIN(p.price_from), MAX(p.price_from) FROM products p WHERE {where}", p);
+        var r = await db.QueryFirstOrDefaultAsync<(long?, long?)>($"SELECT MIN(p.price_from), MAX(p.price_from) FROM {from} WHERE {where}", p);
         return (r.Item1 ?? 0, r.Item2 ?? 0);
     }
 
+    /// <summary>Every category of the products in the facet scope with its product count. The caller orders and limits.</summary>
     public Task<IEnumerable<(string Name, string Slug, long Count)>> FacetCategoriesAsync(ProductFilter f)
     {
         var p = new DynamicParameters();
+        var from = Source(f, p);
         var where = Where(f, p, true);
         return db.QueryAsync<(string, string, long)>(
-            $"SELECT c.name, c.slug, COUNT(*) AS n FROM categories c JOIN products p ON p.category_id = c.id WHERE {where} " +
-            "GROUP BY c.name, c.slug ORDER BY n DESC LIMIT 8", p);
+            $"SELECT c.name, c.slug, COUNT(*) AS n FROM {from} JOIN categories c ON c.id = p.category_id WHERE {where} " +
+            "GROUP BY c.id, c.name, c.slug", p);
     }
 
     public Task<IEnumerable<Guid>> FacetSellerIdsAsync(ProductFilter f)
     {
         var p = new DynamicParameters();
+        var from = Source(f, p);
         var where = Where(f, p, true);
-        return db.QueryAsync<Guid>($"SELECT DISTINCT p.seller_id FROM products p WHERE {where}", p);
-    }
-
-    /// <summary>
-    /// Titles to compare for typo tolerance (public products in the scope without the text condition), best sellers
-    /// first, at most <paramref name="limit"/>.
-    /// </summary>
-    public Task<IEnumerable<(Guid Id, string Title)>> CandidateTitlesAsync(ProductFilter scopeWithoutText, int limit)
-    {
-        var p = new DynamicParameters();
-        var where = Where(new ProductFilter { CategoryIds = scopeWithoutText.CategoryIds, SellerSlug = scopeWithoutText.SellerSlug }, p, true);
-        p.Add("limit", limit);
-        return db.QueryAsync<(Guid, string)>($"SELECT p.id, p.title FROM products p WHERE {where} ORDER BY p.sold_count DESC, p.id LIMIT @limit", p);
-    }
-
-    /// <summary>Title suggestions while typing: (title, slug), best match first.</summary>
-    public Task<IEnumerable<(string Title, string Slug)>> SuggestAsync(string text, List<Guid> fuzzyIds, int limit)
-    {
-        var f = new ProductFilter { Text = text, FuzzyIds = fuzzyIds };
-        var p = new DynamicParameters();
-        var where = Where(f, p, true);
-        var rank = Rank(f, p);
-        p.Add("limit", limit);
-        return db.QueryAsync<(string, string)>($"SELECT p.title, p.slug FROM products p WHERE {where} ORDER BY {rank} DESC, p.sold_count DESC, p.id LIMIT @limit", p);
+        return db.QueryAsync<Guid>($"SELECT DISTINCT p.seller_id FROM {from} WHERE {where}", p);
     }
 }

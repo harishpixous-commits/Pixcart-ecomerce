@@ -41,6 +41,7 @@ public static class ServiceConfiguration
         services.AddSingleton<IImageUpload, ImageUpload>();
         services.AddSingleton<EncryptDecrypt>();
         services.AddSingleton<DatabaseMigrator>();
+        services.AddSingleton<DAL.SearchDocumentCache>(); // storefront search documents, shared by all requests
         services.AddSingleton<TokenService>();
         services.AddScoped<ICurrentUser, CurrentUserService>();
         Automapper.Configure();

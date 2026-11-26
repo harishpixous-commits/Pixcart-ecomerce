@@ -6,6 +6,7 @@ using Model.Constants;
 using Model.DomainModel;
 using Utils;
 using Utils.Interface;
+using Utils.TextSearch;
 
 namespace BAL;
 
@@ -22,12 +23,6 @@ public class CatalogBAL(
     IEnumerable<ISponsoredProducts> ads) : ICatalogBAL
 {
     public static readonly string[] Sorts = ["relevance", "price_asc", "price_desc", "newest", "rating", "discount", "popular"];
-
-    /// <summary>pg_trgm's default word_similarity threshold (the "&lt;%" operator).</summary>
-    public const double FuzzyThreshold = 0.6;
-
-    /// <summary>How many titles the typo-tolerant pass compares at most.</summary>
-    public const int FuzzyCandidates = 5000;
 
     public static readonly IReadOnlyDictionary<string, string> DealKinds = new Dictionary<string, string>
     {
@@ -281,14 +276,17 @@ public class CatalogBAL(
 
     // ------------------------------------------------------------------------- search
 
-    /// <summary>Products whose title is close to the words despite typos (pg_trgm word_similarity ≥ 0.6, compared in memory).</summary>
-    private async Task<List<Guid>> FuzzyMatchesAsync(ProductFilter scope, string text)
+    /// <summary>
+    /// The products in the scope that match the words, with the order keys of their relevance (prefix words in title,
+    /// brand and description; a close title despite typos; the brand as a pattern), decided in memory from the cached
+    /// search documents.
+    /// </summary>
+    private async Task<List<(Guid Id, int Key)>> TextMatchesAsync(ProductFilter scope, string text)
     {
-        var a = Trigram.Of(text);
-        if (a.Count == 0) return [];
-        var outp = new List<Guid>();
-        foreach (var (id, title) in await catalog.CandidateTitlesAsync(scope, FuzzyCandidates))
-            if (Trigram.WordSimilarity(a, title) >= FuzzyThreshold) outp.Add(id);
+        var query = ProductTextQuery.For(text);
+        var outp = new List<(Guid, int)>();
+        foreach (var c in await catalog.SearchCandidatesAsync(scope))
+            if (query.Matches(c.Entry.Document, out var relevance)) outp.Add((c.Id, ProductTextQuery.OrderKey(relevance)));
         return outp;
     }
 
@@ -299,7 +297,7 @@ public class CatalogBAL(
         var filter = new ProductFilter();
         var breadcrumbs = new JsonArray();
         JsonObject? currentCategory = null;
-        if (q.Category != null)
+        if (!string.IsNullOrEmpty(q.Category))
         {
             var cat = await catalog.CategoryBySlugAsync(q.Category, activeOnly: true) ?? throw new NotFoundException("Category");
             filter.CategoryIds = await CategoryDescendantIdsAsync(cat.Id);
@@ -307,11 +305,9 @@ public class CatalogBAL(
             foreach (var c in Enumerable.Reverse(await catalog.CategoryChainAsync(cat.Id)))
                 breadcrumbs.Add(new JsonObject { ["name"] = c.Name, ["slug"] = c.Slug });
         }
-        if (q.Seller != null) filter.SellerSlug = q.Seller;
+        if (!string.IsNullOrEmpty(q.Seller)) filter.SellerSlug = q.Seller;
         var text = q.Q.Trim();
-        filter.Text = text;
-        if (text.Length > 0 && await catalog.SearchCountAsync(filter, facetScope: true) < pageSize)
-            filter.FuzzyIds = await FuzzyMatchesAsync(filter, text);
+        if (text.Length > 0) filter.TextMatches = await TextMatchesAsync(filter, text);
 
         // Facets are computed before brand/price filters so the user can widen them again.
         var facet = filter.FacetScope();
@@ -330,9 +326,13 @@ public class CatalogBAL(
         }
         var total = await catalog.SearchCountAsync(filter);
         var rows = (await catalog.SearchPageAsync(filter, q.Sort, pageSize, (q.Page - 1) * pageSize)).ToList();
-        var brands = await catalog.FacetBrandsAsync(facet, cfg.Int("brand_filter_max"));
+        // Most products first; equal counts in a fixed order: grouped in name order, then sorted by count (ResultSort).
+        var brands = ResultSort.Order((await catalog.FacetBrandsAsync(facet)).OrderBy(b => b.Name, TextCollation.Instance),
+            (x, y) => y.Count.CompareTo(x.Count), cfg.Int("brand_filter_max"));
         var (priceMin, priceMax) = await catalog.FacetPriceRangeAsync(facet);
-        var catCounts = await catalog.FacetCategoriesAsync(facet);
+        var catCounts = ResultSort.Order((await catalog.FacetCategoriesAsync(facet))
+                .OrderBy(c => c.Name, TextCollation.Instance).ThenBy(c => c.Slug, TextCollation.Instance),
+            (x, y) => y.Count.CompareTo(x.Count), 8);
         var delivery = q.Pincode != null ? eta.ToDictionary(e => e.Key, e => (string?)e.Value.Date) : null;
 
         var sponsored = new List<JsonObject>();
@@ -383,12 +383,14 @@ public class CatalogBAL(
         var titles = new List<(string Title, string Slug)>();
         if (text.Length > 0)
         {
-            titles = (await catalog.SuggestAsync(text, [], limit)).ToList();
-            if (titles.Count < limit)
-            {
-                var fuzzy = await FuzzyMatchesAsync(new ProductFilter(), text);
-                if (fuzzy.Count > 0) titles = (await catalog.SuggestAsync(text, fuzzy, limit)).ToList();
-            }
+            // the words or a close title (not the brand), closest title first; equally close ones best-selling first
+            var query = ProductTextQuery.For(text);
+            var hits = new List<(CatalogDAL.SearchCandidate Product, float Similarity)>();
+            foreach (var c in await catalog.SearchCandidatesAsync(new ProductFilter()))
+                if (query.Suggests(c.Entry.Document, out var similarity)) hits.Add((c, similarity));
+            titles = hits.OrderByDescending(h => h.Similarity).ThenByDescending(h => h.Product.SoldCount)
+                .ThenBy(h => h.Product.Id.ToString("D"), StringComparer.Ordinal).Take(limit)
+                .Select(h => (h.Product.Entry.Document.Title, h.Product.Entry.Slug)).ToList();
         }
         var cats = await catalog.CategoriesNamedLikeAsync(text, Math.Min(4, limit));
         return new JsonObject
@@ -649,38 +651,5 @@ public class CatalogBAL(
                 return [];
         }
         return await ProductCardsAsync(rows.ToList());
-    }
-}
-
-/// <summary>
-/// Typo tolerance like PostgreSQL's pg_trgm: words are padded ("  w", " wo", "wor", "ord", "rd ") and compared as sets
-/// of three-letter pieces. word_similarity(a, b) here is the share of a's trigrams found in b.
-/// </summary>
-public static class Trigram
-{
-    public static HashSet<string> Of(string text)
-    {
-        var set = new HashSet<string>();
-        var words = new List<string>();
-        var cur = new System.Text.StringBuilder();
-        foreach (var ch in text.ToLowerInvariant())
-        {
-            if (char.IsLetterOrDigit(ch)) cur.Append(ch);
-            else if (cur.Length > 0) { words.Add(cur.ToString()); cur.Clear(); }
-        }
-        if (cur.Length > 0) words.Add(cur.ToString());
-        foreach (var w in words)
-        {
-            var padded = "  " + w + " ";
-            for (var i = 0; i + 3 <= padded.Length; i++) set.Add(padded.Substring(i, 3));
-        }
-        return set;
-    }
-
-    public static double WordSimilarity(HashSet<string> a, string b)
-    {
-        if (a.Count == 0) return 0;
-        var tb = Of(b);
-        return (double)a.Count(tb.Contains) / a.Count;
     }
 }
