@@ -251,6 +251,17 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
 - `compare.cjs` shop sweep (21 routes x 390/1366, full pages): 42 of 42 within 0.19% (most about 0.03%); search and
   category pages within 0.09%.
 
+### 6.6c Build quality and hosting (2026-11-26)
+- The build has 0 warnings; `PixCartAPI/Directory.Build.props` makes nullable warnings errors. Three of the old
+  warnings were real crashes and are fixed: the payment window and saved cards for an account without a mobile
+  number, and a WhatsApp send without template parameters.
+- One-site hosting (IIS package, website in wwwroot): page paths are served by a middleware, not a fallback route
+  (a fallback route also counts as a candidate for API paths, which turned a wrong method's 405 into 404, and a
+  regex-constrained one never matched the home page). `Tests/WebsiteHostTests.cs` runs the API with a website
+  build in its content root, so this is covered by the tests now. Always rebuild the package
+  (`tools/publish-windows.ps1 -Output C:\Users\haris\pixcart-tools\e2e-site`) and run the browser suite on it
+  before shipping changes to the pipeline.
+
 ### 6.7 Storefront search reproduces the Python search exactly (2026-11-26)
 - Engine `PixCartAPI/Utils/TextSearch/` is PostgreSQL's text search as the Python version uses it, written in C#
   (company-facing comments are neutral on purpose; this mapping lives only here):
