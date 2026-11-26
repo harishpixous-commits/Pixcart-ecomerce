@@ -224,19 +224,19 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   `Workflow({scriptPath: <that file>, resumeFromRunId: 'wf_7e328aa3-01c'})` once the usage limit has reset: finished
   modules come from the cache and it continues at cart-checkout-orders. Same checklist as
   `tools/agent-briefs/review-backend-sequential.js`.
-- Done: auth-accounts, catalog-storefront, cms-regional (3 of 20). 12 confirmed findings:
-  - fixed (2026-11-26): search text/category/seller read as sent and a blank suggestion text answered; 1/0, yes/no,
-    on/off switches everywhere; product aggregates touch updated_at only on a change; exact brands and slugs;
-  - open: role codes must match exactly (StaffBAL.RoleAsync); sign-in, refresh, account and staff edits must write
-    only the changed user columns (AccountDAL.SaveUserAsync writes the whole row and undoes concurrent admin changes);
-    refresh 401 must not send the cookie removal; `:guid` route constraints give 404 where Python gives 401/403 then
-    422; /api/site online_payments must come from IRazorpayBAL; FSSAI field error; email footer from the merged site
-    settings; admin translations search uses the text as a LIKE pattern.
-  - not verified (the verifier hit the usage limit): banner grid checks only the first 4 banners.
-- Record the five demo videos (web order, mobile order, admin, seller, delivery partner) on the new version, like the
-  reference videos in `C:\Users\haris\Downloads\AI-Multivendor-Shopping-Cart-Demo-Videos\01..05*.mp4`. The recording
-  scripts are in `tools/handover-kit/video/` (`chain_net.sh` runs them against the .NET version, `assemble.py` joins
-  the clips; `reset_net.py` resets the demo data between takes).
+- Done: auth-accounts, catalog-storefront, cms-regional (3 of 20). All 12 confirmed findings are fixed with tests
+  (2026-11-26): exact role codes; account writes carry only changed fields (`AccountDAL.SaveUserChangesAsync` with
+  `UserModel.Copy()`, no whole-row writes left); refused refresh keeps the cookie; route ids without `:guid` (422 after
+  sign-in, `RouteTableTests` guards ambiguity); /api/site online_payments from IRazorpayBAL; FSSAI field error; email
+  footer from `ISiteBAL` (merged site settings); translation search as a LIKE pattern; search filters as sent; 1/0,
+  yes/no, on/off switches (`FormBoolBinder`); aggregates touch updated_at only on change; exact brands and slugs;
+  banner grid and promise strip check every item (the unverified finding was real).
+- Found while fixing: every error answer lost X-Request-ID (ExceptionMiddleware clears the response) and the security
+  headers lived only in web.config (none under Kestrel, no X-Frame-Options); now `RequestContextMiddleware` adds them
+  on start (API set like FastAPI, page set like next.config.mjs) and web.config no longer duplicates them. Unknown
+  API/media paths answer 404 `{"detail":"Not Found"}` and wrong methods 405 `{"detail":"Method Not Allowed"}` with
+  Allow (`UnmatchedRouteMiddleware`; the SPA fallback no longer catches /api).
+- Next: resume the workflow (it continues at cart-checkout-orders), fix each confirmed finding with a test, ship.
 
 ### 6.7 Storefront search reproduces the Python search exactly (2026-11-26)
 - Engine `PixCartAPI/Utils/TextSearch/` is PostgreSQL's text search as the Python version uses it, written in C#
