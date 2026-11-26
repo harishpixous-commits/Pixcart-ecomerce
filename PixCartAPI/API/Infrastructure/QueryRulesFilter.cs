@@ -76,8 +76,8 @@ public sealed partial class QueryRulesFilter : IAsyncResourceFilter
     /// <summary>HttpContext.Items key: path and query errors waiting for the body check.</summary>
     internal const string PendingErrors = "request.param.errors";
 
-    private static readonly HashSet<string> TrueWords = ["1", "on", "t", "true", "y", "yes"];
-    private static readonly HashSet<string> FalseWords = ["0", "off", "f", "false", "n", "no"];
+    internal static readonly HashSet<string> TrueWords = ["1", "on", "t", "true", "y", "yes"];
+    internal static readonly HashSet<string> FalseWords = ["0", "off", "f", "false", "n", "no"];
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {

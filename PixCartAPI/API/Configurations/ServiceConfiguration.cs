@@ -76,6 +76,9 @@ public static class ServiceConfiguration
                 o.Filters.Add<API.Infrastructure.QueryRulesFilter>();
                 // JSON bodies checked against the reference schemas, with its 422 answers and field order
                 o.Filters.Add<API.Infrastructure.BodyRulesFilter>();
+                // yes/no, on/off, 1/0 ... for bool parameters, ahead of the default binder that knows only true/false
+                var simple = o.ModelBinderProviders.OfType<Microsoft.AspNetCore.Mvc.ModelBinding.Binders.SimpleTypeModelBinderProvider>().First();
+                o.ModelBinderProviders.Insert(o.ModelBinderProviders.IndexOf(simple), new API.Infrastructure.FormBoolBinderProvider());
             })
             .AddJsonOptions(o =>
             {
