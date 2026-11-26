@@ -767,7 +767,8 @@ public static partial class Cms
                 return ImgLink(c);
             case "banner_grid":
             {
-                var items = new JsonArray(Objects(CatalogText.Get(c, "items")).Select(s => (JsonNode)ImgLink(s)).Take(4).ToArray());
+                // every banner is checked, then the first four are kept
+                var items = new JsonArray(Objects(CatalogText.Get(c, "items")).Select(s => (JsonNode)ImgLink(s)).ToList().Take(4).ToArray());
                 if (items.Count < 2) throw new ArgumentException("A banner grid needs 2 to 4 banners");
                 return new JsonObject { ["items"] = items };
             }
@@ -833,7 +834,7 @@ public static partial class Cms
                     ["items"] = new JsonArray(Objects(CatalogText.Get(c, "items")).Select(i => (JsonNode)new JsonObject
                     {
                         ["icon"] = CatalogText.Cut(StrGet(i, "icon", "check"), 20), ["text"] = CatalogText.Cut(StrGet(i, "text"), 80),
-                    }).Take(6).ToArray()),
+                    }).ToList().Take(6).ToArray()), // every item is checked, then the first six are kept
                 };
             default:
                 return [];
