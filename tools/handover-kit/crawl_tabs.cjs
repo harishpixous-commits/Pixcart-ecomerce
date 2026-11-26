@@ -65,7 +65,8 @@ async function otpFor(phone) {
         await page.getByRole("tab").nth(i).click({ timeout: 5000 }).catch(() => {});
         await page.waitForLoadState("networkidle").catch(() => {});
       }
-      const notFound = await page.getByText(/page (was )?not found|could not find this page/i).count();
+      // a not-found page has it as a heading (settings pages mention "Page not found" in field labels)
+      const notFound = await page.getByRole("heading", { name: /page (was )?not found|could not find this page/i }).count();
       if (notFound) problems.push("shows a not-found page");
       console.log(`${problems.length ? "FAIL" : "ok  "}  ${route.padEnd(30)} tabs ${tabs}${problems.length ? "  " + problems.slice(0, 4).join(" | ") : ""}`);
       if (problems.length) failedPages++;
