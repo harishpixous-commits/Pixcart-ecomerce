@@ -61,7 +61,7 @@ public partial class ReviewBAL(
         ["voted"] = voted.Contains(r.Id), ["reported"] = reported.Contains(r.Id), ["mine"] = userId != null && r.UserId == userId,
     };
 
-    /// <summary>A PostgreSQL-style topic pattern for MySQL: any of the words as whole words.</summary>
+    /// <summary>A topic pattern for the database: any of the words, as whole words.</summary>
     public static string TopicPattern(IEnumerable<string> words) =>
         @"\b(" + string.Join("|", words.Select(w => NotWordChar().Replace(w, ""))) + @")\b";
 

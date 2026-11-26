@@ -12,7 +12,7 @@ public class PromotionsDAL(IMySqlDapperHelper db)
 
     public Task<CategoryModel?> CategoryBySlugAsync(string slug, bool activeOnly = false) =>
         db.QueryFirstOrDefaultAsync<CategoryModel>(
-            $"SELECT * FROM categories WHERE slug = @slug{(activeOnly ? " AND is_active = 1" : "")}", new { slug });
+            $"SELECT * FROM categories WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug{(activeOnly ? " AND is_active = 1" : "")}", new { slug });
 
     /// <summary>Live deals: one row per product with the soonest end and the best kind rank (reference: deals_page live).</summary>
     public async Task<(List<(ProductModel Product, DateTime EndsAt, int Rank)> Rows, long Total)> LiveDealsAsync(

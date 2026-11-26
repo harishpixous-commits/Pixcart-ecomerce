@@ -38,7 +38,7 @@ public class CmsDAL(IMySqlDapperHelper db)
     public async Task<int> MaxPositionAsync() => await db.ExecuteScalarAsync<int?>("SELECT MAX(position) FROM home_sections") ?? 0;
 
     public Task<CmsPageModel?> GetPageAsync(string slug) =>
-        db.QueryFirstOrDefaultAsync<CmsPageModel>("SELECT * FROM cms_pages WHERE slug = @slug", new { slug });
+        db.QueryFirstOrDefaultAsync<CmsPageModel>("SELECT * FROM cms_pages WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug", new { slug });
 
     public Task<IEnumerable<CmsPageModel>> AllPagesAsync() =>
         db.QueryAsync<CmsPageModel>("SELECT * FROM cms_pages ORDER BY slug");
