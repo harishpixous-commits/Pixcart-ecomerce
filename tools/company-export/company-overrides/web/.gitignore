@@ -1,0 +1,18 @@
+.env
+
+# .NET (PixCartAPI)
+**/bin/
+**/obj/
+PixCartAPI/API/var/
+PixCartAPI/**/TestResults/
+*.user
+.vs/
+
+# Angular (PixCartWeb)
+PixCartWeb/node_modules/
+PixCartWeb/dist/
+PixCartWeb/.angular/
+PixCartWeb/out-tsc/
+
+# publish output for Windows hosting
+publish/

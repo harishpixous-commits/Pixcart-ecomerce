@@ -1,0 +1,1 @@
+{"otp_max_per_hour": 5, "otp_max_per_ip_hour": 30, "_note": "product defaults (config.py otp_max_per_hour=5, auth_settings otp_max_per_ip_hour=30); the local demo DB was already at 20/500 for testing before 2026-11-26"}
