@@ -218,14 +218,54 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
 - Verified on a brand-new MySQL 8.4 server: one-command import, images copied, API with only the connection string
   set: storefront, listing, search, product detail, my orders, customer and admin sign-in, all images loading.
 
-### 6.6 Not started
-- Backend review of every module against the Python code (business logic). Use
-  `tools/agent-briefs/review-backend-sequential.js` as the checklist (one module at a time; running 20 reviewers at once
-  used up the usage limit three times before any finished).
+### 6.6 Backend review against the Python code (in progress)
+- Workflow script: `C:\Users\haris\.claude\projects\c--Users-haris-Downloads-pixcart-marketplace-1\04206c7d-7455-4338-a84b-b43ab23f2c61\workflows\scripts\review-backend-vs-python-seq-wf_7e328aa3-01c.js`
+  (one module at a time, each finding verified by an independent skeptic). Resume it with
+  `Workflow({scriptPath: <that file>, resumeFromRunId: 'wf_7e328aa3-01c'})` once the usage limit has reset: finished
+  modules come from the cache and it continues at cart-checkout-orders. Same checklist as
+  `tools/agent-briefs/review-backend-sequential.js`.
+- Done: auth-accounts, catalog-storefront, cms-regional (3 of 20). 12 confirmed findings:
+  - fixed (2026-11-26): search text/category/seller read as sent and a blank suggestion text answered; 1/0, yes/no,
+    on/off switches everywhere; product aggregates touch updated_at only on a change; exact brands and slugs;
+  - open: role codes must match exactly (StaffBAL.RoleAsync); sign-in, refresh, account and staff edits must write
+    only the changed user columns (AccountDAL.SaveUserAsync writes the whole row and undoes concurrent admin changes);
+    refresh 401 must not send the cookie removal; `:guid` route constraints give 404 where Python gives 401/403 then
+    422; /api/site online_payments must come from IRazorpayBAL; FSSAI field error; email footer from the merged site
+    settings; admin translations search uses the text as a LIKE pattern.
+  - not verified (the verifier hit the usage limit): banner grid checks only the first 4 banners.
 - Record the five demo videos (web order, mobile order, admin, seller, delivery partner) on the new version, like the
   reference videos in `C:\Users\haris\Downloads\AI-Multivendor-Shopping-Cart-Demo-Videos\01..05*.mp4`. The recording
   scripts are in `tools/handover-kit/video/` (`chain_net.sh` runs them against the .NET version, `assemble.py` joins
   the clips; `reset_net.py` resets the demo data between takes).
+
+### 6.7 Storefront search reproduces the Python search exactly (2026-11-26)
+- Engine `PixCartAPI/Utils/TextSearch/` is PostgreSQL's text search as the Python version uses it, written in C#
+  (company-facing comments are neutral on purpose; this mapping lives only here):
+  `TextTokenizer` = the default parser (wparser_def.c state table, rule by rule); `SearchVector` = tsvector of the
+  'simple' configuration (setweight, `||` with the MAXNUMPOS/MAXENTRYPOS limits); `SearchQuery` = to_tsquery prefix
+  terms (a word the parser splits becomes a phrase), `@@`, and ts_rank (calc_rank_and / calc_rank_or, float rounding
+  as in C); `Trigrams` = pg_trgm word_similarity (iterate_word_similarity); `SqlLike` = ILIKE; `ShopperWords` =
+  `re.split(r"[^\w]+", q.lower())`; `ResultSort` = tuplesort (sort_template.h quicksort and the bounded heap), so
+  equal facet counts come out in PostgreSQL's order; `TextCollation` = varstr_cmp order.
+- Rules (routers/catalog.py and app/db.py): match = vector @@ prefix query OR text <% title (threshold 0.45, set in
+  db.py) OR brand ILIKE text; relevance = ts_rank + word_similarity (float4); order in_stock desc, relevance desc,
+  sold_count desc, id. Typo matches are always included (the old .NET code added them only when results were few,
+  at 0.6).
+- Integration: `CatalogDAL.SearchCandidatesAsync` reads id, updated_at and sold_count of the public products in
+  scope; search documents are cached per product version in the singleton `DAL.SearchDocumentCache`; matches and
+  relevance are computed in memory and joined into the SQL as `JSON_TABLE(@textMatches ...) rk` with an integer order
+  key (the float's bit pattern), so MySQL orders exactly. Facets: brands grouped byte-exact (utf8mb4_0900_bin),
+  ordered by collation and then by count with ResultSort (PostgreSQL's plan: sort by brand, GroupAggregate, sort by
+  count, limit).
+- Proof: `Tests/TextSearchTests.cs` with `Tests/Fixtures/search-ranking.json` (from
+  `tools/handover-kit/make_search_fixture.py`: 36 products x 52 searches, every vector, match, rank and similarity
+  bit-exact) and `Tests/TextSearchCorpusTests.cs` with `text-search-cases.json` (`make_text_search_cases.py`: 1,702
+  ASCII and 294 non-ASCII parser texts, 140 documents x 45 AND/OR queries, 1,860 similarity pairs, 220 sort cases, all
+  exact). Live: 162 search and suggestion responses compared with the Python API: results, totals and facets
+  identical for every query.
+- Inherent differences: suggestions with equal word similarity (Python orders by similarity only, and PostgreSQL then
+  returns ties in physical row order, which MySQL cannot know; .NET breaks ties by units sold, then id); category
+  names in suggestions (Python has no ORDER BY; .NET uses created_at, position, name).
 
 ---------------------------------------------------------------------------------------------------------------------
 
