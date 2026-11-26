@@ -338,17 +338,17 @@ public class AuthBAL(
 
     public async Task<IssuedSession> RefreshAsync(string? cookieToken)
     {
-        if (string.IsNullOrEmpty(cookieToken)) throw new RefreshRefusedException("Please sign in", false);
+        if (string.IsNullOrEmpty(cookieToken)) throw new RefreshRefusedException("Please sign in");
         var now = DateTimeFunctions.UtcNow();
         await using var uow = await db.BeginAsync();
         var row = await accounts.GetSessionByHashForUpdateAsync(EncryptDecrypt.Sha256(cookieToken), uow.Transaction)
-                  ?? throw new RefreshRefusedException("Please sign in", false);
+                  ?? throw new RefreshRefusedException("Please sign in");
         if (row.RevokedAt is { } revokedAt)
         {
             var owner = await accounts.GetUserAsync(row.UserId, uow.Transaction);
             if (owner?.SessionsValidAfter is { } after && revokedAt == after)
                 // this device was signed out from another one ("Sign out of other devices"): refuse it, nothing more
-                throw new RefreshRefusedException("You were signed out on this device. Please sign in again.", true);
+                throw new RefreshRefusedException("You were signed out on this device. Please sign in again.");
             // The same browser racing itself: a page reloaded (or a second tab opened) while a refresh was on its way, so the
             // old cookie came back moments after it was rotated. Not theft: renew quietly. Only when this token was rotated
             // (a newer session from the same browser began right then) and within a minute.
@@ -361,11 +361,11 @@ public class AuthBAL(
             // a rotated token was replayed: assume theft and end every session of this user
             await accounts.RevokeAllSessionsAsync(row.UserId, now, uow.Transaction);
             await uow.CommitAsync();
-            throw new RefreshRefusedException("Please sign in", true);
+            throw new RefreshRefusedException("Please sign in");
         }
-        if (row.ExpiresAt < now) throw new RefreshRefusedException("Please sign in", false);
+        if (row.ExpiresAt < now) throw new RefreshRefusedException("Please sign in");
         var user = await accounts.GetUserAsync(row.UserId, uow.Transaction);
-        if (user is null || !user.IsActive) throw new RefreshRefusedException("Please sign in", false);
+        if (user is null || !user.IsActive) throw new RefreshRefusedException("Please sign in");
         await accounts.RevokeSessionAsync(row.Id, now, uow.Transaction);
         return await IssueSessionAsync(uow, user, newSignIn: false);
     }

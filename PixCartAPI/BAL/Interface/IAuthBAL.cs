@@ -9,11 +9,8 @@ namespace BAL.Interface;
 /// </summary>
 public record IssuedSession(UserModel User, string RefreshToken, int Days, Dictionary<string, object?> UserPayload);
 
-/// <summary>A refused refresh: the error to answer with, and whether the browser's refresh cookie must be removed.</summary>
-public sealed class RefreshRefusedException(string message, bool deleteCookie) : Utils.AppException(message, "unauthorized", 401)
-{
-    public bool DeleteCookie { get; } = deleteCookie;
-}
+/// <summary>A refused refresh and the reason to answer with (401).</summary>
+public sealed class RefreshRefusedException(string message) : Utils.AppException(message, "unauthorized", 401);
 
 /// <summary>
 /// Sign-in (the reference version's routers/auth.py): one-time codes by SMS for customers, sellers and partners;

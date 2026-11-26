@@ -177,7 +177,9 @@ public class SessionTests(ApiFactory f) : ApiTest(f)
 
         // the phone is out: its access token is refused and it cannot renew it
         Assert.Equal(401, (await phone.Get("/api/auth/me", tPhone)).Status);
-        Assert.Equal(401, (await phone.Post("/api/auth/refresh", headers: Csrf)).Status);
+        var refused = await phone.Post("/api/auth/refresh", headers: Csrf);
+        Assert.Equal(401, refused.Status);
+        Assert.Empty(refused.SetCookies); // the 401 leaves the cookie alone
         // the laptop renews with its own session and carries on
         r = await laptop.Post("/api/auth/refresh", headers: Csrf);
         Assert.True(r.Status == 200, r.ToString());
