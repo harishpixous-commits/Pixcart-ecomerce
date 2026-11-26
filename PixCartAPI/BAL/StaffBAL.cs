@@ -38,7 +38,11 @@ public partial class StaffBAL(
 
     private static string Collapse(string s) => string.Join(' ', s.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-    private async Task<AdminRoleModel> RoleAsync(string code) => await dal.GetRoleAsync(code) ?? throw new NotFoundException("Role");
+    /// <summary>The role with exactly this code: "Support" or "suppórt" is not the role "support".</summary>
+    private async Task<AdminRoleModel> RoleAsync(string code) =>
+        await dal.GetRoleAsync(code) is { } role && string.Equals(role.Code, code, StringComparison.Ordinal)
+            ? role
+            : throw new NotFoundException("Role");
 
     private static List<string> PermsOf(AdminRoleModel r)
     {
