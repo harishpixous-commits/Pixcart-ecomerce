@@ -18,8 +18,7 @@ public static class JsonHelper
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             DictionaryKeyPolicy = null,
             WriteIndented = false,
-            // characters as they are ("₹", "'"), like the reference (json.dumps(ensure_ascii=False)); only what JSON
-            // itself needs is escaped
+            // characters as they are ("₹", "'"); only what JSON itself needs is escaped
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
         return o;

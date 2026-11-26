@@ -570,7 +570,7 @@ public class AssistantTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
-    public void Context_prompt_reads_like_the_reference()
+    public void Context_prompt_text_is_exact()
     {
         var text = AssistantPrompts.Context("Asha", "Owner", ["orders", "assistant", "dashboard"],
             new JsonObject { ["path"] = "/admin/orders", ["title"] = "Orders", ["filters"] = "status=placed" }, ["Reply in Tamil"], true,

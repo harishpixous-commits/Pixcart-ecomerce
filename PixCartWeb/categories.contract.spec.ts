@@ -28,12 +28,12 @@ describe('categories page', () => {
     expect(element.querySelector('svg path, svg polygon, svg circle')).not.toBeNull();
     expect(element.querySelector('[data-testid="placeholder-page"]')).toBeNull();
   });
-  it('matches the reference empty response', async () => {
+  it('renders the empty response', async () => {
     const {element} = await render([]);
     expect(element.querySelectorAll('section')).toHaveLength(0);
     expect(element.textContent).toContain('All categories');
   });
-  it('matches the reference catalog failure fallback', async () => {
+  it('falls back when the catalog fails', async () => {
     const {element} = await render(null, true);
     expect(element.querySelectorAll('section')).toHaveLength(0);
     expect(element.textContent).toContain('All categories');

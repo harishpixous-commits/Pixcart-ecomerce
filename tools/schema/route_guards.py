@@ -1,6 +1,6 @@
 """Which sign-in / permission rule guards each route of the reference API, read from its FastAPI dependencies.
 The .NET API enforces the same rule for every route BEFORE it reads the request (API/Infrastructure/
-ReferenceGuardFilter.cs), so unauthorised calls get 401/403 exactly like the reference, never 422/404 first.
+RouteGuardFilter.cs), so unauthorised calls get 401/403 exactly like the reference, never 422/404 first.
 Regenerate after the reference changes:
   cd <reference backend> && PYTHONPATH=. .venv/Scripts/python <this file> <repo>/PixCartAPI/API/Infrastructure/route-guards.json
 Output: JSON list of {method, path, guard} where guard is one of

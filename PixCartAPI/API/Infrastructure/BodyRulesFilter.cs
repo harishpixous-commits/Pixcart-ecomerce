@@ -16,9 +16,9 @@ namespace API.Infrastructure;
 ///
 /// The schemas come from <c>body-rules.json</c>, generated from the reference's OpenAPI by tools/schema/body_rules.py.
 /// Rules written only in reference code (custom validators) are not in the schema; the endpoint's own checks keep them.
-/// Runs after sign-in (<see cref="ReferenceGuardFilter"/>) and the query check (<see cref="ReferenceQueryFilter"/>).
+/// Runs after sign-in (<see cref="RouteGuardFilter"/>) and the query check (<see cref="QueryRulesFilter"/>).
 /// </summary>
-public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
+public sealed partial class BodyRulesFilter : IAsyncResourceFilter
 {
     private sealed record Route(bool Required, JsonElement Schema);
 
@@ -47,15 +47,15 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
 
     /// <summary>Whether this filter checks the body of a route (then path and query errors are reported with it).</summary>
     internal static bool Checks(string method, string template) =>
-        method is "POST" or "PUT" or "PATCH" && Routes.Value.ContainsKey(ReferenceGuardFilter.Key(method, template));
+        method is "POST" or "PUT" or "PATCH" && Routes.Value.ContainsKey(RouteGuardFilter.Key(method, template));
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
         var request = context.HttpContext.Request;
-        var pending = context.HttpContext.Items.TryGetValue(ReferenceQueryFilter.PendingErrors, out var p) ? p as Dictionary<string, string> : null;
+        var pending = context.HttpContext.Items.TryGetValue(QueryRulesFilter.PendingErrors, out var p) ? p as Dictionary<string, string> : null;
         if (request.Method is "POST" or "PUT" or "PATCH"
             && context.ActionDescriptor is ControllerActionDescriptor action && action.AttributeRouteInfo?.Template is { Length: > 0 } template
-            && Routes.Value.TryGetValue(ReferenceGuardFilter.Key(request.Method, template), out var route)
+            && Routes.Value.TryGetValue(RouteGuardFilter.Key(request.Method, template), out var route)
             && (request.ContentType is null || request.ContentType.Contains("json", StringComparison.OrdinalIgnoreCase)))
         {
             request.EnableBuffering();
@@ -89,14 +89,14 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
                 foreach (var (k, m) in pending ?? [])
                 {
                     fields[k] = m;
-                    labels[k] = ReferenceQueryFilter.Label(k);
+                    labels[k] = QueryRulesFilter.Label(k);
                 }
                 foreach (var (loc, msg) in errors)
                 {
                     var parts = loc.Where(p => !Hidden.Contains(p)).ToList();
                     var key = parts.Count > 0 ? string.Join('.', parts) : "_";
                     fields[key] = msg;
-                    labels[key] = ReferenceQueryFilter.Label(parts.LastOrDefault(p => !p.All(char.IsDigit)) ?? "");
+                    labels[key] = QueryRulesFilter.Label(parts.LastOrDefault(p => !p.All(char.IsDigit)) ?? "");
                 }
                 var (firstKey, firstMsg) = fields.First();
                 var message = firstKey != "_" ? $"{labels[firstKey]}: {firstMsg}" : firstMsg;
@@ -106,7 +106,7 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
         else if (pending is { Count: > 0 })
         {
             var (name, msg) = pending.First();
-            throw new AppException($"{ReferenceQueryFilter.Label(name)}: {msg}", "validation_error", 422, pending);
+            throw new AppException($"{QueryRulesFilter.Label(name)}: {msg}", "validation_error", 422, pending);
         }
         await next();
     }
@@ -261,7 +261,7 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
             case "date":
                 if (value.ValueKind == JsonValueKind.Null) errors.Add((loc, "Input should be a valid date"));
                 else if (value.ValueKind != JsonValueKind.String) errors.Add((loc, "Datetimes provided to dates should have zero time - e.g. be exact dates"));
-                else if (ReferenceQueryFilter.DateMessage(value.GetString()!) is { } dm) errors.Add((loc, dm));
+                else if (QueryRulesFilter.DateMessage(value.GetString()!) is { } dm) errors.Add((loc, dm));
                 return;
             case "date-time":
                 if (value.ValueKind == JsonValueKind.Number) return; // a Unix time is a valid datetime for pydantic
@@ -284,7 +284,7 @@ public sealed partial class ReferenceBodyFilter : IAsyncResourceFilter
         }
         if (Str(schema, "pattern") is { } pattern && !Regex.IsMatch(s, pattern))
         {
-            errors.Add((loc, ReferenceQueryFilter.PatternHints.TryGetValue(name, out var hint) ? hint : "is not in the right format"));
+            errors.Add((loc, QueryRulesFilter.PatternHints.TryGetValue(name, out var hint) ? hint : "is not in the right format"));
             return;
         }
         if (format == "email" && !EmailText().IsMatch(s)) errors.Add((loc, "is not a valid email address"));

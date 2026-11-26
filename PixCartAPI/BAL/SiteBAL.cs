@@ -675,7 +675,7 @@ public static partial class Cms
                 {
                     ["slides"] = slides,
                     ["autoplay"] = !c.ContainsKey("autoplay") || SettingsJson.Truthy(c["autoplay"]),
-                    ["interval"] = Clamp(SettingsJson.Truthy(interval) ? CatalogText.PyInt(interval) : 5, 3, 10),
+                    ["interval"] = Clamp(SettingsJson.Truthy(interval) ? CatalogText.LenientInt(interval) : 5, 3, 10),
                     ["style"] = Is(CatalogText.Get(c, "style"), "fade") ? "fade" : "boxed",
                 };
             }
@@ -733,14 +733,14 @@ public static partial class Cms
                 var limit = c.ContainsKey("limit") ? c["limit"] : 12;
                 return new JsonObject
                 {
-                    ["limit"] = Clamp(SettingsJson.Truthy(limit) ? CatalogText.PyInt(limit) : 12, 4, 24),
+                    ["limit"] = Clamp(SettingsJson.Truthy(limit) ? CatalogText.LenientInt(limit) : 12, 4, 24),
                     ["kind"] = k is "lightning" or "deal_of_day" or "limited" ? k : "",
                 };
             }
             case "sponsored" or "inspired" or "buy_again":
             {
                 var limit = c.ContainsKey("limit") ? c["limit"] : 10;
-                return new JsonObject { ["limit"] = Clamp(SettingsJson.Truthy(limit) ? CatalogText.PyInt(limit) : 10, 4, 20) };
+                return new JsonObject { ["limit"] = Clamp(SettingsJson.Truthy(limit) ? CatalogText.LenientInt(limit) : 10, 4, 20) };
             }
             case "signin":
             {
@@ -759,7 +759,7 @@ public static partial class Cms
                 return new JsonObject
                 {
                     ["heading"] = CatalogText.PlainText(CatalogText.Get(c, "heading"), 80), ["text"] = CatalogText.PlainText(CatalogText.Get(c, "text"), 160),
-                    ["ends_at"] = CatalogText.PyIso(ends), ["link"] = LinkOnly(CatalogText.Get(c, "link")), ["cta"] = CatalogText.PlainText(CatalogText.Get(c, "cta"), 30),
+                    ["ends_at"] = CatalogText.IsoText(ends), ["link"] = LinkOnly(CatalogText.Get(c, "link")), ["cta"] = CatalogText.PlainText(CatalogText.Get(c, "cta"), 30),
                     ["image"] = ImageOnly(CatalogText.Get(c, "image")), ["tone"] = tone != null && Tones.Contains(tone) ? tone : "buy",
                 };
             }
@@ -779,7 +779,7 @@ public static partial class Cms
                 var outp = new JsonObject
                 {
                     ["source"] = sourceText,
-                    ["limit"] = Clamp(CatalogText.PyInt(c.ContainsKey("limit") ? c["limit"] : 12), 4, 24),
+                    ["limit"] = Clamp(CatalogText.LenientInt(c.ContainsKey("limit") ? c["limit"] : 12), 4, 24),
                     ["layout"] = Is(CatalogText.Get(c, "layout"), "grid") ? "grid" : "row",
                     ["show_add"] = SettingsJson.Truthy(CatalogText.Get(c, "show_add")),
                     ["ranked"] = SettingsJson.Truthy(CatalogText.Get(c, "ranked")),

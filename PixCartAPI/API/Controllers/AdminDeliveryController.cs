@@ -56,7 +56,7 @@ public class AdminDeliveryController(
         return await fleet.AssignPickupByStaffAsync(user,returnId,body.PartnerId.Value,body.Direct,body.Force);
     }
 
-    /// <summary>Compatibility route retained for existing callers of this port's earlier body-ID shape.</summary>
+    /// <summary>Older form of the route above, with the return id in the body; kept for existing callers.</summary>
     [HttpPost("returns/assign"), SignedIn, API.Infrastructure.RouteGuard("perm:delivery")]
     public async Task<JsonObject> AssignReturn(ReturnAssignIn body)
     {

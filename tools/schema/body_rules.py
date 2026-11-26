@@ -1,5 +1,5 @@
 """The JSON request-body schema of every route of the reference API, read from its OpenAPI schema with every $ref
-expanded. The .NET API validates bodies against them before reading them (API/Infrastructure/ReferenceBodyFilter.cs),
+expanded. The .NET API validates bodies against them before reading them (API/Infrastructure/BodyRulesFilter.cs),
 with pydantic's rules and the reference's messages and field order, so an invalid body gets the reference's 422 answer.
 Regenerate after the reference changes:
   cd <reference backend> && PYTHONPATH=. .venv/Scripts/python <this file> <repo>/PixCartAPI/API/Infrastructure/body-rules.json
