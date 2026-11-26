@@ -4,6 +4,7 @@
  * modified clicks (new tab, Ctrl, middle button) are left to the browser. Usage: <a pcLink="/orders">.
  */
 
+import { Location } from "@angular/common";
 import { Directive, inject, input } from "@angular/core";
 import { Router } from "@angular/router";
 
@@ -14,6 +15,7 @@ import { Router } from "@angular/router";
 export class PcLink {
   readonly pcLink = input.required<string>();
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
 
   onClick(e: MouseEvent): void {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -22,7 +24,12 @@ export class PcLink {
     const href = this.pcLink();
     if (!href || !href.startsWith("/") || href.startsWith("//")) return;
     e.preventDefault();
-    void this.router.navigateByUrl(href);
+    void this.router.navigateByUrl(href).then((ok) => {
+      // Next shows the address exactly as the href wrote it ("?next=/delivery/register"); the router writes its own
+      // encoding of the same address ("?next=%2Fdelivery%2Fregister"). Put the written form back when only that differs.
+      if (ok && href.includes("?") && this.location.path(true) !== href && this.router.url === this.router.parseUrl(href).toString())
+        this.location.replaceState(href, "", this.location.getState());
+    });
   }
 }
 

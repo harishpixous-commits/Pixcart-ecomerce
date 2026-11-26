@@ -192,12 +192,10 @@ const TABS: { href: string; label: string; icon: LucideIconData }[] = [
         @for (t of tabs; track t.href) {
           <a [pcLink]="t.href" [attr.aria-current]="active(t.href) ? 'page' : null"
             [class]="active(t.href) ? 'flex items-center gap-3 rounded-xl px-3 py-2.5 font-semibold transition-colors bg-peacock text-white' : 'flex items-center gap-3 rounded-xl px-3 py-2.5 font-semibold transition-colors text-ink hover:bg-peacock-light hover:text-peacock'">
-            <svg [pcIcon]="t.icon" class="h-5 w-5" /> {{ t.label }}
-          </a>
+            <svg [pcIcon]="t.icon" class="h-5 w-5" /> {{ t.label }}</a>
         }
         <a pcLink="/delivery/help" [class]="active('/delivery/help') ? 'flex items-center gap-3 rounded-xl px-3 py-2.5 font-semibold bg-peacock text-white' : 'flex items-center gap-3 rounded-xl px-3 py-2.5 font-semibold text-ink hover:bg-peacock-light'">
-          <svg [pcIcon]="CircleHelp" class="h-5 w-5" /> Help
-        </a>
+          <svg [pcIcon]="CircleHelp" class="h-5 w-5" /> Help</a>
         <button type="button" (click)="signOut()" class="mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 font-semibold text-ink-soft hover:bg-mist" aria-label="Sign out">
           <svg [pcIcon]="LogOut" class="h-4 w-4 shrink-0" /> <span>Sign out</span>
         </button>

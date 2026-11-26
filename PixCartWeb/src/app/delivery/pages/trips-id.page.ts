@@ -645,7 +645,8 @@ export class DeliveryTripsIdPage {
     effect(() => {
       this.id();
       if (first) first = false;
-      else untracked(() => this.load());
+      // another trip in the address: Next mounts a fresh page (the old trip, codes, photo and dialogs go)
+      else untracked(() => { this.reset(); this.load(); });
     });
     inject(DestroyRef).onDestroy(() => {
       const p = this.photo();
@@ -653,12 +654,32 @@ export class DeliveryTripsIdPage {
     });
   }
 
+  private reset(): void {
+    const p = this.photo();
+    if (p) URL.revokeObjectURL(p.url);
+    this.trip.set(null);
+    this.error.set(null);
+    this.busy.set(null);
+    this.actionError.set(null);
+    this.code.set("");
+    this.otp.set("");
+    this.cod.set("");
+    this.codMethod.set("");
+    this.photo.set(null);
+    this.failing.set(false);
+  }
+
+  /** Shows the trip an action answered with, unless the page has moved on to another trip meanwhile. */
+  private show(t: TripView, next: TripView): void {
+    if (t.id === this.id()) this.trip.set({ ...t, ...next });
+  }
+
   private load(): void {
     const id = this.id();
     if (!id) return;
     api<TripView>(`/api/delivery/trips/${id}`)
-      .then((t) => { this.trip.set(t); this.error.set(null); })
-      .catch((e) => this.error.set(e instanceof ApiError ? e.message : "Could not open this trip"));
+      .then((t) => { if (id !== this.id()) return; this.trip.set(t); this.error.set(null); })
+      .catch((e) => { if (id === this.id()) this.error.set(e instanceof ApiError ? e.message : "Could not open this trip"); });
   }
 
   protected join(parts: (string | null | undefined)[], sep: string): string {
@@ -680,7 +701,7 @@ export class DeliveryTripsIdPage {
         method: "POST",
         body: { to, code: to === "picked" ? this.code().trim() : "", ...(pos ?? {}) },
       });
-      this.trip.set({ ...t, ...next });
+      this.show(t, next);
       this.code.set("");
       this.toast.show(label);
       this.feeds.refresh();
@@ -718,7 +739,7 @@ export class DeliveryTripsIdPage {
       }
       if (photo) form.append("photo", photo.file);
       const next = await api<TripView>(`/api/delivery/trips/${t.id}/deliver`, { method: "POST", form });
-      this.trip.set({ ...t, ...next });
+      this.show(t, next);
       (navigator as Navigator & { vibrate?: (p: number[]) => boolean }).vibrate?.([60, 40, 120]);
       this.toast.show("Delivered. Great job!");
       this.feeds.refresh();
@@ -738,7 +759,7 @@ export class DeliveryTripsIdPage {
     try {
       const pos = await here(this.feeds.location.last());
       const next = await api<TripView>(`/api/delivery/trips/${t.id}/returned`, { method: "POST", body: { code: this.code().trim(), ...(pos ?? {}) } });
-      this.trip.set({ ...t, ...next });
+      this.show(t, next);
       this.toast.show("Returned to the store");
       this.feeds.refresh();
       this.load();
@@ -763,7 +784,7 @@ export class DeliveryTripsIdPage {
   protected failed(next: TripView): void {
     const t = this.trip();
     this.failing.set(false);
-    if (t) this.trip.set({ ...t, ...next });
+    if (t) this.show(t, next);
     this.feeds.refresh();
     this.load();
   }
