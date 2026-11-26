@@ -161,6 +161,7 @@ public static class ServiceConfiguration
         if (!settings.IsTest) await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
         app.UseMiddleware<RequestContextMiddleware>();
         app.UseMiddleware<ExceptionMiddleware>();
+        app.UseMiddleware<UnmatchedRouteMiddleware>(); // 404/405 {"detail": ...} for API and media paths no route serves
         if (!settings.IsProduction)
         {
             app.UseSwagger(o => o.RouteTemplate = "api/docs/{documentName}/swagger.json");
@@ -180,7 +181,8 @@ public static class ServiceConfiguration
 
         // Windows hosting (one IIS site): the built Angular app is published into wwwroot and served from here, so the
         // site and the API share one address (same-origin cookies, no proxy). Unknown non-API paths get index.html
-        // (Angular's router shows the page); unknown /api paths stay 404 JSON.
+        // (Angular's router shows the page); API and media paths are left to the router (404 or 405, see
+        // UnmatchedRouteMiddleware).
         var web = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
         if (File.Exists(Path.Combine(web, "index.html")))
         {
@@ -194,13 +196,9 @@ public static class ServiceConfiguration
                         System.Text.RegularExpressions.Regex.IsMatch(name, @"-[A-Z0-9]{8}\.(js|css)$") ? "public, max-age=31536000, immutable" : "public, max-age=3600";
                 },
             });
-            app.MapFallback(async ctx =>
+            var mediaSegment = System.Text.RegularExpressions.Regex.Escape(settings.MediaBaseUrl.Trim('/'));
+            app.MapFallback($"{{**path:regex(^(?!(api|{mediaSegment})(/|$)))}}", async ctx =>
             {
-                if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments(settings.MediaBaseUrl))
-                {
-                    await ExceptionMiddleware.Write(ctx, 404, "not_found", "Not found", null);
-                    return;
-                }
                 ctx.Response.ContentType = "text/html; charset=utf-8";
                 ctx.Response.Headers.CacheControl = "no-cache";
                 await ctx.Response.SendFileAsync(Path.Combine(web, "index.html"));
