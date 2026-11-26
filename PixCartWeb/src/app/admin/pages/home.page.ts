@@ -182,8 +182,8 @@ export class FleetGlance {
           <pc-stat label="Sellers waiting for verification" [value]="d()!.sellers_pending_review" href="/admin/sellers?status=submitted" />
           <pc-stat label="Listings waiting for review" [value]="d()!.products_pending_review" href="/admin/products" />
           <pc-stat label="Refunds that failed" [value]="d()!.refunds_needing_attention" href="/admin/refunds?status=failed" />
-          @if (k()?.tickets_ack_overdue !== undefined) {
-            <pc-stat label="Tickets past the 48-hour reply limit" [value]="k()!.tickets_ack_overdue!" href="/admin/support?overdue=1" />
+          @if (tickets() !== undefined) {
+            <pc-stat label="Tickets past the 48-hour reply limit" [value]="tickets()!" href="/admin/support?overdue=1" />
           } @else {
             <pc-stat label="Orders today" [value]="d()!.orders_today" href="/admin/orders" />
           }
@@ -252,6 +252,8 @@ export class AdminHomePage {
     const kv = this.kv();
     return kv && kv.days === this.days() ? kv.data : null;
   });
+  // TS optional chaining (undefined while the period loads, like the reference): a template ?. would give null here
+  protected readonly tickets = computed(() => this.k()?.tickets_ack_overdue);
   protected readonly paidOnline = computed(() => {
     const m = this.k()?.payment_mix ?? {};
     return `${Math.round(((m["online"] ?? 0) * 100) / Math.max(1, (m["online"] ?? 0) + (m["cod"] ?? 0)))}%`;
