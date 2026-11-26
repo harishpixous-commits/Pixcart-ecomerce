@@ -120,7 +120,12 @@ public static partial class ProductInfo
             var unit = Text("net_unit", 10, strip: false);
             if (unit.Length > 0 && !NetUnits.ContainsKey(unit)) throw new Invalid();
             var fssai = Regex.Replace(Text("fssai_license", 14, strip: false), @"\s+", "");
-            if (fssai.Length > 0 && !FssaiRx().IsMatch(fssai)) throw new Invalid();
+            if (fssai.Length > 0 && !FssaiRx().IsMatch(fssai))
+            {
+                if (!strict) throw new Invalid();
+                const string why = "An FSSAI licence or registration number has 14 digits";
+                throw new AppException("Fssai license: " + why, "validation_error", 422, new Dictionary<string, string> { ["details.fssai_license"] = why });
+            }
             return new Details
             {
                 NetUnit = unit,
