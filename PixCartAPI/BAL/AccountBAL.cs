@@ -12,9 +12,9 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
     public async Task<object> ConsentAsync(UserModel user, bool marketingOptIn)
     {
         await using var uow = await db.BeginAsync();
+        var before = user.Copy();
         user.MarketingOptIn = marketingOptIn;
-        user.UpdatedAt = DateTimeFunctions.UtcNow();
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, DateTimeFunctions.UtcNow(), uow.Transaction);
         await audit.AuditAsync(user, "account.consent", "user", user.Id, $"marketing={(marketingOptIn ? "True" : "False")}", uow);
         await uow.CommitAsync();
         return new { marketing_opt_in = user.MarketingOptIn };
@@ -48,6 +48,7 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
         await using var uow = await db.BeginAsync();
         await addresses.AnonymiseAllAsync(user.Id, uow.Transaction);
         await accounts.RevokeAllSessionsAsync(user.Id, now, uow.Transaction);
+        var before = user.Copy();
         user.Name = "Deleted user";
         user.Phone = null;
         user.Email = $"deleted-{user.Id}@deleted.invalid";
@@ -55,8 +56,7 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
         user.IsActive = false;
         user.DeletedAt = now;
         user.MarketingOptIn = false;
-        user.UpdatedAt = now;
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, now, uow.Transaction);
         await audit.AuditAsync(null, "account.deleted", "user", user.Id, uow: uow);
         await uow.CommitAsync();
     }

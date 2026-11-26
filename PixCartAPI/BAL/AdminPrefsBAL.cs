@@ -122,9 +122,9 @@ public class AdminPrefsBAL(AccountDAL accounts, SettingsDAL settings, AppSetting
                 throw Invalid("sidebar_collapsed", "Sidebar collapsed", "must be on or off");
             prefs["sidebar_collapsed"] = kind == JsonValueKind.True;
         }
+        var before = user.Copy();
         user.UiPrefs = JsonSerializer.Serialize(prefs);
-        user.UpdatedAt = DateTimeFunctions.UtcNow();
-        await accounts.SaveUserAsync(user);
+        await accounts.SaveUserChangesAsync(before, user, DateTimeFunctions.UtcNow());
         return await PrefsOutAsync(user);
     }
 }

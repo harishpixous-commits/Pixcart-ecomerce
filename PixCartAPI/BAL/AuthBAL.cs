@@ -72,9 +72,9 @@ public class AuthBAL(
         {
             Id = Guid.NewGuid(), UserId = user.Id, TokenHash = EncryptDecrypt.Sha256(token), CreatedAt = now, ExpiresAt = now.AddDays(days), UserAgent = agent,
         }, uow.Transaction);
+        var before = user.Copy();
         user.LastLoginAt = now;
-        user.UpdatedAt = now;
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, now, uow.Transaction);
         await uow.CommitAsync();
         return new IssuedSession(user, token, days, await UserPayloadAsync(user));
     }
@@ -242,7 +242,12 @@ public class AuthBAL(
             };
             await accounts.InsertUserAsync(user, uow.Transaction);
         }
-        else if (name.Length > 0 && user.Name.Length == 0) user.Name = name;
+        else if (name.Length > 0 && user.Name.Length == 0)
+        {
+            var before = user.Copy();
+            user.Name = name;
+            await accounts.SaveUserChangesAsync(before, user, now, uow.Transaction);
+        }
         if (!user.IsActive)
         {
             await uow.CommitAsync();
@@ -280,9 +285,9 @@ public class AuthBAL(
         if (problem is not null) throw new AppException(problem, "weak_password", fields: new Dictionary<string, string> { ["new_password"] = problem });
         var now = DateTimeFunctions.UtcNow();
         await using var uow = await db.BeginAsync();
+        var before = user.Copy();
         user.PasswordHash = EncryptDecrypt.HashPassword(body.NewPassword!);
-        user.UpdatedAt = now;
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, now, uow.Transaction);
         await accounts.RevokeAllSessionsAsync(user.Id, now, uow.Transaction);
         await uow.CommitAsync();
     }
@@ -291,9 +296,9 @@ public class AuthBAL(
     {
         if (user.TotpEnabled) throw new AppException("Two-step sign-in is already on", "totp_on");
         var secret = TotpHelper.NewSecret();
+        var before = user.Copy();
         user.TotpSecretEnc = crypto.Encrypt(secret);
-        user.UpdatedAt = DateTimeFunctions.UtcNow();
-        await accounts.SaveUserAsync(user);
+        await accounts.SaveUserChangesAsync(before, user, DateTimeFunctions.UtcNow());
         var account = !string.IsNullOrEmpty(user.Email) ? user.Email : !string.IsNullOrEmpty(user.Phone) ? user.Phone : user.Id.ToString();
         return new { secret, uri = TotpHelper.Uri(secret, account, await SiteSettingsReader.BrandNameAsync(settings, env)) };
     }
@@ -307,9 +312,9 @@ public class AuthBAL(
         if (string.IsNullOrEmpty(user.TotpSecretEnc) || !TotpHelper.Verify(crypto.Decrypt(user.TotpSecretEnc), body.Code))
             throw new AppException("That code is not correct. Check the time on your phone and try again.", "totp_invalid");
         await using var uow = await db.BeginAsync();
+        var before = user.Copy();
         user.TotpEnabled = true;
-        user.UpdatedAt = DateTimeFunctions.UtcNow();
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, DateTimeFunctions.UtcNow(), uow.Transaction);
         await audit.AuditAsync(user, "account.totp_on", "user", user.Id, uow: uow);
         await uow.CommitAsync();
     }
@@ -321,10 +326,10 @@ public class AuthBAL(
             throw new AppException("Enter your current password to turn off two-step sign-in", "wrong_password", fields: new Dictionary<string, string> { ["password"] = "Incorrect" });
         if (!user.TotpEnabled || !TotpHelper.Verify(crypto.Decrypt(user.TotpSecretEnc), body.Code)) throw new AppException("That code is not correct", "totp_invalid");
         await using var uow = await db.BeginAsync();
+        var before = user.Copy();
         user.TotpEnabled = false;
         user.TotpSecretEnc = null;
-        user.UpdatedAt = DateTimeFunctions.UtcNow();
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, DateTimeFunctions.UtcNow(), uow.Transaction);
         await audit.AuditAsync(user, "account.totp_off", "user", user.Id, uow: uow);
         await notify.NotifyAsync("security_notice", user, new Dictionary<string, object?>
         {
@@ -395,9 +400,9 @@ public class AuthBAL(
         var current = EncryptDecrypt.Sha256(cookieToken ?? "");
         await using var uow = await db.BeginAsync();
         var n = await accounts.RevokeOtherSessionsAsync(user.Id, current, now, uow.Transaction);
+        var before = user.Copy();
         user.SessionsValidAfter = now;
-        user.UpdatedAt = now;
-        await accounts.SaveUserAsync(user, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, user, now, uow.Transaction);
         await audit.AuditAsync(user, "account.sign_out_others", "user", user.Id, $"sessions={n}", uow);
         await notify.NotifyAsync("security_notice", user, new Dictionary<string, object?>
         {
@@ -410,6 +415,7 @@ public class AuthBAL(
 
     public async Task<Dictionary<string, object?>> UpdateMeAsync(UserModel user, ProfileUpdateIn body)
     {
+        var before = user.Copy();
         if (body.Name is not null) user.Name = body.Name.Trim();
         if (body.Email is not null)
         {
@@ -418,8 +424,7 @@ public class AuthBAL(
                 throw new AppException("This email is already used by another account", "email_taken", fields: new Dictionary<string, string> { ["email"] = "Already in use" });
             user.Email = email;
         }
-        user.UpdatedAt = DateTimeFunctions.UtcNow();
-        await accounts.SaveUserAsync(user);
+        await accounts.SaveUserChangesAsync(before, user, DateTimeFunctions.UtcNow());
         return await UserPayloadAsync(user);
     }
 }

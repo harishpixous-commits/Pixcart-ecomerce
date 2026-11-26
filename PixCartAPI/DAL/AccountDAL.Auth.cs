@@ -1,4 +1,5 @@
 using System.Data;
+using Dapper;
 using Model.DomainModel;
 
 namespace DAL;
@@ -34,14 +35,44 @@ public partial class AccountDAL
             "@TotpEnabled, @MarketingOptIn, @TermsAcceptedAt, @DeletedAt, CAST(@UiPrefs AS JSON), @SessionsValidAfter, @RazorpayCustomerId, @Id, @CreatedAt, @UpdatedAt)",
             u, tx);
 
-    /// <summary>Writes every field of the account this module changes (not the payment module's razorpay_customer_id).</summary>
-    public Task SaveUserAsync(UserModel u, IDbTransaction? tx = null) =>
-        db.ExecuteAsync(
-            "UPDATE users SET phone = @Phone, email = @Email, name = @Name, password_hash = @PasswordHash, is_admin = @IsAdmin, is_active = @IsActive, " +
-            "last_login_at = @LastLoginAt, admin_role = @AdminRole, totp_secret_enc = @TotpSecretEnc, totp_enabled = @TotpEnabled, " +
-            "marketing_opt_in = @MarketingOptIn, terms_accepted_at = @TermsAcceptedAt, deleted_at = @DeletedAt, ui_prefs = CAST(@UiPrefs AS JSON), " +
-            "sessions_valid_after = @SessionsValidAfter, updated_at = @UpdatedAt WHERE id = @Id",
-            u, tx);
+    /// <summary>
+    /// Writes the account fields that differ between <paramref name="before"/> (a copy taken when the account was read)
+    /// and <paramref name="after"/>, then updated_at: the change an action made and nothing it merely read, so a change
+    /// someone else made meanwhile (an admin blocking the account, a new role) is never undone. Nothing is written when
+    /// nothing changed. The payment module's razorpay_customer_id is not this module's to write.
+    /// </summary>
+    public async Task<bool> SaveUserChangesAsync(UserModel before, UserModel after, DateTime updatedAt, IDbTransaction? tx = null)
+    {
+        var p = new DynamicParameters();
+        var set = new List<string>();
+        void Column<T>(string name, T was, T value, string? expression = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(was, value)) return;
+            set.Add($"{name} = {expression ?? "@" + name}");
+            p.Add(name, value);
+        }
+        Column("phone", before.Phone, after.Phone);
+        Column("email", before.Email, after.Email);
+        Column("name", before.Name, after.Name);
+        Column("password_hash", before.PasswordHash, after.PasswordHash);
+        Column("is_admin", before.IsAdmin, after.IsAdmin);
+        Column("is_active", before.IsActive, after.IsActive);
+        Column("last_login_at", before.LastLoginAt, after.LastLoginAt);
+        Column("admin_role", before.AdminRole, after.AdminRole);
+        Column("totp_secret_enc", before.TotpSecretEnc, after.TotpSecretEnc);
+        Column("totp_enabled", before.TotpEnabled, after.TotpEnabled);
+        Column("marketing_opt_in", before.MarketingOptIn, after.MarketingOptIn);
+        Column("terms_accepted_at", before.TermsAcceptedAt, after.TermsAcceptedAt);
+        Column("deleted_at", before.DeletedAt, after.DeletedAt);
+        Column("ui_prefs", before.UiPrefs, after.UiPrefs, "CAST(@ui_prefs AS JSON)");
+        Column("sessions_valid_after", before.SessionsValidAfter, after.SessionsValidAfter);
+        if (set.Count == 0) return false;
+        p.Add("id", after.Id);
+        p.Add("updated_at", updatedAt);
+        await db.ExecuteAsync($"UPDATE users SET {string.Join(", ", set)}, updated_at = @updated_at WHERE id = @id", p, tx);
+        after.UpdatedAt = updatedAt;
+        return true;
+    }
 
     public Task<DeliveryBoyModel?> GetDeliveryPartnerByUserAsync(Guid userId, IDbTransaction? tx = null) =>
         db.QueryFirstOrDefaultAsync<DeliveryBoyModel>("SELECT * FROM delivery_boys WHERE user_id = @userId", new { userId }, tx);

@@ -42,4 +42,7 @@ public class UserModel
     public DateTime CreatedAt { get; set; }
     /// <summary>users.updated_at</summary>
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>A copy, to tell afterwards which fields an action changed.</summary>
+    public UserModel Copy() => (UserModel)MemberwiseClone();
 }

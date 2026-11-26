@@ -207,6 +207,7 @@ public partial class StaffBAL(
         if (access.RoleCode(u) == Owner && !IsOwner(admin)) throw new ForbiddenException("Only an owner can change another owner");
         if (u.Id == admin.Id && (body.IsActive == false || (!string.IsNullOrEmpty(body.Role) && body.Role != access.RoleCode(admin))))
             throw new ConflictException("You cannot change your own role or deactivate yourself", "self_lockout");
+        var before = u.Copy();
         var changes = new List<string>();
         if (!string.IsNullOrEmpty(body.Role) && body.Role != access.RoleCode(u))
         {
@@ -232,11 +233,10 @@ public partial class StaffBAL(
             changes.Add(active ? "activated" : "deactivated");
         }
         var now = DateTimeFunctions.UtcNow();
-        u.UpdatedAt = now;
         await using var uow = await db.BeginAsync();
         // sign them out everywhere; role changes need no sign-out: permissions are read on every request
         if (body.IsActive == false || body.ResetTwoStep) await accounts.RevokeAllSessionsAsync(u.Id, now, uow.Transaction);
-        await accounts.SaveUserAsync(u, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, u, now, uow.Transaction);
         if (await dal.ActiveOwnersAsync(uow.Transaction) == 0) throw new ConflictException("At least one active owner is needed", "last_owner");
         await audit.AuditAsync(admin, "staff.update", "user", u.Id, changes.Count > 0 ? string.Join("; ", changes) : "no change", uow);
         await uow.CommitAsync();

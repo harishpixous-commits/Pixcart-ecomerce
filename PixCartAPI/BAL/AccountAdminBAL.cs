@@ -263,6 +263,7 @@ public class AccountAdminBAL(
     {
         var u = await accounts.GetUserAsync(userId) ?? throw new NotFoundException("Customer");
         if (u.IsAdmin && u.Id != admin.Id) throw new ConflictException("Staff accounts are edited in Staff and roles", "invalid_target");
+        var before = u.Copy();
         var newPhone = body.Phone is not null ? Mobile(body.Phone) : u.Phone;
         var newEmail = body.ClearEmail ? null : body.Email is not null ? body.Email.ToLowerInvariant() : u.Email;
         var signInChanges = new List<string>();
@@ -310,8 +311,7 @@ public class AccountAdminBAL(
             u.MarketingOptIn = m;
             changes.Add($"marketing {(m ? "on" : "off")}");
         }
-        u.UpdatedAt = now;
-        await accounts.SaveUserAsync(u, uow.Transaction);
+        await accounts.SaveUserChangesAsync(before, u, now, uow.Transaction);
         await audit.AuditAsync(admin, "user.edit", "user", u.Id, changes.Count > 0 ? string.Join(", ", changes) : "no change", uow);
         await uow.CommitAsync();
         return await CustomerDetailAsync(userId);
