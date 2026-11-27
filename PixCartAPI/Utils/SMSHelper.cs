@@ -55,10 +55,18 @@ public class SMSHelper(IHttpClientFactory http, ILogger<SMSHelper> log) : ISMSHe
         return client;
     }
 
+    private static string SafeJson(string text)
+    {
+        try { System.Text.Json.JsonDocument.Parse(text).Dispose(); return text; } catch (System.Text.Json.JsonException) { return "null"; }
+    }
+
     private static async Task Check(HttpResponseMessage resp, CancellationToken ct)
     {
         var text = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode || text.Contains("\"type\":\"error\"", StringComparison.OrdinalIgnoreCase))
+        // a 200 that is not a JSON object (a proxy or maintenance page) is not a sent code
+        var ok = resp.IsSuccessStatusCode && System.Text.Json.Nodes.JsonNode.Parse(SafeJson(text)) is System.Text.Json.Nodes.JsonObject o
+                 && !string.Equals(o["type"]?.ToString(), "error", StringComparison.OrdinalIgnoreCase);
+        if (!ok)
             throw new AppException("Could not send the SMS. Please try again in a minute.", "sms_failed", 502);
     }
 }
