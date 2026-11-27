@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BarChart3, Boxes, FileDown, Flag, IndianRupee, LayoutDashboard, Megaphone, MessageCircleQuestion, MessageSquareText, Package, Settings, ShoppingBag, Tag,
+  BarChart3, Boxes, ListChecks, FileDown, Flag, IndianRupee, LayoutDashboard, Megaphone, MessageCircleQuestion, MessageSquareText, Package, Settings, ShoppingBag, Tag,
   ShieldCheck, Undo2, Warehouse, Zap,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -43,6 +43,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
         { section: "Orders", href: "/seller/returns", label: "Returns", icon: Undo2 },
         { section: "Catalogue", href: "/seller/products", label: "Products", icon: Package },
         { section: "Catalogue", href: "/seller/inventory", label: "Inventory", icon: Boxes },
+        { section: "Catalogue", href: "/seller/bulk-edit", label: "Bulk edit", icon: ListChecks },
         { section: "Catalogue", href: "/seller/warehouses", label: "Warehouses", icon: Warehouse },
         { section: "Grow sales", href: "/seller/deals", label: "Deals", icon: Zap },
         { section: "Grow sales", href: "/seller/advertising", label: "Advertising", icon: Megaphone },

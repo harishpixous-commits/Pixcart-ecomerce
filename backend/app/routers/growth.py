@@ -178,6 +178,13 @@ async def redeem_gift_card(body: GiftRedeemIn, user: CurrentUser, session: Sessi
     return out
 
 
+@me_router.get("/gift-cards/options")
+async def gift_card_options(user: CurrentUser, session: SessionDep) -> dict:
+    """What the Rewards page needs to show a Buy button: only when staff switched gift cards and buying on."""
+    cfg = (await growth.get(session))["gift_cards"]
+    return {"can_buy": bool(cfg["enabled"] and cfg["allow_purchase"]), "min_paise": cfg["min_paise"], "max_paise": cfg["max_paise"]}
+
+
 class GiftBuyIn(BaseModel):
     amount_paise: int = Field(ge=100, le=100000000)
 

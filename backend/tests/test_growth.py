@@ -449,11 +449,13 @@ async def test_buying_a_gift_card_issues_it_once_and_only_after_the_gateway_says
 
     monkeypatch.setattr(payment_gateways, "candidates", cands)
     buyer = await login_phone(client, "9876501234")
+    assert (await buyer.get("/api/gift-cards/options")).json()["can_buy"] is False
     # off by default, and the staff switch for purchase is separate from the staff-issue switch
     assert (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["error"]["code"] == "gift_cards_off"
     await admin.put("/api/admin/growth/settings", {"gift_cards": {"enabled": True, "min_paise": 10000, "max_paise": 100000}})
     assert (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["error"]["code"] == "gift_cards_off"
     await admin.put("/api/admin/growth/settings", {"gift_cards": {"allow_purchase": True}})
+    assert (await buyer.get("/api/gift-cards/options")).json() == {"can_buy": True, "min_paise": 10000, "max_paise": 100000}
     assert (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 500000})).json()["error"]["code"] == "invalid_amount"
 
     r = await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})
