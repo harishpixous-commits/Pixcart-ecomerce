@@ -119,6 +119,11 @@ async def restore_expired(session: AsyncSession, user_id: uuid.UUID) -> int:
     return back
 
 
+def tier_free_delivery(cfg: dict, tier: str) -> bool:
+    """Whether this tier carries free delivery (gold keeps what silver gets)."""
+    return (tier == "gold" and bool(cfg["gold_free_delivery"] or cfg["silver_free_delivery"])) or (tier == "silver" and bool(cfg["silver_free_delivery"]))
+
+
 async def free_delivery(session: AsyncSession, user_id: uuid.UUID) -> bool:
     """True when the member's tier carries free delivery (Admin -> Growth -> Loyalty: silver/gold free delivery). Off by default."""
     cfg = (await growth.get(session))["loyalty"]
@@ -126,8 +131,7 @@ async def free_delivery(session: AsyncSession, user_id: uuid.UUID) -> bool:
         return False
     lifetime = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0))).scalar_one()
     tier = tier_for(cfg, int(lifetime))
-    # gold keeps what silver gets
-    return (tier == "gold" and bool(cfg["gold_free_delivery"] or cfg["silver_free_delivery"])) or (tier == "silver" and bool(cfg["silver_free_delivery"]))
+    return tier_free_delivery(cfg, tier)
 
 
 async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
@@ -138,6 +142,7 @@ async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
     rows = (await session.execute(select(LoyaltyEntry).where(LoyaltyEntry.user_id == user_id).order_by(LoyaltyEntry.created_at.desc()).limit(50))).scalars().all()
     return {
         "enabled": cfg["enabled"], "balance": int(balance), "lifetime": int(lifetime), "tier": tier_for(cfg, int(lifetime)), "bonus_percent": bonus_percent(cfg, tier_for(cfg, int(lifetime))),
+        "free_delivery": bool(cfg["enabled"]) and tier_free_delivery(cfg, tier_for(cfg, int(lifetime))),
         "value_paise": int(balance) * cfg["point_value_paise"],
         "history": [{"kind": r.kind, "points": r.points, "note": r.note, "at": r.created_at.isoformat()} for r in rows],
     }

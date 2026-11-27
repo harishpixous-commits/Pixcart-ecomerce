@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui";
 import { ApiError, api, quietly } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
 
-type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
+type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; free_delivery?: boolean; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
 type Referral = { enabled: boolean; code: string; referrer_reward_paise: number; friend_reward_paise: number; min_order_paise: number; joined: number; rewarded: number; earned_paise: number; used_code: boolean };
 type Made = { code: string; discount_paise: number; min_order_paise: number; valid_days: number };
 
@@ -89,7 +89,7 @@ export default function RewardsPage() {
       {loyalty?.enabled && (
         <section className="rounded-xl bg-white p-4 sm:p-6">
           <h2 className="flex items-center gap-2 text-xl font-semibold"><Heart className="h-5 w-5 text-vermilion" /> Loyalty points</h2>
-          <p className="mt-1">{loyalty.balance} points ({rupees(loyalty.value_paise)}) · {loyalty.tier} tier{loyalty.bonus_percent ? ` (+${loyalty.bonus_percent}% points on every delivery)` : ""}</p>
+          <p className="mt-1">{loyalty.balance} points ({rupees(loyalty.value_paise)}) · {loyalty.tier} tier{loyalty.bonus_percent ? ` (+${loyalty.bonus_percent}% points on every delivery)` : ""}{loyalty.free_delivery ? " · free delivery on your orders" : ""}</p>
           <div className="mt-3 flex gap-2">
             <input value={points} onChange={(e) => setPoints(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="Points to use" aria-label="Points to use" className="w-40 rounded-lg border border-line px-3 py-2" />
             <button type="button" disabled={busy || !points} onClick={redeemPoints} className="rounded-full bg-peacock px-5 py-2 font-semibold text-white disabled:opacity-50">Get coupon</button>

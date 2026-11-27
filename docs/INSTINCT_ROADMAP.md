@@ -281,3 +281,6 @@ New growth setting `bought_together` (off by default; `max_items` 1 to 12, defau
 
 ## Push 93: loyalty tier perk, free delivery
 Two new Loyalty settings in Admin → Growth, both off: `silver_free_delivery` and `gold_free_delivery`. When loyalty is on and the member tier has the perk (gold keeps silver perks), shipping and the remote-area surcharge are waived on the cart, the checkout quote and the placed order (the same figure in all three, so the total check at checkout matches). COD fee and other fees are not waived. Both versions; tested for member, silver, then gold-only. The product-page pincode estimate does not know the member (it works without a login), so it can still show a fee.
+
+## Push 94: rewards page tells the member about the free-delivery perk
+`GET /api/loyalty` now returns `free_delivery` (true when loyalty is on and the member tier carries the perk from Push 93). The Rewards page shows "free delivery on your orders" next to the tier. Both versions; tested in the tier test; screens type-checked only.

@@ -1274,5 +1274,7 @@ async def test_tier_free_delivery_waives_shipping_for_silver_and_gold_members(cl
         await s.execute(insert(LoyaltyEntry).values(user_id=uid, kind="earn", points=600, note="test", created_at=utcnow()))
         await s.commit()
     assert await ship() == (0, 0)  # silver
+    assert (await buyer.get("/api/loyalty")).json()["free_delivery"] is True  # the rewards page can say so
     assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "silver_free_delivery": False, "gold_free_delivery": True}})).status_code == 200
     assert await ship() == base  # silver no longer has it, gold only
+    assert (await buyer.get("/api/loyalty")).json()["free_delivery"] is False
