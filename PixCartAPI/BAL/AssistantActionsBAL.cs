@@ -392,6 +392,8 @@ public class AssistantActionsBAL(
     }
 
     /// <summary>Confirm or cancel a pending action (reference: routers/assistant.py decide_action).</summary>
+    private static readonly TimeSpan RunningTimeout = TimeSpan.FromMinutes(10);
+
     public async Task<JsonObject> DecideAsync(UserModel user, Guid actionId, string decision)
     {
         await access.RequireAsync(user, "assistant_actions");
@@ -401,6 +403,16 @@ public class AssistantActionsBAL(
         {
             a = await asstDal.ActionForUpdateAsync(actionId, uow) ?? throw new NotFoundException("Action");
             if (a.UserId != uid) throw new NotFoundException("Action");
+            if (a.Status == "running" && a.DecidedAt is { } started && DateTimeFunctions.UtcNow() - started > RunningTimeout)
+            {
+                // the server stopped while it ran: nobody knows how far it got, so it ends failed and a person looks at it
+                var res = JsonNode.Parse(a.Result) is JsonObject ro0 ? ro0 : new JsonObject();
+                res["error"] = "Interrupted while running. Check the result by hand before asking again.";
+                await asstDal.SaveActionDecisionAsync(a.Id, "failed", started, res.ToJsonString(), uow);
+                a.Status = "failed";
+                await uow.CommitAsync();
+                throw new AppException("This action is already failed", "action_done", 409);
+            }
             if (a.Status != "pending")
                 throw new AppException($"This action is already {a.Status}", "action_done", 409);
             if (decision == "cancel")
@@ -415,7 +427,7 @@ public class AssistantActionsBAL(
                 await uow.CommitAsync();
                 throw new AppException("This suggestion expired. Ask again to get a fresh one.", "action_expired", 409);
             }
-            await asstDal.SaveActionStatusAsync(a.Id, "running", uow); // claimed: a second confirm now gets 409
+            await asstDal.SaveActionDecisionAsync(a.Id, "running", DateTimeFunctions.UtcNow(), a.Result, uow); // claimed: a second confirm now gets 409
             await uow.CommitAsync();
         }
         JsonObject outcome;
