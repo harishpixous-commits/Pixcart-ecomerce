@@ -135,6 +135,22 @@ public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessB
     public async Task<JsonObject> ScorecardAsync(UserModel admin)
     {
         await access.RequireAsync(admin, "dashboard");
+        return await BuildScorecardAsync(null);
+    }
+
+    public async Task<JsonObject> MyScorecardAsync(Guid sellerId)
+    {
+        var cfg = (JsonObject)(await GetAsync())["scorecard"]!;
+        if (!cfg.Bool("enabled")) return new JsonObject { ["enabled"] = false };
+        var mine = ((await BuildScorecardAsync(sellerId))["items"] as JsonArray)?.FirstOrDefault() as JsonObject
+            ?? new JsonObject { ["orders"] = 0, ["late"] = 0, ["cancelled_by_seller"] = 0, ["returned"] = 0, ["late_percent"] = 0.0, ["cancel_percent"] = 0.0, ["return_percent"] = 0.0, ["level"] = "not_enough_orders" };
+        var limits = new JsonObject();
+        foreach (var (k, v) in cfg) if (k.EndsWith("_percent")) limits[k] = v?.DeepClone();
+        return new JsonObject { ["enabled"] = true, ["window_days"] = cfg.Int("window_days"), ["ship_within_hours"] = cfg.Int("ship_within_hours"), ["min_orders"] = cfg.Int("min_orders"), ["limits"] = limits, ["you"] = mine };
+    }
+
+    private async Task<JsonObject> BuildScorecardAsync(Guid? sellerId)
+    {
         var cfg = (JsonObject)(await GetAsync())["scorecard"]!;
         var now = DateTime.UtcNow;
         var since = now.AddDays(-cfg.Int("window_days"));
@@ -142,7 +158,7 @@ public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessB
         var rows = await db.QueryAsync<Row>(
             "SELECT so.seller_id AS SellerId, s.display_name AS Name, so.status AS Status, so.created_at AS CreatedAt, so.shipped_at AS ShippedAt, " +
             "so.cancelled_by AS CancelledBy, so.returned_total AS ReturnedTotal FROM sub_orders so JOIN sellers s ON s.id = so.seller_id " +
-            "WHERE so.created_at >= @since AND so.status <> 'pending_payment'", new { since });
+            "WHERE so.created_at >= @since AND so.status <> 'pending_payment'" + (sellerId != null ? " AND so.seller_id = @sellerId" : ""), new { since, sellerId });
         var items = new List<(int Rank, int Orders, JsonObject Item)>();
         foreach (var g in rows.GroupBy(r => r.SellerId))
         {

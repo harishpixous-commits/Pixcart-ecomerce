@@ -30,3 +30,9 @@ public class SeoController(IGrowthBAL bal) : ControllerBase
     [HttpGet("/sitemap.xml"), RouteGuard("public")] public Task<IActionResult> Root() => Map();
     [HttpGet("/robots.txt"), RouteGuard("public")] public IActionResult Robots() => Content(bal.RobotsTxt(), "text/plain");
 }
+
+[ApiController, SignedIn, Route("/api/seller/scorecard")]
+public class SellerScorecardController(IGrowthBAL bal, ICurrentUser me) : ControllerBase
+{
+    [HttpGet, RouteGuard("approved_seller")] public async Task<object> Mine() => await bal.MyScorecardAsync((await me.RequireSellerAsync(approved: true)).Id);
+}

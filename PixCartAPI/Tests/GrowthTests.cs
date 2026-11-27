@@ -45,4 +45,12 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Contains("pincode",await Check("641001",100));Assert.Contains("order value",await Check("641002",600000));Assert.Contains("first order",await Check("641002",300000));Assert.Null(await Check("641002",150000));
         Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{cod_risk=new{enabled=false}})).Status);Assert.Null(await Check("641001",99999999));
     }
+    [Fact]public async Task Seller_sees_only_their_own_scorecard()
+    {
+        var admin=await Admin();var u=await LoginPhone("9880000073","Synthetic Scorecard Seller");var sid=Guid.Parse((await u.Post("/api/seller/register",new{display_name="Synthetic Scorecard Store"})).Json["id"]!.GetValue<string>());
+        Assert.Equal(403,(await u.Get("/api/seller/scorecard")).Status);await ApiFactory.DbExecAsync("UPDATE sellers SET status='approved' WHERE id=@sid",new{sid});
+        Assert.False((await u.Get("/api/seller/scorecard")).Json["enabled"]!.GetValue<bool>());
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{scorecard=new{enabled=true,min_orders=1}})).Status);
+        var r=await u.Get("/api/seller/scorecard");Assert.True(r.Status==200,r.ToString());Assert.True(r.Json["enabled"]!.GetValue<bool>());Assert.Equal(0,r.Json["you"]!["orders"]!.GetValue<int>());Assert.Equal(10,r.Json["limits"]!["late_warn_percent"]!.GetValue<int>());
+    }
 }
