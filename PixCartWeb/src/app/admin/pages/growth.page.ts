@@ -4,6 +4,7 @@
 
 import { ChangeDetectionStrategy, Component, inject, signal } from "@angular/core";
 import { api, ApiError, quietly } from "../../core/api";
+import { date, rupees } from "../../core/format";
 import { PageHeader, Tabs } from "../../shared/portal-shell";
 import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, ErrorNote, Toast } from "../../shared/ui/ui";
@@ -11,6 +12,9 @@ import { Button, ErrorNote, Toast } from "../../shared/ui/ui";
 type Val = boolean | number | string | string[];
 type Section = Record<string, Val>;
 type Settings = Record<string, Section>;
+type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
+type Seg = { key: string; label: string; count: number };
+type Member = { id: string; name: string; phone: string | null; email: string | null; marketing_opt_in: boolean; orders: number; spent_paise: number; last_order_at: string | null };
 type Score = { seller_id: string; seller: string; orders: number; late: number; cancelled_by_seller: number; returned: number; late_percent: number; cancel_percent: number; return_percent: number; level: string };
 
 const TITLES: Record<string, { title: string; hint: string }> = {
@@ -56,6 +60,50 @@ const label = (k: string): string => {
           </table>
         </div>
       }
+    } @else if (tab() === "gift-cards") {
+      <div class="flex flex-col gap-4">
+        @if (error()) { <pc-error-note [message]="error()!" /> }
+        <form class="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-4" (submit)="issue($event)" data-testid="gift-issue">
+          <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">Amount (₹)</span><input class="rounded-lg border border-line px-3 py-2" [value]="gAmount()" (input)="gAmount.set($any($event.target).value)" aria-label="Gift card amount" /></label>
+          <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">How many (1 to 50)</span><input class="rounded-lg border border-line px-3 py-2" [value]="gQty()" (input)="gQty.set($any($event.target).value)" aria-label="Gift card quantity" /></label>
+          <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="font-semibold">Note</span><input class="rounded-lg border border-line px-3 py-2" [value]="gNote()" (input)="gNote.set($any($event.target).value)" aria-label="Gift card note" /></label>
+          <button pcButton type="submit" [loading]="busy()" class="self-start sm:col-span-4">Issue gift cards</button>
+          <p class="text-sm text-ink-soft sm:col-span-4">Gift cards must be switched on in Settings first. Codes are shown here and in the list below.</p>
+        </form>
+        <div class="overflow-x-auto rounded-xl bg-white">
+          <table class="w-full text-left text-sm" data-testid="gift-cards">
+            <thead><tr class="border-b border-line"><th class="p-3">Code</th><th class="p-3">Balance</th><th class="p-3">Issued</th><th class="p-3">Expires</th><th class="p-3">Status</th><th class="p-3">Note</th><th class="p-3"></th></tr></thead>
+            <tbody>
+              @for (c of cards(); track c.id) {
+                <tr class="border-b border-line/50"><td class="p-3 font-mono font-semibold">{{ c.code }}</td><td class="p-3">{{ rupees(c.balance_paise) }}</td><td class="p-3">{{ rupees(c.initial_paise) }}</td><td class="p-3">{{ date(c.expires_at) }}</td><td class="p-3">{{ c.status }}</td><td class="p-3">{{ c.note }}</td>
+                  <td class="p-3">@if (c.status === "active") {<button type="button" class="font-semibold text-vermilion" (click)="voidCard(c)">Void</button>}</td></tr>
+              } @empty { <tr><td class="p-4 text-ink-soft" colspan="7">No gift cards yet.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else if (tab() === "segments") {
+      <div class="flex flex-col gap-4">
+        @if (segError()) { <p class="rounded-lg bg-white p-4 text-sm text-ink-soft" data-testid="segments-off">{{ segError() }}</p> }
+        <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          @for (g of segs(); track g.key) {
+            <button type="button" (click)="openSeg(g.key)" [attr.aria-pressed]="segKey() === g.key" class="rounded-xl bg-white p-4 text-left hover:ring-2 hover:ring-peacock">
+              <p class="text-2xl font-bold">{{ g.count }}</p><p class="text-sm text-ink-soft">{{ g.label }}</p></button>
+          }
+        </div>
+        @if (members().length) {
+          <div class="overflow-x-auto rounded-xl bg-white">
+            <table class="w-full text-left text-sm" data-testid="segment-members">
+              <thead><tr class="border-b border-line"><th class="p-3">Customer</th><th class="p-3">Contact</th><th class="p-3">Orders</th><th class="p-3">Spent</th><th class="p-3">Last order</th><th class="p-3">Marketing</th></tr></thead>
+              <tbody>
+                @for (m of members(); track m.id) {
+                  <tr class="border-b border-line/50"><td class="p-3 font-semibold">{{ m.name }}</td><td class="p-3">{{ m.phone || m.email }}</td><td class="p-3">{{ m.orders }}</td><td class="p-3">{{ rupees(m.spent_paise) }}</td><td class="p-3">{{ m.last_order_at ? date(m.last_order_at) : "None" }}</td><td class="p-3">{{ m.marketing_opt_in ? "Opted in" : "No" }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
     } @else if (!s()) {
       <pc-page-loader />
     } @else {
@@ -84,7 +132,17 @@ export class AdminGrowthPage {
   protected readonly titles = TITLES;
   protected readonly label = label;
   protected readonly tab = signal("settings");
-  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }];
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }];
+  protected readonly rupees = rupees;
+  protected readonly date = date;
+  protected readonly cards = signal<Card[]>([]);
+  protected readonly gAmount = signal("500");
+  protected readonly gQty = signal("1");
+  protected readonly gNote = signal("");
+  protected readonly segs = signal<Seg[]>([]);
+  protected readonly segKey = signal("");
+  protected readonly members = signal<Member[]>([]);
+  protected readonly segError = signal<string | null>(null);
   protected readonly s = signal<Settings | null>(null);
   protected readonly score = signal<Score[] | null>(null);
   protected readonly scoreOn = signal(false);
@@ -94,7 +152,48 @@ export class AdminGrowthPage {
 
   constructor() {
     api<{ settings: Settings }>("/api/admin/growth/settings").then((x) => this.s.set(x.settings)).catch(quietly);
+    this.loadCards();
+    api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => this.segs.set(x.segments)).catch((e) => this.segError.set(e instanceof ApiError ? e.message : null));
     api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);
+  }
+
+  private loadCards(): void {
+    api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => this.cards.set(x.items)).catch(quietly);
+  }
+
+  protected async issue(e: Event): Promise<void> {
+    e.preventDefault();
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const amount = Math.round((Number(this.gAmount().replace(/[^\d.]/g, "")) || 0) * 100);
+      const quantity = Number(this.gQty()) || 1;
+      await api("/api/admin/growth/gift-cards", { method: "POST", body: { amount_paise: amount, quantity, note: this.gNote().trim() } });
+      this.toast.show(quantity > 1 ? "Gift cards issued" : "Gift card issued");
+      this.loadCards();
+    } catch (x) {
+      this.error.set(x instanceof ApiError ? x.message : "Could not issue");
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async voidCard(c: Card): Promise<void> {
+    try {
+      await api(`/api/admin/growth/gift-cards/${c.id}/void`, { method: "POST", body: {} });
+      this.loadCards();
+    } catch (x) {
+      this.error.set(x instanceof ApiError ? x.message : "Could not void");
+    }
+  }
+
+  protected async openSeg(key: string): Promise<void> {
+    this.segKey.set(key);
+    try {
+      this.members.set((await api<{ items: Member[] }>("/api/admin/growth/segments", { query: { segment: key } })).items);
+    } catch (x) {
+      this.segError.set(x instanceof ApiError ? x.message : null);
+    }
   }
 
   protected sections = (): string[] => Object.keys(this.s() ?? {}).filter((k) => TITLES[k]);
