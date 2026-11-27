@@ -263,13 +263,18 @@ public class CatalogBAL(
             var e = DeliveryEstimate.Estimate(cfg, seller.DispatchDays, w.Pincode, w.StateCode, pin, cutoff: seller.DispatchCutoff);
             if (best == null || e.Int("days_min") < best.Int("days_min")) best = e;
         }
-        var freeFrom = cfg.Long("free_shipping_threshold_paise");
+        // The same rules as the checkout quote: the seller's own amount, the by-state amount and fee, the remote-area surcharge.
+        var stateCode = DeliveryEstimate.StateForPin(pin) ?? "";
+        var freeFrom = CartBAL.FreeThreshold(seller, await ShippingZones.WithStateThresholdAsync(sellerDb, cfg, stateCode), await ShippingZones.SellerFreeBoundsAsync(sellerDb));
+        var fee = v.PricePaise >= freeFrom ? 0 : await ShippingZones.StateFeeAsync(sellerDb, stateCode) ?? cfg.Long("shipping_fee_paise");
+        var (extra, waive) = await ShippingZones.SurchargeAsync(sellerDb, pin);
+        if (extra > 0 && !(waive && fee == 0)) fee += extra;
         var outp = new JsonObject { ["serviceable"] = true };
         foreach (var (k, val) in best!) outp[k] = val?.DeepClone();
         outp["cod_available"] = cfg.Bool("cod_enabled") && v.PricePaise <= cfg.Long("cod_max_order_paise");
         outp["order_within_min"] = cfg.Bool("pdp_delivery_countdown") ? best["order_within_min"]?.DeepClone() : null;
         // delivery is charged per seller package; free once that seller's items reach the threshold
-        outp["delivery_fee_paise"] = v.PricePaise >= freeFrom ? 0 : cfg.Long("shipping_fee_paise");
+        outp["delivery_fee_paise"] = fee;
         outp["free_delivery_from_paise"] = freeFrom;
         outp["state"] = IndianStates.Name(DeliveryEstimate.StateForPin(pin) ?? "");
         return outp;

@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using BAL;
 using BAL.Interface;
@@ -832,6 +833,31 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(0, await Run());
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET confirmed_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 25 HOUR) WHERE id = @s2", new { s2 });
         Assert.Equal(1, await Run()); Assert.Equal(2, await Count());
+    }
+
+    [Fact]
+    public async Task Pincode_check_on_the_product_page_follows_the_same_delivery_rules_as_checkout()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000312", "pin-check-shirt");
+        await Refresh(productId);
+        var seller = await LoginPhone("9400000312", "Pin Owner");
+        async Task<(long Fee, long From)> Est(string pin)
+        {
+            var j = (await Factory.CreateClient().GetFromJsonAsync<JsonObject>($"/api/catalog/delivery-estimate?variant_id={variantId}&pincode={pin}"))!;
+            return (j["delivery_fee_paise"]!.GetValue<long>(), j["free_delivery_from_paise"]!.GetValue<long>());
+        }
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = true, min_paise = 0, max_paise = 5000000 } })).Status);
+        Assert.Equal(200, (await seller.Put("/api/seller/preferences", new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 5000000 })).Status); // the shirt must pay delivery
+        var (baseFee, baseFrom) = await Est("560001"); Assert.True(baseFee > 0); Assert.Equal(5000000, baseFrom); // the seller's own amount
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { enabled = true, state_fees = "29:9000", remote_prefixes = "5600", remote_surcharge_paise = 6000 } })).Status);
+        Assert.Equal(15000, (await Est("560001")).Fee); // state fee plus the remote-area surcharge
+        Assert.Equal(baseFee, (await Est("600002")).Fee); // unlisted state, not remote
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { state_free_above = "29:1" } })).Status);
+        // the seller's own amount still wins over the by-state amount
+        Assert.Equal((15000L, 5000000L), await Est("560001"));
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = false } })).Status);
+        Assert.Equal((0L, 1L), await Est("560001")); // now the by-state amount applies: this shirt ships free there
     }
 
     [Fact]
