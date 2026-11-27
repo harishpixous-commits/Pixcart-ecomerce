@@ -364,6 +364,17 @@ async def product_page(slug: str, session: SessionDep) -> dict:
             )
         ).scalars()
     ) if cfg["pdp_similar"] and cfg["similar_products"] > 0 else []
+    bought_together: list[Product] = []
+    bt = (await growth_svc.get(session))["bought_together"]
+    if bt["enabled"]:
+        from app.models import OrderItem, SubOrder
+        from app.services.product_page import LIVE_PACKAGE
+
+        with_this = select(SubOrder.order_id).join(OrderItem, OrderItem.sub_order_id == SubOrder.id).where(OrderItem.product_id == p.id, SubOrder.status.in_(LIVE_PACKAGE))
+        bought_together = list((await session.execute(
+            select(Product).join(OrderItem, OrderItem.product_id == Product.id).join(SubOrder, SubOrder.id == OrderItem.sub_order_id)
+            .where(*public_product_filter(), Product.id != p.id, Product.in_stock.is_(True), SubOrder.status.in_(LIVE_PACKAGE), SubOrder.order_id.in_(with_this))
+            .group_by(Product.id).order_by(func.count(func.distinct(SubOrder.order_id)).desc(), Product.sold_count.desc()).limit(int(bt["max_items"])))).scalars())
     key_specs = []
     if cfg["pdp_key_specs"]:
         names = details.key_specs or list(p.specs)[:5]
@@ -431,6 +442,8 @@ async def product_page(slug: str, session: SessionDep) -> dict:
             "free_shipping_threshold_paise": free_threshold(seller, cfg, await growth_svc.seller_free_bounds(session)),
         },
         "similar": await product_cards(session, similar),
+        # "Bought together": other products that appeared in the same orders (Admin → Growth; empty while it is off)
+        "bought_together": await product_cards(session, bought_together),
     }
 
 

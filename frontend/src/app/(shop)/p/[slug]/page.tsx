@@ -138,6 +138,7 @@ export default async function ProductPageView({ params }: { params: Promise<{ sl
       <BoughtTogether slug={p.slug} />
       <ProductReviews slug={p.slug} />
       <ProductQuestions slug={p.slug} title={p.title} />
+      {(p.bought_together?.length ?? 0) > 0 && <ProductRail title="Bought together" items={p.bought_together ?? []} />}
       {p.similar.length > 0 && <ProductRail title="Customers also viewed" items={p.similar} />}
       <SponsoredRail slug={p.slug} />
       <BrowsingHistory currentId={p.id} />

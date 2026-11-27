@@ -44,6 +44,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "campaigns": {"enabled": (False, "bool", 0, 0), "max_recipients": (500, "int", 1, 5000), "max_per_day": (3, "int", 1, 20)},
     "shipping_zones": {"enabled": (False, "bool", 0, 0), "remote_prefixes": ("", "text", 0, 300), "remote_surcharge_paise": (6000, "int", 0, 100000), "state_fees": ("", "text", 0, 400), "state_free_above": ("", "text", 0, 400), "waive_when_free": (True, "bool", 0, 0)},
     "saved_searches": {"enabled": (False, "bool", 0, 0), "max_per_user": (10, "int", 1, 50), "min_hours_between_alerts": (24, "int", 1, 720)},
+    "bought_together": {"enabled": (False, "bool", 0, 0), "max_items": (4, "int", 1, 12)},
     "ship_reminders": {"enabled": (False, "bool", 0, 0), "after_hours": (24, "int", 1, 720), "max_age_days": (14, "int", 1, 60)},
     "review_reminders": {"enabled": (False, "bool", 0, 0), "after_days": (5, "int", 1, 60), "max_age_days": (30, "int", 1, 180)},
     "seller_shipping": {"enabled": (False, "bool", 0, 0), "min_paise": (0, "int", 0, 10000000), "max_paise": (500000, "int", 0, 10000000)},

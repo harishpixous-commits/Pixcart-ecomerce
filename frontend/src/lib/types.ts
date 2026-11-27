@@ -215,6 +215,7 @@ export interface ProductPage {
     free_shipping_threshold_paise?: number;
   };
   similar: ProductCard[];
+  bought_together?: ProductCard[];
   deal?: DealInfo | null;
   key_specs?: { label: string; value: string }[];
   info?: { label: string; value: string }[];

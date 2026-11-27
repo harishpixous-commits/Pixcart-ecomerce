@@ -1222,3 +1222,26 @@ async def test_pincode_check_on_the_product_page_follows_the_same_delivery_rules
     assert (await ka.put("/api/seller/preferences", {"dispatch_days": 2, "holiday_mode": False, "free_shipping_threshold_paise": 10000})).status_code == 200
     e = await est("560001")
     assert e["free_delivery_from_paise"] == 10000 and e["delivery_fee_paise"] == 0  # the seller's own amount
+
+
+async def test_bought_together_lists_products_from_the_same_orders_and_is_off_by_default(client, admin, categories):
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+    from tests.test_phase2_money import key
+
+    tn, ka, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000151", name="Together Buyer")
+    addr = await add_address(buyer, state="33")
+    for p in (shirt, cable):
+        await buyer.post("/api/cart/items", {"variant_id": p["variants"][0]["id"], "qty": 1})
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})
+    assert r.status_code == 201, r.text
+
+    async def together(p):
+        return [c["slug"] for c in (await client.get(f"/api/catalog/products/{p['slug']}")).json()["bought_together"]]
+
+    assert await together(shirt) == []  # switched off
+    assert (await admin.put("/api/admin/growth/settings", {"bought_together": {"enabled": True, "max_items": 4}})).status_code == 200
+    assert await together(shirt) == [cable["slug"]] and await together(cable) == [shirt["slug"]]
+    assert (await admin.put("/api/admin/growth/settings", {"bought_together": {"enabled": True, "max_items": 1}})).status_code == 200
+    assert len(await together(shirt)) == 1
