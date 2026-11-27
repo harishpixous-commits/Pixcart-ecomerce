@@ -19,6 +19,7 @@ import { ShopCheckoutPage } from "./pages/checkout.page";
 import { ShopComparePage } from "./pages/compare.page";
 import { ShopContactPage } from "./pages/contact.page";
 import { ShopCouponsPage } from "./pages/coupons.page";
+import { ShopRewardsPage } from "./pages/rewards.page";
 import { ShopDealsPage } from "./pages/deals.page";
 import { ShopHelpGrievancePage } from "./pages/help-grievance.page";
 import { ShopHelpReturnsPage } from "./pages/help-returns.page";
@@ -51,6 +52,7 @@ export const SHOP_ROUTES: Routes = [
   { path: "contact", component: ShopContactPage },
   { path: "coupons", component: ShopCouponsPage },
   { path: "deals", component: ShopDealsPage },
+  { path: "rewards", component: ShopRewardsPage, title: "Rewards" },
   { path: "help", component: ShopHelpPage },
   { path: "help/grievance", component: ShopHelpGrievancePage, title: "Grievance redressal" },
   { path: "help/returns", component: ShopHelpReturnsPage },

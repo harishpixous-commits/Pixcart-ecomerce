@@ -24,7 +24,7 @@ const FILTERS = [["all", "All offers"], ["platform", "Store offers"], ["seller",
     <div class="flex flex-col gap-4">
       <header class="rounded-xl bg-white p-4 sm:p-6">
         <h1 class="flex items-center gap-2 text-2xl font-semibold sm:text-3xl"><svg [pcIcon]="Tag" class="h-7 w-7 text-vermilion" /> Coupons</h1>
-        <p class="text-ink-soft">Copy a code and apply it at checkout. Store offers work across sellers; seller offers work on that seller's products.</p>
+        <p class="text-ink-soft">Copy a code and apply it at checkout. Store offers work across sellers; seller offers work on that seller's products. Have points or a gift card? <a pcLink="/rewards" class="font-semibold text-peacock">Go to Rewards</a></p>
         <div class="mt-3 flex gap-2">
           @for (f of FILTERS; track f[0]) {
             <button type="button" (click)="filter.set(f[0])" [attr.aria-pressed]="filter() === f[0]"
