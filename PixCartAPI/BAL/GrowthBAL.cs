@@ -17,7 +17,8 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
     {
         ["loyalty"] = [new("enabled", false, K.Bool), new("points_per_100", 1, K.Int, 0, 100), new("point_value_paise", 100, K.Int, 1, 10000),
             new("min_redeem_points", 100, K.Int, 1, 100000), new("max_redeem_percent", 20, K.Int, 1, 100), new("expiry_days", 365, K.Int, 0, 3650),
-            new("tier_silver_points", 500, K.Int, 0, 10000000), new("tier_gold_points", 2000, K.Int, 0, 10000000)],
+            new("tier_silver_points", 500, K.Int, 0, 10000000), new("tier_gold_points", 2000, K.Int, 0, 10000000),
+                new("silver_bonus_percent", 0, K.Int, 0, 500), new("gold_bonus_percent", 0, K.Int, 0, 500)],
         ["referral"] = [new("enabled", false, K.Bool), new("referrer_reward_paise", 10000, K.Int, 0, 1000000), new("friend_reward_paise", 5000, K.Int, 0, 1000000),
             new("min_order_paise", 49900, K.Int, 0, 10000000), new("max_per_user", 20, K.Int, 1, 1000)],
         ["abandoned_cart"] = [new("enabled", false, K.Bool), new("first_reminder_hours", 4, K.Int, 1, 720), new("second_reminder_hours", 24, K.Int, 1, 720),
@@ -206,7 +207,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
             "SELECT kind AS Kind, points AS Points, note AS Note, created_at AS At FROM loyalty_ledger WHERE user_id = @userId ORDER BY created_at DESC, id LIMIT 50", new { userId });
         return new JsonObject
         {
-            ["enabled"] = cfg.Bool("enabled"), ["balance"] = balance, ["lifetime"] = lifetime, ["tier"] = LoyaltyPoints.Tier(cfg, lifetime),
+            ["enabled"] = cfg.Bool("enabled"), ["balance"] = balance, ["lifetime"] = lifetime, ["tier"] = LoyaltyPoints.Tier(cfg, lifetime), ["bonus_percent"] = LoyaltyPoints.BonusPercent(cfg, LoyaltyPoints.Tier(cfg, lifetime)),
             ["value_paise"] = balance * cfg.Int("point_value_paise"),
             ["history"] = new JsonArray(rows.Select(r => (JsonNode)new JsonObject { ["kind"] = r.Kind, ["points"] = r.Points, ["note"] = r.Note, ["at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o") }).ToArray()),
         };

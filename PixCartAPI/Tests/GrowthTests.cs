@@ -29,6 +29,20 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal("balance_too_low",(await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=-61,note="Too much"})).ErrorCode);
         Assert.Equal(403,(await buyer.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=5,note="Nope"})).Status);
     }
+    [Fact]public async Task Tier_bonus_adds_points_only_for_silver_and_up()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9880000074");var uid=Guid.Parse(buyer.Id);
+        using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        async Task<int> Earn(Guid sub,string no){await using var tx=await db.BeginAsync();await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=0");var n=await BAL.LoyaltyPoints.EarnAsync(tx,sub,no,250000,uid);await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=1");await tx.CommitAsync();return n;}
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{enabled=true,points_per_100=2,tier_silver_points=60,tier_gold_points=0,silver_bonus_percent=50}})).Status);
+        Assert.Equal(50,await Earn(Guid.NewGuid(),"SYNTH-TIER-1"));
+        Assert.Equal(0,(await buyer.Get("/api/loyalty")).Json["bonus_percent"]!.GetValue<int>());
+        Assert.Equal(200,(await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=10,note="Reach silver"})).Status);
+        var me=(await buyer.Get("/api/loyalty")).Json;Assert.Equal("silver",me["tier"]!.GetValue<string>());Assert.Equal(50,me["bonus_percent"]!.GetValue<int>());
+        Assert.Equal(75,await Earn(Guid.NewGuid(),"SYNTH-TIER-2"));
+        Assert.Contains("50% tier bonus",(await buyer.Get("/api/loyalty")).Json["history"]![0]!["note"]!.GetValue<string>());
+        Assert.Equal(400,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{gold_bonus_percent=900}})).Status);
+    }
     [Fact]public async Task Sitemap_and_robots_follow_the_search_engine_settings()
     {
         var admin=await Admin();var c=Factory.CreateClient();

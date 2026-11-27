@@ -12,6 +12,9 @@ public static class LoyaltyPoints
         cfg.Int("tier_gold_points") > 0 && lifetime >= cfg.Int("tier_gold_points") ? "gold"
         : cfg.Int("tier_silver_points") > 0 && lifetime >= cfg.Int("tier_silver_points") ? "silver" : "member";
 
+    /// <summary>Extra points a tier earns on top of the normal rate. 0 for members and while unset.</summary>
+    public static int BonusPercent(JsonObject cfg, string tier) => tier == "gold" ? cfg.Int("gold_bonus_percent") : tier == "silver" ? cfg.Int("silver_bonus_percent") : 0;
+
     /// <summary>Credits the points for a delivered package inside the caller's transaction. Returns the points credited.</summary>
     public static async Task<int> EarnAsync(IUnitOfWork uow, Guid subId, string subNumber, long itemsTotal, Guid userId)
     {
@@ -22,9 +25,12 @@ public static class LoyaltyPoints
         if (points <= 0) return 0;
         var done = await uow.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM loyalty_ledger WHERE sub_order_id = @subId AND kind = 'earn'", new { subId });
         if (done > 0) return 0;
+        var lifetime = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0", new { userId });
+        var bonus = BonusPercent(cfg, Tier(cfg, lifetime));
+        points = (int)((long)points * (100 + bonus) / 100);
         await uow.ExecuteAsync(
             "INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, @subId, 'earn', @points, @note, @now)",
-            new { id = Guid.NewGuid(), userId, subId, points, note = "Delivered package " + subNumber, now = DateTime.UtcNow });
+            new { id = Guid.NewGuid(), userId, subId, points, note = "Delivered package " + subNumber + (bonus > 0 ? $" (+{bonus}% tier bonus)" : ""), now = DateTime.UtcNow });
         return points;
     }
 
