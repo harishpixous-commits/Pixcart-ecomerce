@@ -1111,3 +1111,59 @@ async def test_a_repeating_campaign_makes_the_next_one_after_each_send_and_cance
     await make_due()
     assert await due() == 0 and [r.status for r in await rows()] == ["sent", "sent", "cancelled"]
     assert cid == got[0].id
+
+
+async def test_ship_reminder_goes_once_to_the_seller_of_a_confirmed_package_that_has_not_shipped(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import SubOrder
+    from app.services import ship_reminders
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import key, setup
+
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    a = await login_phone(client, "9770000141", name="Ship Reminder A")
+
+    async def place(product):
+        addr = await add_address(a, state="33")
+        await a.post("/api/cart/items", {"variant_id": product["variants"][0]["id"], "qty": 1})
+        o = (await a.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+        return o["sub_orders"][0]["id"]
+
+    async def age(sid, hours):
+        async with SessionLocal() as s:
+            await s.execute(update(SubOrder).where(SubOrder.id == uuid.UUID(sid)).values(confirmed_at=utcnow() - timedelta(hours=hours)))
+            await s.commit()
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await ship_reminders.send_due(s)
+            await s.commit()
+            return n
+
+    async def notes(seller):
+        return [n for n in (await seller.get("/api/notifications")).json()["items"] if "waiting to ship" in n["title"]]
+
+    s1, s2 = await place(shirt), await place(phone)
+    for sid, seller in ((s1, tn), (s2, ka)):
+        assert (await seller.post(f"/api/seller/orders/{sid}/confirm")).status_code == 200
+    await age(s1, 30); await age(s2, 2)
+    assert await run() == 0 and await notes(tn) == []  # switched off
+    assert (await admin.put("/api/admin/growth/settings", {"ship_reminders": {"enabled": True, "after_hours": 24, "max_age_days": 14}})).status_code == 200
+    assert await run() == 1  # the shirt package only: the phone was confirmed 2 hours ago
+    got = await notes(tn)
+    assert len(got) == 1 and await notes(ka) == []
+    assert await run() == 0  # once only
+    await age(s2, 25)
+    assert await run() == 1 and len(await notes(ka)) == 1
+    # shipped packages are not reminded about
+    s3 = await place(shirt)
+    assert (await tn.post(f"/api/seller/orders/{s3}/confirm")).status_code == 200
+    assert (await tn.post(f"/api/seller/orders/{s3}/pack")).status_code == 200
+    assert (await tn.post(f"/api/seller/orders/{s3}/ship", {"courier_name": "DTDC", "tracking_number": "AWB1"})).status_code == 200
+    await age(s3, 40)
+    assert await run() == 0

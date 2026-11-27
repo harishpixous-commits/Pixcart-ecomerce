@@ -48,6 +48,9 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "saved_search_match": {
         "inapp": ("New for your search: {{query}}", "{{item}}{{more}} just arrived."),
     },
+    "seller_ship_reminder": {
+        "inapp": ("Order {{order_number}} is waiting to ship", "You confirmed it {{hours}} hours ago. Ship it and add the tracking number so the customer is not left waiting."),
+    },
     "review_reminder": {
         "inapp": ("How was {{item}}?", "Tell other shoppers what you think. It takes a minute."),
     },

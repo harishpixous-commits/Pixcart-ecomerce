@@ -231,3 +231,8 @@ The review reminder note now links to the first unreviewed product page (#review
 ## Push 80: "Order again" on an order
 - New POST /api/cart/reorder/{order_id} (signed in; own orders only, others get 404). Puts every item of the order back in the cart through the normal cart rules (stock, per-item limit, deal units), adding to what is already there. Returns the cart view plus added, skipped (title and reason, for example out of stock) and notices. An "Order again" button on the order page calls it and opens the cart. No schema change, no setting (always on).
 - Tested: one new test each side (cart refilled, out-of-stock line skipped with reason, another shopper and an unknown id get 404). Screens type-checked only; the button was not clicked in a browser.
+
+
+## Push 81: ship reminders for sellers
+- Admin > Growth > Ship reminders (off by default; after_hours 24, max_age_days 14). A job every hour sends the seller one in-app note ("Order X is waiting to ship") for each package that is confirmed or packed, not shipped after_hours since confirmation. Once per package. Packages confirmed longer ago than max_age_days are skipped, so switching it on does not message about old orders. In-app only (the seller email/SMS channels are not wired for this event). Python migration 0044 (sub_orders.ship_reminded_at), .NET V021; ship_reminders.send_due and ShipReminders.SendDueAsync, hourly job on both.
+- Tested: one new test each side (off, too recent, once only, shipped package skipped). The admin screen entry is type-checked only.
