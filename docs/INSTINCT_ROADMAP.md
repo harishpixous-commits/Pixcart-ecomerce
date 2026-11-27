@@ -77,3 +77,7 @@ Open decision for Harish: whether purchased cards may be bought by guests or onl
 
 ## Fix: unpaid-order expiry only asked Razorpay (Instinct)
 Defect (both versions): the expiry job asked Razorpay about every payment. An order paid through Cashfree, PhonePe, PayU or Stripe errored on that lookup, was treated as "cannot verify", and so never expired: stock stayed held. Fix: non-Razorpay payments are checked through their own gateway (Python check_with_gateway, .NET CheckWithGatewayAsync); a paid result keeps the order, an error still leaves it alone. Razorpay path unchanged. Tests use a fake gateway that reports no payment; I did not run the new Python test against the old code to prove it failed before.
+
+## Review slice 10 of 20: delivery-fleet (Instinct)
+Read in the Python version: fleet.py ready_for_pickup, offer, advance, deliver, staff_deliver, earnings, generate_payouts, plus fee_for. Checked: OTP and pickup code are rate limited and set before any path that can accept them; COD collected must equal the amount due; payout generation skips paid weeks, deducts only cash in hand and never goes negative. No defect found. Not read line by line: candidates/auto_assign, return pickups, fail/returned, stuck_check, push.py, routers/delivery.py. .NET side not compared this pass.
+Hardening idea, not done (not reachable today): reject an empty expected code, so a missing pickup_code or delivery_otp could never match an empty entry.
