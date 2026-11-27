@@ -146,6 +146,23 @@ function CartRemindersTab() {
   );
 }
 
+type LoyaltyView = { enabled: boolean; members_with_points: number; points_held: number; value_held_paise: number; earned_30d: number; redeemed_30d: number; expired_30d: number };
+
+function LoyaltyTab() {
+  const [v, setV] = useState<LoyaltyView | null>(null);
+  useEffect(() => { api<LoyaltyView>("/api/admin/growth/loyalty").then(setV).catch(quietly); }, []);
+  if (!v) return <PageLoader />;
+  const cards: [string, string][] = [["Members holding points", String(v.members_with_points)], ["Points held", String(v.points_held)], ["Value held (what you owe in rewards)", rupees(v.value_held_paise)], ["Earned, last 30 days", String(v.earned_30d)], ["Redeemed, last 30 days", String(v.redeemed_30d)], ["Expired, last 30 days", String(v.expired_30d)]];
+  return (
+    <div className="flex flex-col gap-4" data-testid="loyalty-overview">
+      {!v.enabled && <p className="rounded-lg bg-white p-4 text-sm">Loyalty points are switched off in Settings.</p>}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {cards.map(([k, val]) => <div key={k} className="rounded-xl bg-white p-4"><p className="text-sm text-ink-soft">{k}</p><p className="mt-1 text-2xl font-semibold">{val}</p></div>)}
+      </div>
+    </div>
+  );
+}
+
 function SegmentsTab() {
   const [segs, setSegs] = useState<Seg[]>([]);
   const [key, setKey] = useState("");
@@ -314,8 +331,8 @@ export default function AdminGrowthPage() {
   return (
     <div>
       <PageHeader title="Growth" sub="Loyalty, referrals, reminders, flash sales, gift cards, seller quality and risk. Every module starts switched off." />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "cart-reminders", label: "Cart reminders" }]} />
-      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "segments" ? <SegmentsTab /> : tab === "campaigns" ? <CampaignsTab /> : tab === "scorecard-view" ? (
+      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }]} />
+      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "loyalty" ? <LoyaltyTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "segments" ? <SegmentsTab /> : tab === "campaigns" ? <CampaignsTab /> : tab === "scorecard-view" ? (
         !score ? <PageLoader /> : (
           <>
             {!scoreOn && <p className="mb-3 rounded-lg bg-white p-3 text-sm text-ink-soft">The scorecard is switched off in Settings. Figures below are for information.</p>}

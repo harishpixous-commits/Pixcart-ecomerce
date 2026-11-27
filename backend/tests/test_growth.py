@@ -1439,3 +1439,26 @@ async def test_points_expiry_reminder_goes_out_once_per_window(client, admin, ca
     n, mine = await run()
     assert n == 1 and mine == 1  # 70 days old of 90: lapses in 20 days
     assert await run() == (0, 1)  # once per 30 day window
+
+
+async def test_admin_loyalty_overview_shows_points_held_and_the_last_30_days(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+
+    from app.db import SessionLocal, utcnow
+    from app.models import LoyaltyEntry
+    from tests.conftest import login_phone
+
+    buyer = await login_phone(client, "9770000221")
+    uid = uuid.UUID((await buyer.get("/api/auth/me")).json()["id"])
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "point_value_paise": 100}})).status_code == 200
+    base = (await admin.get("/api/admin/growth/loyalty")).json()
+    async with SessionLocal() as s:
+        for kind, pts, note, days in (("earn", 100, "a", 2), ("redeem", -30, "b", 1), ("earn", 50, "old", 90), ("reverse", -20, "Points expired (not used within 30 days)", 3)):
+            s.add(LoyaltyEntry(user_id=uid, kind=kind, points=pts, note=note, created_at=utcnow() - timedelta(days=days)))
+        await s.commit()
+    me = (await admin.get("/api/admin/growth/loyalty")).json()
+    assert me["points_held"] - base["points_held"] == 100 and me["members_with_points"] - base["members_with_points"] == 1  # 100 - 30 + 50 - 20
+    assert me["value_held_paise"] - base["value_held_paise"] == 10000
+    assert (me["earned_30d"] - base["earned_30d"], me["redeemed_30d"] - base["redeemed_30d"], me["expired_30d"] - base["expired_30d"]) == (100, 30, 20)
+    assert (await buyer.get("/api/admin/growth/loyalty")).status_code == 403  # staff only

@@ -260,3 +260,20 @@ async def send_expiry_reminders(session: AsyncSession, batch: int = 200) -> int:
         sent += 1
     await session.flush()
     return sent
+
+
+async def overview(session: AsyncSession) -> dict:
+    """The programme at a glance for Admin -> Growth -> Loyalty: points members hold (what the shop owes in rewards), and the last 30 days."""
+    from datetime import timedelta
+
+    cfg = (await growth.get(session))["loyalty"]
+    since = utcnow() - timedelta(days=30)
+    balances = select(LoyaltyEntry.user_id, func.sum(LoyaltyEntry.points).label("bal")).group_by(LoyaltyEntry.user_id).subquery()
+    members, held = (await session.execute(select(func.count(), func.coalesce(func.sum(balances.c.bal), 0)).where(balances.c.bal > 0))).one()
+
+    async def total(*where) -> int:
+        return int((await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.created_at >= since, *where))).scalar_one())
+
+    return {"enabled": bool(cfg["enabled"]), "members_with_points": int(members), "points_held": int(held), "value_held_paise": int(held) * cfg["point_value_paise"],
+            "earned_30d": await total(LoyaltyEntry.kind == "earn"), "redeemed_30d": -await total(LoyaltyEntry.kind == "redeem"),
+            "expired_30d": -await total(LoyaltyEntry.kind == "reverse", LoyaltyEntry.note.like("Points expired%"))}

@@ -98,6 +98,12 @@ async def campaign_log(admin: Perm("marketing"), session: SessionDep) -> dict:
     return {"items": await campaigns.recent(session)}
 
 
+@router.get("/loyalty")
+async def loyalty_overview(admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Points held by members (and their rupee value), plus points earned, redeemed and expired in the last 30 days."""
+    return await loyalty.overview(session)
+
+
 class AdjustIn(BaseModel):
     user_id: uuid.UUID
     points: int = Field(ge=-100000, le=100000)
