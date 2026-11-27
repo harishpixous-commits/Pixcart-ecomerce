@@ -375,3 +375,16 @@ async def test_seller_bulk_edit_previews_then_applies_and_skips_bad_rows(client,
     assert (await tn.post("/api/seller/variants/bulk-edit", {"variant_ids": [vid], "action": "nope"})).json()["error"]["code"] == "invalid_action"
     assert (await admin.put("/api/admin/growth/settings", {"bulk_edit": {"enabled": False}})).status_code == 200
     assert (await tn.post("/api/seller/variants/bulk-edit", body)).json()["error"]["code"] == "bulk_edit_off"
+
+
+async def test_data_export_includes_loyalty_referral_and_support_requests(client, admin):
+    from tests.conftest import login_phone
+
+    buyer = await login_phone(client, "9000022222", name="Export Me")
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True}})).status_code == 200
+    assert (await admin.post("/api/admin/growth/loyalty/adjust", {"user_id": buyer.user["id"], "points": 25, "note": "Goodwill"})).status_code == 200
+    t = await buyer.post("/api/support/tickets", {"category": "other", "subject": "Question about things", "message": "Please help me out here"})
+    assert t.status_code == 201, t.text
+    data = (await buyer.get("/api/account/export")).json()
+    assert data["loyalty"]["balance"] == 25 and data["loyalty"]["history"][0]["note"] == "Goodwill"
+    assert data["support_tickets"][0]["subject"] == "Question about things" and data["referral_code"] and data["wishlist_count"] == 0

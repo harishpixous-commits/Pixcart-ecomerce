@@ -36,11 +36,12 @@ from app.models import (
     User,
     Variant,
     Warehouse,
+    LoyaltyEntry,
     WishlistItem,
 )
 from app.routers.catalog import product_cards
 from app.routers.orders import run_refunds
-from app.services import product_page, review_settings, storage
+from app.services import product_page, referral, review_settings, storage
 from app.services import returns as returns_svc
 from app.services import support as support_svc
 from app.services.catalog import public_product_filter
@@ -753,7 +754,14 @@ async def export_data(user: CurrentUser, session: SessionDep) -> dict:
     """Right to access: a summary of the personal data we hold."""
     addresses = (await session.execute(select(Address).where(Address.user_id == user.id, Address.is_deleted.is_(False)))).scalars()
     orders = (await session.execute(select(Order).where(Order.user_id == user.id).order_by(Order.created_at.desc()))).scalars()
+    tickets = (await session.execute(select(SupportTicket).where(SupportTicket.user_id == user.id).order_by(SupportTicket.created_at.desc()).limit(500))).scalars()
+    points = list((await session.execute(select(LoyaltyEntry).where(LoyaltyEntry.user_id == user.id).order_by(LoyaltyEntry.created_at.desc()).limit(500))).scalars())
+    wished = (await session.execute(select(func.count()).select_from(WishlistItem).where(WishlistItem.user_id == user.id))).scalar_one()
     return {
+        "support_tickets": [{"number": t.number, "subject": t.subject, "status": t.status, "created": t.created_at.isoformat()} for t in tickets],
+        "loyalty": {"balance": sum(r.points for r in points), "history": [{"kind": r.kind, "points": r.points, "note": r.note, "at": r.created_at.isoformat()} for r in points]},
+        "referral_code": referral.code_for(user.id),
+        "wishlist_count": wished,
         "profile": {"name": user.name, "phone": user.phone, "email": user.email, "marketing_opt_in": user.marketing_opt_in, "joined": user.created_at.isoformat()},
         "addresses": [{"name": a.full_name, "phone": a.phone, "line1": a.line1, "city": a.city, "pincode": a.pincode} for a in addresses],
         "orders": [{"number": o.number, "total": o.grand_total, "status": o.status, "placed": o.created_at.isoformat(), "ship_to": o.ship_to} for o in orders],
