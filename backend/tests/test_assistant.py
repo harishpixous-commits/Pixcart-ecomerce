@@ -370,3 +370,28 @@ async def test_a_running_action_cannot_be_confirmed_again(client, admin, categor
     async with SessionLocal() as s:
         a = (await s.execute(select(AssistantAction).where(AssistantAction.id == uuid.UUID(aid)))).scalar_one()
         assert a.status == "running"
+
+
+async def test_an_action_stuck_running_ends_failed_after_ten_minutes(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+    from sqlalchemy import select
+    from app.assistant import actions
+    from app.db import SessionLocal, utcnow
+    from app.models import User
+    from app.models.extended import AssistantAction
+
+    o, _ = await place_cod_order(client, admin, categories)
+    detail = (await admin.get(f"/api/admin/orders/{o['id']}")).json()
+    package = detail["sub_orders"][0]["number"] if "sub_orders" in detail else detail["packages"][0]["number"]
+    conv = await new_chat(admin)
+    async with SessionLocal() as s:
+        u = (await s.execute(select(User).where(User.email == "admin@pixcart.in"))).scalar_one()
+        act = await actions.prepare(s, u, uuid.UUID(conv), "cancel_package", {"package": package, "reason": "stuck"})
+        act.status, act.decided_at = "running", utcnow() - timedelta(minutes=11)
+        await s.commit()
+        aid = str(act.id)
+    assert (await admin.post(f"/api/admin/assistant/actions/{aid}/confirm", {})).status_code == 409
+    async with SessionLocal() as s:
+        a = (await s.execute(select(AssistantAction).where(AssistantAction.id == uuid.UUID(aid)))).scalar_one()
+        assert a.status == "failed" and "Interrupted" in a.result["error"]

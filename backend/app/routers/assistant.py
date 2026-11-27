@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, File, UploadFile
@@ -232,10 +233,17 @@ async def _action(session, user_id: uuid.UUID, action_id: uuid.UUID) -> Assistan
     return a
 
 
+RUNNING_TIMEOUT = timedelta(minutes=10)
+
+
 @router.post("/assistant/actions/{action_id}/{decision_}")
 async def decide_action(action_id: uuid.UUID, decision_: Literal["confirm", "cancel"], user: Perm("assistant_actions"), session: SessionDep) -> dict:
     uid = user.id  # read now: a rollback below expires loaded objects
     a = await _action(session, uid, action_id)
+    if a.status == "running" and a.decided_at and utcnow() - a.decided_at > RUNNING_TIMEOUT:
+        # the server stopped while it ran: nobody knows how far it got, so it ends failed and a person looks at it
+        a.status, a.result = "failed", {**(a.result or {}), "error": "Interrupted while running. Check the result by hand before asking again."}
+        await session.commit()
     if a.status != "pending":
         raise ApiError(f"This action is already {a.status}", "action_done", 409)
     if decision_ == "cancel":
@@ -243,7 +251,7 @@ async def decide_action(action_id: uuid.UUID, decision_: Literal["confirm", "can
             a.status, a.decided_at = "cancelled", utcnow()
             await session.commit()
         return {"id": str(a.id), "status": a.status}
-    a.status = "running"  # claimed: a second confirm now gets 409 instead of running the action again
+    a.status, a.decided_at = "running", utcnow()  # claimed: a second confirm now gets 409 instead of running the action again
     await session.commit()
     await session.refresh(user)
     try:
