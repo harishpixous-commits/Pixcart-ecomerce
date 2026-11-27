@@ -8,6 +8,7 @@ import type { Routes } from "@angular/router";
 import { SellerNotFound } from "../shared/chrome/not-found-pages";
 import { SellerAdvertisingPage } from "./pages/advertising.page";
 import { SellerAnalyticsPage } from "./pages/analytics.page";
+import { SellerBulkEditPage } from "./pages/bulk-edit.page";
 import { SellerCouponsPage } from "./pages/coupons.page";
 import { SellerDealsPage } from "./pages/deals.page";
 import { SellerEarningsPage } from "./pages/earnings.page";
@@ -34,6 +35,7 @@ export const SELLER_ROUTES: Routes = [
   { path: "", component: SellerHomePage },
   { path: "advertising", component: SellerAdvertisingPage },
   { path: "analytics", component: SellerAnalyticsPage },
+  { path: "bulk-edit", component: SellerBulkEditPage },
   { path: "coupons", component: SellerCouponsPage },
   { path: "deals", component: SellerDealsPage },
   { path: "earnings", component: SellerEarningsPage },
