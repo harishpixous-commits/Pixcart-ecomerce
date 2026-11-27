@@ -77,6 +77,7 @@ public class ReviewModerationBAL(IAccessBAL access, IMySqlDapperHelper db) : IRe
         }
         await RefreshRatingsAsync(uow, r.ProductId);
         if (action == "publish") await LoyaltyPoints.AwardReviewAsync(uow, r.Id);
+        else if (action == "hide") await LoyaltyPoints.TakeBackReviewAsync(uow, r.Id);
         await uow.ExecuteAsync(
             "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
             "VALUES (@actor, @action, 'review', @eid, '', UTC_TIMESTAMP(6), @id)",

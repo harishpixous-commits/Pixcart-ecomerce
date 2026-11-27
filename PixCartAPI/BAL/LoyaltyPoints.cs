@@ -36,6 +36,24 @@ public static class LoyaltyPoints
         return points;
     }
 
+    /// <summary>Takes back the bonus of a review staff hid (once; never below a zero balance). Returns the points taken.</summary>
+    public static async Task<int> TakeBackReviewAsync(IUnitOfWork uow, Guid reviewId)
+    {
+        var r = await uow.QueryFirstOrDefaultAsync<(Guid UserId, Guid? SubOrderId)?>("SELECT user_id AS UserId, sub_order_id AS SubOrderId FROM reviews WHERE id = @reviewId", new { reviewId });
+        if (r is null || r.Value.SubOrderId is null) return 0;
+        var sub = r.Value.SubOrderId;
+        var given = await uow.ExecuteScalarAsync<int?>("SELECT points FROM loyalty_ledger WHERE sub_order_id = @sub AND kind = 'adjust' AND user_id = @uid AND note LIKE 'Review bonus%' LIMIT 1", new { sub, uid = r.Value.UserId });
+        if (given is null or <= 0) return 0;
+        if (await uow.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM loyalty_ledger WHERE sub_order_id = @sub AND kind = 'reverse'", new { sub }) > 0) return 0;
+        var balance = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @uid", new { uid = r.Value.UserId });
+        var take = (int)Math.Min(given.Value, balance);
+        if (take <= 0) return 0;
+        await uow.ExecuteAsync(
+            "INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @uid, @sub, 'reverse', @points, 'Review bonus taken back (review hidden)', @now)",
+            new { id = Guid.NewGuid(), uid = r.Value.UserId, sub, points = -take, now = DateTime.UtcNow });
+        return take;
+    }
+
     public static bool TierFreeDelivery(JsonObject cfg, string tier) =>
         (tier == "gold" && (cfg.Bool("gold_free_delivery") || cfg.Bool("silver_free_delivery"))) || (tier == "silver" && cfg.Bool("silver_free_delivery"));
 

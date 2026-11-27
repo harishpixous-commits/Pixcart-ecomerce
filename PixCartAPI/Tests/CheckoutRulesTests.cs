@@ -914,6 +914,9 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.True(await Put(text) is 200 or 201); Assert.Equal(25, await Balance());
         Assert.True(await Put(text + " Edited.", 4) is 200 or 201); Assert.Equal(25, await Balance()); // once
         Assert.StartsWith("Review bonus", (await a.Get("/api/loyalty")).Json["history"]![0]!["note"]!.GetValue<string>());
+        var rid = await ApiFactory.DbScalarAsync<string>("SELECT CAST(id AS CHAR) FROM reviews WHERE sub_order_id = @sid", new { sid });
+        Assert.Equal(200, (await admin.Post($"/api/admin/reviews/{rid}/hide", new { })).Status); Assert.Equal(0, await Balance()); // hidden: bonus taken back
+        Assert.Equal(200, (await admin.Post($"/api/admin/reviews/{rid}/publish", new { })).Status); Assert.Equal(0, await Balance()); // and not paid twice
     }
 
     [Fact]
