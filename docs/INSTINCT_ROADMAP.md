@@ -55,3 +55,13 @@ No crash or money defect found. Held, not changed: seller coupon update writes n
 
 ## Seller bulk-edit screen (Instinct)
 Page at /seller/bulk-edit in Angular (seller/pages/bulk-edit.page.ts, route added) and Next.js (seller/bulk-edit/page.tsx). Search, pick options, choose action, Preview, then Apply. Type-checked only, not run in a browser. Not in the seller nav yet and no CSV round trip. Gift card purchase flow is still to design (needs a payment flow).
+
+## Gift card purchase flow: design (Instinct, not built)
+Why not built yet: today's payment records hang off Order/SubOrder, so a card purchase needs its own small payment record and its own webhook branch in each gateway path. That is money code in two stacks; it should not be rushed.
+Plan, both versions, off by default behind the existing gift_cards.enabled setting plus a new gift_cards.allow_purchase flag:
+1. Table gift_card_purchases: id, user_id, amount_paise, recipient_email (optional), message, status (created, paid, issued, failed), gateway, gateway_ref, gift_card_id.
+2. POST /api/me/gift-cards/purchase: validates amount against min_paise/max_paise, creates the row, creates a gateway intent through the same payment_routing used for orders. Simulator gateway only until Harish approves live use.
+3. Gateway webhook / verify path: on a verified paid event for a purchase ref, call gift_cards.issue once (idempotent on gateway_ref), mark issued, show the code on the page. Email delivery of the code uses the existing mail queue, no real send in tests.
+4. Refund: a purchased card with full balance can be voided and refunded through the gateway; a used card cannot.
+5. Tests against the simulator: pay then issue once, duplicate webhook issues once, failed payment issues nothing, amount limits, setting off blocks purchase.
+Open decision for Harish: whether purchased cards may be bought by guests or only signed-in users (plan assumes signed-in only).
