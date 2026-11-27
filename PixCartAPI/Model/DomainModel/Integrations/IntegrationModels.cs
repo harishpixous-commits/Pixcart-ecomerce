@@ -127,6 +127,24 @@ public sealed class IntegrationSettings
     public bool RazorpayCheckout { get; set; } = true;
     public string RazorpayCheckoutUrl { get; set; } = "https://checkout.razorpay.com/v1/checkout.js";
     public int PaymentWindowMinutes { get; set; } = 30;
+    // more gateways (docs/PAYMENT_GATEWAYS.md)
+    public string CashfreeClientId { get; set; } = "";
+    public string CashfreeClientSecret { get; set; } = "";
+    public bool CashfreeCheckout { get; set; } = true;
+    public string PhonepeClientId { get; set; } = "";
+    public string PhonepeClientSecret { get; set; } = "";
+    public string PhonepeClientVersion { get; set; } = "1";
+    public string PhonepeWebhookUsername { get; set; } = "";
+    public string PhonepeWebhookPassword { get; set; } = "";
+    public string PhonepeMode { get; set; } = "sandbox";
+    public bool PhonepeCheckout { get; set; } = true;
+    public string PayuKey { get; set; } = "";
+    public string PayuSalt { get; set; } = "";
+    public string PayuMode { get; set; } = "sandbox";
+    public bool PayuCheckout { get; set; } = true;
+    public string StripeSecretKey { get; set; } = "";
+    public string StripeWebhookSecret { get; set; } = "";
+    public bool StripeCheckout { get; set; } = true;
 
     // payouts (RazorpayX)
     public string PayoutMode { get; set; } = "manual";

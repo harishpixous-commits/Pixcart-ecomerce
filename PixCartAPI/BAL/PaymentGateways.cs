@@ -50,6 +50,9 @@ public abstract class PaymentGateway(HttpClient http, IReadOnlyDictionary<string
 
     public abstract Task<GatewayPayment> CreateAsync(long amount, string currency, string receipt, JsonObject customer, string returnUrl, string notifyUrl);
     public abstract Task<List<GatewayAttempt>> AttemptsAsync(string reference);
+    /// <summary>One harmless authenticated call for the Test connection button; throws GatewayException when the keys are refused.</summary>
+    public abstract Task PingAsync();
+    public abstract bool Sandbox { get; }
     public abstract Task<GatewayRefund> RefundAsync(string reference, string paymentId, long amount, string refundId, string note);
     public abstract string? VerifyWebhook(IReadOnlyDictionary<string, string> headers, byte[] body);
     public abstract string? ReferenceFromReturn(IReadOnlyDictionary<string, string> p);
@@ -61,7 +64,12 @@ public abstract class PaymentGateway(HttpClient http, IReadOnlyDictionary<string
 public sealed class CashfreeGateway : PaymentGateway
 {
     private readonly string id, secret, bas;
-    public bool Sandbox { get; }
+    public override bool Sandbox { get; }
+    public override async Task PingAsync()
+    {
+        try { await Send(HttpMethod.Get, bas + "/orders/pixcart_connection_test", H()); }
+        catch (GatewayException e) when (e.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("does not exist", StringComparison.OrdinalIgnoreCase)) { }
+    }
     public CashfreeGateway(HttpClient http, IReadOnlyDictionary<string, string> creds) : base(http, creds)
     {
         id = Cred("client_id"); secret = Cred("client_secret"); Sandbox = id.StartsWith("TEST");
@@ -113,6 +121,8 @@ public sealed class PhonePeGateway : PaymentGateway
         tokenUrl = sandbox ? bas + "/v1/oauth/token" : "https://api.phonepe.com/apis/identity-manager/v1/oauth/token";
     }
     public override string Code => "phonepe";
+    public override bool Sandbox => sandbox;
+    public override async Task PingAsync() => await Auth();
     private async Task<Dictionary<string, string>> Auth()
     {
         if (token.Length == 0 || DateTime.UtcNow > exp.AddSeconds(-30))
@@ -163,6 +173,8 @@ public sealed class PayUGateway : PaymentGateway
         bas = sandbox ? "https://test.payu.in" : "https://secure.payu.in"; info = sandbox ? "https://test.payu.in" : "https://info.payu.in";
     }
     public override string Code => "payu";
+    public override bool Sandbox => bas.Contains("test.");
+    public override async Task PingAsync() => await AttemptsAsync("pixcart_connection_test");
     public override Task<GatewayPayment> CreateAsync(long amount, string currency, string receipt, JsonObject c, string returnUrl, string notifyUrl)
     {
         var amt = Rupees(amount); var product = $"Order {receipt}"; if (product.Length > 100) product = product[..100];
@@ -214,6 +226,8 @@ public sealed class StripeGateway : PaymentGateway
     private readonly string key, whsec; private const string Base = "https://api.stripe.com/v1";
     public StripeGateway(HttpClient http, IReadOnlyDictionary<string, string> creds) : base(http, creds) { key = Cred("secret_key"); whsec = Cred("webhook_secret"); }
     public override string Code => "stripe";
+    public override bool Sandbox => key.StartsWith("sk_test_");
+    public override async Task PingAsync() => await Send(HttpMethod.Get, Base + "/balance", H());
     private Dictionary<string, string> H(string? idem = null) { var h = new Dictionary<string, string> { ["Authorization"] = "Bearer " + key }; if (idem != null) h["Idempotency-Key"] = idem; return h; }
     public override async Task<GatewayPayment> CreateAsync(long amount, string currency, string receipt, JsonObject c, string returnUrl, string notifyUrl)
     {
@@ -248,4 +262,32 @@ public sealed class StripeGateway : PaymentGateway
     }
     public override string? VerifyWebhook(IReadOnlyDictionary<string, string> headers, byte[] body) => VerifyWebhook(headers, body, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     public override string? ReferenceFromReturn(IReadOnlyDictionary<string, string> p) => p.GetValueOrDefault("session_id") is { Length: > 0 } s ? s : null;
+}
+
+/// <summary>Credentials and switches for the extra gateways, read from the integration settings in effect.</summary>
+public static class GatewayConfig
+{
+    public static readonly string[] Extra = ["cashfree", "phonepe", "payu", "stripe"];
+    public static Dictionary<string, string> Credentials(Model.DomainModel.Integrations.IntegrationSettings c, string code) => code switch
+    {
+        "cashfree" => new() { ["client_id"] = c.CashfreeClientId, ["client_secret"] = c.CashfreeClientSecret },
+        "phonepe" => new() { ["client_id"] = c.PhonepeClientId, ["client_secret"] = c.PhonepeClientSecret, ["client_version"] = c.PhonepeClientVersion, ["webhook_username"] = c.PhonepeWebhookUsername, ["webhook_password"] = c.PhonepeWebhookPassword, ["mode"] = c.PhonepeMode },
+        "payu" => new() { ["key"] = c.PayuKey, ["salt"] = c.PayuSalt, ["mode"] = c.PayuMode },
+        "stripe" => new() { ["secret_key"] = c.StripeSecretKey, ["webhook_secret"] = c.StripeWebhookSecret },
+        _ => [],
+    };
+    public static bool Configured(Model.DomainModel.Integrations.IntegrationSettings c, string code)
+    {
+        var cr = Credentials(c, code);
+        var need = code switch { "cashfree" => new[] { "client_id", "client_secret" }, "phonepe" => ["client_id", "client_secret"], "payu" => ["key", "salt"], "stripe" => ["secret_key"], _ => null };
+        return need != null && need.All(k => cr.GetValueOrDefault(k, "").Length > 0);
+    }
+    public static bool Enabled(Model.DomainModel.Integrations.IntegrationSettings c, string code) => code == "razorpay" ? c.RazorpayEnabled && c.RazorpayCheckout : Configured(c, code) && code switch
+    { "cashfree" => c.CashfreeCheckout, "phonepe" => c.PhonepeCheckout, "payu" => c.PayuCheckout, "stripe" => c.StripeCheckout, _ => false };
+    public static PaymentGateway Build(HttpClient http, Model.DomainModel.Integrations.IntegrationSettings c, string code) => code switch
+    {
+        "cashfree" => new CashfreeGateway(http, Credentials(c, code)), "phonepe" => new PhonePeGateway(http, Credentials(c, code)),
+        "payu" => new PayUGateway(http, Credentials(c, code)), "stripe" => new StripeGateway(http, Credentials(c, code)),
+        _ => throw new ArgumentException("Unknown gateway"),
+    };
 }

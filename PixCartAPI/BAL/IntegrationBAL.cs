@@ -433,6 +433,7 @@ public class IntegrationBAL(
             {
                 "razorpay" => await CheckRazorpay(cfg),
                 "razorpayx" => await CheckRazorpayx(cfg),
+                "cashfree" or "phonepe" or "payu" or "stripe" => await CheckGateway(providerKey, cfg),
                 "msg91" => await CheckMsg91(cfg, P("phone")),
                 "email" => await CheckEmail(cfg, P("to"), P("brand")),
                 "whatsapp" => await CheckWhatsapp(cfg),
@@ -452,6 +453,16 @@ public class IntegrationBAL(
             log.LogWarning("integration check {Key} failed: {Message}", providerKey, ex.Message);
             return new CheckResult(false, "Could not reach the provider from this server. Check outbound internet access (NAT gateway).");
         }
+    }
+
+    private async Task<CheckResult> CheckGateway(string code, IntegrationSettings cfg)
+    {
+        var label = code switch { "cashfree" => "Cashfree", "phonepe" => "PhonePe", "payu" => "PayU", _ => "Stripe" };
+        if (!GatewayConfig.Configured(cfg, code)) return new CheckResult(false, $"Enter the {label} keys first.");
+        var gw = GatewayConfig.Build(Client(), cfg, code);
+        try { await gw.PingAsync(); }
+        catch (GatewayException e) { return new CheckResult(false, $"{label} did not accept the keys: {e.Message}"); }
+        return new CheckResult(true, $"Connected to {label} in {(gw.Sandbox ? "test" : "live")} mode.");
     }
 
     private async Task<CheckResult> CheckRazorpay(IntegrationSettings cfg)

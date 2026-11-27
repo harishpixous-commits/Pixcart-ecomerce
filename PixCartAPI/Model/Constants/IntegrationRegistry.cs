@@ -40,6 +40,103 @@ public static class IntegrationRegistry
         },
         new ProviderDef
         {
+            Key = "cashfree", Name = "Cashfree payments", Group = "payments",
+            Purpose = "Cards, UPI and net banking through Cashfree. Used by the routing order on Admin → Payments.",
+            Fields =
+            [
+                new FieldDef { Key = "client_id", Label = "Client ID (App ID)", Setting = "cashfree_client_id", Required = true, Pattern = "[A-Za-z0-9_]{8,80}", PatternHint = "From the Cashfree dashboard. Test IDs start with TEST", Help = "Cashfree dashboard → Developers → API keys." },
+                new FieldDef { Key = "client_secret", Label = "Client secret", Setting = "cashfree_client_secret", Kind = "secret", Required = true, Help = "Shown with the Client ID. Test and live keys differ." },
+            ],
+            On = new Dictionary<string, object> { ["cashfree_checkout"] = true },
+            Off = new Dictionary<string, object> { ["cashfree_checkout"] = false },
+            DefaultOn = "cashfree_client_id",
+            WebhookPath = "/api/payments/cashfree/webhook",
+            WebhookEvents = ["PAYMENT_SUCCESS_WEBHOOK", "PAYMENT_FAILED_WEBHOOK", "REFUND_STATUS_WEBHOOK"],
+            DocsUrl = "https://www.cashfree.com/docs/payments/online/introduction",
+            SetupSteps =
+            [
+                "Create a Cashfree account (test mode works first).",
+                "Developers → API keys: copy the Client ID and Client secret here.",
+                "Developers → Webhooks: paste the webhook URL shown here and tick the payment events.",
+                "Save here, then press Test connection.",
+            ],
+        },
+        new ProviderDef
+        {
+            Key = "phonepe", Name = "PhonePe payments", Group = "payments",
+            Purpose = "UPI and cards through PhonePe Payment Gateway (redirect checkout).",
+            Fields =
+            [
+                new FieldDef { Key = "client_id", Label = "Client ID", Setting = "phonepe_client_id", Required = true, Help = "PhonePe business dashboard → Developer settings." },
+                new FieldDef { Key = "client_secret", Label = "Client secret", Setting = "phonepe_client_secret", Kind = "secret", Required = true },
+                new FieldDef { Key = "client_version", Label = "Client version", Setting = "phonepe_client_version", Required = true, Pattern = "[0-9]{1,4}", PatternHint = "A number such as 1" },
+                new FieldDef { Key = "webhook_username", Label = "Webhook username", Setting = "phonepe_webhook_username", Help = "Set the same username on the PhonePe webhook." },
+                new FieldDef { Key = "webhook_password", Label = "Webhook password", Setting = "phonepe_webhook_password", Kind = "secret" },
+                new FieldDef { Key = "mode", Label = "Environment", Setting = "phonepe_mode", Kind = "select", Options = ["sandbox", "live"], Help = "Sandbox moves no money." },
+            ],
+            On = new Dictionary<string, object> { ["phonepe_checkout"] = true },
+            Off = new Dictionary<string, object> { ["phonepe_checkout"] = false },
+            DefaultOn = "phonepe_client_id",
+            WebhookPath = "/api/payments/phonepe/webhook",
+            WebhookEvents = ["checkout.order.completed", "checkout.order.failed"],
+            DocsUrl = "https://developer.phonepe.com/payment-gateway",
+            SetupSteps =
+            [
+                "Get PhonePe Payment Gateway access and the client credentials.",
+                "Paste the Client ID, secret and version here and pick sandbox first.",
+                "On the PhonePe dashboard add the webhook URL shown here with the username and password you set here.",
+                "Save here, then press Test connection.",
+            ],
+        },
+        new ProviderDef
+        {
+            Key = "payu", Name = "PayU payments", Group = "payments",
+            Purpose = "Cards, UPI and net banking through PayU hosted checkout.",
+            Fields =
+            [
+                new FieldDef { Key = "key", Label = "Merchant key", Setting = "payu_key", Required = true, Pattern = "[A-Za-z0-9]{4,40}", PatternHint = "Letters and numbers" },
+                new FieldDef { Key = "salt", Label = "Merchant salt", Setting = "payu_salt", Kind = "secret", Required = true },
+                new FieldDef { Key = "mode", Label = "Environment", Setting = "payu_mode", Kind = "select", Options = ["sandbox", "live"], Help = "Sandbox uses test.payu.in and moves no money." },
+            ],
+            On = new Dictionary<string, object> { ["payu_checkout"] = true },
+            Off = new Dictionary<string, object> { ["payu_checkout"] = false },
+            DefaultOn = "payu_key",
+            WebhookPath = "/api/payments/payu/webhook",
+            WebhookEvents = ["success", "failure"],
+            DocsUrl = "https://docs.payu.in/docs/generate-hash-merchant-hosted",
+            SetupSteps =
+            [
+                "Open a PayU merchant account (test key and salt are available first).",
+                "Paste the merchant key and salt here and pick sandbox first.",
+                "In PayU dashboard → Webhooks add the webhook URL shown here.",
+                "Save here, then press Test connection.",
+            ],
+        },
+        new ProviderDef
+        {
+            Key = "stripe", Name = "Stripe payments", Group = "payments",
+            Purpose = "Cards and international payments through Stripe Checkout (redirect).",
+            Fields =
+            [
+                new FieldDef { Key = "secret_key", Label = "Secret key", Setting = "stripe_secret_key", Kind = "secret", Required = true, Help = "Stripe dashboard → Developers → API keys. Test keys start with sk_test_." },
+                new FieldDef { Key = "webhook_secret", Label = "Webhook signing secret", Setting = "stripe_webhook_secret", Kind = "secret", Required = true, Help = "Shown after you add the webhook endpoint (starts with whsec_)." },
+            ],
+            On = new Dictionary<string, object> { ["stripe_checkout"] = true },
+            Off = new Dictionary<string, object> { ["stripe_checkout"] = false },
+            DefaultOn = "stripe_secret_key",
+            WebhookPath = "/api/payments/stripe/webhook",
+            WebhookEvents = ["checkout.session.completed", "checkout.session.expired"],
+            DocsUrl = "https://docs.stripe.com/payments/checkout",
+            SetupSteps =
+            [
+                "Create a Stripe account and use test mode first.",
+                "Developers → API keys: copy the secret key here.",
+                "Developers → Webhooks → Add endpoint: paste the webhook URL shown here and tick the checkout.session events.",
+                "Paste the signing secret here, save, then press Test connection.",
+            ],
+        },
+        new ProviderDef
+        {
             Key = "razorpayx", Name = "RazorpayX automatic payouts", Group = "payments",
             Purpose = "Sends seller payouts straight to their bank accounts. Without it, payouts use a bank file and you enter the UTR.",
             Fields =
