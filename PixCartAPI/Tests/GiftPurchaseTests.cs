@@ -77,10 +77,20 @@ public class GiftPurchaseTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(0, await Cards());
         Assert.Equal("not_found", await Code(() => Tx(t => GiftCards.CheckPurchaseAsync(t, gw, Guid.Parse(other.Id), pid))));
 
+        Assert.Equal(200, (await buyer.Patch("/api/auth/me", new { email = "giftbuyer@example.in" })).Status);
+        var smtp = await admin.Put("/api/admin/integrations/email", new { values = new { host = "smtp.example.in", from_address = "orders@example.in" }, enabled = true, password = AdminPassword });
+        Assert.True(smtp.Status == 200, smtp.ToString());
         var pid2 = Guid.Parse((await Tx(t => GiftCards.StartPurchaseAsync(t, gw, integ, user, 20000)))["id"]!.GetValue<string>());
         pay.Now = [new GatewayAttempt("a3", "captured", "upi", 20000, "")];
-        var a = await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, user.Id, pid2));
-        var b = await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, user.Id, pid2));
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        var after = new List<Func<Task>>();
+        var a = await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, user.Id, pid2, after, notify));
+        foreach (var f in after) await f();
+        var after2 = new List<Func<Task>>();
+        var b = await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, user.Id, pid2, after2, notify));
+        Assert.Empty(after2);
+        var mails = await db.QueryAsync<string>("SELECT body FROM notifications WHERE user_id = @id AND event = 'gift_card_bought' AND channel = 'email'", new { id = buyer.Id });
+        var mail = Assert.Single(mails); Assert.Contains(a["code"]!.GetValue<string>(), mail); Assert.Contains("₹200", mail);
         Assert.Equal("issued", a["status"]!.GetValue<string>());
         Assert.StartsWith("GC", a["code"]!.GetValue<string>());
         Assert.Equal(a["code"]!.GetValue<string>(), b["code"]!.GetValue<string>());

@@ -41,6 +41,10 @@ public static class NotificationEvents
             {
                 ["inapp"] = ("New for your search: {{query}}", "{{item}}{{more}} just arrived."),
             },
+            ["gift_card_bought"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["email"] = ("Your {{brand}} gift card", "Hi {{name}},\n\nThank you. Your gift card for {{amount}} is ready.\n\nCode: {{code}}\nValid until {{expires}}\n\nUse it at checkout, or see the balance here: {{link}}"),
+            },
             ["marketing_message"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("{{title}}", "{{message}}"),

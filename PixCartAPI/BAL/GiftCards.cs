@@ -86,7 +86,7 @@ public static class GiftCards
         return view;
     }
 
-    public static async Task<JsonObject> CheckPurchaseAsync(IUnitOfWork uow, IPaymentGatewayBAL gateways, Guid? userId, Guid purchaseId)
+    public static async Task<JsonObject> CheckPurchaseAsync(IUnitOfWork uow, IPaymentGatewayBAL gateways, Guid? userId, Guid purchaseId, List<Func<Task>>? afterCommit = null, BAL.Interface.ICatalogNotifyBAL? notify = null)
     {
         var p = await uow.QueryFirstOrDefaultAsync<Purchase>(PurchaseSql + "WHERE id = @purchaseId FOR UPDATE", new { purchaseId });
         if (p is null || (userId is not null && p.UserId != userId)) throw new NotFoundException("Purchase"); // staff pass null and may check anyone's
@@ -117,6 +117,11 @@ public static class GiftCards
         var card = new Card(Guid.NewGuid(), "GC" + Hex(5), p.Amount, p.Amount, now.AddDays(cfg.Int("validity_days")), "active", $"Bought online ({p.Gateway})");
         await uow.ExecuteAsync("INSERT INTO gift_cards (id, code, initial_paise, balance_paise, expires_at, status, note, created_at) VALUES (@Id, @Code, @Initial, @Balance, @ExpiresAt, 'active', @Note, @now)", new { card.Id, card.Code, card.Initial, card.Balance, card.ExpiresAt, card.Note, now });
         await uow.ExecuteAsync("UPDATE gift_card_purchases SET status = 'issued', gift_card_id = @cid, error = '' WHERE id = @id", new { cid = card.Id, id = p.Id });
+        // the code also goes to the buyer's email, after the commit (once: only the first check gets here)
+        afterCommit?.Add(() => notify!.NotifyUserAsync(p.UserId, "gift_card_bought", new Dictionary<string, string>
+        {
+            ["amount"] = p.Amount % 100 == 0 ? $"₹{p.Amount / 100:N0}" : $"₹{p.Amount / 100m:N2}", ["code"] = card.Code, ["expires"] = card.ExpiresAt.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture),
+        }, "/rewards"));
         return PurchaseView(p with { Status = "issued", CardId = card.Id }, card);
     }
 

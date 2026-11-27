@@ -190,3 +190,8 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 ## Push 73: delivery fee by destination state
 - Growth "Shipping zones" has a new text setting state_fees ("33:3000, 29:5000": state code, then the fee in paise). While Shipping zones is on, a seller package that does not ship free pays that fee for an address in the listed state; other states use the marketplace fee. Used by the checkout quote and order placement. No schema change.
 - Tested: one new test each side. The cart page (no address yet) shows the marketplace fee. Free-delivery thresholds are not changed by state.
+
+
+## Push 74: gift card code by email
+- When a bought gift card is issued (the gateway confirmed full payment), the buyer also gets an email with the code, amount and expiry (template gift_card_bought, editable under Admin notification templates). Sent only on the first issue, never when the buyer or staff re-check. Needs an email address on the account and SMTP set up; otherwise the buyer still sees the code on screen as before. Python and .NET (the .NET email goes out after the commit).
+- Tested: the existing purchase test now covers the email (once, with the code and amount) on both sides. Not done: refund or void of a bought card, guests buying, Cashfree and PayU for card purchases.

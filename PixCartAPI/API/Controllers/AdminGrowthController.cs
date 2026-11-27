@@ -41,7 +41,7 @@ public class ReferralController(Utils.Interface.IMySqlDapperHelper db, ICurrentU
 }
 
 [ApiController, SignedIn]
-public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me, IRateLimitBAL limits, IAuditBAL audit, IPaymentGatewayBAL gateways, IIntegrationBAL integrations) : ControllerBase
+public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me, IRateLimitBAL limits, IAuditBAL audit, IPaymentGatewayBAL gateways, IIntegrationBAL integrations, ICatalogNotifyBAL notify) : ControllerBase
 {
     public record IssueIn { [System.ComponentModel.DataAnnotations.Range(100, 100000000)] public int AmountPaise { get; init; } [System.ComponentModel.DataAnnotations.StringLength(200)] public string Note { get; init; } = ""; [System.ComponentModel.DataAnnotations.Range(1, 50)] public int Quantity { get; init; } = 1; public int? ValidityDays { get; init; } }
     public record RedeemIn { [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(20, MinimumLength = 4)] public string Code { get; init; } = ""; public int? AmountPaise { get; init; } }
@@ -62,9 +62,9 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
     public async Task<object> StaffCheck(Guid id)
     {
         var admin = await me.RequireAsync();
-        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.CheckPurchaseAsync(tx, gateways, null, id);
+        await using var tx = await db.BeginAsync(); var after = new List<Func<Task>>(); var r = await BAL.GiftCards.CheckPurchaseAsync(tx, gateways, null, id, after, notify);
         await audit.AuditAsync(admin, "gift_card.purchase_check", "gift_card_purchase", id.ToString(), r["status"]!.GetValue<string>(), tx);
-        await tx.CommitAsync(); r.Remove("code"); return r; // the code goes to the buyer, staff see it in the cards list
+        await tx.CommitAsync(); foreach (var f in after) await f(); r.Remove("code"); return r; // the code goes to the buyer, staff see it in the cards list
     }
     [HttpPost("/api/admin/growth/gift-cards/{id:guid}/void"), RouteGuard("perm:marketing")]
     public async Task<object> Void(Guid id)
@@ -99,7 +99,7 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
     public async Task<object> CheckBuy(Guid id)
     {
         var u = await me.RequireAsync();
-        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.CheckPurchaseAsync(tx, gateways, u.Id, id); await tx.CommitAsync(); return r;
+        await using var tx = await db.BeginAsync(); var after = new List<Func<Task>>(); var r = await BAL.GiftCards.CheckPurchaseAsync(tx, gateways, u.Id, id, after, notify); await tx.CommitAsync(); foreach (var f in after) await f(); return r;
     }
     [HttpPost("/api/gift-cards/redeem"), RouteGuard("signed_in")]
     public async Task<object> Redeem(RedeemIn b)
