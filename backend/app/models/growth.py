@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,3 +52,32 @@ class CartReminder(IdMixin, Base):
     stage: Mapped[int] = mapped_column(Integer)
     cart_paise: Mapped[int] = mapped_column(Integer, default=0)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GiftCard(IdMixin, Base):
+    """A prepaid gift card. Staff issue it; the holder turns some or all of the balance into a single-use coupon."""
+
+    __tablename__ = "gift_cards"
+
+    code: Mapped[str] = mapped_column(String(20), unique=True)
+    initial_paise: Mapped[int] = mapped_column(Integer)
+    balance_paise: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(8), default="active")
+    note: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (CheckConstraint("status IN ('active','void')", name="status"), CheckConstraint("balance_paise >= 0", name="balance"))
+
+
+class GiftCardUse(IdMixin, Base):
+    """Balance moved into a coupon. If the coupon runs out unused, the amount goes back to the card (restored)."""
+
+    __tablename__ = "gift_card_uses"
+
+    gift_card_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("gift_cards.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    coupon_code: Mapped[str] = mapped_column(String(30))
+    amount_paise: Mapped[int] = mapped_column(Integer)
+    restored: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -15,7 +15,7 @@ from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
 from app.config import settings
-from app.services import growth, loyalty, referral, seo
+from app.services import gift_cards, growth, loyalty, referral, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -106,6 +106,56 @@ async def admin_referrals(admin: Perm("marketing"), session: SessionDep) -> dict
     rows = (await session.execute(select(Referral).order_by(Referral.created_at.desc()).limit(200))).scalars().all()
     names = {u.id: u.name or u.phone or u.email or "" for u in (await session.execute(select(User).where(User.id.in_({i for r in rows for i in (r.referrer_id, r.referee_id)})))).scalars()} if rows else {}
     return {"items": [{"referrer": names.get(r.referrer_id, ""), "friend": names.get(r.referee_id, ""), "status": r.status, "reward_paise": r.reward_paise, "at": r.created_at.isoformat()} for r in rows]}
+
+
+class GiftIssueIn(BaseModel):
+    amount_paise: int = Field(ge=100, le=100000000)
+    note: str = Field(default="", max_length=200)
+    quantity: int = Field(default=1, ge=1, le=50)
+    validity_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+@router.post("/gift-cards")
+async def issue_gift_cards(body: GiftIssueIn, admin: Perm("marketing"), session: SessionDep) -> dict:
+    cards = [await gift_cards.issue(session, body.amount_paise, body.note, body.validity_days) for _ in range(body.quantity)]
+    audit(session, admin, "gift_card.issue", "settings", "gift_cards", f"{body.quantity} x {body.amount_paise}")
+    await session.commit()
+    return {"items": [{"id": str(c.id), "code": c.code, **gift_cards.view(c)} for c in cards]}
+
+
+@router.get("/gift-cards")
+async def list_gift_cards(admin: Perm("marketing"), session: SessionDep) -> dict:
+    from sqlalchemy import select
+    from app.models import GiftCard
+    rows = (await session.execute(select(GiftCard).order_by(GiftCard.created_at.desc()).limit(200))).scalars().all()
+    return {"items": [{"id": str(c.id), "code": c.code, "note": c.note, **gift_cards.view(c)} for c in rows]}
+
+
+@router.post("/gift-cards/{card_id}/void")
+async def void_gift_card(card_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
+    c = await gift_cards.void(session, card_id)
+    audit(session, admin, "gift_card.void", "settings", str(card_id), c.code)
+    await session.commit()
+    return {"id": str(c.id), "code": c.code, **gift_cards.view(c)}
+
+
+class GiftRedeemIn(BaseModel):
+    code: str = Field(min_length=4, max_length=20)
+    amount_paise: int | None = Field(default=None, ge=1, le=100000000)
+
+
+@me_router.post("/gift-cards/balance")
+async def gift_card_balance(body: GiftRedeemIn, user: CurrentUser, session: SessionDep) -> dict:
+    out = await gift_cards.balance(session, user.id, body.code)
+    await session.commit()
+    return out
+
+
+@me_router.post("/gift-cards/redeem")
+async def redeem_gift_card(body: GiftRedeemIn, user: CurrentUser, session: SessionDep) -> dict:
+    out = await gift_cards.redeem(session, user.id, body.code, body.amount_paise)
+    await session.commit()
+    return out
 
 
 @me_router.get("/seo/sitemap.xml")

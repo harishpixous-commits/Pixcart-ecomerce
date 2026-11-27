@@ -270,3 +270,44 @@ async def test_abandoned_cart_reminders_follow_the_settings_and_stop_after_an_or
         await s.execute(update(CartItem).where(CartItem.user_id == uid).values(updated_at=utcnow() - timedelta(hours=1)))
         await s.commit()
     assert await run() == 0
+
+
+async def test_gift_cards_are_issued_by_staff_and_redeemed_into_a_coupon(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+    from sqlalchemy import update
+    from app.db import SessionLocal, utcnow
+    from app.models import Coupon
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000041")
+    addr = await add_address(buyer)
+    assert (await admin.post("/api/admin/growth/gift-cards", {"amount_paise": 20000})).json()["error"]["code"] == "gift_cards_off"
+    assert (await admin.put("/api/admin/growth/settings", {"gift_cards": {"enabled": True, "min_paise": 10000, "max_paise": 100000}})).status_code == 200
+    assert (await admin.post("/api/admin/growth/gift-cards", {"amount_paise": 500000})).json()["error"]["code"] == "invalid_amount"
+    assert (await buyer.post("/api/admin/growth/gift-cards", {"amount_paise": 20000})).status_code == 403
+    card = (await admin.post("/api/admin/growth/gift-cards", {"amount_paise": 20000, "note": "Diwali"})).json()["items"][0]
+    code = card["code"]
+    assert (await buyer.post("/api/gift-cards/balance", {"code": "GCNOPE"})).json()["error"]["code"] == "invalid_code"
+    assert (await buyer.post("/api/gift-cards/balance", {"code": code.lower()})).json()["balance_paise"] == 20000
+    assert (await buyer.post("/api/gift-cards/redeem", {"code": code, "amount_paise": 30000})).json()["error"]["code"] == "balance_too_low"
+    r = (await buyer.post("/api/gift-cards/redeem", {"code": code, "amount_paise": 12000})).json()
+    assert r["discount_paise"] == 12000 and r["card_balance_paise"] == 8000
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    o = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex, "coupon_code": r["code"]})
+    assert o.status_code == 201, o.text
+    assert o.json()["order"]["discount_total"] == 12000
+    # a second redemption never used: the amount returns to the card once its coupon expires
+    r2 = (await buyer.post("/api/gift-cards/redeem", {"code": code})).json()
+    assert r2["discount_paise"] == 8000 and r2["card_balance_paise"] == 0
+    async with SessionLocal() as s:
+        await s.execute(update(Coupon).where(Coupon.code == r2["code"]).values(ends_at=utcnow() - timedelta(days=1)))
+        await s.commit()
+    assert (await buyer.post("/api/gift-cards/balance", {"code": code})).json()["balance_paise"] == 8000
+    assert (await buyer.post("/api/gift-cards/balance", {"code": code})).json()["balance_paise"] == 8000
+    # staff void
+    assert (await admin.post(f"/api/admin/growth/gift-cards/{card['id']}/void")).json()["status"] == "void"
+    assert (await buyer.post("/api/gift-cards/redeem", {"code": code})).json()["error"]["code"] == "card_unavailable"
+    assert len((await admin.get("/api/admin/growth/gift-cards")).json()["items"]) == 1
