@@ -50,9 +50,12 @@ def _paise(v: str, field: str) -> int:
         d = Decimal(v.replace(",", "").replace("₹", "").strip())
     except InvalidOperation as exc:
         raise ValueError(f"{field} must be a number in rupees") from exc
-    if d <= 0:
+    if not d.is_finite() or d <= 0:  # "NaN" and "Infinity" parse as Decimals but are not prices (they used to crash the upload)
         raise ValueError(f"{field} must be more than 0")
-    return int((d * 100).quantize(Decimal("1")))
+    try:
+        return int((d * 100).quantize(Decimal("1")))
+    except ArithmeticError as exc:  # e.g. 1e999999 overflows
+        raise ValueError(f"{field} is too large") from exc
 
 
 def _int(v: str, field: str, default: int | None = None) -> int:

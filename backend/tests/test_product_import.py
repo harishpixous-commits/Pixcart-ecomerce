@@ -74,3 +74,14 @@ async def test_bad_files_are_refused_clearly(client, admin, categories):
     assert r["file_errors"]
     r = (await upload(seller, b"x" * (2 * 1024 * 1024 + 10), dry_run=True)).json()
     assert "larger than 2 MB" in r["file_errors"][0]["error"]
+
+
+async def test_nan_and_infinity_prices_are_row_errors_not_crashes(client, admin, categories):
+    seller = await make_seller(client, admin, "9620000003", name="Bulk Three", pan="BULKT3234T")
+    row = ["SHIRT-9", "Kovai Men's Cotton Formal Shirt Grey", "Men's Shirts", "Kovai", "Crisp grey cotton shirt for office wear, regular fit.", "100% cotton", "6205", "5", "7", "India",
+           "KS-G-M", "Size", "M", "", "", "NaN", "Infinity", "20", "250"]
+    huge = row[:10] + ["KS-G-L", "Size", "L", "", "", "1e999999", "1e999999", "20", "250"]
+    r = await upload(seller, make_csv([row, huge]), dry_run=True)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "must be more than 0" in str(body)
