@@ -15,7 +15,7 @@ from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
 from app.config import settings
-from app.services import gift_cards, growth, loyalty, referral, seo
+from app.services import gift_cards, growth, loyalty, referral, segments, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -40,6 +40,20 @@ async def put_settings(body: dict[str, Any], admin: Perm("marketing"), session: 
 async def scorecard(admin: Perm("dashboard"), session: SessionDep) -> dict:
     cfg = (await growth.get(session))["scorecard"]
     return {"enabled": cfg["enabled"], "window_days": cfg["window_days"], "items": await growth.seller_scorecard(session, cfg)}
+
+
+@router.get("/segments")
+async def customer_segments(admin: Perm("marketing"), session: SessionDep, segment: str | None = None) -> dict:
+    """Counts for every customer segment; add ?segment=vip (new, never_ordered, repeat, vip, lapsed) to list who is in it."""
+    cfg = (await growth.get(session))["segments"]
+    if not cfg["enabled"]:
+        raise ApiError("Customer segments are switched off. Turn them on in Admin > Growth.", "segments_off")
+    if segment is not None and segment not in segments.SEGMENTS:
+        raise ApiError("Unknown segment", "invalid_segment")
+    out: dict = {"segments": [{"key": k, "label": v, "count": n} for (k, v), n in zip(segments.SEGMENTS.items(), (await segments.counts(session, cfg)).values())]}
+    if segment:
+        out["items"] = await segments.members(session, cfg, segment)
+    return out
 
 
 class AdjustIn(BaseModel):

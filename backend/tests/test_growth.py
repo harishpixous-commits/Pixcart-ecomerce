@@ -333,3 +333,20 @@ async def test_flash_sale_limits_apply_to_seller_deals_when_switched_on(client, 
     assert r.json()["error"]["code"] == "discount_too_large"
     r = await tn.post("/api/seller/deals", base | {"ends_at": iso(now + timedelta(hours=3)), "deal_price_paise": 60000})
     assert r.status_code in (201, 409), r.text
+
+
+async def test_customer_segments_are_off_by_default_and_classify_customers(client, admin, categories):
+    from tests.conftest import login_phone
+
+    assert (await admin.get("/api/admin/growth/segments")).json()["error"]["code"] == "segments_off"
+    assert (await admin.put("/api/admin/growth/settings", {"segments": {"enabled": True}})).status_code == 200
+    await login_phone(client, "9000011111", name="Fresh Face")
+    r = await admin.get("/api/admin/growth/segments?segment=new")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    counts = {s["key"]: s["count"] for s in body["segments"]}
+    assert counts["new"] >= 1 and counts["never_ordered"] >= 1 and counts["vip"] == 0 and counts["lapsed"] == 0
+    assert any(i["name"] == "Fresh Face" and i["orders"] == 0 for i in body["items"])
+    assert (await admin.get("/api/admin/growth/segments?segment=nope")).json()["error"]["code"] == "invalid_segment"
+    anon = (await client.get("/api/admin/growth/segments")).status_code
+    assert anon in (401, 403)

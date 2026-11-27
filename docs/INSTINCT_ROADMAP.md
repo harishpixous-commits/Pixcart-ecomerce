@@ -41,3 +41,5 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - Gift cards (Python): migration 0033, services/gift_cards.py. Staff issue cards (admin POST/GET /api/admin/growth/gift-cards, void); holders check balance and redeem all or part into a single-use coupon (POST /api/gift-cards/balance, /redeem), unused expired coupons return the amount. Not built: shoppers buying a card online (needs a payment flow), screens.
 
 - Flash sales: Growth flash_sales settings (max duration, max discount) now guard seller deal creation when enabled, on top of the existing Deals feature. show_countdown is a storefront flag, not yet wired.
+
+- Segments: GET /api/admin/growth/segments[?segment=new|never_ordered|repeat|vip|lapsed], off by default, counts and lists (200 max) with spend. Read-only; no campaign send, no admin screen yet.
