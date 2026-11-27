@@ -586,4 +586,4 @@ class AssistantAction(IdMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (CheckConstraint("status IN ('pending','done','cancelled','failed','expired')", name="status"),)
+    __table_args__ = (CheckConstraint("status IN ('pending','running','done','cancelled','failed','expired')", name="status"),)

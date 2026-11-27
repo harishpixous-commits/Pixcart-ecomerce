@@ -306,7 +306,7 @@ async def execute(session: AsyncSession, user: User, act: AssistantAction) -> di
 
     if act.user_id != user.id:
         raise ApiError("Only the person who asked can confirm this", "not_yours", 403)
-    if act.status != "pending":
+    if act.status not in ("pending", "running"):  # the confirm endpoint marks it running first
         raise ApiError(f"This action is already {act.status}", "action_done", 409)
     if utcnow() - act.created_at > EXPIRES_AFTER:
         act.status = "expired"

@@ -243,12 +243,15 @@ async def decide_action(action_id: uuid.UUID, decision_: Literal["confirm", "can
             a.status, a.decided_at = "cancelled", utcnow()
             await session.commit()
         return {"id": str(a.id), "status": a.status}
+    a.status = "running"  # claimed: a second confirm now gets 409 instead of running the action again
+    await session.commit()
+    await session.refresh(user)
     try:
         result = await actions_mod.execute(session, user, a)
     except ApiError as exc:
         await session.rollback()
         a = await _action(session, uid, action_id)
-        if a.status == "pending" and exc.code not in ("action_expired",):
+        if a.status in ("pending", "running") and exc.code not in ("action_expired",):
             a.status, a.decided_at, a.result = "failed", utcnow(), {**(a.result or {}), "error": exc.message}
             await session.refresh(user)
             audit(session, user, f"assistant.action.{a.kind}", "assistant_action", a.id, f"failed: {exc.message[:200]}")

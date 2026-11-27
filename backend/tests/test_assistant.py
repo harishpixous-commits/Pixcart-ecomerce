@@ -344,3 +344,29 @@ async def test_laya_server_is_public_https_and_moving_it_needs_the_password(admi
     mine["name"] = "Helper"
     r = await client.put("/api/admin/assistant/settings", json=mine, headers=h)
     assert r.status_code == 200 and r.json()["settings"]["decision"]["laya_key_set"]
+
+
+async def test_a_running_action_cannot_be_confirmed_again(client, admin, categories):
+    """The second of two quick confirms must be refused, not run the action twice."""
+    import uuid
+    from sqlalchemy import select
+    from app.assistant import actions
+    from app.db import SessionLocal
+    from app.models import User
+    from app.models.extended import AssistantAction
+
+    o, _ = await place_cod_order(client, admin, categories)
+    detail = (await admin.get(f"/api/admin/orders/{o['id']}")).json()
+    package = detail["sub_orders"][0]["number"] if "sub_orders" in detail else detail["packages"][0]["number"]
+    conv = await new_chat(admin)
+    async with SessionLocal() as s:
+        u = (await s.execute(select(User).where(User.email == "admin@pixcart.in"))).scalar_one()
+        act = await actions.prepare(s, u, uuid.UUID(conv), "cancel_package", {"package": package, "reason": "double tap"})
+        act.status = "running"
+        await s.commit()
+        aid = str(act.id)
+    r = await admin.post(f"/api/admin/assistant/actions/{aid}/confirm", {})
+    assert r.status_code == 409 and r.json()["code"] == "action_done" if "code" in r.json() else r.status_code == 409
+    async with SessionLocal() as s:
+        a = (await s.execute(select(AssistantAction).where(AssistantAction.id == uuid.UUID(aid)))).scalar_one()
+        assert a.status == "running"
