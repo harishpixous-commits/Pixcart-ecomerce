@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from app.core.deps import CurrentUser, SessionDep, audit
+from app.core.deps import ApprovedSeller, CurrentUser, SessionDep, audit
 from app.core.errors import ApiError, NotFound
 from app.core.permissions import Perm
 from app.db import utcnow
@@ -77,3 +77,15 @@ async def sitemap(session: SessionDep) -> Response:
     if xml is None:
         raise NotFound("Sitemap")
     return Response(xml, media_type="application/xml")
+
+
+@me_router.get("/seller/scorecard")
+async def my_scorecard(seller: ApprovedSeller, session: SessionDep) -> dict:
+    """The seller's own late-shipping, cancellation and return figures against the levels staff set."""
+    cfg = (await growth.get(session))["scorecard"]
+    if not cfg["enabled"]:
+        return {"enabled": False}
+    rows = await growth.seller_scorecard(session, cfg, seller.id)
+    mine = rows[0] if rows else {"orders": 0, "late": 0, "cancelled_by_seller": 0, "returned": 0, "late_percent": 0, "cancel_percent": 0, "return_percent": 0, "level": "not_enough_orders"}
+    return {"enabled": True, "window_days": cfg["window_days"], "ship_within_hours": cfg["ship_within_hours"], "min_orders": cfg["min_orders"],
+            "limits": {k: cfg[k] for k in cfg if k.endswith("_percent")}, "you": mine}

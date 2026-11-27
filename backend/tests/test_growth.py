@@ -120,3 +120,12 @@ async def test_cod_risk_rules_refuse_cash_orders(client, admin, categories):
     # switching the module off lifts it
     assert (await admin.put("/api/admin/growth/settings", {"cod_risk": {"enabled": False}})).status_code == 200
     assert (await cod()).status_code == 201
+
+
+async def test_seller_sees_only_their_own_scorecard(client, admin, categories):
+    tn, ka, _, _ = await (__import__("tests.test_orders", fromlist=["marketplace"]).marketplace(client, admin, categories))
+    assert (await tn.get("/api/seller/scorecard")).json() == {"enabled": False}
+    assert (await admin.put("/api/admin/growth/settings", {"scorecard": {"enabled": True, "min_orders": 1}})).status_code == 200
+    r = (await tn.get("/api/seller/scorecard")).json()
+    assert r["enabled"] is True and r["you"]["orders"] == 0 and r["limits"]["late_warn_percent"] == 10
+    assert (await admin.get("/api/seller/scorecard")).status_code in (401, 403)
