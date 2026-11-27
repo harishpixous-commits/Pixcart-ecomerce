@@ -76,4 +76,13 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         await ApiFactory.DbExecAsync("INSERT INTO orders(id,number,user_id,status,payment_method,payment_status,ship_to,items_total,shipping_total,cod_fee,refunded_total,grand_total,currency,fx_rate,fees,idempotency_key,created_at,updated_at) VALUES(@id,'PXREF1',@u,'placed','cod','pending','{}',100,0,0,0,100,'INR',1,'[]',@k,UTC_TIMESTAMP(),UTC_TIMESTAMP())",new{id=Guid.NewGuid(),u=Guid.Parse(cy.Id),k=Guid.NewGuid().ToString()});
         Assert.Equal("not_new",(await cy.Post("/api/referral/apply",new{code})).ErrorCode);
     }
+    [Fact]public void Flash_sale_limits_only_apply_when_switched_on()
+    {
+        var on=new System.Text.Json.Nodes.JsonObject{["enabled"]=true,["max_duration_hours"]=4,["max_discount_percent"]=50};
+        var off=new System.Text.Json.Nodes.JsonObject{["enabled"]=false,["max_duration_hours"]=4,["max_discount_percent"]=50};
+        Assert.Null(BAL.DealsBAL.FlashGuard(off,TimeSpan.FromHours(30),100000,1000));
+        Assert.Equal("too_long",BAL.DealsBAL.FlashGuard(on,TimeSpan.FromHours(5),100000,60000)!.Value.Code);
+        Assert.Equal("discount_too_large",BAL.DealsBAL.FlashGuard(on,TimeSpan.FromHours(3),100000,40000)!.Value.Code);
+        Assert.Null(BAL.DealsBAL.FlashGuard(on,TimeSpan.FromHours(3),100000,50000));
+    }
 }

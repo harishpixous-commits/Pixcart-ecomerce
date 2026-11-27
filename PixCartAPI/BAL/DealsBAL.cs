@@ -13,7 +13,7 @@ namespace BAL;
 /// lightning deals also stop when their quantity is sold.
 /// </summary>
 public class DealsBAL(CatalogSupportDAL support, DealsDAL deals, CatalogDAL catalog, IMySqlDapperHelper db,
-    IPlatformSettingsBAL platform, AuditDAL audit, IAccessBAL access, ICatalogNotifyBAL notify) : Interface.IDealsBAL, Interface.IDealSync
+    IPlatformSettingsBAL platform, DAL.SettingsDAL growthSettings, AuditDAL audit, IAccessBAL access, ICatalogNotifyBAL notify) : Interface.IDealsBAL, Interface.IDealSync
 {
     private static DateTime _lastSync = DateTime.MinValue; // monotonic gate, as the reference's _last_sync
 
@@ -208,6 +208,17 @@ public class DealsBAL(CatalogSupportDAL support, DealsDAL deals, CatalogDAL cata
         };
     }
 
+    /// <summary>Admin Growth "flash sales" limits, applied on top of the marketplace deal rules when switched on.</summary>
+    public static (string Code, string Message)? FlashGuard(JsonObject flash, TimeSpan length, long price, long dealPrice)
+    {
+        if (flash["enabled"]?.GetValue<bool>() != true) return null;
+        var hours = flash["max_duration_hours"]!.GetValue<int>();
+        var pct = flash["max_discount_percent"]!.GetValue<int>();
+        if (length > TimeSpan.FromHours(hours)) return ("too_long", $"A deal can run for at most {hours} hours");
+        if (dealPrice < price * (100 - pct) / 100) return ("discount_too_large", $"A deal can take at most {pct}% off the selling price");
+        return null;
+    }
+
     /// <summary>Reference: deals.create (+ seller_create_deal). Returns the created deal's id.</summary>
     public async Task<Guid> CreateAsync(SellerModel seller, UserModel user, Guid variantId, string kind, long dealPrice,
         DateTime startsAt, DateTime endsAt, int? qtyLimit)
@@ -234,6 +245,9 @@ public class DealsBAL(CatalogSupportDAL support, DealsDAL deals, CatalogDAL cata
             var text = max < TimeSpan.FromDays(2) ? $"{(int)max.TotalHours} hours" : $"{max.Days} days";
             throw new AppException($"A {Kinds[kind].ToLower()} can run for at most {text}", "too_long", 400);
         }
+        var flash = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), await growthSettings.GetAsync("growth"))["flash_sales"]!;
+        var guard = FlashGuard(flash, endsAt - startsAt, v.PricePaise, dealPrice);
+        if (guard is not null) throw new AppException(guard.Value.Message, guard.Value.Code, 400);
         var maxPrice = v.PricePaise * (100 - cfg.Int("deal_min_discount_pct")) / 100;
         if (dealPrice > maxPrice)
             throw new AppException(

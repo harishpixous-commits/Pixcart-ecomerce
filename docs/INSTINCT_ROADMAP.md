@@ -30,3 +30,5 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - Loyalty redeem (.NET): POST /api/loyalty/redeem, same design as Python (single-use platform-funded flat coupon, points back if unused after 30 days). Test added; Growth, CheckoutRules, RouteGuard runs green. Caveat: coupon code not tied to one user.
 - Abandoned-cart reminders (.NET): V009__cart_reminders.sql, BAL/CartReminders.cs, 'cart_reminders' job every 30 min in JobsWorker, 'abandoned_cart' template in-app and email. Same rules as Python (marketing opt-in only, stops after an order). Test added; CheckoutRules, Job, Notif, Parity, Growth runs green.
 - Gift cards (.NET): V010__gift_cards.sql, BAL/GiftCards.cs, same endpoints and rules as Python. Test added; CheckoutRules, RouteGuard, Parity, Growth runs green. Not built: shoppers buying a card online, screens.
+
+- Flash sales: Growth flash_sales settings (max duration, max discount) now guard seller deal creation when enabled, on top of the existing Deals feature. show_countdown is a storefront flag, not yet wired.
