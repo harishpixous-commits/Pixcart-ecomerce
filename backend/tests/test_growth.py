@@ -350,3 +350,28 @@ async def test_customer_segments_are_off_by_default_and_classify_customers(clien
     assert (await admin.get("/api/admin/growth/segments?segment=nope")).json()["error"]["code"] == "invalid_segment"
     anon = (await client.get("/api/admin/growth/segments")).status_code
     assert anon in (401, 403)
+
+
+async def test_seller_bulk_edit_previews_then_applies_and_skips_bad_rows(client, admin, categories):
+    from tests.test_promotions import setup
+
+    tn, ka, shirt, _ = await setup(client, admin, categories)  # price ₹1,000, MRP ₹2,000, 10 in stock
+    vid, slug = shirt["variants"][0]["id"], shirt["slug"]
+
+    async def price():
+        return (await client.get(f"/api/catalog/products/{slug}")).json()["variants"][0]["price"]
+
+    body = {"variant_ids": [vid], "action": "price_percent", "value": 10}
+    r = (await tn.post("/api/seller/variants/bulk-edit", body)).json()
+    assert r["dry_run"] and r["changed"] == 1 and r["rows"][0]["after"] == 110000 and await price() == 100000  # preview changes nothing
+    r = (await tn.post("/api/seller/variants/bulk-edit", body | {"dry_run": False})).json()
+    assert r["changed"] == 1 and await price() == 110000
+    r = (await tn.post("/api/seller/variants/bulk-edit", body | {"value": 500, "dry_run": False})).json()  # 6x = above MRP
+    assert r["changed"] == 0 and r["rows"][0]["reason"] == "price_out_of_range" and await price() == 110000
+    r = (await ka.post("/api/seller/variants/bulk-edit", body | {"dry_run": False})).json()  # someone else's version
+    assert r["rows"][0]["reason"] == "not_yours" and await price() == 110000
+    r = (await tn.post("/api/seller/variants/bulk-edit", {"variant_ids": [vid], "action": "stock_add", "value": 5, "dry_run": False})).json()
+    assert r["changed"] == 1 and r["rows"][0]["after"] == 15
+    assert (await tn.post("/api/seller/variants/bulk-edit", {"variant_ids": [vid], "action": "nope"})).json()["error"]["code"] == "invalid_action"
+    assert (await admin.put("/api/admin/growth/settings", {"bulk_edit": {"enabled": False}})).status_code == 200
+    assert (await tn.post("/api/seller/variants/bulk-edit", body)).json()["error"]["code"] == "bulk_edit_off"

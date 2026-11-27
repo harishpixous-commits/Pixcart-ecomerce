@@ -15,7 +15,7 @@ from app.core.errors import ApiError, Conflict, NotFound
 from app.db import utcnow
 from app.models import Category, OrderItem, Product, ProductImage, Seller, Variant
 from app.models.catalog import GST_RATES_BPS
-from app.services import inventory, storage
+from app.services import bulk_edit, inventory, storage
 from app.services.catalog import (
     apply_videos,
     check_image_url,
@@ -494,6 +494,23 @@ async def patch_variant(variant_id: uuid.UUID, body: VariantPatch, seller: Selle
     await refresh_product_aggregates(session, p)
     await session.commit()
     return variant_out(v)
+
+
+class BulkEditIn(BaseModel):
+    variant_ids: list[uuid.UUID] = Field(min_length=1, max_length=5000)
+    action: str
+    value: int | None = None
+    dry_run: bool = True
+
+
+@router.post("/variants/bulk-edit")
+async def bulk_edit_variants(body: BulkEditIn, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
+    """Change price (by percent), stock or on/off for many of your versions at once. dry_run=true (default) only previews."""
+    res = await bulk_edit.apply(session, seller, body.variant_ids, body.action, body.value, body.dry_run)
+    if not body.dry_run and res["changed"]:
+        audit(session, user, "variant.bulk_edit", "seller", seller.id, f"{body.action} {body.value} x{res['changed']}")
+    await session.commit()
+    return res
 
 
 @router.post("/products/{product_id}/submit")
