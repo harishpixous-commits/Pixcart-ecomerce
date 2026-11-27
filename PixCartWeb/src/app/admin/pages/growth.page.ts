@@ -139,6 +139,22 @@ const label = (k: string): string => {
           </div>
         } @else { <pc-page-loader /> }
       </div>
+    } @else if (tab() === "referrals") {
+      <div class="flex flex-col gap-4">
+        @if (referrals(); as rf) {
+          <p class="rounded-lg bg-white p-4 text-sm" data-testid="referral-summary">{{ rf.length }} latest referrals, {{ rewardedCount() }} rewarded.</p>
+          <div class="overflow-x-auto rounded-xl bg-white">
+            <table class="w-full text-left text-sm" data-testid="referrals">
+              <thead><tr class="border-b border-line"><th class="p-3">Referrer</th><th class="p-3">Friend</th><th class="p-3">Status</th><th class="p-3">Reward</th><th class="p-3">Joined</th></tr></thead>
+              <tbody>
+                @for (r of rf; track $index) {
+                  <tr class="border-b border-line/50"><td class="p-3 font-semibold">{{ r.referrer }}</td><td class="p-3">{{ r.friend }}</td><td class="p-3">{{ r.status }}</td><td class="p-3">{{ r.reward_paise ? rupees(r.reward_paise) : "-" }}</td><td class="p-3">{{ date(r.at) }}</td></tr>
+                } @empty { <tr><td class="p-4 text-ink-soft" colspan="5">No referrals yet.</td></tr> }
+              </tbody>
+            </table>
+          </div>
+        } @else { <pc-page-loader /> }
+      </div>
     } @else if (tab() === "campaigns") {
       <div class="flex flex-col gap-4">
         <section class="flex flex-col gap-3 rounded-xl bg-white p-5">
@@ -240,11 +256,13 @@ export class AdminGrowthPage {
   protected readonly titles = TITLES;
   protected readonly label = label;
   protected readonly tab = signal("settings");
-  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }];
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }, { value: "referrals", label: "Referrals" }];
   protected readonly rupees = rupees;
   protected readonly date = date;
   protected readonly cards = signal<Card[]>([]);
   protected readonly purchases = signal<Purchase[]>([]);
+  protected readonly referrals = signal<{ referrer: string; friend: string; status: string; reward_paise: number; at: string }[] | null>(null);
+  protected rewardedCount(): number { return (this.referrals() ?? []).filter((r) => r.status === "rewarded").length; }
   protected readonly reminders = signal<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] } | null>(null);
   protected readonly gAmount = signal("500");
   protected readonly gQty = signal("1");
@@ -277,6 +295,7 @@ export class AdminGrowthPage {
     this.loadCampaigns();
     api<LoyaltyView>("/api/admin/growth/loyalty").then((x) => this.loyaltyView.set(x)).catch(quietly);
     api<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] }>("/api/admin/growth/cart-reminders").then((x) => this.reminders.set(x)).catch(quietly);
+    api<{ items: { referrer: string; friend: string; status: string; reward_paise: number; at: string }[] }>("/api/admin/growth/referrals").then((x) => this.referrals.set(x.items)).catch(quietly);
     api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => this.segs.set(x.segments)).catch((e) => this.segError.set(e instanceof ApiError ? e.message : null));
     api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);
   }
