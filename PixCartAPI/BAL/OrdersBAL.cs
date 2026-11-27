@@ -45,6 +45,11 @@ public class OrdersBAL(
 {
     // The delivery fleet service also uses this one, so it is resolved when needed (no constructor cycle).
     private IDeliveryFleetBAL Fleet => services.GetRequiredService<IDeliveryFleetBAL>();
+    // The payment gateways (docs/PAYMENT_GATEWAYS.md): routing with failover, the adapters and their health.
+    private BAL.Payments.PaymentRouting Routing => services.GetRequiredService<BAL.Payments.PaymentRouting>();
+    private BAL.Payments.PaymentGateways Gateways => services.GetRequiredService<BAL.Payments.PaymentGateways>();
+    private BAL.Payments.PaymentHealth Health => services.GetRequiredService<BAL.Payments.PaymentHealth>();
+    private string GatewayName(string code) => Gateways.Find(code)?.Name ?? code;
 
     private static readonly char[] NumberAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray(); // no O, I
 
@@ -403,35 +408,8 @@ public class OrdersBAL(
         PaymentModel? payment = null;
         if (isOnline)
         {
-            // Created inside the transaction: if the gateway call fails, nothing above is committed.
-            JsonObject rp;
-            try
-            {
-                rp = await razorpay.CreateOrderAsync(charge ?? grandTotal, order.Number,
-                    new Dictionary<string, string> { ["order_number"] = order.Number }, chargeCurrency);
-            }
-            catch (RazorpayBAL.GatewayException exc)
-            {
-                if (chargeCurrency != RegionalBAL.Base)
-                    throw new AppException(
-                        $"Paying in {chargeCurrency} is not available right now ({exc.Message}). Switch the currency to ₹ (INR) and try again.",
-                        "currency_unavailable", 502);
-                throw new AppException($"Could not start the payment: {exc.Message}", "gateway_error", 502);
-            }
-            payment = new PaymentModel
-            {
-                Id = Guid.NewGuid(),
-                OrderId = order.Id,
-                Provider = "razorpay",
-                ProviderOrderId = rp["id"]?.GetValue<string>() ?? "",
-                AmountPaise = grandTotal,
-                Currency = chargeCurrency,
-                ChargeAmount = charge,
-                Status = "created",
-                CreatedAt = now,
-                UpdatedAt = now,
-            };
-            await orders.InsertPaymentAsync(payment, uow);
+            // Created inside the transaction: if every gateway fails, nothing above is committed.
+            payment = await StartPaymentAsync(order, user, grandTotal, chargeCurrency, charge, null, uow);
         }
 
         try
@@ -539,7 +517,9 @@ public class OrdersBAL(
         var live = subs.Count(s => s.Status != "cancelled");
         var canCancelAt = CustomerCancellableAt(cfg);
 
-        var captured = o.PaymentMethod == "online" ? await orders.CapturedPaymentAsync(o.Id) : null;
+        // the order's payment (the one captured first; a later duplicate is refunded), shown as "Payment received"
+        var payments = o.PaymentMethod == "online" ? (await orders.PaymentsForOrderAsync(o.Id)).ToList() : [];
+        var captured = payments.Count > 0 ? await orders.CapturedPaymentAsync(o.Id) : null;
         var outp = new JsonObject
         {
             ["id"] = o.Id.ToString(),
@@ -554,7 +534,8 @@ public class OrdersBAL(
                 {
                     ["amount"] = captured.AmountPaise, ["method"] = captured.Method,
                     ["reference"] = captured.ProviderPaymentId ?? "", ["currency"] = captured.Currency.Length > 0 ? captured.Currency : "INR",
-                    ["charge_amount"] = captured.ChargeAmount, ["at"] = captured.UpdatedAt.ToString("o"),
+                    ["charge_amount"] = captured.ChargeAmount, ["provider"] = captured.Provider, ["gateway"] = GatewayName(captured.Provider),
+                    ["at"] = captured.UpdatedAt.ToString("o"),
                 }
                 : null,
             ["ship_to"] = JsonNode.Parse(o.ShipTo),
@@ -654,6 +635,14 @@ public class OrdersBAL(
                 ["amount"] = r.AmountPaise, ["status"] = r.Status, ["reason"] = r.Reason, ["created_at"] = r.CreatedAt.ToString("o"),
             });
         outp["refunds"] = refundArr;
+        if (forAdmin)
+            outp["payments"] = new JsonArray([.. payments.Select(p => (JsonNode)new JsonObject
+            {
+                ["id"] = p.Id.ToString(), ["provider"] = p.Provider, ["gateway"] = GatewayName(p.Provider), ["reference"] = p.ProviderOrderId,
+                ["payment_reference"] = p.ProviderPaymentId ?? "", ["status"] = p.Status, ["method"] = p.Method, ["error"] = p.Error,
+                ["amount"] = p.ChargeAmount ?? p.AmountPaise, ["currency"] = p.Currency.Length > 0 ? p.Currency : "INR",
+                ["created_at"] = p.CreatedAt.ToString("o"),
+            })]);
         // packages carried by the own delivery fleet: partner, trip steps, delivery code while on the way, live position
         outp["fleet"] = await deliveryTracking.CustomerTrackingAsync(o, subs);
         return outp;
@@ -661,33 +650,82 @@ public class OrdersBAL(
 
     // ------------------------------------------------------------------ checkout payload
 
+    /// <summary>Who pays, as the gateways need it: the account's name, mobile number (else the delivery phone) and email.</summary>
+    private static BAL.Payments.PaymentCustomer PaymentCustomer(OrderModel order, UserModel user)
+    {
+        var ship = JsonHelper.Object(order.ShipTo);
+        var raw = !string.IsNullOrEmpty(user.Phone) ? user.Phone : BAL.Payments.PaymentText.S(ship["phone"]);
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        var name = !string.IsNullOrEmpty(user.Name) ? user.Name : BAL.Payments.PaymentText.S(ship["full_name"]);
+        return new(name, digits.Length > 10 ? digits[^10..] : digits, user.Email ?? "");
+    }
+
+    /// <summary>Starts the order's payment with the first gateway that can take it (automatic failover,
+    /// docs/PAYMENT_GATEWAYS.md) and adds the payment row. 409 payments_unavailable, 502 gateway_error or currency_unavailable.</summary>
+    public async Task<PaymentModel> StartPaymentAsync(OrderModel order, UserModel user, long amountPaise, string currency, long? charge,
+        IReadOnlyList<BAL.Payments.IPaymentGateway>? candidates, IUnitOfWork uow)
+    {
+        var cfg = await integrations.GetAsync();
+        var rules = await Routing.GetAsync();
+        candidates ??= await Routing.EligibleAsync(cfg, currency, rules);
+        (BAL.Payments.IPaymentGateway Gateway, BAL.Payments.CreatedPayment Created) started;
+        try
+        {
+            started = await Routing.StartAsync(cfg, candidates, rules, charge ?? amountPaise, currency, order.Number, PaymentCustomer(order, user));
+        }
+        catch (BAL.Payments.PaymentStartException exc) when (currency != RegionalBAL.Base)
+        {
+            var detail = exc.Reason.Length > 0 ? $" ({exc.Reason})" : "";
+            throw new AppException($"Paying in {currency} is not available right now{detail}. Switch the currency to ₹ (INR) and try again.",
+                "currency_unavailable", 502);
+        }
+        var now = DateTimeFunctions.UtcNow();
+        var payment = new PaymentModel
+        {
+            Id = Guid.NewGuid(), OrderId = order.Id, Provider = started.Gateway.Code,
+            ProviderOrderId = started.Created.Reference.Length > 100 ? started.Created.Reference[..100] : started.Created.Reference,
+            AmountPaise = amountPaise, Currency = currency, ChargeAmount = charge, Status = "created",
+            // Razorpay's fields are rebuilt from the current settings; the other gateways' are kept to open the same payment again
+            ClientData = started.Gateway.Code == "razorpay" || started.Created.Fields.Count == 0 ? null : started.Created.Fields.ToJsonString(),
+            CreatedAt = now, UpdatedAt = now,
+        };
+        await orders.InsertPaymentAsync(payment, uow);
+        return payment;
+    }
+
+    /// <summary>What the payment window needs (docs/PAYMENT_GATEWAYS.md, section 4): the gateway, how to open it and its fields,
+    /// the amount, the other gateways that can take it ("Pay another way"), and for Razorpay the saved-cards customer.</summary>
     public async Task<JsonObject?> ShopperCheckoutAsync(OrderModel order, PaymentModel? payment, UserModel user)
     {
         if (payment is null || order.Status != "pending_payment") return null;
         var integ = await integrations.GetAsync();
         var brand = await SiteSettingsReader.BrandNameAsync(settings, app);
-        var data = new JsonObject
+        var currency = payment.Currency.Length > 0 ? payment.Currency : "INR";
+        var data = new JsonObject { ["provider"] = payment.Provider, ["mode"] = Gateways.Find(payment.Provider)?.Mode ?? "modal" };
+        if (payment.Provider == "razorpay")
         {
-            ["provider"] = "razorpay",
-            ["key_id"] = integ.RazorpayKeyId,
-            ["checkout_url"] = integ.RazorpayCheckoutUrl,
-            ["razorpay_order_id"] = payment.ProviderOrderId,
-            ["amount"] = payment.ChargeAmount ?? payment.AmountPaise,
-            ["currency"] = payment.Currency.Length > 0 ? payment.Currency : "INR",
-            ["name"] = brand,
-            ["description"] = $"Order {order.Number}",
-            ["prefill"] = new JsonObject
-            {
-                ["name"] = user.Name,
-                ["contact"] = string.IsNullOrEmpty(user.Phone) ? "" : $"+91{user.Phone}",
-                ["email"] = user.Email ?? "",
-            },
-            ["expires_at"] = order.PaymentExpiresAt?.ToString("o"),
+            data["key_id"] = integ.RazorpayKeyId;
+            data["checkout_url"] = integ.RazorpayCheckoutUrl;
+            data["razorpay_order_id"] = payment.ProviderOrderId;
+        }
+        else
+            foreach (var kv in JsonHelper.Object(payment.ClientData)) data[kv.Key] = kv.Value?.DeepClone();
+        data["amount"] = payment.ChargeAmount ?? payment.AmountPaise;
+        data["currency"] = currency;
+        data["name"] = brand;
+        data["description"] = $"Order {order.Number}";
+        data["prefill"] = new JsonObject
+        {
+            ["name"] = user.Name,
+            ["contact"] = string.IsNullOrEmpty(user.Phone) ? "" : $"+91{user.Phone}",
+            ["email"] = user.Email ?? "",
         };
+        data["expires_at"] = order.PaymentExpiresAt?.ToString("o");
+        data["alternatives"] = BAL.Payments.PaymentRouting.Alternatives(await Routing.EligibleAsync(integ, currency), payment.Provider);
         var reg = await regional.GetAsync();
         data["methods"] = reg["pay_methods"]?.DeepClone();
         data["card_networks"] = reg["card_networks"]?.DeepClone();
-        if (reg["save_cards"]?.GetValue<bool>() == true && (!string.IsNullOrEmpty(user.Phone) || !string.IsNullOrEmpty(user.Email)))
+        if (payment.Provider == "razorpay" && reg["save_cards"]?.GetValue<bool>() == true && (!string.IsNullOrEmpty(user.Phone) || !string.IsNullOrEmpty(user.Email)))
         {
             if (user.RazorpayCustomerId is null)
             {
@@ -731,9 +769,18 @@ public class OrdersBAL(
         if (amount != (payment.ChargeAmount ?? payment.AmountPaise))
             throw new AppException("Payment amount does not match the order", "amount_mismatch");
         var now = DateTime.UtcNow;
-        if (payment.Status == "captured")
+        if (payment.Status == "captured" || await orders.OtherCapturedPaymentExistsAsync(order.Id, payment.Id, uow))
         {
-            // A second successful payment for the same order (two tabs, a retried UPI request): refund it in full.
+            // A second successful payment for the same order (two tabs, a retried UPI request, or a slow gateway that went
+            // through after the shopper paid another way): refund it in full, to itself.
+            if (payment.Status != "captured")
+            {
+                payment.Status = "captured";
+                payment.ProviderPaymentId = providerPaymentId;
+                payment.Method = method.Length > 20 ? method[..20] : method;
+                payment.CapturedAt = now;
+                await orders.UpdatePaymentAsync(payment, uow);
+            }
             await orders.InsertRefundAsync(new RefundModel
             {
                 Id = Guid.NewGuid(), OrderId = order.Id, PaymentId = payment.Id, ProviderPaymentId = providerPaymentId,
@@ -745,6 +792,7 @@ public class OrdersBAL(
         payment.Status = "captured";
         payment.ProviderPaymentId = providerPaymentId;
         payment.Method = method.Length > 20 ? method[..20] : method;
+        payment.CapturedAt = now;
         await orders.UpdatePaymentAsync(payment, uow);
         if (order.Status == "pending_payment")
         {
@@ -802,8 +850,35 @@ public class OrdersBAL(
             data["amount"]?.GetValue<long>() ?? 0, uow);
     }
 
-    /// <summary>Asks Razorpay whether this order was paid, from Razorpay's own records (reference:
-    /// check_with_gateway).</summary>
+    /// <summary>Records an attempt the payment's gateway reported as authorised or captured, capturing it first where the
+    /// gateway needs that. Returns what MarkPaidAsync returns, or "not_captured".</summary>
+    public async Task<string> ConfirmAttemptAsync(PaymentModel payment, BAL.Payments.PaymentAttempt attempt, IUnitOfWork uow,
+        Model.DomainModel.Integrations.IntegrationSettings? cfg = null)
+    {
+        var g = Gateways.Get(payment.Provider);
+        var settingsNow = cfg ?? await integrations.GetAsync();
+        if (attempt.Status == "authorized" && g.CaptureNeeded)
+        {
+            var authorised = attempt;
+            attempt = await Health.ObserveAsync(g, _ => g.CaptureAsync(settingsNow, authorised, payment.ChargeAmount ?? payment.AmountPaise,
+                payment.Currency.Length > 0 ? payment.Currency : "INR"));
+        }
+        if (attempt.Status != "captured")
+        {
+            if (attempt.Status == "failed") payment.Status = "failed";
+            var errText = attempt.Error.Length > 0 ? attempt.Error : attempt.Status;
+            payment.Error = errText.Length > 500 ? errText[..500] : errText;
+            await orders.UpdatePaymentAsync(payment, uow);
+            return "not_captured";
+        }
+        return await MarkPaidAsync(payment, attempt.Id, attempt.Method, attempt.Amount, uow);
+    }
+
+    /// <summary>Asks the payment's gateway whether it was paid, from the gateway's own records (never the browser's word).
+    /// Used when the shopper comes back from a UPI app or a payment page, by the order page while it waits, by the admin
+    /// "Check payment" button and by gateway events. result: already_paid | paid | already | refund (a duplicate payment,
+    /// refunded) | not_paid; waiting: a payment is still open at the gateway (a UPI request not approved yet); reason: why
+    /// the last attempt failed, in the gateway's words. Throws PaymentGatewayException when the gateway cannot be asked.</summary>
     public async Task<JsonObject> CheckWithGatewayAsync(PaymentModel payment, IUnitOfWork uow)
     {
         if (payment.Status == "captured")
@@ -813,21 +888,20 @@ public class OrdersBAL(
                 ["payment"] = new JsonObject { ["id"] = payment.ProviderPaymentId, ["method"] = payment.Method, ["status"] = "captured" },
                 ["waiting"] = false, ["reason"] = "",
             };
-        var attempts = (await razorpay.OrderPaymentsAsync(payment.ProviderOrderId))
-            .OrderByDescending(a => a["created_at"]?.GetValue<long>() ?? 0).ToList();
-        var seen = new JsonArray(attempts.Select(a => (JsonNode?)new JsonObject
+        var g = Gateways.Get(payment.Provider);
+        var cfg = await integrations.GetAsync();
+        var attempts = (await Health.ObserveAsync(g, ct => g.AttemptsAsync(cfg, payment.ProviderOrderId, ct)))
+            .OrderByDescending(a => a.CreatedAt).ToList();
+        var seen = new JsonArray([.. attempts.Select(a => (JsonNode)new JsonObject
         {
-            ["id"] = a["id"]?.GetValue<string>(), ["status"] = a["status"]?.GetValue<string>(),
-            ["method"] = a["method"]?.GetValue<string>() ?? "", ["error"] = a["error_description"]?.GetValue<string>() ?? "",
-        }).ToArray());
-        var done = attempts.FirstOrDefault(a => a["status"]?.GetValue<string>() is "captured" or "authorized");
+            ["id"] = a.Id, ["status"] = a.Status, ["method"] = a.Method, ["error"] = a.Error,
+        })]);
+        var done = attempts.FirstOrDefault(a => a.Status is "captured" or "authorized");
         if (done is null)
         {
-            var failed = attempts.FirstOrDefault(a => a["status"]?.GetValue<string>() == "failed");
-            var reason = failed is not null
-                ? (failed["error_description"]?.GetValue<string>() is { } f && f.Length > 0 ? f : "The payment did not go through")
-                : "";
-            if (failed is not null && payment.Status != "captured")
+            var failed = attempts.FirstOrDefault(a => a.Status == "failed");
+            var reason = failed is null ? "" : failed.Error.Length > 0 ? failed.Error : "The payment did not go through";
+            if (failed is not null)
             {
                 payment.Error = reason.Length > 500 ? reason[..500] : reason;
                 await orders.UpdatePaymentAsync(payment, uow);
@@ -835,15 +909,47 @@ public class OrdersBAL(
             return new JsonObject
             {
                 ["result"] = "not_paid", ["attempts"] = seen,
-                ["waiting"] = attempts.Any(a => a["status"]?.GetValue<string>() == "created"), ["reason"] = reason,
+                ["waiting"] = attempts.Any(a => a.Status is "created" or "pending"), ["reason"] = reason,
             };
         }
-        var result = await ConfirmWithGatewayAsync(payment, done["id"]!.GetValue<string>(), uow);
+        var result = await ConfirmAttemptAsync(payment, done, uow, cfg);
         return new JsonObject
         {
             ["result"] = result, ["attempts"] = seen,
-            ["payment"] = new JsonObject { ["id"] = done["id"]?.GetValue<string>(), ["method"] = done["method"]?.GetValue<string>() ?? "", ["status"] = "captured" },
+            ["payment"] = new JsonObject { ["id"] = done.Id, ["method"] = done.Method, ["status"] = "captured" },
             ["waiting"] = false, ["reason"] = "",
+        };
+    }
+
+    /// <summary>CheckWithGatewayAsync for an order that may have been tried with several gateways: the latest payment
+    /// first, then the earlier ones that are still open (a slow gateway can go through after the shopper paid another
+    /// way). The answer describes the payment that was paid, else the latest one; payment_id names it.</summary>
+    public async Task<JsonObject> CheckOrderPaymentsAsync(OrderModel order, IUnitOfWork uow)
+    {
+        var payments = await orders.PaymentsForOrderForUpdateAsync(order.Id, uow);
+        if (payments.Count == 0)
+            return new JsonObject { ["result"] = "not_paid", ["attempts"] = new JsonArray(), ["waiting"] = false, ["reason"] = "", ["payment_id"] = null };
+        JsonObject? first = null;
+        for (var i = 0; i < payments.Count; i++)
+        {
+            var pay = payments[i];
+            if (i > 0 && (pay.Status is "captured" or "failed")) continue;
+            JsonObject outp;
+            try
+            {
+                outp = await CheckWithGatewayAsync(pay, uow);
+            }
+            catch (BAL.Payments.PaymentGatewayException) when (i > 0)
+            {
+                continue; // an earlier gateway that does not answer now is checked again next time (and by the expiry job)
+            }
+            outp["payment_id"] = pay.Id.ToString();
+            if (outp["result"]!.GetValue<string>() != "not_paid") return outp;
+            first ??= outp;
+        }
+        return first ?? new JsonObject
+        {
+            ["result"] = "not_paid", ["attempts"] = new JsonArray(), ["waiting"] = false, ["reason"] = "", ["payment_id"] = payments[0].Id.ToString(),
         };
     }
 
@@ -851,7 +957,7 @@ public class OrdersBAL(
         UserModel user, string razorpayOrderId, string razorpayPaymentId, string razorpaySignature)
     {
         await using var uow = await db.BeginAsync();
-        var payment = await orders.PaymentByProviderOrderForUpdateAsync(razorpayOrderId, uow)
+        var payment = await orders.PaymentByProviderOrderForUpdateAsync(razorpayOrderId, uow, "razorpay")
             ?? throw new NotFoundException("Payment");
         var order = await orders.GetOrderAsync(payment.OrderId, uow) ?? throw new NotFoundException("Order");
         if (order.UserId != user.Id) throw new NotFoundException("Order");
@@ -872,7 +978,7 @@ public class OrdersBAL(
         {
             // The duplicate-payment refunds go to the gateway from the background refund worker (reference:
             // background.add_task(run_refunds, ...)).
-            refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+            refundQueue.Enqueue(await orders.UnsentRefundIdsAsync(payment.OrderId));
         }
         if (result == "not_captured")
             throw new AppException("The payment was not completed. You can try again.", "payment_not_captured");
@@ -913,14 +1019,14 @@ public class OrdersBAL(
         {
             await using (var uow = await db.BeginAsync())
             {
-                var payment = await orders.PaymentByProviderOrderForUpdateAsync(rzpOrder, uow);
+                var payment = await orders.PaymentByProviderOrderForUpdateAsync(rzpOrder, uow, "razorpay");
                 if (payment is null) return (null, "unknown", "");
                 orderId = payment.OrderId;
                 if (rzpPayment.Length > 0 && signature.Length > 0 && await razorpay.VerifyPaymentSignatureAsync(rzpOrder, rzpPayment, signature))
                 {
                     var result = await ConfirmWithGatewayAsync(payment, rzpPayment, uow);
                     await uow.CommitAsync();
-                    if (result == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+                    if (result == "refund") refundQueue.Enqueue(await orders.UnsentRefundIdsAsync(payment.OrderId));
                     if (result is "paid" or "already" or "refund") return (orderId, "success", "");
                     confirmedButNotDone = true;
                     res = new JsonObject();
@@ -930,19 +1036,19 @@ public class OrdersBAL(
                     // failure, a bad signature or no details: Razorpay's own records decide
                     res = await CheckWithGatewayAsync(payment, uow);
                     await uow.CommitAsync();
-                    if (res["result"]?.GetValue<string>() == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+                    if (res["result"]?.GetValue<string>() == "refund") refundQueue.Enqueue(await orders.UnsentRefundIdsAsync(payment.OrderId));
                 }
             }
             if (confirmedButNotDone)
             {
                 await using var uow = await db.BeginAsync();
-                var payment = await orders.PaymentByProviderOrderForUpdateAsync(rzpOrder, uow) ?? throw new NotFoundException("Payment");
+                var payment = await orders.PaymentByProviderOrderForUpdateAsync(rzpOrder, uow, "razorpay") ?? throw new NotFoundException("Payment");
                 res = await CheckWithGatewayAsync(payment, uow);
                 await uow.CommitAsync();
-                if (res["result"]?.GetValue<string>() == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+                if (res["result"]?.GetValue<string>() == "refund") refundQueue.Enqueue(await orders.UnsentRefundIdsAsync(payment.OrderId));
             }
         }
-        catch (Exception exc) when (exc is RazorpayBAL.GatewayException or AppException)
+        catch (Exception exc) when (exc is RazorpayBAL.GatewayException or BAL.Payments.PaymentGatewayException or AppException)
         {
             // the order page keeps checking, and the webhook also records the payment
             return (orderId, "checking", "");
@@ -967,6 +1073,7 @@ public class OrdersBAL(
     {
         var outp = new JsonObject { ["status"] = "not_paid", ["reason"] = "" };
         var committed = false;
+        var refundAfter = false;
         await using (var uow = await db.BeginAsync())
         {
             var o = await orders.GetOrderAsync(orderId, uow) ?? throw new NotFoundException("Order");
@@ -982,15 +1089,15 @@ public class OrdersBAL(
             }
             else
             {
-                await rateLimit.RateLimitAsync($"paycheck:{o.Id}", 80, 600, uow); // protects the Razorpay API quota
+                await rateLimit.RateLimitAsync($"paycheck:{o.Id}", 80, 600, uow); // protects the gateways' API quotas
                 try
                 {
-                    var res = await CheckWithGatewayAsync(payment, uow);
+                    var res = await CheckOrderPaymentsAsync(o, uow);
                     var result = res["result"]!.GetValue<string>();
                     if (result is "paid" or "already" or "already_paid" or "refund")
                     {
                         outp["status"] = "paid";
-                        if (result == "refund") refundQueue.Enqueue(await orders.PendingRefundIdsAsync(payment.Id));
+                        refundAfter = result == "refund";
                     }
                     else if (res["waiting"]!.GetValue<bool>()) outp["status"] = "waiting";
                     else if (res["reason"]!.GetValue<string>() is { Length: > 0 } r)
@@ -999,6 +1106,7 @@ public class OrdersBAL(
                         outp["reason"] = r;
                     }
                 }
+                catch (BAL.Payments.PaymentGatewayException) { outp["status"] = "unknown"; }
                 catch (RazorpayBAL.GatewayException) { outp["status"] = "unknown"; }
                 catch (AppException) { outp["status"] = "unknown"; }
             }
@@ -1006,6 +1114,7 @@ public class OrdersBAL(
             committed = true;
         }
         _ = committed;
+        if (refundAfter) refundQueue.Enqueue(await orders.UnsentRefundIdsAsync(orderId));
         var fresh = (await orders.GetOrderAsync(orderId))!;
         var detail = await DetailAsync(fresh);
         detail["payment"] = await ShopperCheckoutAsync(fresh, await orders.LatestPaymentAsync(fresh.Id), user);
@@ -1273,36 +1382,108 @@ public class OrdersBAL(
         }
     }
 
-    /// <summary>Sends one pending refund to Razorpay. Safe to call repeatedly (receipt = our refund id)
-    /// (reference: process_refund; attempts ≥ 8 → failed, needs manual attention in the admin panel).</summary>
+    /// <summary>Sends one pending refund to the gateway that took the payment. Safe to call repeatedly: a refund already
+    /// on its way is left alone, and a retry first asks the gateway whether the earlier try reached it. After 8 failed
+    /// tries the refund is marked failed and needs manual attention in the admin panel.</summary>
     public async Task ProcessRefundAsync(Guid refundId)
     {
         await using var uow = await db.BeginAsync();
         var refund = await orders.RefundForUpdateAsync(refundId, uow);
-        if (refund is null || refund.Status != "pending") return;
+        if (refund is null || refund.Status != "pending" || !string.IsNullOrEmpty(refund.ProviderRefundId)) return;
         var payment = await orders.PaymentForUpdateAsync(refund.PaymentId, uow) ?? throw new NotFoundException("Payment");
+        var retry = refund.Attempts > 0;
         refund.Attempts += 1;
+        string outReference, outStatus;
         try
         {
-            var data = await razorpay.RefundPaymentAsync(
-                refund.ProviderPaymentId ?? payment.ProviderPaymentId ?? "",
-                RefundCharge(payment, refund.AmountPaise),
-                refund.Id.ToString(),
-                new Dictionary<string, string> { ["refund_id"] = refund.Id.ToString() });
-            refund.ProviderRefundId = data["id"]?.GetValue<string>();
-            refund.Status = data["status"]?.GetValue<string>() == "processed" ? "processed" : "pending";
-            if (refund.Status == "pending") refund.LastError = "";
-            await orders.UpdateRefundAsync(refund, uow);
-            await uow.CommitAsync();
-            if (refund.Status == "processed") await NotifyRefundAsync(refund);
+            var g = Gateways.Get(payment.Provider);
+            var cfg = await integrations.GetAsync();
+            var status = "unknown";
+            if (retry && g.RefundLookupByOurId)
+                // an earlier try may have reached the gateway before it timed out: ask first, so the money goes back once
+                // (the other gateways are safe to ask again: Razorpay by its receipt, Stripe by the idempotency key)
+                status = await Health.ObserveAsync(g, _ => g.RefundStatusAsync(cfg, payment.ProviderOrderId, refund.Id.ToString(), ""));
+            if (status is "processed" or "pending")
+            {
+                (outReference, outStatus) = (refund.Id.ToString(), status); // the gateway files it under our refund id
+            }
+            else
+            {
+                var paymentRef = !string.IsNullOrEmpty(refund.ProviderPaymentId) ? refund.ProviderPaymentId : payment.ProviderPaymentId ?? "";
+                var sent = await Health.ObserveAsync(g, _ => g.RefundAsync(cfg, paymentRef, payment.ProviderOrderId, RefundCharge(payment, refund.AmountPaise),
+                    payment.Currency.Length > 0 ? payment.Currency : "INR", refund.Id.ToString(), refund.Reason.Length > 0 ? refund.Reason : "Refund"));
+                (outReference, outStatus) = (sent.Reference, sent.Status);
+            }
         }
-        catch (RazorpayBAL.GatewayException ex)
+        catch (BAL.Payments.PaymentGatewayException ex)
         {
             refund.LastError = ex.Message.Length > 500 ? ex.Message[..500] : ex.Message;
             if (refund.Attempts >= 8) refund.Status = "failed";
             await orders.UpdateRefundAsync(refund, uow);
             await uow.CommitAsync();
+            return;
         }
+        refund.ProviderRefundId = outReference.Length == 0 ? null : outReference.Length > 100 ? outReference[..100] : outReference;
+        refund.Status = outStatus == "processed" ? "processed" : "pending";
+        if (refund.Status == "pending") refund.LastError = "";
+        await orders.UpdateRefundAsync(refund, uow);
+        await uow.CommitAsync();
+        if (refund.Status == "processed") await NotifyRefundAsync(refund);
+    }
+
+    /// <summary>Asks the gateway how a refund that is on its way stands and records a final answer (the caller commits,
+    /// then tells the customer when it became processed). True when it changed. Throws PaymentGatewayException when the
+    /// gateway cannot be asked.</summary>
+    public async Task<bool> SyncRefundAsync(RefundModel refund, IUnitOfWork uow)
+    {
+        var payment = await orders.PaymentAsync(refund.PaymentId, uow) ?? throw new NotFoundException("Payment");
+        var g = Gateways.Get(payment.Provider);
+        var cfg = await integrations.GetAsync();
+        var status = await Health.ObserveAsync(g, _ => g.RefundStatusAsync(cfg, payment.ProviderOrderId, refund.Id.ToString(), refund.ProviderRefundId ?? ""));
+        if (status == "processed" && refund.Status != "processed")
+        {
+            refund.Status = "processed";
+            refund.LastError = "";
+            await orders.UpdateRefundAsync(refund, uow);
+            return true;
+        }
+        if (status == "failed" && refund.Status == "pending")
+        {
+            refund.Status = "failed";
+            refund.LastError = "The gateway reported the refund failed";
+            await orders.UpdateRefundAsync(refund, uow);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Refunds sent to a gateway but not confirmed yet (a webhook may be missing): each is asked about at most
+    /// every 10 minutes. Returns how many got a final answer.</summary>
+    public async Task<int> SyncPendingRefundsAsync()
+    {
+        var done = 0;
+        foreach (var id in await orders.RefundsToSyncAsync(DateTimeFunctions.UtcNow().AddMinutes(-10)))
+        {
+            await using var uow = await db.BeginAsync();
+            var refund = await orders.RefundForUpdateAsync(id, uow);
+            if (refund is null || refund.Status != "pending" || string.IsNullOrEmpty(refund.ProviderRefundId)) continue;
+            var changed = false;
+            try
+            {
+                changed = await SyncRefundAsync(refund, uow);
+                if (!changed) await orders.UpdateRefundAsync(refund, uow); // asked; ask again in 10 minutes
+            }
+            catch (BAL.Payments.PaymentGatewayException ex)
+            {
+                refund.LastError = ex.Message.Length > 500 ? ex.Message[..500] : ex.Message;
+                await orders.UpdateRefundAsync(refund, uow);
+            }
+            await uow.CommitAsync();
+            if (!changed) continue;
+            done++;
+            if (refund.Status == "processed") await NotifyRefundAsync(refund);
+        }
+        return done;
     }
 
     /// <summary>Tells the customer a refund has gone through (reference: notify_refund; call once, when it becomes
@@ -1732,9 +1913,9 @@ public class OrdersBAL(
     }
 
     /// <summary>
-    /// Reference: jobs.expire_unpaid_orders. An order whose payment window closed is cancelled unless the gateway
-    /// shows a captured/authorized attempt (then it is confirmed instead); a gateway error skips the order rather
-    /// than cancelling it.
+    /// Cancels online orders whose payment window closed, after asking each payment's gateway for a late payment: a
+    /// captured or authorised attempt is recorded instead (a second one is refunded as a duplicate), and a gateway that
+    /// cannot be asked leaves the order for the next run rather than cancelling it blindly.
     /// </summary>
     public async Task<int> ExpireUnpaidOrdersAsync()
     {
@@ -1743,14 +1924,16 @@ public class OrdersBAL(
         foreach (var order in expired)
         {
             var paid = false;
+            var cfg = await integrations.GetAsync();
             foreach (var pay in await orders.PaymentsForOrderAsync(order.Id))
             {
-                IReadOnlyList<System.Text.Json.Nodes.JsonObject>? attempts;
+                IReadOnlyList<BAL.Payments.PaymentAttempt>? attempts;
                 try
                 {
-                    attempts = await razorpay.OrderPaymentsAsync(pay.ProviderOrderId);
+                    var g = Gateways.Get(pay.Provider);
+                    attempts = await Health.ObserveAsync(g, ct => g.AttemptsAsync(cfg, pay.ProviderOrderId, ct));
                 }
-                catch (Exception e) when (e is RazorpayBAL.GatewayException or HttpRequestException)
+                catch (BAL.Payments.PaymentGatewayException)
                 {
                     attempts = null; // cannot verify right now: leave the order alone
                 }
@@ -1758,19 +1941,19 @@ public class OrdersBAL(
                 // every successful attempt is recorded: a second one (a duplicate UPI payment) is refunded, not lost
                 foreach (var a in attempts)
                 {
-                    if (a["status"]?.GetValue<string>() is not ("captured" or "authorized")) continue;
+                    if (a.Status is not ("captured" or "authorized")) continue;
                     try
                     {
                         await using var cuow = await db.BeginAsync();
                         // read again: an earlier attempt of this payment may have just been recorded
                         var current = await orders.PaymentForUpdateAsync(pay.Id, cuow) ?? pay;
-                        var r = await ConfirmWithGatewayAsync(current, a["id"]!.GetValue<string>(), cuow);
+                        var r = await ConfirmAttemptAsync(current, a, cuow, cfg);
                         await cuow.CommitAsync();
                         if (r is "paid" or "already") paid = true;
                     }
-                    catch (Exception e) when (e is AppException or RazorpayBAL.GatewayException or HttpRequestException)
+                    catch (Exception e) when (e is AppException or BAL.Payments.PaymentGatewayException)
                     {
-                        paid = true; // gateway rejected the confirm: leave the order alone
+                        paid = true; // the gateway refused the confirmation: leave the order alone
                     }
                 }
             }

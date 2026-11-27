@@ -24,7 +24,7 @@ public partial class WebhookBAL
                 if(payment is not null&&S(paymentEntity["status"])=="captured")
                 {
                     var result=await orderBal.MarkPaidAsync(payment,S(paymentEntity["id"]),S(paymentEntity["method"]),paymentEntity["amount"]?.GetValue<long>()??0,tx);
-                    if(result=="refund")refundIds=(await tx.QueryAsync<Guid>("SELECT id FROM refunds WHERE payment_id=@id AND status='pending'",new{id=payment.Id})).ToList();
+                    if(result=="refund")refundIds=(await tx.QueryAsync<Guid>("SELECT id FROM refunds WHERE order_id=@id AND status='pending' AND provider_refund_id IS NULL",new{id=payment.OrderId})).ToList();
                 }
             }
             else if(kind=="payment.failed")

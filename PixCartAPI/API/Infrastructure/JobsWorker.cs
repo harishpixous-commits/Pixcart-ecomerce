@@ -51,9 +51,11 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
             Every(TimeSpan.FromMinutes(2))),
         new("retry_refunds", async sp =>
         {
-            var ids = await sp.GetRequiredService<IOrdersBAL>().PendingRefundIdsAsync();
+            var ordersBal = sp.GetRequiredService<IOrdersBAL>();
+            var ids = await ordersBal.PendingRefundIdsAsync();
             if (ids.Count > 0) sp.GetRequiredService<IRefundQueue>().Enqueue(ids);
-            return ids.Count;
+            // refunds on their way at a gateway whose webhook did not arrive
+            return ids.Count + await ordersBal.SyncPendingRefundsAsync();
         }, Every(TimeSpan.FromMinutes(5))),
         new("cleanup", async sp =>
         {
@@ -64,6 +66,7 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
             var db = sp.GetRequiredService<IMySqlDapperHelper>();
             await db.ExecuteAsync("DELETE FROM ad_impressions WHERE created_at < UTC_TIMESTAMP(6) - INTERVAL 48 HOUR");
             await db.ExecuteAsync("DELETE FROM assistant_uploads WHERE expires_at < UTC_TIMESTAMP(6)");
+            await sp.GetRequiredService<BAL.Payments.PaymentHealth>().PruneAsync(); // gateway health events older than a week
             n += await db.ExecuteAsync(
                 "UPDATE assistant_actions SET status = 'expired' WHERE status = 'pending' AND created_at < UTC_TIMESTAMP(6) - INTERVAL 1 HOUR");
             return n;

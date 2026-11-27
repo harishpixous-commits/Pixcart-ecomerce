@@ -38,6 +38,18 @@ public interface IOrdersBAL
     /// <summary>POST /api/orders/{id}/payment-status (reference: payment_status): paid | waiting | failed |
     /// not_paid | unknown, from Razorpay's records, plus the shopper's order view.</summary>
     Task<JsonObject> CheckWithGatewayAsync(PaymentModel payment,IUnitOfWork uow);
+    /// <summary>The payment check for every attempt of an order (the latest first, then earlier open ones).</summary>
+    Task<JsonObject> CheckOrderPaymentsAsync(OrderModel order, IUnitOfWork uow);
+    /// <summary>Records an authorised or captured attempt reported by the payment's gateway (captured first where needed).</summary>
+    Task<string> ConfirmAttemptAsync(PaymentModel payment, BAL.Payments.PaymentAttempt attempt, IUnitOfWork uow,
+        Model.DomainModel.Integrations.IntegrationSettings? cfg = null);
+    /// <summary>Starts a payment for the order with the first gateway that can take it and adds the payment row.</summary>
+    Task<PaymentModel> StartPaymentAsync(OrderModel order, UserModel user, long amountPaise, string currency, long? charge,
+        IReadOnlyList<BAL.Payments.IPaymentGateway>? candidates, IUnitOfWork uow);
+    /// <summary>Asks the gateway about a refund on its way and records a final answer; true when it changed.</summary>
+    Task<bool> SyncRefundAsync(RefundModel refund, IUnitOfWork uow);
+    /// <summary>Refunds on their way for over 10 minutes, asked about again; how many got a final answer.</summary>
+    Task<int> SyncPendingRefundsAsync();
     Task<JsonObject> PaymentStatusAsync(UserModel user, Guid orderId);
     /// <summary>Razorpay's return to the site after a payment (reference: razorpay_callback); where to send the shopper.</summary>
     Task<(Guid? OrderId, string Outcome, string Reason)> PaymentReturnAsync(IReadOnlyDictionary<string, string> data);

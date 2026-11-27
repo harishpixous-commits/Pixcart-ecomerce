@@ -103,6 +103,11 @@ public class OrdersDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync("UPDATE products SET sold_count = sold_count + @qty, updated_at = UTC_TIMESTAMP() WHERE id = @productId",
             new { productId, qty });
 
+    /// <summary>Another payment of this order is already captured (a later capture is a duplicate).</summary>
+    public async Task<bool> OtherCapturedPaymentExistsAsync(Guid orderId, Guid paymentId, IUnitOfWork uow) =>
+        await uow.QueryFirstOrDefaultAsync<long>("SELECT COUNT(*) FROM payments WHERE order_id = @orderId AND status = 'captured' AND id <> @paymentId",
+            new { orderId, paymentId }) > 0;
+
     public Task<int> InsertPaymentAsync(PaymentModel p, IUnitOfWork uow) =>
         uow.ExecuteAsync(
             """
@@ -119,10 +124,12 @@ public class OrdersDAL(IMySqlDapperHelper db)
             : uow.QueryFirstOrDefaultAsync<PaymentModel>(
                 "SELECT * FROM payments WHERE order_id = @orderId ORDER BY created_at DESC LIMIT 1", new { orderId });
 
-    /// <summary>The captured online payment (Razorpay), shown as "Payment received" with its reference.</summary>
+    /// <summary>The order's payment, shown as "Payment received" with its reference: the captured one the gateway took
+    /// first (a later capture on another attempt is a duplicate, refunded to itself). Older rows without a capture time
+    /// count by when they were created.</summary>
     public Task<PaymentModel?> CapturedPaymentAsync(Guid orderId) =>
         db.QueryFirstOrDefaultAsync<PaymentModel>(
-            "SELECT * FROM payments WHERE order_id = @orderId AND status = 'captured' ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM payments WHERE order_id = @orderId AND status = 'captured' ORDER BY COALESCE(captured_at, created_at), created_at LIMIT 1",
             new { orderId });
 
     // ------------------------------------------------------------------ detail
@@ -214,9 +221,12 @@ public class OrdersDAL(IMySqlDapperHelper db)
     // ------------------------------------------------------------------ payments
 
     /// <summary>A payment row by its Razorpay order id, locked (reference: verify_payment).</summary>
-    public Task<PaymentModel?> PaymentByProviderOrderForUpdateAsync(string providerOrderId, IUnitOfWork uow) =>
-        uow.QueryFirstOrDefaultAsync<PaymentModel>(
-            "SELECT * FROM payments WHERE provider_order_id = @providerOrderId FOR UPDATE", new { providerOrderId });
+    public Task<PaymentModel?> PaymentByProviderOrderForUpdateAsync(string providerOrderId, IUnitOfWork uow, string? provider = null) =>
+        provider is null
+            ? uow.QueryFirstOrDefaultAsync<PaymentModel>(
+                "SELECT * FROM payments WHERE provider_order_id = @providerOrderId FOR UPDATE", new { providerOrderId })
+            : uow.QueryFirstOrDefaultAsync<PaymentModel>(
+                "SELECT * FROM payments WHERE provider = @provider AND provider_order_id = @providerOrderId FOR UPDATE", new { providerOrderId, provider });
 
     /// <summary>The order's latest payment, locked (reference: payment_status).</summary>
     public Task<PaymentModel?> LatestPaymentForUpdateAsync(Guid orderId, IUnitOfWork uow) =>
@@ -229,6 +239,43 @@ public class OrdersDAL(IMySqlDapperHelper db)
 
     public Task<PaymentModel?> PaymentForUpdateAsync(Guid id, IUnitOfWork uow) =>
         uow.QueryFirstOrDefaultAsync<PaymentModel>("SELECT * FROM payments WHERE id = @id FOR UPDATE", new { id });
+
+    public Task<PaymentModel?> PaymentAsync(Guid id, IUnitOfWork uow) =>
+        uow.QueryFirstOrDefaultAsync<PaymentModel>("SELECT * FROM payments WHERE id = @id", new { id });
+
+    /// <summary>Every payment of the order, newest first, locked (a payment check looks at every attempt).</summary>
+    public async Task<IReadOnlyList<PaymentModel>> PaymentsForOrderForUpdateAsync(Guid orderId, IUnitOfWork uow) =>
+        (await uow.QueryAsync<PaymentModel>("SELECT * FROM payments WHERE order_id = @orderId ORDER BY created_at DESC FOR UPDATE", new { orderId })).ToList();
+
+    /// <summary>The payment a gateway's return or event is about: by the gateway's order reference, else by its payment
+    /// reference; locked.</summary>
+    public async Task<PaymentModel?> PaymentByGatewayReferenceForUpdateAsync(string provider, string reference, IUnitOfWork uow)
+    {
+        if (reference.Length == 0) return null;
+        return await uow.QueryFirstOrDefaultAsync<PaymentModel>(
+                "SELECT * FROM payments WHERE provider = @provider AND provider_order_id = @reference FOR UPDATE", new { provider, reference })
+            ?? await uow.QueryFirstOrDefaultAsync<PaymentModel>(
+                "SELECT * FROM payments WHERE provider = @provider AND provider_payment_id = @reference FOR UPDATE", new { provider, reference });
+    }
+
+    /// <summary>The order's refunds that still have to be sent to a gateway (a duplicate payment can be on any of its payments).</summary>
+    public async Task<IReadOnlyList<Guid>> UnsentRefundIdsAsync(Guid orderId) =>
+        (await db.QueryAsync<Guid>(
+            "SELECT id FROM refunds WHERE order_id = @orderId AND status = 'pending' AND provider_refund_id IS NULL ORDER BY created_at",
+            new { orderId })).ToList();
+
+    /// <summary>A payment's refunds already sent to its gateway and not confirmed yet; locked.</summary>
+    public async Task<IReadOnlyList<RefundModel>> RefundsOnTheWayAsync(Guid paymentId, IUnitOfWork uow) =>
+        (await uow.QueryAsync<RefundModel>(
+            "SELECT * FROM refunds WHERE payment_id = @paymentId AND status = 'pending' AND provider_refund_id IS NOT NULL ORDER BY created_at FOR UPDATE",
+            new { paymentId })).ToList();
+
+    /// <summary>Refunds sent to a gateway but not confirmed since before the given time (a webhook may be missing), the
+    /// longest waiting first.</summary>
+    public async Task<IReadOnlyList<Guid>> RefundsToSyncAsync(DateTime before) =>
+        (await db.QueryAsync<Guid>(
+            "SELECT id FROM refunds WHERE status = 'pending' AND provider_refund_id IS NOT NULL AND updated_at < @before ORDER BY updated_at LIMIT 50",
+            new { before })).ToList();
 
     /// <summary>A refund already recorded for this gateway payment (reference: the duplicate check in mark_paid).</summary>
     public Task<bool> RefundExistsForProviderPaymentAsync(string providerPaymentId, IUnitOfWork uow) =>

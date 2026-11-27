@@ -108,12 +108,18 @@ public static class PaymentText
         _ => n.ToJsonString(),
     };
 
+    /// <summary>A whole number as a gateway sends it (a number, or digits in text); 0 when there is none. Numbers are read
+    /// from their JSON text, so a parsed answer and one built in memory read the same.</summary>
     public static long L(JsonNode? n) => n?.GetValueKind() switch
     {
-        JsonValueKind.Number => n.GetValue<double>() is var d ? (long)d : 0,
-        JsonValueKind.String => long.TryParse(n.GetValue<string>(), out var v) ? v : 0,
+        JsonValueKind.Number => WholeNumber(n.ToJsonString()),
+        JsonValueKind.String => long.TryParse(n.GetValue<string>(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0,
         _ => 0,
     };
+
+    private static long WholeNumber(string text) =>
+        long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var whole) ? whole
+        : double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? (long)d : 0;
 
     public static string Cut(string s, int n) => s.Length > n ? s[..n] : s;
 
