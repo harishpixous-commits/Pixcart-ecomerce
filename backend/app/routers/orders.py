@@ -245,7 +245,8 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     address = await get_owned_address(session, user.id, body.address_id)
     cfg = await get_settings(session)
     ck = await fees_svc.get(session)
-    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode)), cfg, (await get_integrations(session)).online_payments, ck)
+    bounds = await growth_svc.seller_free_bounds(session)
+    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode), bounds), cfg, (await get_integrations(session)).online_payments, ck, bounds)
     cod_fee = cfg["cod_fee_paise"] if body.payment_method == "cod" else 0
     view["summary"]["cod_fee"] = cod_fee
     view["summary"]["grand_total"] += cod_fee

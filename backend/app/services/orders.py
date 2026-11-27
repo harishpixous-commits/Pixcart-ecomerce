@@ -159,20 +159,28 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
     return lines
 
 
-def group_by_seller(lines: list[CartLine], cfg: dict, remote: tuple[int, bool] = (0, True)) -> list[SellerGroup]:
+def free_threshold(seller: Seller, cfg: dict, bounds: tuple[int, int] | None) -> int:
+    """The item total from which this seller's package ships free: the seller's own, kept inside the admin's bounds, else the marketplace's."""
+    own = getattr(seller, "free_shipping_threshold_paise", None)
+    if bounds is None or own is None:
+        return cfg["free_shipping_threshold_paise"]
+    return min(max(int(own), bounds[0]), bounds[1])
+
+
+def group_by_seller(lines: list[CartLine], cfg: dict, remote: tuple[int, bool] = (0, True), bounds: tuple[int, int] | None = None) -> list[SellerGroup]:
     groups: dict[uuid.UUID, SellerGroup] = {}
     for line in lines:
         groups.setdefault(line.seller.id, SellerGroup(line.seller)).lines.append(line)
     for g in groups.values():
         has_items = g.items_total > 0
-        g.shipping_fee = 0 if (not has_items or g.items_total >= cfg["free_shipping_threshold_paise"]) else cfg["shipping_fee_paise"]
+        g.shipping_fee = 0 if (not has_items or g.items_total >= free_threshold(g.seller, cfg, bounds)) else cfg["shipping_fee_paise"]
         # Remote-area surcharge (Admin -> Growth -> Shipping zones): once per seller package, not charged on an empty group.
         if has_items and remote[0] and not (remote[1] and g.shipping_fee == 0):
             g.shipping_fee += remote[0]
     return list(groups.values())
 
 
-def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, ck: dict | None = None) -> dict:
+def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, ck: dict | None = None, bounds: tuple[int, int] | None = None) -> dict:
     """The cart and its bill. With the checkout settings (``ck``) the marketplace's fees and the nudges are included."""
     items_total = sum(g.items_total for g in groups)
     shipping = sum(g.shipping_fee for g in groups)
@@ -185,7 +193,7 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, c
                 "seller": {"id": str(g.seller.id), "name": g.seller.display_name, "slug": g.seller.slug},
                 "items_total": g.items_total,
                 "shipping_fee": g.shipping_fee,
-                "free_shipping_gap": max(0, cfg["free_shipping_threshold_paise"] - g.items_total) if 0 < g.items_total < cfg["free_shipping_threshold_paise"] else 0,
+                "free_shipping_gap": max(0, free_threshold(g.seller, cfg, bounds) - g.items_total) if 0 < g.items_total < free_threshold(g.seller, cfg, bounds) else 0,
                 "lines": [
                     {
                         "id": str(line.cart_item_id),
@@ -301,7 +309,7 @@ async def place_order(
 
     from app.services import growth as growth_svc
 
-    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode))
+    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode), await growth_svc.seller_free_bounds(session))
     now = utcnow()
     is_online = payment_method == "online"
     categories = {c.id: c for c in (await session.execute(select(Category))).scalars()}

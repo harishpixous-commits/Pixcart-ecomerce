@@ -61,12 +61,17 @@ class PrefsIn(BaseModel):
     invoice_prefix: str = Field(default="", max_length=4, pattern=r"^[A-Z0-9]{0,4}$")
     # Orders placed before this time (IST) are packed that day; shoppers see "Order within ..." on product pages.
     dispatch_cutoff: str | None = Field(default=None, pattern=r"^((?:[01]\d|2[0-3]):[0-5]\d)?$")
+    # Own free-delivery threshold in paise; null clears it (back to the marketplace's). Only when sent, and only while Growth -> Seller shipping is on.
+    free_shipping_threshold_paise: int | None = Field(default=None, ge=0, le=10_000_000)
 
 
 @router.get("/preferences")
-async def get_prefs(seller: SellerAccount) -> dict:
-    return {"dispatch_days": seller.dispatch_days, "holiday_mode": seller.holiday_mode, "invoice_prefix": seller.invoice_prefix,
-            "dispatch_cutoff": seller.dispatch_cutoff, "rating_avg": float(seller.rating_avg or 0), "rating_count": seller.rating_count}
+async def get_prefs(seller: SellerAccount, session: SessionDep) -> dict:
+    from app.services import growth as growth_svc
+
+    bounds = await growth_svc.seller_free_bounds(session)
+    return {"free_shipping_bounds": {"min_paise": bounds[0], "max_paise": bounds[1]} if bounds else None, "dispatch_days": seller.dispatch_days, "holiday_mode": seller.holiday_mode, "invoice_prefix": seller.invoice_prefix,
+            "dispatch_cutoff": seller.dispatch_cutoff, "free_shipping_threshold_paise": seller.free_shipping_threshold_paise, "rating_avg": float(seller.rating_avg or 0), "rating_count": seller.rating_count}
 
 
 @router.put("/preferences")
@@ -74,9 +79,20 @@ async def put_prefs(body: PrefsIn, seller: SellerAccount, user: CurrentUser, ses
     seller.dispatch_days, seller.holiday_mode, seller.invoice_prefix = body.dispatch_days, body.holiday_mode, body.invoice_prefix
     if body.dispatch_cutoff is not None:
         seller.dispatch_cutoff = body.dispatch_cutoff
+    if "free_shipping_threshold_paise" in body.model_fields_set:
+        v = body.free_shipping_threshold_paise
+        if v is not None and v != seller.free_shipping_threshold_paise:  # an unchanged value sent back with the form is not re-checked
+            from app.services import growth as growth_svc
+
+            bounds = await growth_svc.seller_free_bounds(session)
+            if bounds is None:
+                raise ApiError("Own free-delivery amounts are not switched on", "seller_shipping_off")
+            if not bounds[0] <= v <= bounds[1]:
+                raise ApiError(f"Choose an amount between {bounds[0] // 100} and {bounds[1] // 100} rupees", "threshold_out_of_range")
+        seller.free_shipping_threshold_paise = v
     audit(session, user, "seller.preferences", "seller", seller.id, f"holiday={body.holiday_mode}")
     await session.commit()
-    return await get_prefs(seller)
+    return await get_prefs(seller, session)
 
 
 # ----------------------------------------------------------------------------- warehouses

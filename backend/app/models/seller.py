@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -65,6 +66,8 @@ class Seller(IdMixin, TimestampMixin, Base):
     dispatch_days: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
     # "HH:MM" (IST). Orders placed after this time are packed the next working day; "" = no cut-off shown.
     dispatch_cutoff: Mapped[str] = mapped_column(String(5), default="", server_default="")
+    # Own free-delivery threshold (paise); empty = the marketplace one. Used only while Growth -> Seller shipping is on.
+    free_shipping_threshold_paise: Mapped[int | None] = mapped_column(BigInteger)
     holiday_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     invoice_prefix: Mapped[str] = mapped_column(String(5), default="", server_default="")
     payout_contact_id: Mapped[str] = mapped_column(String(40), default="", server_default="")

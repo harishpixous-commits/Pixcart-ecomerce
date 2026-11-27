@@ -938,3 +938,47 @@ async def test_review_reminder_goes_once_per_delivered_package_that_is_not_revie
     assert await run() == 0  # once only
     await age(s3, 6)
     assert await run() == 1 and len(await notes(b)) == 1
+
+
+async def test_seller_can_set_own_free_delivery_amount_within_admin_bounds(client, admin, categories):
+    import uuid
+
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    tn, ka, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000111")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})  # 299 rupees from the second seller
+
+    async def quote():
+        return (await buyer.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})).json()
+
+    async def prefs(value):
+        return await ka.put("/api/seller/preferences", {"dispatch_days": 2, "holiday_mode": False, "free_shipping_threshold_paise": value})
+
+    base = await quote()
+    assert base["summary"]["shipping_total"] == 4000 and base["groups"][0]["free_shipping_gap"] == 49900 - 29900
+    assert (await prefs(20000)).json()["error"]["code"] == "seller_shipping_off"
+    assert (await ka.get("/api/seller/preferences")).json()["free_shipping_bounds"] is None
+    assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"enabled": True, "min_paise": 10000, "max_paise": 100000}})).status_code == 200
+    assert (await prefs(5000)).json()["error"]["code"] == "threshold_out_of_range"
+    assert (await prefs(200000)).json()["error"]["code"] == "threshold_out_of_range"
+    assert (await ka.get("/api/seller/preferences")).json()["free_shipping_bounds"] == {"min_paise": 10000, "max_paise": 100000}
+    r = await prefs(20000)
+    assert r.status_code == 200 and r.json()["free_shipping_threshold_paise"] == 20000
+    q = await quote()
+    assert q["summary"]["shipping_total"] == 0 and q["summary"]["grand_total"] == base["summary"]["grand_total"] - 4000 and q["groups"][0]["free_shipping_gap"] == 0
+    r = await ka.put("/api/seller/preferences", {"dispatch_days": 2, "holiday_mode": False})  # not sent: unchanged
+    assert r.json()["free_shipping_threshold_paise"] == 20000
+    assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"min_paise": 40000}})).status_code == 200  # admin tightens
+    assert (await quote())["summary"]["shipping_total"] == 4000  # 20000 is lifted to 40000 > 299 rupees
+    assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"enabled": False}})).status_code == 200
+    assert (await quote())["summary"]["shipping_total"] == 4000 and (await quote())["groups"][0]["free_shipping_gap"] == 20000
+    assert (await prefs(20000)).status_code == 200  # the form sends the stored value back while the module is off: fine
+    assert (await ka.get("/api/seller/preferences")).json()["free_shipping_bounds"] is None
+    assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"enabled": True, "min_paise": 10000}})).status_code == 200
+    assert (await prefs(None)).json()["free_shipping_threshold_paise"] is None
+    assert (await quote())["summary"]["shipping_total"] == 4000
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": str(uuid.uuid4())})
+    assert r.status_code == 201, r.text

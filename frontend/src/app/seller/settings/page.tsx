@@ -15,7 +15,7 @@ export default function SellerSettings() {
   const [g, setG] = useState({ name: "", email: "", phone: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [prefs, setPrefs] = useState<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string } | null>(null);
+  const [prefs, setPrefs] = useState<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string; free_shipping_threshold_paise: number | null; free_shipping_bounds: { min_paise: number; max_paise: number } | null } | null>(null);
 
   useEffect(() => {
     api<SellerProfile>("/api/seller/me").then((s) => {
@@ -23,7 +23,7 @@ export default function SellerSettings() {
       setStore({ display_name: s.display_name, description: s.description, contact_email: s.contact_email, contact_phone: s.contact_phone });
       setG(s.grievance);
     }).catch(quietly);
-    api<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string }>("/api/seller/preferences").then(setPrefs).catch(quietly);
+    api<{ dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string; free_shipping_threshold_paise: number | null; free_shipping_bounds: { min_paise: number; max_paise: number } | null }>("/api/seller/preferences").then(setPrefs).catch(quietly);
   }, []);
 
   async function save(key: string, path: string, body: object) {
@@ -76,6 +76,12 @@ export default function SellerSettings() {
               </div>
               <p className="text-xs text-ink-faint">Orders before this time count from today; later ones from the next working day. Shoppers see &ldquo;Order within 2 hrs 10 mins&rdquo; on your product pages.</p>
             </div>
+            {prefs.free_shipping_bounds && (
+              <TextField label="Free delivery from (rupees)" inputMode="numeric"
+                value={prefs.free_shipping_threshold_paise == null ? "" : String(Math.round(prefs.free_shipping_threshold_paise / 100))}
+                onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setPrefs({ ...prefs, free_shipping_threshold_paise: d === "" ? null : Number(d) * 100 }); }}
+                hint={`Orders from you above this amount ship free. Between ${Math.round(prefs.free_shipping_bounds.min_paise / 100)} and ${Math.round(prefs.free_shipping_bounds.max_paise / 100)}. Leave empty to use the marketplace amount.`} />
+            )}
             <TextField label="Invoice prefix" value={prefs.invoice_prefix} maxLength={4} onChange={(e) => setPrefs({ ...prefs, invoice_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} hint="Up to 4 letters, e.g. KOV gives KOV/26-27/000001" />
             <label className="flex items-start gap-3 rounded-lg bg-marigold-light p-3 sm:col-span-2">
               <input type="checkbox" className="mt-1 h-4 w-4 accent-peacock" checked={prefs.holiday_mode} onChange={(e) => setPrefs({ ...prefs, holiday_mode: e.target.checked })} />

@@ -45,6 +45,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "shipping_zones": {"enabled": (False, "bool", 0, 0), "remote_prefixes": ("", "text", 0, 300), "remote_surcharge_paise": (6000, "int", 0, 100000), "waive_when_free": (True, "bool", 0, 0)},
     "saved_searches": {"enabled": (False, "bool", 0, 0), "max_per_user": (10, "int", 1, 50), "min_hours_between_alerts": (24, "int", 1, 720)},
     "review_reminders": {"enabled": (False, "bool", 0, 0), "after_days": (5, "int", 1, 60), "max_age_days": (30, "int", 1, 180)},
+    "seller_shipping": {"enabled": (False, "bool", 0, 0), "min_paise": (0, "int", 0, 10000000), "max_paise": (500000, "int", 0, 10000000)},
     "segments": {"enabled": (False, "bool", 0, 0), "vip_spend_paise": (2500000, "int", 0, 1000000000), "lapsed_days": (90, "int", 7, 1000),
                  "new_days": (30, "int", 1, 365)},
 }
@@ -260,3 +261,12 @@ async def return_reasons(session: AsyncSession, *, only_on: bool = True) -> dict
         return labels
     on = {c: lab for c, lab in labels.items() if not cfg[f"off_{c}"]}
     return on or labels
+
+
+async def seller_free_bounds(session: AsyncSession) -> tuple[int, int] | None:
+    """Admin -> Growth -> Seller shipping: sellers may set their own free-delivery threshold between these bounds (paise).
+    None while switched off, so every seller uses the marketplace threshold."""
+    cfg = (await get(session))["seller_shipping"]
+    if not cfg["enabled"]:
+        return None
+    return int(cfg["min_paise"]), max(int(cfg["min_paise"]), int(cfg["max_paise"]))
