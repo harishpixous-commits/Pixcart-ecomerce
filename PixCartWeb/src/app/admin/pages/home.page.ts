@@ -182,13 +182,13 @@ export class FleetGlance {
           <pc-stat label="Sellers waiting for verification" [value]="d()!.sellers_pending_review" href="/admin/sellers?status=submitted" />
           <pc-stat label="Listings waiting for review" [value]="d()!.products_pending_review" href="/admin/products" />
           @if (d()!.orders_late_to_ship) {
-            <pc-stat label="Orders late to ship" [value]="d()!.orders_late_to_ship!" href="/admin/orders" />
+            <pc-stat label="Orders late to ship" [value]="d()!.orders_late_to_ship!" href="/admin/orders?late=1" />
           }
           <pc-stat label="Refunds that failed" [value]="d()!.refunds_needing_attention" href="/admin/refunds?status=failed" />
           @if (tickets() !== undefined) {
             <pc-stat label="Tickets past the 48-hour reply limit" [value]="tickets()!" href="/admin/support?overdue=1" />
           } @else {
-            <pc-stat label="Orders today" [value]="d()!.orders_today" href="/admin/orders" />
+            <pc-stat label="Orders today" [value]="d()!.orders_today" href="/admin/orders?late=1" />
           }
         </div>
       }

@@ -887,12 +887,14 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(1, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>());
         var staff = await Admin();
         Assert.Equal(1, (await staff.Get("/api/admin/dashboard")).Json["orders_late_to_ship"]!.GetValue<int>()); // staff see it too
+        Assert.Equal(1, (await staff.Get("/api/admin/orders?late=1")).Json["total"]!.GetValue<int>()); // and can open the list behind that number
         Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/confirm")).Status);
         Assert.Equal(1, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>());
         Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/pack")).Status);
         Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/ship", new { courier_name = "DTDC", tracking_number = "AWB9" })).Status);
         Assert.Equal(0, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>()); // shipped: no longer waiting on the seller
         Assert.Equal(0, (await staff.Get("/api/admin/dashboard")).Json["orders_late_to_ship"]!.GetValue<int>());
+        Assert.Equal(0, (await staff.Get("/api/admin/orders?late=1")).Json["total"]!.GetValue<int>());
     }
 
     [Fact]
