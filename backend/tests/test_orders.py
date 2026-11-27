@@ -348,3 +348,32 @@ async def test_order_again_puts_the_items_of_a_past_order_back_in_the_cart(clien
     other = await login_phone(client, "9770000131")
     assert (await other.post(f"/api/cart/reorder/{oid}")).status_code == 404  # not their order
     assert (await buyer.post(f"/api/cart/reorder/{uuid.uuid4()}")).status_code == 404
+
+
+async def test_seller_orders_list_counts_open_orders_older_than_the_dispatch_time(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import SubOrder
+    from tests.conftest import add_address, login_phone
+
+    tn, _, shirt, _ = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000150")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": str(uuid.uuid4())})).json()["order"]
+    sid = o["sub_orders"][0]["id"]
+    r = (await tn.get("/api/seller/orders")).json()
+    assert r["late_count"] == 0 and r["late_after_days"] >= 1
+    async with SessionLocal() as s:
+        await s.execute(update(SubOrder).where(SubOrder.id == uuid.UUID(sid)).values(created_at=utcnow() - timedelta(days=r["late_after_days"] + 1)))
+        await s.commit()
+    assert (await tn.get("/api/seller/orders")).json()["late_count"] == 1
+    assert (await tn.post(f"/api/seller/orders/{sid}/confirm")).status_code == 200  # still open, still late
+    assert (await tn.get("/api/seller/orders")).json()["late_count"] == 1
+    assert (await tn.post(f"/api/seller/orders/{sid}/pack")).status_code == 200
+    assert (await tn.post(f"/api/seller/orders/{sid}/ship", {"courier_name": "DTDC", "tracking_number": "AWB9"})).status_code == 200
+    assert (await tn.get("/api/seller/orders")).json()["late_count"] == 0  # shipped: no longer waiting on the seller

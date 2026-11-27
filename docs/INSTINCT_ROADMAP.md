@@ -252,3 +252,8 @@ The review reminder note now links to the first unreviewed product page (#review
 ## Push 84: pincode check follows the checkout delivery rules
 - Defect fixed (both versions): the "check delivery" box on the product page (GET /api/catalog/delivery-estimate) showed the marketplace fee and amount only. It now uses the same rules as the checkout quote: the seller own free-delivery amount (kept in the admin bounds), the by-state amount and fee, and the remote-area surcharge (waived when the package ships free). delivery_fee_paise includes the surcharge; free_delivery_from_paise is the amount that applies for that pincode state.
 - Tested: one new test each side (state fee plus surcharge, unlisted state, by-state amount, seller own amount winning). The shop assistant text and the home page announcement still quote the marketplace amount (they have no seller or address).
+
+
+## Push 85: seller orders page flags late orders
+- GET /api/seller/orders now also returns late_count (open packages: placed, confirmed or packed, created more than the seller own dispatch_days ago, at least 1 day) and late_after_days. The seller Orders page shows a note above the tabs ("N open orders are more than D days old. Ship them first."). No new route, no setting, no schema change; always on.
+- Tested: one new test each side (0 when fresh, 1 when old, still 1 after confirm, 0 once shipped). Screens type-checked only.

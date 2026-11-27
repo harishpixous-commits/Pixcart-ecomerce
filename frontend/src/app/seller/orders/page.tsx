@@ -38,6 +38,11 @@ function List() {
   return (
     <div>
       <PageHeader title="Orders" sub="Confirm, pack and ship each order. Customers can cancel until you ship." actions={<ExportButton scope="seller" name="orders" status={status || undefined} />} />
+      {!!data?.late_count && (
+        <p className="mb-3 rounded-lg bg-marigold-light px-3 py-2 text-sm text-ink" role="status">
+          {data.late_count} open order{data.late_count === 1 ? " is" : "s are"} more than {data.late_after_days} day{data.late_after_days === 1 ? "" : "s"} old. Ship {data.late_count === 1 ? "it" : "them"} first.
+        </p>
+      )}
       <Tabs value={status} onChange={(v) => { setPage(1); router.push(`/seller/orders?status=${v}`); }} items={TABS.map(([v, l]) => ({ value: v, label: l, count: v ? counts[v] ?? 0 : undefined }))} />
       <Input placeholder="Search by order number" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="mb-3 max-w-sm" aria-label="Search orders" />
       {!data ? (

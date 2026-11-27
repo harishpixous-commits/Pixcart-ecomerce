@@ -140,12 +140,18 @@ async def list_orders(
     counts = dict(
         (await session.execute(select(SubOrder.status, func.count()).where(SubOrder.seller_id == seller.id, SubOrder.status != "pending_payment").group_by(SubOrder.status))).all()
     )
+    # Open packages older than the seller's own dispatch time (at least a day): the ones to ship first.
+    late_days = max(1, seller.dispatch_days)
+    late = (await session.execute(select(func.count()).select_from(SubOrder).where(
+        SubOrder.seller_id == seller.id, SubOrder.status.in_(("placed", "confirmed", "packed")), SubOrder.created_at < utcnow() - timedelta(days=late_days)))).scalar_one()
     return {
         "items": [sub_out(r.SubOrder, r.Order, items.get(r.SubOrder.id, []), full=False) for r in rows],
         "total": total,
         "page": page,
         "page_size": page_size,
         "status_counts": counts,
+        "late_count": late,
+        "late_after_days": late_days,
     }
 
 
