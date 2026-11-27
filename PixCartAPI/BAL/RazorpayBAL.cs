@@ -147,10 +147,12 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
             throw new GatewayException("Payment gateway is not reachable right now");
         }
         JsonObject? json = null;
-        try { json = JsonNode.Parse(text) as JsonObject; } catch (JsonException) { /* handled below */ }
+        var readable = true;
+        try { json = JsonNode.Parse(text) as JsonObject; } catch (JsonException) { readable = false; }
         if (status >= 400)
         {
-            var desc = json?["error"]?["description"]?.GetValue<string>() ?? "";
+            // a body that is not JSON (a proxy's error page) is shown as it is, shortened
+            var desc = readable ? json?["error"]?["description"]?.GetValue<string>() ?? "" : (text.Length > 200 ? text[..200] : text);
             throw new GatewayException(desc.Length > 0 ? desc : $"Payment gateway error ({status})");
         }
         return json ?? new JsonObject();

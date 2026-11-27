@@ -16,7 +16,8 @@ public static class Money
     {
         var baseSum = weights.Values.Sum();
         if (baseSum <= 0 || totalDiscount <= 0) return weights.ToDictionary(kv => kv.Key, _ => 0L);
-        var raw = weights.ToDictionary(kv => kv.Key, kv => totalDiscount * (decimal)kv.Value / baseSum);
+        // shares in binary floating point, so the leftover paise go to the same lines on every version of the shop
+        var raw = weights.ToDictionary(kv => kv.Key, kv => (double)(totalDiscount * kv.Value) / baseSum);
         var outp = raw.ToDictionary(kv => kv.Key, kv => (long)Math.Floor(kv.Value));
         var left = totalDiscount - outp.Values.Sum();
         foreach (var k in raw.OrderByDescending(kv => kv.Value - Math.Floor(kv.Value)).Select(kv => kv.Key).Take((int)left))

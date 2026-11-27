@@ -241,6 +241,81 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(new RefundRow { ProviderPaymentId = "pay_SYNTH_SECOND", AmountPaise = 10000, Reason = "Duplicate payment" }, refund);
     }
 
+    [Fact]
+    public async Task Razorpayx_payout_events_mark_payouts_paid_or_failed()
+    {
+        var admin = await Admin();
+        var r = await admin.Put("/api/admin/integrations/razorpayx", new { values = new { account_number = "1234567890", webhook_secret = "xsecret" }, password = AdminPassword });
+        Assert.True(r.Status == 200, r.ToString());
+        var (_, _, sellerId) = await ShirtInStock("9400000206", "payout-shirt");
+        var paid = Guid.NewGuid();
+        var failed = Guid.NewGuid();
+        foreach (var (id, number, pout) in new[] { (paid, "PO-SYNTH-1", "pout_SYNTH_1"), (failed, "PO-SYNTH-2", "pout_SYNTH_2") })
+            await ApiFactory.DbExecAsync(
+                "INSERT INTO payouts (number, seller_id, amount, status, mode, utr, provider_payout_id, failure_reason, bank_snapshot, paid_at, id, created_at, updated_at) " +
+                "VALUES (@number, @sellerId, 150000, 'processing', 'razorpayx', '', @pout, '', CAST('{\"account_last4\": \"9012\"}' AS JSON), NULL, @id, @now, @now)",
+                new { number, sellerId, pout, id, now = Now });
+        async Task<int> Send(string evt, string pout, string extra, string eventId)
+        {
+            var raw = "{\"event\":\"" + evt + "\",\"payload\":{\"payout\":{\"entity\":{\"id\":\"" + pout + "\"" + extra + "}}}}";
+            var sig = Convert.ToHexStringLower(System.Security.Cryptography.HMACSHA256.HashData(System.Text.Encoding.UTF8.GetBytes("xsecret"), System.Text.Encoding.UTF8.GetBytes(raw)));
+            var res = await Factory.Browser().SendAsync(HttpMethod.Post, "/api/webhooks/razorpayx", new StringContent(raw, System.Text.Encoding.UTF8, "application/json"),
+                headers: new() { ["x-razorpay-signature"] = sig, ["x-razorpay-event-id"] = eventId });
+            return res.Status;
+        }
+        Assert.Equal(200, await Send("payout.processed", "pout_SYNTH_1", ",\"utr\":\"UTR123\"", "evt_synth_1"));
+        Assert.Equal("paid", await ApiFactory.DbScalarAsync<string>("SELECT status FROM payouts WHERE id = @paid", new { paid }));
+        Assert.Equal("UTR123", await ApiFactory.DbScalarAsync<string>("SELECT utr FROM payouts WHERE id = @paid", new { paid }));
+        Assert.Equal(200, await Send("payout.failed", "pout_SYNTH_2", ",\"status_details\":{\"description\":\"Beneficiary bank is down\"}", "evt_synth_2"));
+        Assert.Equal("failed", await ApiFactory.DbScalarAsync<string>("SELECT status FROM payouts WHERE id = @failed", new { failed }));
+        Assert.Equal("Beneficiary bank is down", await ApiFactory.DbScalarAsync<string>("SELECT failure_reason FROM payouts WHERE id = @failed", new { failed }));
+        Assert.Equal(200, await Send("payout.processed", "pout_SYNTH_UNKNOWN", "", "evt_synth_3"));  // an unknown payout changes nothing
+    }
+
+    [Fact]
+    public async Task Courier_tracking_moves_the_package_to_shipped_then_delivered()
+    {
+        var admin = await Admin();
+        var r = await admin.Put("/api/admin/integrations/shiprocket",
+            new { values = new { email = "ship@example.com", password = "ship-pass-123", webhook_token = "ship-token-123" }, password = AdminPassword });
+        Assert.True(r.Status == 200, r.ToString());
+        var (variantId, productId, _) = await ShirtInStock("9400000207", "awb-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000207", "Meena");
+        var addr = await AddAddress(buyer, state: "33");
+        r = await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.True(r.Status is 200 or 201, r.ToString());
+        r = await buyer.Post("/api/orders", Order(addr));
+        Assert.True(r.Status == 201, r.ToString());
+        var orderId = r.Json["order"]!["id"]!.GetValue<string>();
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'packed', tracking_number = 'AWB-SYNTH-1' WHERE order_id = @orderId", new { orderId });
+        async Task<int> Track(string status, string at)
+        {
+            var raw = "{\"awb\":\"AWB-SYNTH-1\",\"current_status\":\"" + status + "\",\"current_timestamp\":\"" + at + "\"}";
+            var res = await Factory.Browser().SendAsync(HttpMethod.Post, "/api/webhooks/shiprocket", new StringContent(raw, System.Text.Encoding.UTF8, "application/json"),
+                headers: new() { ["x-api-key"] = "ship-token-123" });
+            return res.Status;
+        }
+        Assert.Equal(200, await Track("IN TRANSIT", "2026-11-27 10:00"));
+        Assert.Equal("shipped", await ApiFactory.DbScalarAsync<string>("SELECT status FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+        Assert.Equal(200, await Track("DELIVERED", "2026-11-27 18:00"));
+        Assert.Equal("delivered", await ApiFactory.DbScalarAsync<string>("SELECT status FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+    }
+
+    [Fact]
+    public void Fee_gst_coupon_shares_and_shortfall_texts_follow_the_shop_rules()
+    {
+        Assert.Equal((1562L, 438L), BAL.FeesBAL.GstSplit(2000, 2800));  // 1562.5: an exact half rounds to even
+        Assert.Equal((312L, 88L), BAL.FeesBAL.GstSplit(400, 2800));
+        Assert.Equal((1695L, 305L), BAL.FeesBAL.GstSplit(2000, 1800));
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid();
+        var parts = BAL.Money.Allocate(12000, new Dictionary<Guid, long> { [a] = 10000, [b] = 10000, [c] = 70000 });
+        Assert.Equal((1333L, 1333L, 9334L), (parts[a], parts[b], parts[c]));  // the leftover paisa goes where it always has
+        Assert.Equal("2", CouponsBAL.ShortfallRupees(250));
+        Assert.Equal("4", CouponsBAL.ShortfallRupees(350));
+        Assert.Equal("123,457", CouponsBAL.ShortfallRupees(12345678));  // grouped in thousands on every server
+    }
+
     private sealed record RefundRow
     {
         public string ProviderPaymentId { get; init; } = "";

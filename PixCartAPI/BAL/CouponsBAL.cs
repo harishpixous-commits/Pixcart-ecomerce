@@ -14,6 +14,10 @@ namespace BAL;
 /// </summary>
 public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL catalog) : ICouponsBAL
 {
+    /// <summary>Whole rupees for the "add items worth" message: an exact half rounds to even, digits grouped in thousands.</summary>
+    public static string ShortfallRupees(long paise) =>
+        Math.Round(paise / 100m, 0, MidpointRounding.ToEven).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>A validated coupon: the discount and its per-cart-line split (variant id -> paise).</summary>
     public sealed record Result(CouponModel Coupon, long Discount, Dictionary<Guid, long> PerLine);
 
@@ -43,7 +47,7 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         var baseSum = eligible.Values.Sum();
         if (baseSum == 0) throw new AppException("This coupon does not apply to the items in your cart", "coupon_not_applicable");
         if (baseSum < c.MinOrderPaise)
-            throw new AppException($"Add items worth ₹{(c.MinOrderPaise - baseSum) / 100m:#,0} more to use this coupon", "coupon_min_order");
+            throw new AppException($"Add items worth ₹{ShortfallRupees(c.MinOrderPaise - baseSum)} more to use this coupon", "coupon_min_order");
         var discount = c.Kind == "percent" ? Money.ApplyBps(baseSum, c.Value) : c.Value;
         if (c.MaxDiscountPaise is { } max) discount = Math.Min(discount, max);
         discount = Math.Min(discount, baseSum);

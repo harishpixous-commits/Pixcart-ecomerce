@@ -107,12 +107,13 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
         return hours == 0 ? "" : ((now ?? DateTimeOffset.UtcNow) + TimeSpan.FromHours(hours)).ToString("o");
     }
 
-    private static string Rupees(long paise) => paise % 100 == 0 ? $"₹{paise / 100m:#,0}" : $"₹{paise / 100m:#,0.00}";
+    private static string Rupees(long paise) => "₹" + (paise / 100m).ToString(paise % 100 == 0 ? "#,0" : "#,0.00", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>(taxable value, GST) inside a GST-inclusive amount.</summary>
     public static (long Taxable, long Gst) GstSplit(long amount, int bps)
     {
-        var taxable = bps != 0 ? (long)Math.Round(amount * 10_000m / (10_000 + bps), MidpointRounding.AwayFromZero) : amount;
+        // an exact half rounds to even, as the shop has always rounded this split
+        var taxable = bps != 0 ? (long)Math.Round(amount * 10_000m / (10_000 + bps), MidpointRounding.ToEven) : amount;
         return (taxable, amount - taxable);
     }
 
