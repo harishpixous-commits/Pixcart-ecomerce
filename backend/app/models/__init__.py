@@ -10,7 +10,7 @@ from app.models.delivery import (
     PushToken,
 )
 from app.models.engagement import AnswerReport, AnswerVote, ProductAnswer, ProductQuestion, QuestionReport, StockAlert
-from app.models.growth import LoyaltyEntry
+from app.models.growth import LoyaltyEntry, Referral
 from app.models.extended import (
     AdminRole,
     AiRun,
@@ -77,7 +77,7 @@ __all__ = [
     "AdminRole", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
     "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle", "ProductVideo",
     "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",
-    "LoyaltyEntry", "PaymentGatewayEvent", "LedgerEntry", "MediaAsset", "Notification", "NotificationTemplate", "Payout", "ProductDailyStat", "ReturnItem",
+    "LoyaltyEntry", "Referral", "PaymentGatewayEvent", "LedgerEntry", "MediaAsset", "Notification", "NotificationTemplate", "Payout", "ProductDailyStat", "ReturnItem",
     "ReturnRequest", "Review", "ReviewReport", "ReviewVote", "ProductReport", "StockMovement", "SupportTicket", "TicketMessage", "Warehouse", "WishlistItem",
     "Address",
     "AuditLog",

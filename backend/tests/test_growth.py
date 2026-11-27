@@ -129,3 +129,40 @@ async def test_seller_sees_only_their_own_scorecard(client, admin, categories):
     r = (await tn.get("/api/seller/scorecard")).json()
     assert r["enabled"] is True and r["you"]["orders"] == 0 and r["limits"]["late_warn_percent"] == 10
     assert (await admin.get("/api/seller/scorecard")).status_code in (401, 403)
+
+
+async def test_referral_rewards_both_sides_once_on_the_friends_first_delivery(client, admin, categories):
+    import uuid
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import ship_and_deliver
+    from tests.test_orders import marketplace
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    ann = await login_phone(client, "9770000011")
+    bob = await login_phone(client, "9770000012")
+    code = (await ann.get("/api/referral")).json()["code"]
+    # off by default
+    assert (await bob.post("/api/referral/apply", {"code": code})).json()["error"]["code"] == "referral_off"
+    assert (await admin.put("/api/admin/growth/settings", {"referral": {"enabled": True, "min_order_paise": 100, "referrer_reward_paise": 10000, "friend_reward_paise": 5000}})).status_code == 200
+    assert (await bob.post("/api/referral/apply", {"code": ann.user and "PX00000000"})).json()["error"]["code"] == "invalid_code"
+    assert (await ann.post("/api/referral/apply", {"code": code})).json()["error"]["code"] == "own_code"
+    assert (await bob.post("/api/referral/apply", {"code": code})).status_code == 200
+    assert (await bob.post("/api/referral/apply", {"code": code})).json()["error"]["code"] == "already_used"
+
+    addr = await add_address(bob)
+    await bob.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+    o = (await bob.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).json()["order"]
+    assert (await ann.get("/api/loyalty")).json()["balance"] == 0  # nothing before delivery
+    await ship_and_deliver(seller, o["sub_orders"][0]["id"])
+    assert (await ann.get("/api/loyalty")).json()["balance"] == 100 and (await bob.get("/api/loyalty")).json()["balance"] == 50
+    s = (await ann.get("/api/referral")).json()
+    assert s["joined"] == 1 and s["rewarded"] == 1 and s["earned_paise"] == 10000
+    rows = (await admin.get("/api/admin/growth/referrals")).json()["items"]
+    assert len(rows) == 1 and rows[0]["status"] == "rewarded"
+
+    # a customer who already ordered cannot join afterwards
+    cy = await login_phone(client, "9770000013")
+    await add_address(cy)
+    await cy.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+    assert (await cy.post("/api/orders", {"address_id": await add_address(cy), "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).status_code == 201
+    assert (await cy.post("/api/referral/apply", {"code": code})).json()["error"]["code"] == "not_new"

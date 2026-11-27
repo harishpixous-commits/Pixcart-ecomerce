@@ -15,7 +15,7 @@ from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
 from app.config import settings
-from app.services import growth, loyalty, seo
+from app.services import growth, loyalty, referral, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -68,6 +68,31 @@ me_router = APIRouter(prefix="/api", tags=["loyalty"])
 @me_router.get("/loyalty")
 async def my_points(user: CurrentUser, session: SessionDep) -> dict:
     return await loyalty.summary(session, user.id)
+
+
+class ReferralIn(BaseModel):
+    code: str = Field(min_length=4, max_length=20)
+
+
+@me_router.get("/referral")
+async def my_referral(user: CurrentUser, session: SessionDep) -> dict:
+    return await referral.summary(session, user)
+
+
+@me_router.post("/referral/apply")
+async def apply_referral(body: ReferralIn, user: CurrentUser, session: SessionDep) -> dict:
+    out = await referral.apply(session, user, body.code)
+    await session.commit()
+    return out
+
+
+@router.get("/referrals")
+async def admin_referrals(admin: Perm("marketing"), session: SessionDep) -> dict:
+    from sqlalchemy import select
+    from app.models import Referral, User
+    rows = (await session.execute(select(Referral).order_by(Referral.created_at.desc()).limit(200))).scalars().all()
+    names = {u.id: u.name or u.phone or u.email or "" for u in (await session.execute(select(User).where(User.id.in_({i for r in rows for i in (r.referrer_id, r.referee_id)})))).scalars()} if rows else {}
+    return {"items": [{"referrer": names.get(r.referrer_id, ""), "friend": names.get(r.referee_id, ""), "status": r.status, "reward_paise": r.reward_paise, "at": r.created_at.isoformat()} for r in rows]}
 
 
 @me_router.get("/seo/sitemap.xml")

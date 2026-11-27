@@ -26,3 +26,18 @@ class LoyaltyEntry(IdMixin, Base):
         CheckConstraint("kind IN ('earn','redeem','expire','adjust','reverse')", name="kind"),
         UniqueConstraint("sub_order_id", "kind", name="uq_loyalty_sub_kind"),
     )
+
+
+class Referral(IdMixin, Base):
+    """A friend who joined with a customer's code. One row per friend. Rewards are credited as loyalty points."""
+
+    __tablename__ = "referrals"
+
+    referrer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    referee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    status: Mapped[str] = mapped_column(String(10), default="joined")
+    reward_paise: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    rewarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (CheckConstraint("status IN ('joined','rewarded','capped')", name="status"),)
