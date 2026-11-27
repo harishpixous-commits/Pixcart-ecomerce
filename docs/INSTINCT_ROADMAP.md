@@ -338,3 +338,7 @@ Completes Push 106: the home deals rail hides its ticking clock too when Admin �
 ## Push 109: points expiry reminder (in-app and email)
 
 New loyalty setting `expiry_reminder` (off by default; needs loyalty on and expiry_days above 0). A job every 6 hours sends each member whose points lapse within 30 days one in-app note and one email ("N points expire soon", editable template `points_expiring`, links to Rewards), not again until 30 days have passed. Both versions; a test on each side. Not run: real email delivery, browser. Admin Growth page shows the new switch from the settings schema; its hint text is not updated.
+
+## Push 110: Growth admin loyalty hint covers expiry and review deletion
+
+Hint text on Admin → Growth → Loyalty now explains expiry_days, expiry_reminder and that deleting a review also takes its points back. Web text only, both apps.
