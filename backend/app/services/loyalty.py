@@ -139,6 +139,24 @@ async def award_review(session: AsyncSession, review) -> int:
     return cfg["review_points"]
 
 
+async def take_back_review(session: AsyncSession, review) -> int:
+    """Takes back the bonus of a review staff hid (once; never below a zero balance). Returns the points taken."""
+    if review.sub_order_id is None:
+        return 0
+    given = (await session.execute(select(LoyaltyEntry).where(LoyaltyEntry.sub_order_id == review.sub_order_id, LoyaltyEntry.kind == "adjust", LoyaltyEntry.note.like("Review bonus%")))).scalar_one_or_none()
+    if given is None or given.user_id != review.user_id or given.points <= 0:
+        return 0
+    if (await session.execute(select(LoyaltyEntry.id).where(LoyaltyEntry.sub_order_id == review.sub_order_id, LoyaltyEntry.kind == "reverse"))).first():
+        return 0
+    balance = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == review.user_id))).scalar_one()
+    take = min(given.points, int(balance))
+    if take <= 0:
+        return 0
+    session.add(LoyaltyEntry(user_id=review.user_id, sub_order_id=review.sub_order_id, kind="reverse", points=-take, note="Review bonus taken back (review hidden)", created_at=utcnow()))
+    await session.flush()
+    return take
+
+
 def tier_free_delivery(cfg: dict, tier: str) -> bool:
     """Whether this tier carries free delivery (gold keeps what silver gets)."""
     return (tier == "gold" and bool(cfg["gold_free_delivery"] or cfg["silver_free_delivery"])) or (tier == "silver" and bool(cfg["silver_free_delivery"]))

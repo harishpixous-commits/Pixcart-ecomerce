@@ -287,3 +287,6 @@ Two new Loyalty settings in Admin → Growth, both off: `silver_free_delivery` a
 
 ## Push 95: review bonus points
 Two Loyalty settings in Admin → Growth: `review_points` (0 = off, default) and `review_min_chars` (30). When loyalty is on, a published review from someone who received the product earns that many points, once per delivered package (the ledger allows one "adjust" row per package, so editing or deleting and rewriting the review does not pay again). A review held for approval pays when staff publish it. Both versions; tested (off, too short, paid once, edit not paid again). The settings screen is the generic growth form, so no new screen. Not covered: points are not taken back if the review is later hidden.
+
+## Push 96: review bonus is taken back when staff hide the review
+Hiding a review (admin moderation) takes back its bonus once (never below a zero balance). Publishing it again does not pay twice. Both versions, tested. Not covered: a review the customer deletes keeps its bonus (rewriting does not pay again, so there is nothing to gain).
