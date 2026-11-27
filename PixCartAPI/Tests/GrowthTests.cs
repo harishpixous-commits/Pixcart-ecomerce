@@ -53,4 +53,27 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{scorecard=new{enabled=true,min_orders=1}})).Status);
         var r=await u.Get("/api/seller/scorecard");Assert.True(r.Status==200,r.ToString());Assert.True(r.Json["enabled"]!.GetValue<bool>());Assert.Equal(0,r.Json["you"]!["orders"]!.GetValue<int>());Assert.Equal(10,r.Json["limits"]!["late_warn_percent"]!.GetValue<int>());
     }
+    [Fact]public async Task Referral_rewards_both_sides_once_on_the_friends_first_delivery()
+    {
+        var admin=await Admin();var ann=await LoginPhone("9880000081");var bob=await LoginPhone("9880000082");var cy=await LoginPhone("9880000083");var a=Guid.Parse(ann.Id);var b=Guid.Parse(bob.Id);
+        var code=(await ann.Get("/api/referral")).Json["code"]!.GetValue<string>();
+        Assert.Equal("referral_off",(await bob.Post("/api/referral/apply",new{code})).ErrorCode);
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{referral=new{enabled=true,min_order_paise=100,referrer_reward_paise=10000,friend_reward_paise=5000}})).Status);
+        Assert.Equal("invalid_code",(await bob.Post("/api/referral/apply",new{code="PX00000000"})).ErrorCode);
+        Assert.Equal("own_code",(await ann.Post("/api/referral/apply",new{code})).ErrorCode);
+        Assert.Equal(200,(await bob.Post("/api/referral/apply",new{code})).Status);
+        Assert.Equal("already_used",(await bob.Post("/api/referral/apply",new{code})).ErrorCode);
+        using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        async Task<bool> Reward(Guid u,long total){await using var tx=await db.BeginAsync();var ok=await BAL.ReferralRewards.RewardAsync(tx,total,u);await tx.CommitAsync();return ok;}
+        Assert.False(await Reward(b,50));                      // below the minimum order
+        Assert.Equal(0,(await ann.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        Assert.True(await Reward(b,5000));Assert.False(await Reward(b,5000));  // once
+        Assert.Equal(100,(await ann.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());Assert.Equal(50,(await bob.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        var s=(await ann.Get("/api/referral")).Json;Assert.Equal(1,s["joined"]!.GetValue<int>());Assert.Equal(1,s["rewarded"]!.GetValue<int>());Assert.Equal(10000,s["earned_paise"]!.GetValue<long>());
+        var rows=(await admin.Get("/api/admin/growth/referrals")).Json["items"]!.AsArray();Assert.Single(rows);Assert.Equal("rewarded",rows[0]!["status"]!.GetValue<string>());
+        Assert.Equal(403,(await ann.Get("/api/admin/growth/referrals")).Status);
+        // a customer who already ordered cannot join afterwards
+        await ApiFactory.DbExecAsync("INSERT INTO orders(id,number,user_id,status,payment_method,payment_status,ship_to,items_total,shipping_total,cod_fee,refunded_total,grand_total,currency,fx_rate,fees,idempotency_key,created_at,updated_at) VALUES(@id,'PXREF1',@u,'placed','cod','pending','{}',100,0,0,0,100,'INR',1,'[]',@k,UTC_TIMESTAMP(),UTC_TIMESTAMP())",new{id=Guid.NewGuid(),u=Guid.Parse(cy.Id),k=Guid.NewGuid().ToString()});
+        Assert.Equal("not_new",(await cy.Post("/api/referral/apply",new{code})).ErrorCode);
+    }
 }

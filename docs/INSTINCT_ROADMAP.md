@@ -26,3 +26,4 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - Payments step 3b (.NET): routing/failover at checkout, switch, callback, webhook, admin routing API; 3 fake-gateway tests; Payment/Order/Integration/RouteGuard/Refund scoped runs green. Not wired: Admin Payments page, shopper UI modes, Flutter.
 - Admin Payments page (Angular): same as Next.js version. Type-checked only.
 - Shopper payment modes (Angular): same as Next.js (core/gateway-pay.ts, Pay another way). Type-checked only.
+- Referral (.NET): V008__referrals.sql, BAL/ReferralRewards.cs, GET /api/referral, POST /api/referral/apply, admin GET /api/admin/growth/referrals; both sides get loyalty points on the friend's first delivered package. Test added; Growth, RouteGuard, Delivery, Parity scoped runs green. Not wired: shopper and admin screens, redeeming points at checkout.

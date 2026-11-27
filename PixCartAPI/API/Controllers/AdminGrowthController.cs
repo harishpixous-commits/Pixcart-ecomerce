@@ -22,6 +22,15 @@ public class LoyaltyController(IGrowthBAL bal, ICurrentUser me) : ControllerBase
     [HttpGet, RouteGuard("signed_in")] public async Task<object> Mine() => await bal.LoyaltyAsync((await me.RequireAsync()).Id);
 }
 
+[ApiController, SignedIn]
+public class ReferralController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me) : ControllerBase
+{
+    public record ApplyIn { [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(20, MinimumLength = 4)] public string Code { get; init; } = ""; }
+    [HttpGet("/api/referral"), RouteGuard("signed_in")] public async Task<object> Mine() => await BAL.ReferralRewards.SummaryAsync(db, (await me.RequireAsync()).Id);
+    [HttpPost("/api/referral/apply"), RouteGuard("signed_in")] public async Task<object> Apply(ApplyIn b) => await BAL.ReferralRewards.ApplyAsync(db, (await me.RequireAsync()).Id, b.Code);
+    [HttpGet("/api/admin/growth/referrals"), RouteGuard("perm:marketing")] public async Task<object> All() { await me.RequireAsync(); return new { items = await BAL.ReferralRewards.ListAsync(db) }; }
+}
+
 [ApiController]
 public class SeoController(IGrowthBAL bal) : ControllerBase
 {
