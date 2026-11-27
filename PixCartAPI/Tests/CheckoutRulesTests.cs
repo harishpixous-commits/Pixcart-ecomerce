@@ -801,6 +801,26 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Free_delivery_amount_can_differ_by_destination_state()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000309", "state-free-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000122", "State Free Buyer");
+        var home = await AddAddress(buyer, state: "33");
+        var other = await AddAddress(buyer, state: "29", pincode: "560001");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        async Task<long> Ship(string addr) => (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["groups"]![0]!["shipping_fee"]!.GetValue<long>();
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { enabled = true, state_free_above = "29:90000000" } })).Status);
+        var high = await Ship(other); Assert.True(high > 0); // a very high amount in that state: the package pays
+        Assert.Equal(0, await Ship(home)); // the other state keeps the marketplace amount (this package ships free there)
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { state_free_above = "29:1, 99 : 5, junk" } })).Status);
+        Assert.Equal(0, await Ship(other)); Assert.Equal(0, await Ship(home));
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { enabled = false } })).Status);
+        Assert.Equal(0, await Ship(other)); // switched off: the marketplace amount again
+    }
+
+    [Fact]
     public async Task Delivery_fee_can_differ_by_destination_state()
     {
         var admin = await Admin();

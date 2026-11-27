@@ -30,6 +30,20 @@ public static class ShippingZones
         return null;
     }
 
+    /// <summary>"state_free_above" ("33:80000"): a copy of the marketplace settings with the free-delivery threshold for that state; the same object when off or not listed. A seller's own threshold still wins.</summary>
+    public static async Task<JsonObject> WithStateThresholdAsync(IMySqlDapperHelper db, JsonObject cfg, string? stateCode)
+    {
+        var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var zc = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["shipping_zones"]!;
+        if (!zc.Bool("enabled")) return cfg;
+        foreach (Match m in Regex.Matches(zc["state_free_above"]?.ToString() ?? "", @"(\d{2})\s*[:=]\s*(\d{1,9})"))
+            if (m.Groups[1].Value == (stateCode ?? ""))
+            {
+                var copy = (JsonObject)cfg.DeepClone(); copy["free_shipping_threshold_paise"] = long.Parse(m.Groups[2].Value); return copy;
+            }
+        return cfg;
+    }
+
     public static async Task<(long Amount, bool Waive)> SurchargeAsync(IMySqlDapperHelper db, string? pincode)
     {
         var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));

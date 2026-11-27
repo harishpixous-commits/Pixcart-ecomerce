@@ -152,6 +152,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     {
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
+        if (stateCode is not null) cfg = await ShippingZones.WithStateThresholdAsync(db, cfg, stateCode);
         return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode), await ShippingZones.SellerFreeBoundsAsync(db), stateCode is null ? null : await ShippingZones.StateFeeAsync(db, stateCode)), cfg, await razorpay.OnlinePaymentsAsync(), ck, await ShippingZones.SellerFreeBoundsAsync(db));
     }
 
