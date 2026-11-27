@@ -15,6 +15,27 @@ public static class LoyaltyPoints
     /// <summary>Extra points a tier earns on top of the normal rate. 0 for members and while unset.</summary>
     public static int BonusPercent(JsonObject cfg, string tier) => tier == "gold" ? cfg.Int("gold_bonus_percent") : tier == "silver" ? cfg.Int("silver_bonus_percent") : 0;
 
+    /// <summary>Points for a published review of a package the member received (review_points, 0 = off). Once per delivered package
+    /// (one 'adjust' row per package) and only for a review of at least review_min_chars. Returns the points given.</summary>
+    public static async Task<int> AwardReviewAsync(IUnitOfWork uow, Guid reviewId)
+    {
+        var saved = JsonHelper.Object(await uow.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(BAL.GrowthBAL.Defaults(), saved)["loyalty"]!;
+        var points = cfg.Int("review_points");
+        if (!cfg.Bool("enabled") || points <= 0) return 0;
+        var r = await uow.QueryFirstOrDefaultAsync<(Guid UserId, Guid? SubOrderId, string Status, bool Verified, string Body, string Title)?>(
+            "SELECT r.user_id AS UserId, r.sub_order_id AS SubOrderId, r.status AS Status, r.verified AS Verified, r.body AS Body, p.title AS Title FROM reviews r JOIN products p ON p.id = r.product_id WHERE r.id = @reviewId", new { reviewId });
+        if (r is null || r.Value.Status != "published" || !r.Value.Verified || r.Value.SubOrderId is null) return 0;
+        if (r.Value.Body.Trim().Length < cfg.Int("review_min_chars")) return 0;
+        var done = await uow.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM loyalty_ledger WHERE sub_order_id = @sub AND kind = 'adjust'", new { sub = r.Value.SubOrderId });
+        if (done > 0) return 0;
+        var note = ("Review bonus: " + r.Value.Title); if (note.Length > 200) note = note[..200];
+        await uow.ExecuteAsync(
+            "INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, @sub, 'adjust', @points, @note, @now)",
+            new { id = Guid.NewGuid(), userId = r.Value.UserId, sub = r.Value.SubOrderId, points, note, now = DateTime.UtcNow });
+        return points;
+    }
+
     public static bool TierFreeDelivery(JsonObject cfg, string tier) =>
         (tier == "gold" && (cfg.Bool("gold_free_delivery") || cfg.Bool("silver_free_delivery"))) || (tier == "silver" && cfg.Bool("silver_free_delivery"));
 

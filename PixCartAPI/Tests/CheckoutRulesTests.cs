@@ -893,6 +893,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Review_bonus_points_once_per_delivered_package_only_for_a_real_review()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000341", "review-bonus-shirt");
+        await Refresh(productId);
+        var a = await LoginPhone("9770000171", "Review Bonus A");
+        var addr = await AddAddress(a, state: "33");
+        await a.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await a.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        var sid = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'delivered', delivered_at = UTC_TIMESTAMP(6) WHERE id = @sid", new { sid });
+        const string text = "Works well, fits true to size and the cotton feels good.";
+        async Task<int> Put(string body, int rating = 5) => (await a.Put("/api/catalog/products/review-bonus-shirt/reviews", new { rating, title = "Good", body })).Status;
+        async Task<long> Balance() => (await a.Get("/api/loyalty")).Json["balance"]!.GetValue<long>();
+        Assert.True(await Put(text) is 200 or 201); Assert.Equal(0, await Balance()); // switched off
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, review_points = 25, review_min_chars = 30 } })).Status);
+        Assert.True(await Put("Nice") is 200 or 201); Assert.Equal(0, await Balance()); // too short
+        Assert.True(await Put(text) is 200 or 201); Assert.Equal(25, await Balance());
+        Assert.True(await Put(text + " Edited.", 4) is 200 or 201); Assert.Equal(25, await Balance()); // once
+        Assert.StartsWith("Review bonus", (await a.Get("/api/loyalty")).Json["history"]![0]!["note"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Pincode_check_on_the_product_page_follows_the_same_delivery_rules_as_checkout()
     {
         var admin = await Admin();

@@ -275,3 +275,6 @@ Two new Loyalty settings in Admin → Growth, both off: `silver_free_delivery` a
 
 ## Push 94: rewards page tells the member about the free-delivery perk
 `GET /api/loyalty` now returns `free_delivery` (true when loyalty is on and the member tier carries the perk from Push 93). The Rewards page shows "free delivery on your orders" next to the tier. Both versions; tested in the tier test; screens type-checked only.
+
+## Push 95: review bonus points
+Two Loyalty settings in Admin → Growth: `review_points` (0 = off, default) and `review_min_chars` (30). When loyalty is on, a published review from someone who received the product earns that many points, once per delivered package (the ledger allows one "adjust" row per package, so editing or deleting and rewriting the review does not pay again). A review held for approval pays when staff publish it. Both versions; tested (off, too short, paid once, edit not paid again). The settings screen is the generic growth form, so no new screen. Not covered: points are not taken back if the review is later hidden.

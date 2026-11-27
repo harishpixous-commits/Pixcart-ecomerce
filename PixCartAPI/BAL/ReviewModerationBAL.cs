@@ -76,6 +76,7 @@ public class ReviewModerationBAL(IAccessBAL access, IMySqlDapperHelper db) : IRe
             await uow.ExecuteAsync("UPDATE reviews SET report_count = 0, updated_at = UTC_TIMESTAMP(6) WHERE id = @reviewId", new { reviewId });
         }
         await RefreshRatingsAsync(uow, r.ProductId);
+        if (action == "publish") await LoyaltyPoints.AwardReviewAsync(uow, r.Id);
         await uow.ExecuteAsync(
             "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) " +
             "VALUES (@actor, @action, 'review', @eid, '', UTC_TIMESTAMP(6), @id)",

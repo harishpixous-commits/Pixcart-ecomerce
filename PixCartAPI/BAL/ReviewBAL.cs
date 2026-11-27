@@ -21,7 +21,8 @@ public partial class ReviewBAL(
     IPlatformSettingsBAL platform,
     IReviewSettingsBAL reviewSettings,
     IImageUpload uploads,
-    AppSettings app) : IReviewBAL
+    AppSettings app,
+    IMySqlDapperHelper db) : IReviewBAL
 {
     /// <summary>Phone numbers, emails and links: such posts wait for a person to check them.</summary>
     [GeneratedRegex(@"(https?://|www\.|\b[\w.+-]+@[\w-]+\.[\w.]+\b|(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{9}(?!\d))", RegexOptions.IgnoreCase)]
@@ -195,6 +196,7 @@ public partial class ReviewBAL(
         if (existing is null) await reviews.InsertAsync(r);
         else await reviews.UpdateAsync(r);
         await reviews.RefreshRatingsAsync(p.Id);
+        await using (var tx = await db.BeginAsync()) { if (await LoyaltyPoints.AwardReviewAsync(tx, r.Id) > 0) await tx.CommitAsync(); }  // review bonus points (off unless set in Admin → Growth → Loyalty)
         return new JsonObject { ["ok"] = true, ["status"] = r.Status, ["media_status"] = r.MediaStatus, ["held_for_check"] = flagged };
     }
 
