@@ -84,3 +84,6 @@ Hardening idea, not done (not reachable today): reject an empty expected code, s
 
 ## Review slice 11 of 20: delivery-admin (Instinct)
 Read in Python: cash, deposits, payouts list/generate/paid, partner docs and bank view. Payout paid is locked and idempotent; bank view needs the payouts permission and is audited. Held, low severity, same in both versions: recording a cash deposit reads the partner's cash in hand without locking the partner, so two staff recording at the same instant could together exceed what the partner holds. Fix is a row lock (Python) and a new for-update read plus unit of work (.NET); not done this pass. Rest of the file (assign, zones, KYC, reports) not read line by line.
+
+## Review slice 12 of 20: admin-ops (Instinct)
+Read in Python: seller suspend/commission, admin cancel and deliver, refund retry and manual settle, customer block/unblock, and the refund worker they interact with. Checked that settle-by-hand and the refund worker cannot both pay: the worker holds the refund row lock across the gateway call and settle waits on the same lock. Gateway errors from every provider share one error class, so failed non-Razorpay refunds reach "failed" after 8 tries. No defect found. Not read line by line: dashboard, seller/product lists, product approve/reject, categories, customers list, reports. .NET side not compared this pass.
