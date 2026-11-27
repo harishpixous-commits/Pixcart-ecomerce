@@ -247,3 +247,8 @@ The review reminder note now links to the first unreviewed product page (#review
 ## Push 83: product page shows the seller own free-delivery amount
 - Defect fixed (both versions): the product page "Free when you buy X or more from this seller" always showed the marketplace amount, even when a seller had set their own (Push 72) and the cart used it. The product payload seller block now carries free_shipping_threshold_paise (the seller own amount kept inside the admin bounds when Seller shipping is on, else the marketplace amount), and the product page uses it. Not changed: the by-state amount (Push 79) needs a delivery address, so the product page still ignores it.
 - Tested: assertions added to the existing seller-own-amount test on each side (own amount shown, marketplace amount when the module is off). Screens type-checked only.
+
+
+## Push 84: pincode check follows the checkout delivery rules
+- Defect fixed (both versions): the "check delivery" box on the product page (GET /api/catalog/delivery-estimate) showed the marketplace fee and amount only. It now uses the same rules as the checkout quote: the seller own free-delivery amount (kept in the admin bounds), the by-state amount and fee, and the remote-area surcharge (waived when the package ships free). delivery_fee_paise includes the surcharge; free_delivery_from_paise is the amount that applies for that pincode state.
+- Tested: one new test each side (state fee plus surcharge, unlisted state, by-state amount, seller own amount winning). The shop assistant text and the home page announcement still quote the marketplace amount (they have no seller or address).

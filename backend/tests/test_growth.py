@@ -1172,3 +1172,27 @@ async def test_ship_reminder_goes_once_to_the_seller_of_a_confirmed_package_that
     assert (await tn.post(f"/api/seller/orders/{s3}/ship", {"courier_name": "DTDC", "tracking_number": "AWB1"})).status_code == 200
     await age(s3, 40)
     assert await run() == 0
+
+
+async def test_pincode_check_on_the_product_page_follows_the_same_delivery_rules_as_checkout(client, admin, categories):
+    from tests.test_orders import marketplace
+
+    _, ka, shirt, cable = await marketplace(client, admin, categories)
+    vid = cable["variants"][0]["id"]  # 299 rupees
+
+    async def est(pin):
+        return (await client.get(f"/api/catalog/delivery-estimate?variant_id={vid}&pincode={pin}")).json()
+
+    e = await est("560001")
+    assert e["delivery_fee_paise"] == 4000 and e["free_delivery_from_paise"] == 49900
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": True, "state_fees": "29:9000", "remote_prefixes": "5600", "remote_surcharge_paise": 6000}})).status_code == 200
+    assert (await est("560001"))["delivery_fee_paise"] == 15000  # state fee plus the remote-area surcharge
+    assert (await est("600002"))["delivery_fee_paise"] == 4000  # unlisted state, not remote
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"state_free_above": "29:20000"}})).status_code == 200
+    e = await est("560001")
+    assert e["free_delivery_from_paise"] == 20000 and e["delivery_fee_paise"] == 0  # free there, surcharge waived when free
+    assert (await est("600002"))["free_delivery_from_paise"] == 49900
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": False}, "seller_shipping": {"enabled": True, "min_paise": 0, "max_paise": 100000}})).status_code == 200
+    assert (await ka.put("/api/seller/preferences", {"dispatch_days": 2, "holiday_mode": False, "free_shipping_threshold_paise": 10000})).status_code == 200
+    e = await est("560001")
+    assert e["free_delivery_from_paise"] == 10000 and e["delivery_fee_paise"] == 0  # the seller's own amount

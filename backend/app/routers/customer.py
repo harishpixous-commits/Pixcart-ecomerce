@@ -692,13 +692,23 @@ async def delivery_estimate(session: SessionDep, variant_id: uuid.UUID, pincode:
     cfg = await get_settings(session)
     best = min((estimate(cfg, seller.dispatch_days, w.pincode, w.state_code, pin, cutoff=seller.dispatch_cutoff) for w in whs),
                key=lambda e: e["days_min"])
-    free_from = cfg["free_shipping_threshold_paise"]
+    # The same rules as the checkout quote: the seller's own amount, the by-state amount and fee, the remote-area surcharge.
+    from app.services import growth as growth_svc
+    from app.services.orders import free_threshold
+
+    state_code = state_for_pin(pin) or ""
+    free_from = free_threshold(seller, await growth_svc.with_state_threshold(session, cfg, state_code), await growth_svc.seller_free_bounds(session))
+    state_fee = None if v.price_paise >= free_from else await growth_svc.state_fee(session, state_code)
+    fee = 0 if v.price_paise >= free_from else (cfg["shipping_fee_paise"] if state_fee is None else state_fee)
+    extra, waive = await growth_svc.remote_surcharge(session, pin)
+    if extra and not (waive and fee == 0):
+        fee += extra
     return {
         "serviceable": True, **best,
         "cod_available": cfg["cod_enabled"] and v.price_paise <= cfg["cod_max_order_paise"],
         "order_within_min": best["order_within_min"] if cfg["pdp_delivery_countdown"] else None,
         # delivery is charged per seller package; free once that seller's items reach the threshold
-        "delivery_fee_paise": 0 if v.price_paise >= free_from else cfg["shipping_fee_paise"],
+        "delivery_fee_paise": fee,
         "free_delivery_from_paise": free_from,
         "state": STATES.get(state_for_pin(pin) or "", ""),
     }
