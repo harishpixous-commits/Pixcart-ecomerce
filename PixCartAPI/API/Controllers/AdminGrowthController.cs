@@ -69,6 +69,12 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
         var u = await me.RequireAsync(); await limits.RateLimitAsync($"giftcard:{u.Id}", 20, 600);
         await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.BalanceAsync(tx, b.Code); await tx.CommitAsync(); return r;
     }
+    [HttpGet("/api/gift-cards/options"), RouteGuard("signed_in")]
+    public async Task<object> Options()
+    {
+        await me.RequireAsync();
+        await using var tx = await db.BeginAsync(); var c = await BAL.GiftCards.OptionsAsync(tx); await tx.CommitAsync(); return c;
+    }
     public record BuyIn { [System.ComponentModel.DataAnnotations.Range(100, 100000000)] public int AmountPaise { get; init; } }
     [HttpPost("/api/gift-cards/purchase"), RouteGuard("signed_in")]
     public async Task<IActionResult> Buy(BuyIn b)

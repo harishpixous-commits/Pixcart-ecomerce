@@ -11,6 +11,9 @@ import { Toast } from "../../shared/ui/ui";
 type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
 type Referral = { enabled: boolean; code: string; referrer_reward_paise: number; friend_reward_paise: number; min_order_paise: number; joined: number; rewarded: number; earned_paise: number; used_code: boolean };
 type Made = { code: string; discount_paise: number; min_order_paise: number; valid_days: number };
+type Options = { can_buy: boolean; min_paise: number; max_paise: number };
+type Purchase = { id: string; status: string; amount_paise: number; error: string; code?: string; expires_at?: string; payment?: { mode: string; url?: string } };
+const PENDING_KEY = "pixcart.giftPurchase";
 type CardInfo = { balance_paise: number; status: string; expires_at: string };
 
 @Component({
@@ -64,6 +67,29 @@ type CardInfo = { balance_paise: number; status: string; expires_at: string };
           </section>
         }
       }
+      @if (options(); as o) {
+        @if (o.can_buy) {
+          <section class="rounded-xl bg-white p-4 sm:p-6" data-testid="buy-gift-card">
+            <h2 class="flex items-center gap-2 text-xl font-semibold"><svg [pcIcon]="Gift" class="h-5 w-5 text-vermilion" /> Buy a gift card</h2>
+            <p class="mt-1 text-sm text-ink-soft">From {{ rupees(o.min_paise) }} to {{ rupees(o.max_paise) }}. The card code appears here after your payment is confirmed.</p>
+            @if (purchase(); as p) {
+              @if (p.status === "issued" && p.code) {
+                <p class="mt-3 font-semibold">Your gift card: <span class="font-mono text-peacock">{{ p.code }}</span> ({{ rupees(p.amount_paise) }}, expires {{ date(p.expires_at ?? "") }}). Save this code.</p>
+              } @else if (p.status === "failed") {
+                <p class="mt-3 text-vermilion">{{ p.error || "The payment did not go through." }}</p>
+              } @else {
+                <button type="button" [disabled]="busy()" (click)="checkBuy()" class="mt-3 rounded-full bg-peacock px-5 py-2 font-semibold text-white disabled:opacity-50">I have paid, check now</button>
+              }
+            }
+            @if (!purchase() || purchase()!.status === "failed" || purchase()!.status === "issued") {
+              <div class="mt-3 flex gap-2">
+                <input [value]="amount()" (input)="amount.set($any($event.target).value.replace(NON_DIGIT, ''))" inputmode="numeric" placeholder="Amount in rupees" aria-label="Gift card amount in rupees" class="w-44 rounded-lg border border-line px-3 py-2" />
+                <button type="button" [disabled]="busy() || !amount()" (click)="buyCard()" class="rounded-full bg-peacock px-5 py-2 font-semibold text-white disabled:opacity-50">Buy</button>
+              </div>
+            }
+          </section>
+        }
+      }
       <section class="rounded-xl bg-white p-4 sm:p-6">
         <h2 class="flex items-center gap-2 text-xl font-semibold"><svg [pcIcon]="Gift" class="h-5 w-5 text-vermilion" /> Gift card</h2>
         <div class="mt-2 flex flex-wrap gap-2">
@@ -96,14 +122,21 @@ export class ShopRewardsPage {
   protected readonly cardInfo = signal<CardInfo | null>(null);
   protected readonly made = signal<Made | null>(null);
   protected readonly busy = signal(false);
+  protected readonly options = signal<Options | null>(null);
+  protected readonly amount = signal("");
+  protected readonly purchase = signal<Purchase | null>(null);
 
   constructor() {
     this.load();
+    // a payment started earlier (the shopper left to pay and came back): offer to check it
+    const id = typeof localStorage !== "undefined" ? localStorage.getItem(PENDING_KEY) : null;
+    if (id) this.purchase.set({ id, status: "created", amount_paise: 0, error: "" });
   }
 
   private load() {
     api<Loyalty>("/api/loyalty").then((d) => this.loyalty.set(d)).catch(quietly);
     api<Referral>("/api/referral").then((d) => this.referral.set(d)).catch(quietly);
+    api<Options>("/api/gift-cards/options").then((d) => this.options.set(d)).catch(quietly);
   }
 
   private async run(fn: () => Promise<void>) {
@@ -140,6 +173,28 @@ export class ShopRewardsPage {
       this.made.set(await api<Made>("/api/gift-cards/redeem", { method: "POST", body: { code: this.card().trim() } }));
       this.cardInfo.set(null);
       this.card.set("");
+    });
+  }
+  protected buyCard() {
+    return this.run(async () => {
+      const p = await api<Purchase>("/api/gift-cards/purchase", { method: "POST", body: { amount_paise: Math.round(Number(this.amount()) * 100) } });
+      if (p.payment?.mode !== "redirect" || !p.payment.url) {
+        this.toast.show("This payment method is not supported for gift cards yet. Please try again later.");
+        return;
+      }
+      localStorage.setItem(PENDING_KEY, p.id);
+      this.purchase.set(p);
+      window.open(p.payment.url, "_blank", "noopener");
+    });
+  }
+  protected checkBuy() {
+    return this.run(async () => {
+      const cur = this.purchase();
+      if (!cur) return;
+      const p = await api<Purchase>(`/api/gift-cards/purchase/${cur.id}/check`, { method: "POST", body: {} });
+      this.purchase.set(p);
+      if (p.status !== "created") localStorage.removeItem(PENDING_KEY);
+      else this.toast.show("We have not received the payment yet. Finish paying, then check again.");
     });
   }
   protected copy(code: string) {

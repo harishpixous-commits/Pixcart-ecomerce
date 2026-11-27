@@ -53,11 +53,14 @@ public class GiftPurchaseTests(ApiFactory f) : ApiTest(f)
         async Task<T> Tx<T>(Func<IUnitOfWork, Task<T>> f) { await using var tx = await db.BeginAsync(); var r = await f(tx); await tx.CommitAsync(); return r; }
         async Task<string> Code(Func<Task> f) { try { await f(); return ""; } catch (AppException e) { return e.Code; } }
 
+        Assert.False((await buyer.Get("/api/gift-cards/options")).Json["can_buy"]!.GetValue<bool>());
         // off by default; the purchase switch is separate from the staff-issue switch
         Assert.Equal("gift_cards_off", await Code(() => Tx(t => GiftCards.StartPurchaseAsync(t, gw, integ, user, 20000))));
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { gift_cards = new { enabled = true, min_paise = 10000, max_paise = 100000 } })).Status);
         Assert.Equal("gift_cards_off", await Code(() => Tx(t => GiftCards.StartPurchaseAsync(t, gw, integ, user, 20000))));
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { gift_cards = new { allow_purchase = true } })).Status);
+        var opts = (await buyer.Get("/api/gift-cards/options")).Json;
+        Assert.True(opts["can_buy"]!.GetValue<bool>()); Assert.Equal(10000, opts["min_paise"]!.GetValue<int>());
         Assert.Equal("invalid_amount", await Code(() => Tx(t => GiftCards.StartPurchaseAsync(t, gw, integ, user, 500000))));
 
         var started = await Tx(t => GiftCards.StartPurchaseAsync(t, gw, integ, user, 20000));

@@ -46,6 +46,12 @@ public static class GiftCards
         return items;
     }
 
+    public static async Task<JsonObject> OptionsAsync(IUnitOfWork uow)
+    {
+        var cfg = await CfgAsync(uow);
+        return new JsonObject { ["can_buy"] = cfg.Bool("enabled") && cfg.Bool("allow_purchase"), ["min_paise"] = cfg.Int("min_paise"), ["max_paise"] = cfg.Int("max_paise") };
+    }
+
     // ---- buying a card online (mirror of start_purchase / check_purchase)
     private sealed record Purchase(Guid Id, Guid UserId, int Amount, string Gateway, string Ref, string Status, Guid? CardId, string Error);
     private const string PurchaseSql = "SELECT id AS Id, user_id AS UserId, amount_paise AS Amount, gateway AS Gateway, gateway_ref AS Ref, status AS Status, gift_card_id AS CardId, error AS Error FROM gift_card_purchases ";

@@ -6,7 +6,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from "@angular/core";
 import { Router, RouterOutlet } from "@angular/router";
 import {
-  ChartColumn, Boxes, FileDown, Flag, IndianRupee, LayoutDashboard, Megaphone, MessageCircleQuestion, MessageSquareText, Package, Settings, ShoppingBag, Tag,
+  ChartColumn, Boxes, ListChecks, FileDown, Flag, IndianRupee, LayoutDashboard, Megaphone, MessageCircleQuestion, MessageSquareText, Package, Settings, ShoppingBag, Tag,
   ShieldCheck, Undo2, Warehouse, Zap,
 } from "lucide-angular";
 import { api } from "../core/api";
@@ -46,6 +46,7 @@ export class SellerLayout {
           { section: "Orders", href: "/seller/returns", label: "Returns", icon: Undo2 },
           { section: "Catalogue", href: "/seller/products", label: "Products", icon: Package },
           { section: "Catalogue", href: "/seller/inventory", label: "Inventory", icon: Boxes },
+          { section: "Catalogue", href: "/seller/bulk-edit", label: "Bulk edit", icon: ListChecks },
           { section: "Catalogue", href: "/seller/warehouses", label: "Warehouses", icon: Warehouse },
           { section: "Grow sales", href: "/seller/deals", label: "Deals", icon: Zap },
           { section: "Grow sales", href: "/seller/advertising", label: "Advertising", icon: Megaphone },
