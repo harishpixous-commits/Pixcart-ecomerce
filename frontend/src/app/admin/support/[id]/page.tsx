@@ -12,7 +12,7 @@ import { AiBadge, AiDraftButton, type AiRun } from "@/components/ai";
 const STATUS: Record<string, string> = { open: "Open", awaiting_customer: "Waiting for customer", resolved: "Resolved", closed: "Closed" };
 
 type T = {
-  id: string; number: string; subject: string; category_label: string; status: string; priority: string; is_grievance: boolean; order_id: string | null; order_number: string | null;
+  id: string; number: string; subject: string; category_label: string; csat_rating?: number | null; csat_comment?: string; status: string; priority: string; is_grievance: boolean; order_id: string | null; order_number: string | null;
   created_at: string; ack_due_at: string; resolve_due_at: string; ack_overdue: boolean; resolve_overdue: boolean; acknowledged_at: string | null;
   customer: { name: string; phone: string; email: string }; messages: { id: string; author_role: string; body: string; internal: boolean; at: string }[];
 };
@@ -100,6 +100,7 @@ export default function TicketDetail() {
             <Field label="Status" htmlFor="ts"><Select id="ts" value={t.status} onChange={(e) => setField({ status: e.target.value })}>{Object.entries(STATUS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
             <Field label="Priority" htmlFor="tp"><Select id="tp" value={t.priority} onChange={(e) => setField({ priority: e.target.value })}>{["low", "normal", "high", "urgent"].map((p) => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>)}</Select></Field>
             <p>Reply by: <span className={t.ack_overdue ? "font-semibold text-vermilion" : ""}>{t.acknowledged_at ? "done" : dateTime(t.ack_due_at)}</span></p>
+            {t.csat_rating ? <p data-testid="csat">Customer rating: <span className="font-semibold">{t.csat_rating}/5</span>{t.csat_comment ? `, "${t.csat_comment}"` : ""}</p> : null}
             <p>Resolve by: <span className={t.resolve_overdue ? "font-semibold text-vermilion" : ""}>{dateTime(t.resolve_due_at)}</span></p>
           </section>
         </aside>

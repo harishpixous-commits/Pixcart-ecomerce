@@ -13,6 +13,28 @@ type T = { id: string; number: string; subject: string; category_label: string; 
 
 const TICKET_STATUS: Record<string, string> = { open: "Open", awaiting_customer: "Waiting for customer", resolved: "Resolved", closed: "Closed" };
 
+type Csat = { rated: number; unrated_closed: number; average: number | null; spread: Record<string, number>; recent: { id: string; number: string; subject: string; rating: number; comment: string }[] };
+
+function Satisfaction() {
+  const [c, setC] = useState<Csat | null>(null);
+  useEffect(() => { api<Csat>("/api/admin/tickets/satisfaction").then(setC).catch(quietly); }, []);
+  if (!c) return null;
+  return (
+    <section className="mb-4 rounded-xl bg-white p-4 text-sm" data-testid="csat-summary">
+      <h2 className="font-semibold">Customer satisfaction</h2>
+      {c.rated === 0 ? <p className="text-ink-soft">No ratings yet. {c.unrated_closed} resolved requests are waiting for one.</p> : (
+        <>
+          <p className="mt-1">Average <span className="text-lg font-semibold">{c.average}/5</span> from {c.rated} ratings. {c.unrated_closed} resolved requests are not rated yet.</p>
+          <p className="mt-1 text-ink-soft">{[5, 4, 3, 2, 1].map((n) => `${n}: ${c.spread[String(n)] ?? 0}`).join("   ")}</p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {c.recent.filter((r) => r.comment).slice(0, 3).map((r) => <li key={r.id}><Link href={`/admin/support/${r.id}`} className="font-semibold text-peacock">{r.number}</Link> {r.rating}/5, "{r.comment}"</li>)}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 function Desk() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -31,6 +53,7 @@ function Desk() {
   return (
     <div>
       <PageHeader title="Support desk" sub="E-commerce rules: acknowledge every complaint within 48 hours and resolve it within one month." actions={<ExportButton scope="admin" name="tickets" status={status === "all" ? undefined : status} />} />
+      <Satisfaction />
       <div className="flex flex-wrap items-center gap-3">
         <Tabs value={status} onChange={(v) => go({ status: v })} items={[...Object.entries(TICKET_STATUS).map(([v, l]) => ({ value: v, label: l, count: c[v] ?? 0 })), { value: "all", label: "All" }]} />
         <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" className="accent-peacock" checked={overdue} onChange={(e) => router.replace(`/admin/support?status=${status}${e.target.checked ? "&overdue=1" : ""}${grievance ? "&grievance=1" : ""}`)} /> Not acknowledged in time</label>

@@ -9,7 +9,7 @@ import { Button, ErrorNote, PageLoader, Pill, Textarea } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 
-type T = { id: string; number: string; subject: string; status: string; category_label: string; order_id: string | null; is_grievance: boolean; created_at: string; acknowledged_at: string | null; messages: { id: string; author_role: string; body: string; at: string }[] };
+type T = { id: string; number: string; subject: string; status: string; category_label: string; order_id: string | null; is_grievance: boolean; created_at: string; acknowledged_at: string | null; csat_rating: number | null; csat_comment: string; messages: { id: string; author_role: string; body: string; at: string }[] };
 
 export default function TicketPage() {
   const site = useSite();
@@ -18,6 +18,8 @@ export default function TicketPage() {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState("");
   const load = useCallback(() => api<T>(`/api/support/tickets/${id}`).then(setT).catch((e) => setError(e.message)), [id]);
   useEffect(() => { load(); }, [load]);
   async function send(e: React.FormEvent) {
@@ -28,6 +30,17 @@ export default function TicketPage() {
       setBody("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not send");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function rate(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      setT(await api<T>(`/api/support/tickets/${id}/rating`, { method: "POST", body: { rating: stars, comment } }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save your rating");
     } finally {
       setBusy(false);
     }
@@ -52,6 +65,22 @@ export default function TicketPage() {
           </li>
         ))}
       </ol>
+      {(t.status === "resolved" || t.status === "closed") && (
+        t.csat_rating ? (
+          <p className="rounded-xl bg-white p-4 text-sm" data-testid="csat-done">You rated this {t.csat_rating}/5. Thank you for telling us.</p>
+        ) : (
+          <form onSubmit={rate} className="flex flex-col gap-2 rounded-xl bg-white p-4" data-testid="csat-form">
+            <p className="text-sm font-medium">How did we handle this request?</p>
+            <div className="flex gap-1" role="radiogroup" aria-label="Rating">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} type="button" role="radio" aria-checked={stars === n} aria-label={`${n} out of 5`} onClick={() => setStars(n)} className={clsx("h-10 w-10 rounded-lg border text-lg font-semibold", stars >= n ? "border-amber-400 bg-amber-100" : "border-line")}>{n}</button>
+              ))}
+            </div>
+            <Textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} placeholder="Anything you want to add (optional)" aria-label="Comment" />
+            <div><Button type="submit" loading={busy} disabled={stars === 0}>Send rating</Button></div>
+          </form>
+        )
+      )}
       {t.status !== "closed" && (
         <form onSubmit={send} className="flex flex-col gap-2 rounded-xl bg-white p-4">
           <ErrorNote message={error} />
