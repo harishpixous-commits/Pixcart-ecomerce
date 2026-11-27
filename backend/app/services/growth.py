@@ -5,6 +5,7 @@ bulk_edit, segments, campaigns, saved_searches. Every module ships switched OFF 
 Seller scorecard is computed from sub orders (no extra tables)."""
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import timedelta
 from typing import Any
@@ -41,6 +42,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "seo": {"sitemap_enabled": (True, "bool", 0, 0), "sitemap_include_categories": (True, "bool", 0, 0), "sitemap_include_sellers": (False, "bool", 0, 0)},
     "bulk_edit": {"enabled": (True, "bool", 0, 0), "max_rows": (500, "int", 1, 5000)},
     "campaigns": {"enabled": (False, "bool", 0, 0), "max_recipients": (500, "int", 1, 5000), "max_per_day": (3, "int", 1, 20)},
+    "shipping_zones": {"enabled": (False, "bool", 0, 0), "remote_prefixes": ("", "text", 0, 300), "remote_surcharge_paise": (6000, "int", 0, 100000), "waive_when_free": (True, "bool", 0, 0)},
     "saved_searches": {"enabled": (False, "bool", 0, 0), "max_per_user": (10, "int", 1, 50), "min_hours_between_alerts": (24, "int", 1, 720)},
     "segments": {"enabled": (False, "bool", 0, 0), "vip_spend_paise": (2500000, "int", 0, 1000000000), "lapsed_days": (90, "int", 7, 1000),
                  "new_days": (30, "int", 1, 365)},
@@ -222,3 +224,15 @@ async def auto_suspend_sellers(session: AsyncSession) -> int:
         await notify_seller(session, seller.id, "seller_kyc_update", {"status": "suspended", "message": f"Your store is suspended: {reason}. Contact seller support."}, link="/seller/onboarding")
         done += 1
     return done
+
+
+async def remote_surcharge(session: AsyncSession, pincode: str) -> tuple[int, bool]:
+    """Admin -> Growth -> Shipping zones: an extra delivery fee per seller package for pincodes that start with a listed prefix.
+    Returns (amount in paise, waive when the order already ships free). (0, True) while switched off or when no prefix matches."""
+    cfg = (await get(session))["shipping_zones"]
+    if not cfg["enabled"] or not cfg["remote_surcharge_paise"]:
+        return 0, True
+    prefixes = [p for p in re.findall(r"\d{1,6}", cfg["remote_prefixes"] or "")]
+    if any((pincode or "").startswith(p) for p in prefixes):
+        return int(cfg["remote_surcharge_paise"]), bool(cfg["waive_when_free"])
+    return 0, True

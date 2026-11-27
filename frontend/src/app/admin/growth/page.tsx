@@ -15,6 +15,7 @@ type Score = { seller_id: string; seller: string; orders: number; late: number; 
 const TITLES: Record<string, { title: string; hint: string }> = {
   loyalty: { title: "Loyalty points", hint: "Customers earn points on delivered orders and spend them at checkout." },
   referral: { title: "Referral rewards", hint: "A customer shares a code; both sides get store credit after the friend's first order." },
+  shipping_zones: { title: "Shipping zones", hint: "Add a delivery fee per seller package for remote pincodes. List pincode prefixes separated by commas (for example 744, 19). By default the fee is not added to a package that already ships free." },
   saved_searches: { title: "Saved searches", hint: "Shoppers follow a search and get an in-app note when new matching products are approved. At most one note per search in the hours set here." },
   campaigns: { title: "Segment campaigns", hint: "Send an in-app message to a customer segment. Only customers who opted in to marketing get it. Needs Segments switched on." },
   abandoned_cart: { title: "Abandoned cart reminders", hint: "Remind shoppers who left items in the cart. Optional coupon in the reminder." },

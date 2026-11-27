@@ -159,13 +159,16 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
     return lines
 
 
-def group_by_seller(lines: list[CartLine], cfg: dict) -> list[SellerGroup]:
+def group_by_seller(lines: list[CartLine], cfg: dict, remote: tuple[int, bool] = (0, True)) -> list[SellerGroup]:
     groups: dict[uuid.UUID, SellerGroup] = {}
     for line in lines:
         groups.setdefault(line.seller.id, SellerGroup(line.seller)).lines.append(line)
     for g in groups.values():
         has_items = g.items_total > 0
         g.shipping_fee = 0 if (not has_items or g.items_total >= cfg["free_shipping_threshold_paise"]) else cfg["shipping_fee_paise"]
+        # Remote-area surcharge (Admin -> Growth -> Shipping zones): once per seller package, not charged on an empty group.
+        if has_items and remote[0] and not (remote[1] and g.shipping_fee == 0):
+            g.shipping_fee += remote[0]
     return list(groups.values())
 
 
@@ -182,7 +185,7 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, c
                 "seller": {"id": str(g.seller.id), "name": g.seller.display_name, "slug": g.seller.slug},
                 "items_total": g.items_total,
                 "shipping_fee": g.shipping_fee,
-                "free_shipping_gap": max(0, cfg["free_shipping_threshold_paise"] - g.items_total) if g.shipping_fee else 0,
+                "free_shipping_gap": max(0, cfg["free_shipping_threshold_paise"] - g.items_total) if 0 < g.items_total < cfg["free_shipping_threshold_paise"] else 0,
                 "lines": [
                     {
                         "id": str(line.cart_item_id),
@@ -296,7 +299,9 @@ async def place_order(
         if locked.usage_limit is not None and locked.used_count >= locked.usage_limit:
             raise ApiError("This coupon has been fully used", "coupon_exhausted")
 
-    groups = group_by_seller(lines, cfg)
+    from app.services import growth as growth_svc
+
+    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode))
     now = utcnow()
     is_online = payment_method == "online"
     categories = {c.id: c for c in (await session.execute(select(Category))).scalars()}

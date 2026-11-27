@@ -725,3 +725,32 @@ async def test_saved_search_notes_a_shopper_once_about_new_matching_products(cli
     b = (await buyer.get("/api/saved-searches")).json()["items"][0]["id"]
     assert (await other.delete(f"/api/saved-searches/{b}")).status_code == 200
     assert len((await buyer.get("/api/saved-searches")).json()["items"]) == 1  # not someone else's to remove
+
+
+async def test_remote_area_surcharge_is_added_per_seller_package_and_waived_when_free(client, admin, categories):
+    import uuid
+
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, _, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000061")
+    near = await add_address(buyer, state="33", pincode="600028")
+    far = await add_address(buyer, state="33", pincode="744101")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 2})  # 1998 rupees: ships free
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})  # 299 rupees: 40 shipping
+
+    async def total(addr):
+        return (await buyer.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})).json()["summary"]["grand_total"]
+
+    base = await total(far)
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": True, "remote_prefixes": "744, 19", "remote_surcharge_paise": 6000}})).status_code == 200
+    assert await total(near) == base  # not a listed prefix
+    assert await total(far) == base + 6000  # only the package that already pays shipping; the free one is waived
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"waive_when_free": False}})).status_code == 200
+    quoted = await total(far)
+    assert quoted == base + 12000
+    r = await buyer.post("/api/orders", {"address_id": far, "payment_method": "cod", "idempotency_key": str(uuid.uuid4()), "expected_total": quoted})
+    assert r.status_code == 201, r.text
+    assert r.json()["order"]["grand_total"] == quoted
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"remote_surcharge_paise": 9999999}})).status_code == 400

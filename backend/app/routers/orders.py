@@ -34,6 +34,7 @@ from app.models import (
 from app.routers.addresses import get_owned_address
 from app.services import payment_gateways
 from app.services import fees as fees_svc
+from app.services import growth as growth_svc
 from app.services import fleet, razorpay, regional
 from app.services.cms import get_site
 from app.services.coupons import evaluate
@@ -244,7 +245,7 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     address = await get_owned_address(session, user.id, body.address_id)
     cfg = await get_settings(session)
     ck = await fees_svc.get(session)
-    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg), cfg, (await get_integrations(session)).online_payments, ck)
+    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode)), cfg, (await get_integrations(session)).online_payments, ck)
     cod_fee = cfg["cod_fee_paise"] if body.payment_method == "cod" else 0
     view["summary"]["cod_fee"] = cod_fee
     view["summary"]["grand_total"] += cod_fee
