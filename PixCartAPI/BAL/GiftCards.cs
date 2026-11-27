@@ -165,8 +165,8 @@ public static class GiftCards
         if (amount <= 0 || amount > card.Balance) throw new AppException("That is more than the balance on this card.", "balance_too_low");
         var ccode = "GV" + Hex(4);
         await uow.ExecuteAsync(
-            "INSERT INTO coupons (id, code, description, kind, value, min_order_paise, ends_at, usage_limit, per_user_limit, used_count, funded_by, first_order_only, is_active, show_on_checkout) " +
-            "VALUES (@id, @ccode, 'Gift card', 'flat', @amount, @amount, @ends, 1, 1, 0, 'platform', 0, 1, 0)", new { id = Guid.NewGuid(), ccode, amount, ends = now.AddDays(CouponDays) });
+            "INSERT INTO coupons (id, code, description, kind, value, min_order_paise, ends_at, usage_limit, per_user_limit, used_count, funded_by, first_order_only, is_active, show_on_checkout, only_user_id) " +
+            "VALUES (@id, @ccode, 'Gift card', 'flat', @amount, @amount, @ends, 1, 1, 0, 'platform', 0, 1, 0, @userId)", new { id = Guid.NewGuid(), userId, ccode, amount, ends = now.AddDays(CouponDays) });
         await uow.ExecuteAsync("UPDATE gift_cards SET balance_paise = balance_paise - @amount WHERE id = @id", new { amount, id = card.Id });
         await uow.ExecuteAsync("INSERT INTO gift_card_uses (id, gift_card_id, user_id, coupon_code, amount_paise, restored, created_at) VALUES (@id, @cardId, @userId, @ccode, @amount, 0, @now)",
             new { id = Guid.NewGuid(), cardId = card.Id, userId, ccode, amount, now });

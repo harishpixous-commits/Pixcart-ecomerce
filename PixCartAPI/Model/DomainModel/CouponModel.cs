@@ -34,6 +34,8 @@ public class CouponModel
     public Guid? CategoryId { get; set; }
     /// <summary>coupons.first_order_only</summary>
     public bool FirstOrderOnly { get; set; }
+    /// <summary>coupons.only_user_id (a code made for one person)</summary>
+    public Guid? OnlyUserId { get; set; }
     /// <summary>coupons.is_active</summary>
     public bool IsActive { get; set; }
     /// <summary>coupons.show_on_checkout</summary>

@@ -69,9 +69,9 @@ public static class LoyaltyPoints
         var now = DateTime.UtcNow;
         var code = CodePrefix + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4));
         await uow.ExecuteAsync(
-            "INSERT INTO coupons (id, code, description, kind, value, min_order_paise, ends_at, usage_limit, per_user_limit, used_count, funded_by, first_order_only, is_active, show_on_checkout) " +
-            "VALUES (@id, @code, 'Loyalty points', 'flat', @discount, @minOrder, @ends, 1, 1, 0, 'platform', 0, 1, 0)",
-            new { id = Guid.NewGuid(), code, discount, minOrder, ends = now.AddDays(RedeemDays) });
+            "INSERT INTO coupons (id, code, description, kind, value, min_order_paise, ends_at, usage_limit, per_user_limit, used_count, funded_by, first_order_only, is_active, show_on_checkout, only_user_id) " +
+            "VALUES (@id, @code, 'Loyalty points', 'flat', @discount, @minOrder, @ends, 1, 1, 0, 'platform', 0, 1, 0, @userId)",
+            new { id = Guid.NewGuid(), userId, code, discount, minOrder, ends = now.AddDays(RedeemDays) });
         await uow.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, NULL, 'redeem', @points, @note, @now)",
             new { id = Guid.NewGuid(), userId, points = -points, note = "Redeemed for coupon " + code, now });
         return new JsonObject { ["code"] = code, ["discount_paise"] = discount, ["min_order_paise"] = minOrder, ["valid_days"] = RedeemDays, ["balance"] = balance - points };

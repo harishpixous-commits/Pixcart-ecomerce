@@ -27,6 +27,7 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         var c = await coupons.ByCodeAsync(code.Trim().ToUpperInvariant());
         var now = DateTime.UtcNow;
         if (c is null || !c.IsActive) throw new AppException("This coupon code is not valid", "coupon_invalid");
+        if (c.OnlyUserId is { } only && only != userId) throw new AppException("This coupon code is not valid", "coupon_invalid"); // made for someone else: same answer as an unknown code
         if (c.StartsAt is { } s && DateTime.SpecifyKind(s, DateTimeKind.Utc) > now) throw new AppException("This coupon is not active yet", "coupon_not_started");
         if (c.EndsAt is { } e && DateTime.SpecifyKind(e, DateTimeKind.Utc) < now) throw new AppException("This coupon has expired", "coupon_expired");
         if (c.UsageLimit is { } limit && c.UsedCount >= limit) throw new AppException("This coupon has been fully used", "coupon_exhausted");

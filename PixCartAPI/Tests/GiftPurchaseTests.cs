@@ -87,4 +87,18 @@ public class GiftPurchaseTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(1, await Cards());
         Assert.Equal(20000, (await buyer.Post("/api/gift-cards/balance", new { code = a["code"]!.GetValue<string>() })).Json["balance_paise"]!.GetValue<int>());
     }
+
+    [Fact]
+    public async Task A_gift_card_coupon_works_only_for_the_person_who_made_it()
+    {
+        var admin = await Admin(); var owner = await LoginPhone("9880000093"); var other = await LoginPhone("9880000094");
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { gift_cards = new { enabled = true, min_paise = 10000, max_paise = 100000 } })).Status);
+        var card = (await admin.Post("/api/admin/growth/gift-cards", new { amount_paise = 20000 })).Json["items"]![0]!["code"]!.GetValue<string>();
+        var made = (await owner.Post("/api/gift-cards/redeem", new { code = card })).Json["code"]!.GetValue<string>();
+        using var scope = Factory.Services.CreateScope();
+        var coupons = scope.ServiceProvider.GetRequiredService<ICouponsBAL>();
+        var ex = await Assert.ThrowsAsync<AppException>(() => coupons.EvaluateAsync(made, Guid.Parse(other.Id), []));
+        Assert.Equal("coupon_invalid", ex.Code);
+        try { await coupons.EvaluateAsync(made, Guid.Parse(owner.Id), []); } catch (AppException e) { Assert.NotEqual("coupon_invalid", e.Code); }
+    }
 }
