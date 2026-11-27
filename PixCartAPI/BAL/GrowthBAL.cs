@@ -210,6 +210,13 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         return r;
     }
 
+    /// <summary>Flash sales → show_countdown (on by default): product pages and tiles hide the ticking clock when off.</summary>
+    public static async Task<bool> ShowDealCountdownAsync(IMySqlDapperHelper db)
+    {
+        var saved = JsonHelper.Object(await db.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        return ((JsonObject)SettingsDAL.Merge(Defaults(), saved)["flash_sales"]!).Bool("show_countdown");
+    }
+
     public async Task<JsonObject> LoyaltyAsync(Guid userId)
     {
         await using (var tx = await db.BeginAsync()) { if (await LoyaltyPoints.RestoreExpiredAsync(tx, userId) > 0) await tx.CommitAsync(); }

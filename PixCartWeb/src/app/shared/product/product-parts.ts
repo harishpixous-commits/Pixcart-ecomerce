@@ -61,7 +61,7 @@ export class DealCountdown {
       @if (discount() > 0) {<span [class]="size() === 'md' ? 'rounded bg-vermilion font-semibold text-white px-2 py-0.5 text-sm' : 'rounded bg-vermilion font-semibold text-white px-1.5 text-xs leading-5'">{{ discount() }}% off</span>}
       <span [class]="size() === 'md' ? 'font-semibold text-vermilion text-sm' : 'font-semibold text-vermilion text-xs'">{{ deal().label }}</span>
     </div>
-    @if (deal().kind !== "limited") {<pc-deal-countdown [endsAt]="deal().ends_at" [spanClass]="size() === 'md' ? 'font-medium text-vermilion text-sm' : 'font-medium text-vermilion text-xs'" />}
+    @if (deal().kind !== "limited" && deal().show_countdown !== false) {<pc-deal-countdown [endsAt]="deal().ends_at" [spanClass]="size() === 'md' ? 'font-medium text-vermilion text-sm' : 'font-medium text-vermilion text-xs'" />}
     @if (deal().claimed_pct !== null) {
       <div class="flex items-center gap-2">
         <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-vermilion-light"><span class="block h-full bg-vermilion" [style.width.%]="max4(deal().claimed_pct!)"></span></span>

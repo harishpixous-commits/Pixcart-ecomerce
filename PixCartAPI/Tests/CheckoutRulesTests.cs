@@ -1092,4 +1092,21 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(400, blocked.Status); Assert.Equal("cod_risk", blocked.ErrorCode);
         Assert.NotEqual("cod_risk", (await Order("online")).ErrorCode); // paying online is never blocked by this rule
     }
+
+    [Fact]
+    public async Task Deal_countdown_can_be_switched_off_in_flash_sale_settings()
+    {
+        var admin = await Admin();
+        var (variantId, productId, sellerId) = await ShirtInStock("9400000361", "countdown-shirt");
+        await Refresh(productId);
+        await ApiFactory.DbExecAsync(
+            "INSERT INTO deals (id, seller_id, product_id, variant_id, kind, deal_price_paise, regular_price_paise, starts_at, ends_at, sold_qty, status, note) " +
+            "VALUES (@id, @sellerId, @productId, @variantId, 'lightning', 100, 200, @s, @e, 0, 'active', '')",
+            new { id = Guid.NewGuid(), sellerId, productId, variantId, s = DateTime.UtcNow.AddHours(-1), e = DateTime.UtcNow.AddHours(5) });
+        var visitor = Factory.CreateClient();
+        async Task<bool> Shown() => (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/products/countdown-shirt"))!["deal"]!["show_countdown"]!.GetValue<bool>();
+        Assert.True(await Shown()); // on by default
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { flash_sales = new { show_countdown = false } })).Status);
+        Assert.False(await Shown());
+    }
 }

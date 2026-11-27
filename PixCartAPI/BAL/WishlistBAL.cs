@@ -78,6 +78,7 @@ public class WishlistBAL(WishlistDAL dal, SettingsDAL settings) : IWishlistBAL
         var unitOn = await MarketBool("pdp_unit_price", true);
         var minNode = await SiteSettingsReader.MarketplaceAsync(settings, "pdp_bought_min", JsonValue.Create(10));
         var boughtMin = minNode is JsonValue mv && mv.TryGetValue<int>(out var m) ? m : 10;
+        bool? showCountdown = null;
         var outp = new List<Dictionary<string, object?>>();
         foreach (var p in products)
         {
@@ -86,6 +87,7 @@ public class WishlistBAL(WishlistDAL dal, SettingsDAL settings) : IWishlistBAL
             var unit = JsonHelper.Object(p.Details)["net_unit"] is JsonValue uv && uv.TryGetValue<string>(out var u) ? u : "";
             var units = bought.GetValueOrDefault(p.Id);
             object? deal = null;
+            showCountdown ??= ((JsonObject)SettingsDAL.Merge(GrowthBAL.Defaults(), await settings.GetAsync("growth"))["flash_sales"]!).Bool("show_countdown");
             if (deals.TryGetValue(p.Id, out var d))
             {
                 int? claimed = d.QtyLimit is > 0 ? (int)Math.Round(100.0 * d.SoldQty / d.QtyLimit.Value, MidpointRounding.ToEven) : null;
@@ -94,6 +96,7 @@ public class WishlistBAL(WishlistDAL dal, SettingsDAL settings) : IWishlistBAL
                     ["kind"] = d.Kind, ["label"] = DealKinds.GetValueOrDefault(d.Kind, d.Kind), ["ends_at"] = DateTimeFunctions.Iso(d.EndsAt), ["deal_price"] = d.DealPricePaise,
                     ["regular_price"] = d.RegularPricePaise, ["claimed_pct"] = claimed is null ? null : Math.Min(100, claimed.Value),
                     ["units_left"] = d.QtyLimit is > 0 ? Math.Max(0, d.QtyLimit.Value - d.SoldQty) : null, ["variant_id"] = d.VariantId.ToString(),
+                    ["show_countdown"] = showCountdown,
                 };
             }
             outp.Add(new Dictionary<string, object?>

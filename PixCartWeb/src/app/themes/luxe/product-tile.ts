@@ -78,7 +78,7 @@ const FRAME: Record<ThemeLayout["productGrid"], string> = {
             <div class="mt-1.5" data-testid="deal-badge">
               <p class="flex flex-wrap items-baseline gap-x-2 text-[11px] font-medium uppercase leading-4 tracking-[0.14em] text-vermilion">
                 <span>{{ deal.label }}</span>
-                @if (deal.kind !== "limited") {<pc-deal-countdown [endsAt]="deal.ends_at" spanClass="tabular-nums tracking-[0.06em]" />}
+                @if (deal.kind !== "limited" && deal.show_countdown !== false) {<pc-deal-countdown [endsAt]="deal.ends_at" spanClass="tabular-nums tracking-[0.06em]" />}
               </p>
               @if (deal.claimed_pct !== null) {
                 <p class="mt-1 flex items-center gap-2 text-[11px] leading-4 text-ink-soft">

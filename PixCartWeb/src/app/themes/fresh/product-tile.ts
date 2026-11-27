@@ -67,7 +67,7 @@ const TAG = "max-w-full truncate rounded-md px-1.5 py-1 text-[11px] font-extrabo
             <span class="text-ink-soft" aria-hidden="true">({{ count() }})</span>
           </p>
         }
-        @if (p().deal && p().deal!.kind !== "limited") {<pc-deal-countdown [endsAt]="p().deal!.ends_at" spanClass="mt-1 text-[11px] font-semibold text-vermilion" />}
+        @if (p().deal && p().deal!.kind !== "limited" && p().deal!.show_countdown !== false) {<pc-deal-countdown [endsAt]="p().deal!.ends_at" spanClass="mt-1 text-[11px] font-semibold text-vermilion" />}
         @if (p().starts_at) {<p class="mt-1 text-[11px] font-semibold text-peacock">Starts {{ start() }}</p>}
       </div>
     </a>

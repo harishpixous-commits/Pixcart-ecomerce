@@ -313,3 +313,7 @@ With the COD risk module on, a customer whose cash packages came back undelivere
 ## Push 105: full-suite re-run after Pushes 98 to 104
 
 Python: whole suite ran to the end, no failures (run with -x, all dots). .NET: 391 tests across five groups, 0 failed (Growth+Seller 54, Admin/Cms/Account/Auth 54, Checkout/Assistant/Llm/Sms 87, Payment/Gateway/Delivery/Export/Report/Workbook/Fleet 82, everything else 114). No code changes in this push. Not run: browser, Flutter, Windows publish, live gateways.
+
+## Push 106: Flash sales `show_countdown` now works (was a dead setting)
+
+Admin → Growth → Flash sales → show_countdown (on by default) now decides whether the product page badge and the two theme tiles show the ticking clock. The deal object carries `show_countdown`; the web apps hide the clock when it is false. Both versions (React and Angular type-check clean); backend test on each side. Not wired: the home "deal of the day" strip and the deals list still show their own clock. Not run: browser.

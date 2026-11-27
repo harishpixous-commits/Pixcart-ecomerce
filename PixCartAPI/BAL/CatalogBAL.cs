@@ -65,8 +65,14 @@ public class CatalogBAL(
     private async Task<Dictionary<Guid, JsonObject>> ActiveDealsForAsync(IEnumerable<Guid> productIds)
     {
         var outp = new Dictionary<Guid, JsonObject>();
-        foreach (var d in await catalog.ActiveDealsAsync(productIds))
-            outp.TryAdd(d.ProductId, DealPublic(d));
+        var deals = (await catalog.ActiveDealsAsync(productIds)).ToList();
+        if (deals.Count == 0) return outp;
+        var show = await GrowthBAL.ShowDealCountdownAsync(sellerDb); // Admin → Growth → Flash sales: the pages hide the ticking clock when off
+        foreach (var d in deals)
+        {
+            if (outp.ContainsKey(d.ProductId)) continue;
+            var o = DealPublic(d); o["show_countdown"] = show; outp[d.ProductId] = o;
+        }
         return outp;
     }
 
