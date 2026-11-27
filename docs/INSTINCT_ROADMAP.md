@@ -242,3 +242,8 @@ The review reminder note now links to the first unreviewed product page (#review
 - Full Python suite (run in chunks, 48 files): 283 passed, 0 failed. Full .NET suite (run in 6 filter groups): 377 passed, 0 failed after the fix below.
 - Regression found and fixed (.NET): the route-guard table test failed because the new POST /api/cart/reorder/{orderId} had no route rule. It now carries RouteGuard("signed_in"). Lesson: every new .NET route needs a RouteGuard attribute when the reference has no entry.
 - Not run: browser suite, Flutter, Windows publish, live gateways.
+
+
+## Push 83: product page shows the seller own free-delivery amount
+- Defect fixed (both versions): the product page "Free when you buy X or more from this seller" always showed the marketplace amount, even when a seller had set their own (Push 72) and the cart used it. The product payload seller block now carries free_shipping_threshold_paise (the seller own amount kept inside the admin bounds when Seller shipping is on, else the marketplace amount), and the product page uses it. Not changed: the by-state amount (Push 79) needs a delivery address, so the product page still ignores it.
+- Tested: assertions added to the existing seller-own-amount test on each side (own amount shown, marketplace amount when the module is off). Screens type-checked only.

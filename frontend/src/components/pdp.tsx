@@ -73,11 +73,12 @@ export function OffersBlock({ offers }: { offers: ProductOffer[] }) {
 
 export function ServiceIcons({ p, price }: { p: ProductPage; price: number }) {
   const site = useSite();
-  const free = price >= site.free_shipping_threshold_paise;
+  const threshold = p.seller?.free_shipping_threshold_paise ?? site.free_shipping_threshold_paise;
+  const free = price >= threshold;
   const items: { icon: typeof Truck; label: string; detail: string; tone?: string }[] = [
     free
       ? { icon: Truck, label: "Free delivery", detail: "No delivery charge on this item" }
-      : { icon: Truck, label: `Delivery ${rupees(site.shipping_fee_paise ?? 4000)}`, detail: `Free when you buy ${rupees(site.free_shipping_threshold_paise)} or more from this seller` },
+      : { icon: Truck, label: `Delivery ${rupees(site.shipping_fee_paise ?? 4000)}`, detail: `Free when you buy ${rupees(threshold)} or more from this seller` },
   ];
   if (site.cod_enabled) items.push({ icon: Banknote, label: "Pay on delivery", detail: "Cash, UPI or card when the parcel arrives" });
   items.push(p.return_window_days > 0

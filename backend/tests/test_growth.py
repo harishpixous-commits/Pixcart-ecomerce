@@ -989,12 +989,17 @@ async def test_seller_can_set_own_free_delivery_amount_within_admin_bounds(clien
     assert r.status_code == 200 and r.json()["free_shipping_threshold_paise"] == 20000
     q = await quote()
     assert q["summary"]["shipping_total"] == 0 and q["summary"]["grand_total"] == base["summary"]["grand_total"] - 4000 and q["groups"][0]["free_shipping_gap"] == 0
+    async def pdp_amount():
+        return (await buyer.get(f"/api/catalog/products/{cable['slug']}")).json()["seller"]["free_shipping_threshold_paise"]
+
+    assert await pdp_amount() == 20000  # the product page shows this seller's own amount
     r = await ka.put("/api/seller/preferences", {"dispatch_days": 2, "holiday_mode": False})  # not sent: unchanged
     assert r.json()["free_shipping_threshold_paise"] == 20000
     assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"min_paise": 40000}})).status_code == 200  # admin tightens
     assert (await quote())["summary"]["shipping_total"] == 4000  # 20000 is lifted to 40000 > 299 rupees
     assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"enabled": False}})).status_code == 200
     assert (await quote())["summary"]["shipping_total"] == 4000 and (await quote())["groups"][0]["free_shipping_gap"] == 20000
+    assert await pdp_amount() == 49900  # module off: the marketplace amount again
     assert (await prefs(20000)).status_code == 200  # the form sends the stored value back while the module is off: fine
     assert (await ka.get("/api/seller/preferences")).json()["free_shipping_bounds"] is None
     assert (await admin.put("/api/admin/growth/settings", {"seller_shipping": {"enabled": True, "min_paise": 10000}})).status_code == 200

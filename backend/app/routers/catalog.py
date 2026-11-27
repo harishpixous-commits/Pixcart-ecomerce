@@ -13,7 +13,9 @@ from app.core.validators import STATES
 from app.db import utcnow
 from app.integrations import get as get_integrations
 from app.models import Category, Product, Seller, Variant
+from app.services import growth as growth_svc
 from app.services import product_page as pp
+from app.services.orders import free_threshold
 from app.services.catalog import (
     category_descendant_ids,
     discount_pct,
@@ -425,6 +427,8 @@ async def product_page(slug: str, session: SessionDep) -> dict:
             "state": STATES.get(seller.pickup_state_code, ""),
             "grievance_officer": {"name": seller.grievance_name, "email": seller.grievance_email},
             "dispatch_days": seller.dispatch_days,
+            # The amount from which this seller's package ships free (the seller's own when Seller shipping is on, else the marketplace's).
+            "free_shipping_threshold_paise": free_threshold(seller, cfg, await growth_svc.seller_free_bounds(session)),
         },
         "similar": await product_cards(session, similar),
     }
