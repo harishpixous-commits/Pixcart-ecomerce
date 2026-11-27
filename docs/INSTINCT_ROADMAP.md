@@ -362,3 +362,6 @@ Hunt: no orphan delivery or support APIs. Gap found: customers could not rate ho
 
 ## Push 119: ticket satisfaction screens (both web apps)
 Customer ticket page: once a request is resolved or closed and unrated, a 1-5 rating with optional comment; after rating it says "You rated this N/5". Admin ticket page shows the customer rating and comment. Admin Support desk has a Customer satisfaction card (average, rated count, unrated resolved count, 5-to-1 spread, latest comments). Validated: type-check clean in both apps (tsc, ngc). Not run: browser.
+
+## Push 120: full-suite re-run
+Python 297 passed, 0 failed. .NET 400 passed, 0 failed (5 groups after a clean rebuild). Covers Alembic 0045 / V022 and the exports and satisfaction work of Pushes 115 to 119. Not run: browser, Flutter, live gateways.
