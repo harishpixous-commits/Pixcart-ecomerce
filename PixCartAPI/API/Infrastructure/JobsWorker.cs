@@ -93,6 +93,9 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
         // Scheduled segment campaigns (Admin → Growth; sent when their time comes).
         new("campaigns", async sp => await SegmentCampaigns.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromMinutes(5))),
+        // Ship reminders: one in-app note to the seller per confirmed package that has not shipped (Admin → Growth; off unless switched on).
+        new("ship_reminders", async sp => await ShipReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
+            Every(TimeSpan.FromHours(1))),
         // Review reminders: one in-app note per delivered package after a few days (Admin → Growth; off unless switched on).
         new("review_reminders", async sp => await ReviewReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromHours(1))),

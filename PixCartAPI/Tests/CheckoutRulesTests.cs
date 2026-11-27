@@ -801,6 +801,37 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Ship_reminder_goes_once_to_the_seller_of_a_confirmed_package_that_has_not_shipped()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000311", "ship-remind-shirt");
+        await Refresh(productId);
+        var a = await LoginPhone("9770000141", "Ship Reminder A");
+        async Task<string> Order(string status, int hoursAgo)
+        {
+            var addr = await AddAddress(a, state: "33");
+            await a.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            var o = await a.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+            Assert.True(o.Status == 201, o.ToString());
+            var sid = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+            await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = @status, confirmed_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL @h HOUR) WHERE id = @sid", new { status, h = hoursAgo, sid });
+            return sid;
+        }
+        var s1 = await Order("confirmed", 30); var s2 = await Order("packed", 2); var s3 = await Order("shipped", 40);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        Task<int> Run() => ShipReminders.SendDueAsync(db, notify);
+        async Task<long> Count() => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_ship_reminder'", new { });
+        Assert.Equal(0, await Run()); Assert.Equal(0, await Count());
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { ship_reminders = new { enabled = true, after_hours = 24, max_age_days = 14 } })).Status);
+        Assert.Equal(1, await Run()); Assert.Equal(1, await Count()); // only the confirmed package from 30 hours ago
+        Assert.Equal(0, await Run());
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET confirmed_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 25 HOUR) WHERE id = @s2", new { s2 });
+        Assert.Equal(1, await Run()); Assert.Equal(2, await Count());
+    }
+
+    [Fact]
     public async Task Order_again_puts_the_items_of_a_past_order_back_in_the_cart()
     {
         var (variantId, productId, _) = await ShirtInStock("9400000310", "order-again-shirt");
