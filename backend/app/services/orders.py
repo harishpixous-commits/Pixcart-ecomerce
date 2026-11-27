@@ -855,20 +855,14 @@ async def expire_unpaid_orders(session: AsyncSession) -> int:
         paid = False
         for pay in payments:
             try:
-                attempts = await razorpay.order_payments(pay.provider_order_id)
-            except razorpay.GatewayError:
-                attempts = None
-            if attempts is None:
-                paid = True  # cannot verify now; try again on the next run rather than cancel blindly
+                # whichever gateway took the payment answers from its own records (Razorpay, Cashfree, PhonePe, PayU, Stripe)
+                res = await check_with_gateway(session, pay)
+            except Exception as exc:  # noqa: BLE001 - gateway down, not configured, or a mismatch: never cancel blindly
+                log.warning("late capture check failed for %s: %s", order.number, exc)
+                paid = True
                 break
-            for a in attempts:
-                if a.get("status") in ("captured", "authorized"):
-                    try:
-                        if await confirm_with_gateway(session, pay, a["id"]) in ("paid", "already"):
-                            paid = True
-                    except (ApiError, razorpay.GatewayError) as exc:
-                        log.warning("late capture check failed for %s: %s", order.number, exc)
-                        paid = True
+            if res["result"] in ("paid", "already_paid", "already", "refund"):
+                paid = True
         if paid:
             await session.commit()
             continue

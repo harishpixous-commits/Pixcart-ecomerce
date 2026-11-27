@@ -74,3 +74,6 @@ Plan, both versions, off by default behind the existing gift_cards.enabled setti
 4. Refund: a purchased card with full balance can be voided and refunded through the gateway; a used card cannot.
 5. Tests against the simulator: pay then issue once, duplicate webhook issues once, failed payment issues nothing, amount limits, setting off blocks purchase.
 Open decision for Harish: whether purchased cards may be bought by guests or only signed-in users (plan assumes signed-in only).
+
+## Fix: unpaid-order expiry only asked Razorpay (Instinct)
+Defect (both versions): the expiry job asked Razorpay about every payment. An order paid through Cashfree, PhonePe, PayU or Stripe errored on that lookup, was treated as "cannot verify", and so never expired: stock stayed held. Fix: non-Razorpay payments are checked through their own gateway (Python check_with_gateway, .NET CheckWithGatewayAsync); a paid result keeps the order, an error still leaves it alone. Razorpay path unchanged. Tests use a fake gateway that reports no payment; I did not run the new Python test against the old code to prove it failed before.

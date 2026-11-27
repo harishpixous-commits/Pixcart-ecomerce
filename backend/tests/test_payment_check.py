@@ -164,3 +164,30 @@ async def test_status_check_keeps_what_the_payment_window_needs(client, admin, c
     gateway.pay(pay["razorpay_order_id"])
     s = (await buyer.post(f"/api/orders/{order['id']}/payment-status")).json()
     assert s["status"] == "paid" and s["order"]["payment"] is None
+
+
+async def test_unpaid_order_on_another_gateway_expires_when_that_gateway_has_no_payment(client, admin, categories, gateway, monkeypatch):
+    """The expiry job used to ask Razorpay about every payment, so an order paid through another gateway could never expire."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal, utcnow
+    from app.models import Order, Payment
+    from app.services import orders as order_service
+    from app.services import payment_gateways
+
+    class Fake:
+        async def attempts(self, ref):
+            return []
+
+    monkeypatch.setattr(payment_gateways.gateways, "build", lambda *a, **k: Fake())
+    buyer, order, _ = await online_order(client, admin, categories, "9760000004")
+    async with SessionLocal() as s:
+        pay = (await s.execute(select(Payment).where(Payment.order_id == uuid.UUID(order["id"])))).scalar_one()
+        pay.provider = "cashfree"
+        (await s.get(Order, pay.order_id)).payment_expires_at = utcnow() - timedelta(minutes=1)
+        await s.commit()
+    async with SessionLocal() as s:
+        assert await order_service.expire_unpaid_orders(s) == 1
+    assert (await buyer.get(f"/api/orders/{order['id']}")).json()["status"] == "cancelled"
