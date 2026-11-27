@@ -81,9 +81,15 @@ public static class LoyaltyPoints
         var lifetime = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0", new { userId });
         var bonus = BonusPercent(cfg, Tier(cfg, lifetime));
         points = (int)((long)points * (100 + bonus) / 100);
+        var note = "Delivered package " + subNumber + (bonus > 0 ? $" (+{bonus}% tier bonus)" : "");
+        if (cfg.Int("first_order_points") > 0 && await uow.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM loyalty_ledger WHERE user_id = @userId AND kind = 'earn'", new { userId }) == 0)
+        {
+            points += cfg.Int("first_order_points"); // the member's first delivered package
+            note += $" (+{cfg.Int("first_order_points")} first order bonus)";
+        }
         await uow.ExecuteAsync(
             "INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, @subId, 'earn', @points, @note, @now)",
-            new { id = Guid.NewGuid(), userId, subId, points, note = "Delivered package " + subNumber + (bonus > 0 ? $" (+{bonus}% tier bonus)" : ""), now = DateTime.UtcNow });
+            new { id = Guid.NewGuid(), userId, subId, points, note, now = DateTime.UtcNow });
         return points;
     }
 

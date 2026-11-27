@@ -31,6 +31,17 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal("balance_too_low",(await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=-61,note="Too much"})).ErrorCode);
         Assert.Equal(403,(await buyer.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=5,note="Nope"})).Status);
     }
+    [Fact]public async Task First_order_bonus_is_added_to_the_first_delivered_package_only()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9880000081");var uid=Guid.Parse(buyer.Id);
+        using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        async Task<int> Earn(string number){await using var tx=await db.BeginAsync();await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=0");var n=await BAL.LoyaltyPoints.EarnAsync(tx,Guid.NewGuid(),number,250000,uid);await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=1");await tx.CommitAsync();return n;}
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{enabled=true,points_per_100=2,first_order_points=50}})).Status);
+        Assert.Equal(100,await Earn("SYNTH-FIRST-1")); // 50 for the goods plus 50 for the first order
+        Assert.Contains("first order bonus",(await buyer.Get("/api/loyalty")).Json["history"]![0]!["note"]!.GetValue<string>());
+        Assert.Equal(50,await Earn("SYNTH-FIRST-2")); // no bonus the second time
+        Assert.Equal(150,(await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+    }
     [Fact]public async Task Tier_bonus_adds_points_only_for_silver_and_up()
     {
         var admin=await Admin();var buyer=await LoginPhone("9880000074");var uid=Guid.Parse(buyer.Id);
