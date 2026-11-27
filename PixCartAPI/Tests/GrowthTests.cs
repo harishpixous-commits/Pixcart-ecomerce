@@ -37,8 +37,10 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
         async Task<int> Earn(string number){await using var tx=await db.BeginAsync();await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=0");var n=await BAL.LoyaltyPoints.EarnAsync(tx,Guid.NewGuid(),number,250000,uid);await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=1");await tx.CommitAsync();return n;}
         Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{enabled=true,points_per_100=2,first_order_points=50}})).Status);
+        Assert.Equal(50,(await buyer.Get("/api/loyalty")).Json["first_order_points"]!.GetValue<int>()); // the rewards page can tell them
         Assert.Equal(100,await Earn("SYNTH-FIRST-1")); // 50 for the goods plus 50 for the first order
         Assert.Contains("first order bonus",(await buyer.Get("/api/loyalty")).Json["history"]![0]!["note"]!.GetValue<string>());
+        Assert.Equal(0,(await buyer.Get("/api/loyalty")).Json["first_order_points"]!.GetValue<int>()); // used up
         Assert.Equal(50,await Earn("SYNTH-FIRST-2")); // no bonus the second time
         Assert.Equal(150,(await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
     }

@@ -221,6 +221,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         return new JsonObject
         {
             ["enabled"] = cfg.Bool("enabled"), ["balance"] = balance, ["lifetime"] = lifetime, ["tier"] = LoyaltyPoints.Tier(cfg, lifetime), ["bonus_percent"] = LoyaltyPoints.BonusPercent(cfg, LoyaltyPoints.Tier(cfg, lifetime)),
+            ["review_points"] = cfg.Int("review_points"), ["first_order_points"] = lifetime == 0 ? cfg.Int("first_order_points") : 0, // ways to earn the member can still use
             ["free_delivery"] = cfg.Bool("enabled") && LoyaltyPoints.TierFreeDelivery(cfg, LoyaltyPoints.Tier(cfg, lifetime)),
             ["value_paise"] = balance * cfg.Int("point_value_paise"),
             ["history"] = new JsonArray(rows.Select(r => (JsonNode)new JsonObject { ["kind"] = r.Kind, ["points"] = r.Points, ["note"] = r.Note, ["at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o") }).ToArray()),
