@@ -12,6 +12,8 @@ public interface ISellerProductsBAL
     Task<object> CategoriesAsync(SellerModel seller);
     Task<JsonObject> FeesAsync();
     Task<JsonObject> LifecycleAsync(UserModel user,SellerModel seller,Guid id,string action);
+    Task<string> BulkEditCsvExportAsync(SellerModel seller);
+    Task<JsonObject> BulkEditCsvApplyAsync(UserModel user,SellerModel seller,byte[] data,string filename,bool dryRun);
     Task<JsonObject> BulkEditAsync(UserModel user,SellerModel seller,List<Guid> ids,string action,int? value,bool dryRun);
     Task<JsonObject> PatchAsync(SellerModel seller,Guid variantId,long? price,long? mrp,int? stock,bool? active);
 }

@@ -532,4 +532,28 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("bulk_edit_off", (await tn.Post("/api/seller/variants/bulk-edit", body)).ErrorCode);
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { bulk_edit = new { enabled = true } })).Status);
     }
+
+    [Fact]
+    public async Task Seller_bulk_edit_csv_round_trip()
+    {
+        var (vid, _, _) = await ShirtInStock("9400000411", "bulk-csv");
+        var tn = await LoginPhone("9400000411", "Csv Owner");
+        
+        async Task<long> Price() { using var scope = Factory.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>().QueryFirstOrDefaultAsync<long>("SELECT price_paise FROM variants WHERE id=@vid", new { vid }); }
+        static MultipartFormDataContent Up(string csv) { var f = new MultipartFormDataContent(); f.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(csv)), "file", "v.csv"); return f; }
+        var dl = await tn.Get("/api/seller/variants/bulk-edit.csv");
+        Assert.Equal(200, dl.Status);
+        var line = dl.Text.Split("\n").First(l => l.StartsWith(vid.ToString()));
+        Assert.Contains(",1000.00,10,yes", line);
+        var r = await tn.Post("/api/seller/variants/bulk-edit.csv", Up($"id,price,stock,active\n{vid},1100,15,yes\n"));
+        Assert.True(r.Json["dry_run"]!.GetValue<bool>()); Assert.Equal(1, r.Json["changed"]!.GetValue<int>()); Assert.Equal(110000, r.Json["rows"]![0]!["changes"]!["price"]!["after"]!.GetValue<long>()); Assert.Equal(100000, await Price());
+        r = await tn.Post("/api/seller/variants/bulk-edit.csv?dry_run=false", Up($"id,price,stock,active\n{vid},1100,15,yes\n"));
+        Assert.Equal(1, r.Json["changed"]!.GetValue<int>()); Assert.Equal(110000, await Price());
+        r = await tn.Post("/api/seller/variants/bulk-edit.csv?dry_run=false", Up($"id,price\n{vid},5000\n{vid},1200\nnot-an-id,1\n"));
+        Assert.Equal(["price_out_of_range", "duplicate_row", "bad_id"], r.Json["rows"]!.AsArray().Select(x => x!["reason"]!.GetValue<string>()).ToArray()); Assert.Equal(0, r.Json["changed"]!.GetValue<int>());
+        r = await tn.Post("/api/seller/variants/bulk-edit.csv?dry_run=false", Up($"id,price\n{Guid.NewGuid()},900\n")); // not one of this seller's versions
+        Assert.Equal("not_yours", r.Json["rows"]![0]!["reason"]!.GetValue<string>()); Assert.Equal(110000, await Price());
+        Assert.Equal("bad_number", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up($"id,price\n{vid},abc\n"))).Json["rows"]![0]!["reason"]!.GetValue<string>());
+        Assert.Equal("invalid_file", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up("sku,price\nX,1\n"))).ErrorCode);
+    }
 }

@@ -36,6 +36,8 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
         public bool? IsActive {get;init;}
     }
     public record BulkEditIn{[Required,MinLength(1),MaxLength(5000)]public List<Guid> VariantIds{get;init;}=[];[Required]public string Action{get;init;}="";public int? Value{get;init;}public bool DryRun{get;init;}=true;}
+    [HttpGet("variants/bulk-edit.csv"),RouteGuard("seller")] public async Task<IActionResult> BulkEditCsvDownload(){var s=await Seller();return File(System.Text.Encoding.UTF8.GetBytes(await bal.BulkEditCsvExportAsync(s)),"text/csv; charset=utf-8","my-versions.csv");}
+    [HttpPost("variants/bulk-edit.csv"),RouteGuard("seller")] public async Task<object> BulkEditCsvUpload(IFormFile file,[FromQuery(Name="dry_run")]bool dryRun=true,CancellationToken ct=default){var s=await Seller();return await bal.BulkEditCsvApplyAsync(await me.RequireAsync(),s,await ReadBoundedAsync(file,1024*1024,ct),file.FileName,dryRun);}
     [HttpPost("variants/bulk-edit"),RouteGuard("seller")] public async Task<object> BulkEdit(BulkEditIn b)=>await bal.BulkEditAsync(await me.RequireAsync(),await Seller(),b.VariantIds,b.Action,b.Value,b.DryRun);
     [HttpPatch("variants/{id}")] public async Task<object> Patch(Guid id,VariantPatch b)=>await bal.PatchAsync(await Seller(),id,b.PricePaise,b.MrpPaise,b.Stock,b.IsActive);
     private static async Task<byte[]> ReadBoundedAsync(IFormFile file,long max,CancellationToken ct)

@@ -1,12 +1,14 @@
 /* Bulk edit: pick product options, choose price / stock / on-off, preview, apply. Port of frontend/src/app/seller/bulk-edit/page.tsx. */
 
 import { ChangeDetectionStrategy, Component, computed, signal } from "@angular/core";
-import { ApiError, api } from "../../core/api";
+import { ApiError, api, downloadFile } from "../../core/api";
 import { PageHeader } from "../../shared/portal-shell";
 import { Button, ErrorNote } from "../../shared/ui/ui";
 
 type Item = { variant_id: string; title: string; sku: string; label: string; total: number; is_active: boolean };
 type Row = { id: string; sku: string | null; ok: boolean; reason: string | null; before?: number | boolean; after?: number | boolean };
+type CsvRow = { row: number; id: string; sku: string | null; ok: boolean; reason: string | null; changes: Record<string, { before: number | boolean; after: number | boolean }> };
+type CsvResult = { dry_run: boolean; changed: number; skipped: number; rows: CsvRow[] };
 type Result = { dry_run: boolean; changed: number; skipped: number; rows: Row[] };
 
 @Component({
@@ -55,6 +57,26 @@ type Result = { dry_run: boolean; changed: number; skipped: number; rows: Row[] 
           </div>
         }
       </section>
+      <section class="flex flex-col gap-3 rounded-xl bg-white p-5">
+        <h2 class="font-semibold">Or edit in a spreadsheet</h2>
+        <p class="text-sm text-ink-soft">Download all your options, change price (in rupees), stock or active (yes/no), then upload the file. Leave a cell blank to keep it. Check it first, then apply.</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <button pcButton variant="secondary" (click)="downloadCsv()">Download CSV</button>
+          <input type="file" accept=".csv,text/csv" aria-label="Edited CSV file" class="text-sm" (change)="pickFile($event)" />
+          <button pcButton (click)="sendCsv(true)" [loading]="csvBusy() === 'check'" [disabled]="!file()">Check file</button>
+          @if (csv()?.dry_run && csv()!.changed > 0) {
+            <button pcButton variant="buy" (click)="sendCsv(false)" [loading]="csvBusy() === 'apply'">Apply to {{ csv()!.changed }}</button>
+          }
+        </div>
+        @if (csv(); as c) {
+          <div class="text-sm">
+            <p class="font-semibold">{{ c.dry_run ? "Would change" : "Changed" }} {{ c.changed }}, skipped {{ c.skipped }}.</p>
+            <ul class="mt-1 max-h-60 overflow-auto">
+              @for (x of c.rows; track x.row) {<li>Row {{ x.row }} {{ x.sku ?? "" }}: {{ x.ok ? describe(x) : "skipped (" + (x.reason ?? "").replaceAll("_", " ") + ")" }}</li>}
+            </ul>
+          </div>
+        }
+      </section>
     </div>
   `,
 })
@@ -76,6 +98,42 @@ export class SellerBulkEditPage {
   protected readonly error = signal<string | null>(null);
   protected readonly needsValue = computed(() => this.actions.find((a) => a[0] === this.action())?.[2] ?? false);
   protected readonly ready = computed(() => this.picked().size > 0 && (!this.needsValue() || (this.value().trim() !== "" && Number.isFinite(Number(this.value())))));
+
+  protected readonly file = signal<File | null>(null);
+  protected readonly csv = signal<CsvResult | null>(null);
+  protected readonly csvBusy = signal<"check" | "apply" | null>(null);
+
+  protected downloadCsv(): void {
+    downloadFile("/api/seller/variants/bulk-edit.csv", undefined, "my-versions.csv").catch(() => {});
+  }
+
+  protected pickFile(e: Event): void {
+    this.file.set((e.target as HTMLInputElement).files?.[0] ?? null);
+    this.csv.set(null);
+  }
+
+  protected describe(r: CsvRow): string {
+    return Object.entries(r.changes)
+      .map(([k, c]) => (k === "price" ? `price ₹${(Number(c.before) / 100).toFixed(2)} to ₹${(Number(c.after) / 100).toFixed(2)}` : `${k} ${String(c.before)} to ${String(c.after)}`))
+      .join(", ");
+  }
+
+  protected async sendCsv(dry: boolean): Promise<void> {
+    const file = this.file();
+    if (!file) return;
+    this.csvBusy.set(dry ? "check" : "apply");
+    this.error.set(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      this.csv.set(await api<CsvResult>("/api/seller/variants/bulk-edit.csv", { method: "POST", form, query: { dry_run: dry } }));
+      if (!dry) void this.load();
+    } catch (e) {
+      this.error.set(e instanceof ApiError ? e.message : "Upload failed");
+    } finally {
+      this.csvBusy.set(null);
+    }
+  }
 
   constructor() {
     void this.load();
