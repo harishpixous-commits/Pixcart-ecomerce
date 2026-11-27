@@ -28,6 +28,23 @@ public static class LoyaltyPoints
         return points;
     }
 
+    /// <summary>Takes back the share of a package's earned points that matches what has been returned (call after returned_total is
+    /// updated). Safe to repeat: only the not-yet-reversed part is taken. Never takes the balance below zero. Returns the points taken.</summary>
+    public static async Task<int> ReverseForReturnAsync(IUnitOfWork uow, Guid subId, string subNumber, long itemsTotal, long returnedTotal, Guid userId)
+    {
+        var earned = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE sub_order_id = @subId AND kind = 'earn'", new { subId });
+        if (earned == 0 || itemsTotal == 0) return 0;
+        var target = earned * Math.Min(returnedTotal, itemsTotal) / itemsTotal;
+        var prefix = "Returned items, package " + subNumber;
+        var done = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(-points),0) FROM loyalty_ledger WHERE user_id = @userId AND kind = 'reverse' AND note LIKE @like", new { userId, like = prefix + "%" });
+        var balance = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId", new { userId });
+        var take = Math.Min(target - done, balance);
+        if (take <= 0) return 0;
+        await uow.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, NULL, 'reverse', @points, @note, @now)",
+            new { id = Guid.NewGuid(), userId, points = (int)-take, note = prefix, now = DateTime.UtcNow });
+        return (int)take;
+    }
+
     public const int RedeemDays = 30;
     public const string CodePrefix = "LP";
 

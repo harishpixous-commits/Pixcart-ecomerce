@@ -259,6 +259,7 @@ public partial class ReturnsBAL(
             }
         }
         await returnsDal.BumpSubReturnedTotalAsync(sub.Id, ret.RefundAmount, uow);
+        await LoyaltyPoints.ReverseForReturnAsync(uow, sub.Id, sub.Number, sub.ItemsTotal, sub.ReturnedTotal + ret.RefundAmount, order.UserId); // takes back the matching share of earned points
         await PostReturnAsync(sub, ret, rows, items, sValue, uow);
         var now = DateTimeFunctions.UtcNow();
         if (seller is not null)

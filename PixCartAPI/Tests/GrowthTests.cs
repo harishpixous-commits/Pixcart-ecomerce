@@ -107,4 +107,18 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal(25,d["loyalty"]!["balance"]!.GetValue<long>());Assert.Equal("Goodwill",d["loyalty"]!["history"]![0]!["note"]!.GetValue<string>());
         Assert.Equal("Question about things",d["support_tickets"]![0]!["subject"]!.GetValue<string>());Assert.False(string.IsNullOrEmpty(d["referral_code"]!.GetValue<string>()));Assert.Equal(0,d["wishlist_count"]!.GetValue<long>());
     }
+    [Fact]public async Task Returned_items_take_back_their_share_of_earned_points_once_and_never_below_zero()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9880000083");var uid=Guid.Parse(buyer.Id);var sub=Guid.NewGuid();
+        using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{enabled=true,points_per_100=2}})).Status);
+        async Task<int> Run(Func<Utils.Interface.IUnitOfWork,Task<int>> f){await using var tx=await db.BeginAsync();await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=0");var n=await f(tx);await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=1");await tx.CommitAsync();return n;}
+        Assert.Equal(40,await Run(tx=>BAL.LoyaltyPoints.EarnAsync(tx,sub,"SYNTH-RET-1",200000,uid)));
+        Assert.Equal(20,await Run(tx=>BAL.LoyaltyPoints.ReverseForReturnAsync(tx,sub,"SYNTH-RET-1",200000,100000,uid)));
+        Assert.Equal(0,await Run(tx=>BAL.LoyaltyPoints.ReverseForReturnAsync(tx,sub,"SYNTH-RET-1",200000,100000,uid)));
+        Assert.Equal(20,(await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        Assert.Equal(20,await Run(tx=>BAL.LoyaltyPoints.ReverseForReturnAsync(tx,sub,"SYNTH-RET-1",200000,200000,uid)));
+        Assert.Equal(0,(await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        Assert.Equal("reverse",(await buyer.Get("/api/loyalty")).Json["history"]![0]!["kind"]!.GetValue<string>());
+    }
 }
