@@ -1172,9 +1172,22 @@ async def test_ship_reminder_goes_once_to_the_seller_of_a_confirmed_package_that
     await age(s1, 30); await age(s2, 2)
     assert await run() == 0 and await notes(tn) == []  # switched off
     assert (await admin.put("/api/admin/growth/settings", {"ship_reminders": {"enabled": True, "after_hours": 24, "max_age_days": 14}})).status_code == 200
-    assert await run() == 1  # the shirt package only: the phone was confirmed 2 hours ago
+    from sqlalchemy import select
+
+    from app.config import settings as app_settings
+    from app.models import Notification
+
+    await tn.patch("/api/auth/me", {"email": "tnseller@example.in"})
+    old_smtp, app_settings.smtp_host = app_settings.smtp_host, "smtp.test"
+    try:
+        assert await run() == 1  # the shirt package only: the phone was confirmed 2 hours ago
+    finally:
+        app_settings.smtp_host = old_smtp
     got = await notes(tn)
     assert len(got) == 1 and await notes(ka) == []
+    async with SessionLocal() as s:
+        mails = (await s.execute(select(Notification).where(Notification.event == "seller_ship_reminder", Notification.channel == "email"))).scalars().all()
+    assert len(mails) == 1 and mails[0].recipient == "tnseller@example.in" and "/seller/orders/" in mails[0].body  # the seller gets an email too
     assert await run() == 0  # once only
     await age(s2, 25)
     assert await run() == 1 and len(await notes(ka)) == 1
