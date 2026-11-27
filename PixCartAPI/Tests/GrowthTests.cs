@@ -43,6 +43,31 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Contains("50% tier bonus",(await buyer.Get("/api/loyalty")).Json["history"]![0]!["note"]!.GetValue<string>());
         Assert.Equal(400,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{gold_bonus_percent=900}})).Status);
     }
+    [Fact]public async Task Segment_campaign_goes_only_to_opted_in_customers_within_the_caps()
+    {
+        var admin=await Admin();var body=new{segment="never_ordered",title="Weekend offer",message="Free shipping this weekend",link="/offers",dry_run=true};
+        Assert.Equal("campaigns_off",(await admin.Post("/api/admin/growth/campaigns",body)).ErrorCode);
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{campaigns=new{enabled=true,max_recipients=2,max_per_day=2}})).Status);
+        Assert.Equal("segments_off",(await admin.Post("/api/admin/growth/campaigns",body)).ErrorCode);
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{segments=new{enabled=true}})).Status);
+        var people=new List<Api>();for(var i=0;i<4;i++)people.Add(await LoginPhone($"96100100{i:00}",$"Camp {i}"));
+        for(var i=0;i<3;i++)await ApiFactory.DbExecAsync("UPDATE users SET marketing_opt_in=1 WHERE id=@id",new{id=people[i].Id});
+        async Task<bool> Has(Api p)=>(await p.Get("/api/notifications")).Json["items"]!.AsArray().Any(n=>n!["title"]!.GetValue<string>()=="Weekend offer");
+        var r=await admin.Post("/api/admin/growth/campaigns",body);Assert.True(r.Status==200,r.ToString());
+        Assert.True(r.Json["dry_run"]!.GetValue<bool>());Assert.Equal(3,r.Json["opted_in"]!.GetValue<int>());Assert.Equal(2,r.Json["recipients"]!.GetValue<int>());Assert.True(r.Json["capped"]!.GetValue<bool>());
+        Assert.Empty((await admin.Get("/api/admin/growth/campaigns")).Json["items"]!.AsArray());
+        foreach(var p in people)Assert.False(await Has(p));
+        r=await admin.Post("/api/admin/growth/campaigns",new{segment="never_ordered",title="Weekend offer",message="Free shipping this weekend",link="/offers",dry_run=false});
+        Assert.Equal(2,r.Json["recipients"]!.GetValue<int>());
+        var seen=new List<bool>();foreach(var p in people)seen.Add(await Has(p));
+        Assert.Equal(2,seen.Count(x=>x));Assert.False(seen[3]);
+        var log=(await admin.Get("/api/admin/growth/campaigns")).Json["items"]!.AsArray();Assert.Single(log);Assert.Equal(2,log[0]!["recipients"]!.GetValue<int>());
+        Assert.Equal(200,(await admin.Post("/api/admin/growth/campaigns",new{segment="never_ordered",title="Weekend offer",message="Free shipping this weekend",link="/offers",dry_run=false})).Status);
+        Assert.Equal("campaign_limit",(await admin.Post("/api/admin/growth/campaigns",new{segment="never_ordered",title="Weekend offer",message="Free shipping this weekend",link="/offers",dry_run=false})).ErrorCode);
+        Assert.Equal("invalid_link",(await admin.Post("/api/admin/growth/campaigns",new{segment="never_ordered",title="T",message="M",link="https://evil.example"})).ErrorCode);
+        Assert.Equal("invalid_segment",(await admin.Post("/api/admin/growth/campaigns",new{segment="nope",title="T",message="M"})).ErrorCode);
+        Assert.Equal(403,(await people[0].Post("/api/admin/growth/campaigns",body)).Status);
+    }
     [Fact]public async Task Sitemap_and_robots_follow_the_search_engine_settings()
     {
         var admin=await Admin();var c=Factory.CreateClient();

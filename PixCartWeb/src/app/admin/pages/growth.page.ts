@@ -12,6 +12,8 @@ import { Button, ErrorNote, Toast } from "../../shared/ui/ui";
 type Val = boolean | number | string | string[];
 type Section = Record<string, Val>;
 type Settings = Record<string, Section>;
+type CampaignPreview = { opted_in: number; recipients: number; capped: boolean };
+type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string };
 type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
 type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
 type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
@@ -29,6 +31,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
+  campaigns: { title: "Segment campaigns", hint: "Send an in-app message to a customer segment. Only customers who opted in to marketing get it. Needs Segments switched on." },
   segments: { title: "Customer segments", hint: "VIP, new and lapsed customers for targeted offers." },
 };
 
@@ -114,6 +117,38 @@ const label = (k: string): string => {
           </div>
         } @else { <pc-page-loader /> }
       </div>
+    } @else if (tab() === "campaigns") {
+      <div class="flex flex-col gap-4">
+        <section class="flex flex-col gap-3 rounded-xl bg-white p-5">
+          <p class="text-sm text-ink-soft">Preview first: it counts who would get the message and sends nothing. In-app only, and only to customers who opted in to marketing.</p>
+          <select class="rounded-lg border px-3 py-2 text-sm" aria-label="Segment" (change)="cSegment.set($any($event.target).value); cPreview.set(null)">
+            @for (g of segs(); track g.key) {<option [value]="g.key" [selected]="g.key === cSegment()">{{ g.label }} ({{ g.count }})</option>}
+          </select>
+          <input class="rounded-lg border px-3 py-2 text-sm" maxlength="80" placeholder="Title" [value]="cTitle()" (input)="cTitle.set($any($event.target).value); cPreview.set(null)" />
+          <textarea class="rounded-lg border px-3 py-2 text-sm" maxlength="300" rows="3" placeholder="Message" [value]="cMessage()" (input)="cMessage.set($any($event.target).value); cPreview.set(null)"></textarea>
+          <input class="rounded-lg border px-3 py-2 text-sm" maxlength="200" placeholder="Page to open, like /offers (optional)" [value]="cLink()" (input)="cLink.set($any($event.target).value); cPreview.set(null)" />
+          <pc-error-note [message]="error()" />
+          <div class="flex items-center gap-2">
+            <button pcButton (click)="campaign(true)" [loading]="busy() && !cPreview()" [disabled]="!cTitle().trim() || !cMessage().trim()">Preview</button>
+            @if (cPreview(); as p) {
+              @if (p.recipients > 0) {<button pcButton variant="buy" (click)="campaign(false)" [loading]="busy()">Send to {{ p.recipients }}</button>}
+              <span class="text-sm text-ink-soft" data-testid="campaign-preview">{{ p.opted_in }} opted in{{ p.capped ? ", capped at " + p.recipients : "" }}</span>
+            }
+          </div>
+        </section>
+        @if (campaigns().length) {
+          <div class="overflow-x-auto rounded-xl bg-white">
+            <table class="w-full text-left text-sm" data-testid="campaigns">
+              <thead><tr class="border-b border-line"><th class="p-3">Sent</th><th class="p-3">Segment</th><th class="p-3">Title</th><th class="p-3">People</th></tr></thead>
+              <tbody>
+                @for (c of campaigns(); track c.id) {
+                  <tr class="border-b border-line/50"><td class="p-3">{{ date(c.at) }}</td><td class="p-3">{{ c.segment.replaceAll("_", " ") }}</td><td class="p-3 font-semibold">{{ c.title }}</td><td class="p-3">{{ c.recipients }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
     } @else if (tab() === "segments") {
       <div class="flex flex-col gap-4">
         @if (segError()) { <p class="rounded-lg bg-white p-4 text-sm text-ink-soft" data-testid="segments-off">{{ segError() }}</p> }
@@ -164,7 +199,7 @@ export class AdminGrowthPage {
   protected readonly titles = TITLES;
   protected readonly label = label;
   protected readonly tab = signal("settings");
-  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "cart-reminders", label: "Cart reminders" }];
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "cart-reminders", label: "Cart reminders" }];
   protected readonly rupees = rupees;
   protected readonly date = date;
   protected readonly cards = signal<Card[]>([]);
@@ -173,6 +208,12 @@ export class AdminGrowthPage {
   protected readonly gAmount = signal("500");
   protected readonly gQty = signal("1");
   protected readonly gNote = signal("");
+  protected readonly cSegment = signal("never_ordered");
+  protected readonly cTitle = signal("");
+  protected readonly cMessage = signal("");
+  protected readonly cLink = signal("");
+  protected readonly cPreview = signal<CampaignPreview | null>(null);
+  protected readonly campaigns = signal<CampaignRow[]>([]);
   protected readonly segs = signal<Seg[]>([]);
   protected readonly segKey = signal("");
   protected readonly members = signal<Member[]>([]);
@@ -187,9 +228,36 @@ export class AdminGrowthPage {
   constructor() {
     api<{ settings: Settings }>("/api/admin/growth/settings").then((x) => this.s.set(x.settings)).catch(quietly);
     this.loadCards();
+    this.loadCampaigns();
     api<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] }>("/api/admin/growth/cart-reminders").then((x) => this.reminders.set(x)).catch(quietly);
     api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => this.segs.set(x.segments)).catch((e) => this.segError.set(e instanceof ApiError ? e.message : null));
     api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);
+  }
+
+  private loadCampaigns(): void {
+    api<{ items: CampaignRow[] }>("/api/admin/growth/campaigns").then((x) => this.campaigns.set(x.items)).catch(quietly);
+  }
+
+  protected async campaign(dry: boolean): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const body = { segment: this.cSegment(), title: this.cTitle(), message: this.cMessage(), link: this.cLink(), dry_run: dry };
+      const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body });
+      if (dry) this.cPreview.set(r);
+      else {
+        this.cPreview.set(null);
+        this.cTitle.set("");
+        this.cMessage.set("");
+        this.cLink.set("");
+        this.toast.show(`Sent to ${r.recipients} customers`);
+        this.loadCampaigns();
+      }
+    } catch (x) {
+      this.error.set(x instanceof ApiError ? x.message : "Could not send");
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   private loadCards(): void {

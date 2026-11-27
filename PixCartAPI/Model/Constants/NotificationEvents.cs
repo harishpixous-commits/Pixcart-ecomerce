@@ -33,6 +33,10 @@ public static class NotificationEvents
                 ["inapp"] = ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
                 ["email"] = ("{{item}} is still in your {{brand}} cart", "Hi {{name}},\n\n{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}\n\nFinish your order: {{link}}"),
             },
+            ["marketing_message"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("{{title}}", "{{message}}"),
+            },
             ["order_cancelled"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("Order cancelled", "{{item}} was cancelled: {{reason}}."),

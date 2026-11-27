@@ -13,12 +13,12 @@ public static class Segments
         ["new"] = "Signed up recently", ["never_ordered"] = "Never placed an order", ["repeat"] = "Two or more orders",
         ["vip"] = "Spent at or above the VIP amount", ["lapsed"] = "Ordered before, but not lately",
     };
-    private static readonly Dictionary<string, string> Where = new()
+    internal static readonly Dictionary<string, string> Where = new()
     {
         ["new"] = "created_at >= @newSince", ["never_ordered"] = "orders = 0", ["repeat"] = "orders >= 2",
         ["vip"] = "spent >= @vip", ["lapsed"] = "orders > 0 AND last_order_at < @lapsedBefore",
     };
-    private const string Base = @"WITH c AS (
+    internal const string Base = @"WITH c AS (
   SELECT u.id, u.name, u.phone, u.email, u.marketing_opt_in, u.created_at,
          COUNT(o.number) AS orders, CAST(COALESCE(SUM(o.grand_total), 0) AS SIGNED) AS spent, MAX(o.placed_at) AS last_order_at
   FROM users u LEFT JOIN orders o ON o.user_id = u.id AND o.status <> 'cancelled' AND o.placed_at IS NOT NULL

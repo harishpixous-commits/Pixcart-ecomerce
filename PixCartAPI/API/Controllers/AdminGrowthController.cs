@@ -8,10 +8,13 @@ namespace API.Controllers;
 
 /// <summary>Admin → Growth settings and the seller scorecard. No reference route guard rows: guards are declared here.</summary>
 [ApiController, SignedIn, Route("/api/admin/growth")]
-public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me, IMySqlDapperHelper db) : ControllerBase
+public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me, IMySqlDapperHelper db, ICatalogNotifyBAL notify) : ControllerBase
 {
     [HttpGet("cart-reminders"), RouteGuard("perm:marketing")] public async Task<object> CartReminderLog() { await me.RequireAsync(); return await BAL.CartReminders.RecentAsync(db); }
     [HttpGet("segments"), RouteGuard("perm:marketing")] public async Task<object> Segments(string? segment) { await me.RequireAsync(); return await BAL.Segments.ListAsync(db, segment); }
+    public record CampaignIn { [System.ComponentModel.DataAnnotations.Required] public string Segment { get; init; } = ""; [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)] public string Title { get; init; } = ""; [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(300)] public string Message { get; init; } = ""; [System.ComponentModel.DataAnnotations.StringLength(200)] public string Link { get; init; } = ""; public bool DryRun { get; init; } = true; }
+    [HttpPost("campaigns"), RouteGuard("perm:marketing")] public async Task<object> SendCampaign(CampaignIn b) => await BAL.SegmentCampaigns.SendAsync(db, notify, await me.RequireAsync(), b.Segment, b.Title, b.Message, b.Link, b.DryRun);
+    [HttpGet("campaigns"), RouteGuard("perm:marketing")] public async Task<object> CampaignLog() { await me.RequireAsync(); return await BAL.SegmentCampaigns.RecentAsync(db); }
     [HttpGet("settings"), RouteGuard("perm:marketing")] public async Task<object> Settings() => await bal.SettingsAsync(await me.RequireAsync());
     [HttpPut("settings"), RouteGuard("perm:marketing")] public async Task<object> Settings(JsonObject body) => await bal.UpdateAsync(await me.RequireAsync(), body);
     public record AdjustIn { [System.ComponentModel.DataAnnotations.Required] public Guid? UserId { get; init; } [System.ComponentModel.DataAnnotations.Range(-100000, 100000)] public int Points { get; init; } [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 3)] public string Note { get; init; } = ""; }

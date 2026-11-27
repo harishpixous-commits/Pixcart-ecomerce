@@ -34,6 +34,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
             new("new_account_max_cod_paise", 200000, K.Int, 0, 100000000), new("blocked_pincodes", Array.Empty<string>(), K.List, 0, 500)],
         ["seo"] = [new("sitemap_enabled", true, K.Bool), new("sitemap_include_categories", true, K.Bool), new("sitemap_include_sellers", false, K.Bool)],
         ["bulk_edit"] = [new("enabled", true, K.Bool), new("max_rows", 500, K.Int, 1, 5000)],
+        ["campaigns"] = [new("enabled", false, K.Bool), new("max_recipients", 500, K.Int, 1, 5000), new("max_per_day", 3, K.Int, 1, 20)],
         ["segments"] = [new("enabled", false, K.Bool), new("vip_spend_paise", 2500000, K.Int, 0, 1000000000), new("lapsed_days", 90, K.Int, 7, 1000), new("new_days", 30, K.Int, 1, 365)],
     };
 
