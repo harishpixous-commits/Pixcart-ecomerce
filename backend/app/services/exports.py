@@ -32,12 +32,14 @@ from app.db import SessionLocal
 from app.models import (
     AiRun,
     Category,
+    GiftCard,
     InventoryLevel,
     LedgerEntry,
     Order,
     OrderItem,
     Payout,
     Product,
+    Referral,
     ReturnItem,
     ReturnRequest,
     Seller,
@@ -477,6 +479,37 @@ _ITEM_PDF = ("Package", "Invoice number", "Seller GSTIN", "Place of supply", "SK
 _PROD_STATUSES = [("approved", "Live"), ("pending", "In review"), ("rejected", "Rejected"), ("draft", "Draft"), ("archived", "Archived")]
 _PROD_PDF = ("SKU", "Product", "Option", "Seller", "Category", "Status", "MRP", "Price", "Stock", "Sold")
 
+def _gift_cards_q(ctx: Context) -> Select:
+    stmt = select(GiftCard)
+    if ctx.status:
+        stmt = stmt.where(GiftCard.status == ctx.status)
+    return _range(stmt, GiftCard.created_at, ctx).order_by(GiftCard.created_at, GiftCard.id)
+
+
+GIFT_CARD_HEADERS = ["Card (last 4)", "Issued (IST)", "Expires (IST)", "Status", "Value", "Balance", "Used", "Note"]
+
+
+def _gift_card_row(r) -> list[Any]:
+    c = r[0]
+    return [c.code[-4:], ist(c.created_at), ist(c.expires_at), c.status, money(c.initial_paise), money(c.balance_paise), money(c.initial_paise - c.balance_paise), c.note]
+
+
+def _referrals_q(ctx: Context) -> Select:
+    ref, fr = aliased(User), aliased(User)
+    stmt = select(Referral, ref.name, fr.name).join(ref, ref.id == Referral.referrer_id).join(fr, fr.id == Referral.referee_id)
+    if ctx.status:
+        stmt = stmt.where(Referral.status == ctx.status)
+    return _range(stmt, Referral.created_at, ctx).order_by(Referral.created_at, Referral.id)
+
+
+REFERRAL_HEADERS = ["Referrer", "Friend", "Joined (IST)", "Status", "Reward", "Rewarded (IST)"]
+
+
+def _referral_row(r) -> list[Any]:
+    f, referrer, friend = r
+    return [referrer or "", friend or "", ist(f.created_at), f.status, money(f.reward_paise), ist(f.rewarded_at)]
+
+
 _ALL: list[ExportSpec] = [
         # ---------------- admin
         ExportSpec("orders", "Orders (one row per package)", "Every package with payment, tax, commission, TCS/TDS, payout and shipping details.", "admin", "orders",
@@ -507,6 +540,11 @@ _ALL: list[ExportSpec] = [
         ExportSpec("ai-runs", "AI usage", "Every AI draft and assistant answer with tokens, latency and what happened to it, for cost review and audits.", "admin", "settings",
                    AI_HEADERS, _ai_q, _ai_row, "date of the AI run", [("draft", "Draft"), ("applied", "Used"), ("sent", "Sent"), ("discarded", "Discarded"), ("failed", "Failed")],
                    pdf_columns=("Time (IST)", "Task", "By", "Status", "Mode", "Model", "Input tokens", "Output tokens", "Latency ms")),
+        ExportSpec("gift-cards", "Gift cards", "Every gift card with value, balance and expiry. Only the last 4 characters of the code are shown.", "admin", "marketing",
+                   GIFT_CARD_HEADERS, _gift_cards_q, _gift_card_row, "date the card was issued", [("active", "Active"), ("void", "Void")], date_optional=True),
+        ExportSpec("referrals", "Referrals", "Friends who joined with a referral code, with the reward status. Contains personal data: share only as the privacy notice allows.", "admin", "marketing",
+                   REFERRAL_HEADERS, _referrals_q, _referral_row, "date the friend joined", [("joined", "Joined"), ("rewarded", "Rewarded"), ("capped", "Over the cap")],
+                   contains_personal_data=True, date_optional=True),
         # ---------------- seller (always limited to the signed-in seller)
         ExportSpec("orders", "Orders", "Your packages with totals, deductions, payout and shipping details.", "seller", "",
                    PACKAGE_HEADERS, _packages_q, _package_row, "date the order was placed", SUB_STATUSES, filters=("payment_method", "q"), pdf_columns=_ORD_PDF),

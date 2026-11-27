@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import update
@@ -154,3 +155,27 @@ async def test_large_export_streams_every_row(client, admin, categories):
     data = rows(await admin.get("/api/admin/exports/orders.csv"))
     assert len(data) == 1 + 2 + 5000
     assert {r[0] for r in data[1:]} >= {f"BULK-{i:05d}" for i in range(5000)}
+
+
+async def test_gift_card_and_referral_exports(client, admin, categories):
+    from app.db import SessionLocal, utcnow
+    from app.models import Referral
+    await admin.put("/api/admin/growth/settings", {"gift_cards": {"enabled": True, "min_paise": 10000, "max_paise": 100000}})
+    made = (await admin.post("/api/admin/growth/gift-cards", {"amount_paise": 50000, "note": "Diwali", "quantity": 1})).json()["items"][0]
+    out = rows(await admin.get("/api/admin/exports/gift-cards.csv"))
+    head = out[0]
+    assert head[0] == "Card (last 4)" and len(out) == 2
+    row = dict(zip(head, out[1], strict=True))
+    assert row["Card (last 4)"] == made["code"][-4:] and made["code"] not in ",".join(out[1])
+    assert row["Value"] == "500.00" and row["Balance"] == "500.00" and row["Used"] == "0.00" and row["Note"] == "Diwali"
+    buyer = await login_phone(client, "9800000021")
+    friend = await login_phone(client, "9800000022")
+    me, fr = (await buyer.get("/api/auth/me")).json()["id"], (await friend.get("/api/auth/me")).json()["id"]
+    async with SessionLocal() as s:
+        s.add(Referral(referrer_id=uuid.UUID(me), referee_id=uuid.UUID(fr), status="rewarded", reward_paise=2500, created_at=utcnow(), rewarded_at=utcnow()))
+        await s.commit()
+    refs = rows(await admin.get("/api/admin/exports/referrals.csv"))
+    r = dict(zip(refs[0], refs[1], strict=True))
+    assert len(refs) == 2 and r["Status"] == "rewarded" and r["Reward"] == "25.00"
+    only = rows(await admin.get("/api/admin/exports/referrals.csv?status=joined"))
+    assert len(only) == 1
