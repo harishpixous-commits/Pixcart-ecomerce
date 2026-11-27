@@ -25,8 +25,16 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
     {
         var addr = await customers.AddressesAsync(user.Id);
         var orders = await customers.AllOrdersAsync(user.Id);
+        var uid = user.Id;
+        var tickets = (await db.QueryAsync<(string Number, string Subject, string Status, DateTime CreatedAt)>("SELECT number AS Number, subject AS Subject, status AS Status, created_at AS CreatedAt FROM support_tickets WHERE user_id = @uid ORDER BY created_at DESC LIMIT 500", new { uid })).ToList();
+        var points = (await db.QueryAsync<(string Kind, int Points, string Note, DateTime CreatedAt)>("SELECT kind AS Kind, points AS Points, note AS Note, created_at AS CreatedAt FROM loyalty_ledger WHERE user_id = @uid ORDER BY created_at DESC LIMIT 500", new { uid })).ToList();
+        var wished = await db.QueryFirstOrDefaultAsync<long>("SELECT COUNT(*) FROM wishlist_items WHERE user_id = @uid", new { uid });
         return new
         {
+            support_tickets = tickets.Select(t => new { number = t.Number, subject = t.Subject, status = t.Status, created = DateTimeFunctions.Iso(t.CreatedAt) }).ToList(),
+            loyalty = new { balance = points.Sum(x => (long)x.Points), history = points.Select(x => new { kind = x.Kind, points = x.Points, note = x.Note, at = DateTimeFunctions.Iso(x.CreatedAt) }).ToList() },
+            referral_code = ReferralRewards.CodeFor(uid),
+            wishlist_count = wished,
             profile = new { name = user.Name, phone = user.Phone, email = user.Email, marketing_opt_in = user.MarketingOptIn, joined = DateTimeFunctions.Iso(user.CreatedAt) },
             addresses = addr.Select(a => new { name = a.FullName, phone = a.Phone, line1 = a.Line1, city = a.City, pincode = a.Pincode }).ToList(),
             orders = orders.Select(o => new

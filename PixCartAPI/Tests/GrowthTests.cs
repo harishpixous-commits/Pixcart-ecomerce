@@ -97,4 +97,14 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal("invalid_segment",(await admin.Get("/api/admin/growth/segments?segment=nope")).ErrorCode);
         Assert.Equal(403,(await buyer.Get("/api/admin/growth/segments")).Status);
     }
+    [Fact]public async Task Data_export_includes_loyalty_referral_and_support_requests()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9880000082","Export Me");
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{enabled=true}})).Status);
+        Assert.Equal(200,(await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=Guid.Parse(buyer.Id),points=25,note="Goodwill"})).Status);
+        var t=await buyer.Post("/api/support/tickets",new{category="other",subject="Question about things",message="Please help me out here"});Assert.True(t.Status==201,t.ToString());
+        var d=(await buyer.Get("/api/account/export")).Json;
+        Assert.Equal(25,d["loyalty"]!["balance"]!.GetValue<long>());Assert.Equal("Goodwill",d["loyalty"]!["history"]![0]!["note"]!.GetValue<string>());
+        Assert.Equal("Question about things",d["support_tickets"]![0]!["subject"]!.GetValue<string>());Assert.False(string.IsNullOrEmpty(d["referral_code"]!.GetValue<string>()));Assert.Equal(0,d["wishlist_count"]!.GetValue<long>());
+    }
 }
