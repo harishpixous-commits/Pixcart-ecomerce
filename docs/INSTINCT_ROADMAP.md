@@ -251,3 +251,6 @@ The review reminder note now links to the first unreviewed product page (#review
 
 ## Push 86: admin dashboard "Orders late to ship"
 Staff dashboard gets `orders_late_to_ship`: open packages (placed/confirmed/packed) older than their seller own dispatch days (min 1). Stat shown only when above zero, links to admin orders. Both versions. Tested in the late-orders tests on both sides.
+
+## Push 87: review reminders also by email
+New email template for `review_reminder` (editable in admin templates) and Python now sends it on the email channel as well as in-app (.NET already sent on every channel with a template). Email only leaves when the email integration is set up and the shopper has an email. Tested on both sides. Ship reminders stay in-app (seller side).

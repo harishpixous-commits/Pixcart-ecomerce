@@ -756,7 +756,11 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.EndsWith("#reviews", await db.ExecuteScalarAsync<string>("SELECT link FROM notifications WHERE user_id = @uid AND event = 'review_reminder'", new { uid = Guid.Parse(a.Id) }));
         Assert.Equal(0, await Run());
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET delivered_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 6 DAY) WHERE id = @sb", new { sb });
+        Assert.Equal(200, (await b.Patch("/api/auth/me", new { email = "reviewer@example.in" })).Status);
+        Assert.Equal(200, (await admin.Put("/api/admin/integrations/email", new { values = new { host = "smtp.example.in", from_address = "orders@example.in" }, enabled = true, password = AdminPassword })).Status);
         Assert.Equal(1, await Run()); Assert.Equal(1, await Count(b.Id));
+        var mail = await db.QueryAsync<string>("SELECT body FROM notifications WHERE user_id = @uid AND event = 'review_reminder' AND channel = 'email'", new { uid = Guid.Parse(b.Id) });
+        Assert.Single(mail); Assert.Contains("#reviews", mail.Single()); // email goes too, with the review link
     }
 
     [Fact]

@@ -40,6 +40,7 @@ public static class NotificationEvents
             ["review_reminder"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("How was {{item}}?", "Tell other shoppers what you think. It takes a minute."),
+                ["email"] = ("How was {{item}}?", "Hi {{name}},\n\nTell other shoppers what you think of {{item}}. It takes a minute.\n\n{{link}}"),
             },
             ["saved_search_match"] = new Dictionary<string, (string Subject, string Body)>
             {
