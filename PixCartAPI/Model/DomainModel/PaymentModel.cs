@@ -18,6 +18,10 @@ public class PaymentModel
     public string Currency { get; set; } = "";
     /// <summary>payments.charge_amount</summary>
     public long? ChargeAmount { get; set; }
+    /// <summary>payments.client_data: the checkout's fields for this attempt (JSON; never a secret)</summary>
+    public string? ClientData { get; set; }
+    /// <summary>payments.captured_at: when the money was taken (an order's payment is the one captured first)</summary>
+    public DateTime? CapturedAt { get; set; }
     /// <summary>payments.status</summary>
     public string Status { get; set; } = "";
     /// <summary>payments.method</summary>

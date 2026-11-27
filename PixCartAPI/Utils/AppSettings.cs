@@ -44,6 +44,31 @@ public class AppSettings
     public bool RazorpayCheckout { get; set; } = true;
     public string RazorpayCheckoutUrl { get; set; } = "https://checkout.razorpay.com/v1/checkout.js";
     public int PaymentWindowMinutes { get; set; } = 30;
+    // more payment gateways (docs/PAYMENT_GATEWAYS.md); each takes payments only once its switch is on
+    public string CashfreeClientId { get; set; } = "";
+    public string CashfreeClientSecret { get; set; } = "";
+    public bool CashfreeCheckout { get; set; }
+    public string CashfreeApiBase { get; set; } = "";
+    public string CashfreeSdkUrl { get; set; } = "https://sdk.cashfree.com/js/v3/cashfree.js";
+    public string PhonepeClientId { get; set; } = "";
+    public string PhonepeClientSecret { get; set; } = "";
+    public string PhonepeClientVersion { get; set; } = "1";
+    public string PhonepeWebhookUsername { get; set; } = "";
+    public string PhonepeWebhookPassword { get; set; } = "";
+    public string PhonepeEnv { get; set; } = "sandbox";
+    public bool PhonepeCheckout { get; set; }
+    public string PhonepeApiBase { get; set; } = "";
+    public string PhonepeAuthBase { get; set; } = "";
+    public string PayuKey { get; set; } = "";
+    public string PayuSalt { get; set; } = "";
+    public string PayuEnv { get; set; } = "sandbox";
+    public bool PayuCheckout { get; set; }
+    public string PayuBase { get; set; } = "";
+    public string PayuInfoBase { get; set; } = "";
+    public string StripeSecretKey { get; set; } = "";
+    public string StripeWebhookSecret { get; set; } = "";
+    public bool StripeCheckout { get; set; }
+    public string StripeApiBase { get; set; } = "";
 
     // Further provider settings (Admin → Integrations overrides each one; see IIntegrationBAL)
     /// <summary>"manual" or "razorpayx".</summary>

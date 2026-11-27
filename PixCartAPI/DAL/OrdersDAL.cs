@@ -107,9 +107,9 @@ public class OrdersDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync(
             """
             INSERT INTO payments (id, order_id, provider, provider_order_id, amount_paise, currency, charge_amount,
-                status, method, error, created_at, updated_at)
+                status, method, error, client_data, captured_at, created_at, updated_at)
             VALUES (@Id, @OrderId, @Provider, @ProviderOrderId, @AmountPaise, @Currency, @ChargeAmount,
-                @Status, @Method, @Error, @CreatedAt, @UpdatedAt)
+                @Status, @Method, @Error, CAST(@ClientData AS JSON), @CapturedAt, @CreatedAt, @UpdatedAt)
             """, p);
 
     public Task<PaymentModel?> LatestPaymentAsync(Guid orderId, IUnitOfWork? uow = null) =>
@@ -240,7 +240,7 @@ public class OrdersDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync(
             """
             UPDATE payments SET status = @Status, provider_payment_id = @ProviderPaymentId, method = @Method,
-                error = @Error, updated_at = UTC_TIMESTAMP()
+                error = @Error, captured_at = @CapturedAt, updated_at = UTC_TIMESTAMP()
             WHERE id = @Id
             """, p);
 
