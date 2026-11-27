@@ -18,8 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import rate_limit
 from app.core.errors import ApiError, NotFound
 from app.db import utcnow
-from app.models import Coupon, GiftCard, GiftCardPurchase, GiftCardUse
+from app.models import Coupon, GiftCard, GiftCardPurchase, GiftCardUse, User
 from app.services import growth
+from app.services.notify import notify
 
 COUPON_DAYS = 30
 
@@ -186,4 +187,8 @@ async def check_purchase(session: AsyncSession, user_id: uuid.UUID | None, purch
     card = await _make_card(session, _cfg(await growth.get(session)), p.amount_paise, f"Bought online ({p.gateway})")
     p.status, p.gift_card_id, p.error = "issued", card.id, ""
     await session.flush()
+    buyer = await session.get(User, p.user_id)  # the code also goes to the buyer's email (once: only the first check gets here)
+    r = p.amount_paise / 100
+    await notify(session, "gift_card_bought", buyer, {"amount": f"₹{r:,.0f}" if r == int(r) else f"₹{r:,.2f}", "code": card.code, "expires": card.expires_at.strftime("%d %b %Y")},
+                 link="/rewards", channels=("email",))
     return purchase_view(p, card)

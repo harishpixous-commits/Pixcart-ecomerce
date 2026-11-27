@@ -482,10 +482,21 @@ async def test_buying_a_gift_card_issues_it_once_and_only_after_the_gateway_says
     other = await login_phone(client, "9876509999")
     assert (await other.post(f"/api/gift-cards/purchase/{pid}/check", {})).status_code == 404
     # a fresh purchase, paid in full: issued once, even when asked twice
-    pid2 = (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["id"]
-    fake.attempts_now = [{"id": "a3", "status": "captured", "method": "upi", "error": "", "amount": 20000}]
-    a = (await buyer.post(f"/api/gift-cards/purchase/{pid2}/check", {})).json()
-    b = (await buyer.post(f"/api/gift-cards/purchase/{pid2}/check", {})).json()
+    from app.config import settings as app_settings
+    from app.models import Notification
+
+    await buyer.patch("/api/auth/me", {"email": "giftbuyer@example.in"})
+    old_smtp, app_settings.smtp_host = app_settings.smtp_host, "smtp.test"
+    try:
+        pid2 = (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["id"]
+        fake.attempts_now = [{"id": "a3", "status": "captured", "method": "upi", "error": "", "amount": 20000}]
+        a = (await buyer.post(f"/api/gift-cards/purchase/{pid2}/check", {})).json()
+        b = (await buyer.post(f"/api/gift-cards/purchase/{pid2}/check", {})).json()
+    finally:
+        app_settings.smtp_host = old_smtp
+    async with SessionLocal() as s:
+        mails = (await s.execute(select(Notification).where(Notification.event == "gift_card_bought"))).scalars().all()
+    assert len(mails) == 1 and mails[0].channel == "email" and mails[0].recipient == "giftbuyer@example.in" and a["code"] in mails[0].body and "₹200" in mails[0].body  # once, not on the second check
     assert a["status"] == "issued" and a["code"].startswith("GC") and b["code"] == a["code"]
     assert await cards() == 1
     assert (await buyer.post("/api/gift-cards/balance", {"code": a["code"]})).json()["balance_paise"] == 20000

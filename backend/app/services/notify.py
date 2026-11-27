@@ -51,6 +51,9 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "review_reminder": {
         "inapp": ("How was {{item}}?", "Tell other shoppers what you think. It takes a minute."),
     },
+    "gift_card_bought": {
+        "email": ("Your {{brand}} gift card", "Hi {{name}},\n\nThank you. Your gift card for {{amount}} is ready.\n\nCode: {{code}}\nValid until {{expires}}\n\nUse it at checkout, or see the balance here: {{link}}"),
+    },
     "marketing_message": {
         "inapp": ("{{title}}", "{{message}}"),
     },
