@@ -982,3 +982,33 @@ async def test_seller_can_set_own_free_delivery_amount_within_admin_bounds(clien
     assert (await quote())["summary"]["shipping_total"] == 4000
     r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": str(uuid.uuid4())})
     assert r.status_code == 201, r.text
+
+
+async def test_delivery_fee_can_differ_by_destination_state(client, admin, categories):
+    import uuid
+
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, _, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000121")
+    home = await add_address(buyer, state="33")
+    other = await add_address(buyer, state="29", pincode="560001")
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})  # 299 rupees: pays delivery
+
+    async def quote(addr):
+        return (await buyer.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})).json()
+
+    assert (await quote(other))["summary"]["shipping_total"] == 4000
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": True, "state_fees": "29:9000, 99 : 1, junk"}})).status_code == 200
+    assert (await quote(home))["summary"]["shipping_total"] == 4000  # state not listed: the marketplace fee
+    q = await quote(other)
+    assert q["summary"]["shipping_total"] == 9000 and q["groups"][0]["shipping_fee"] == 9000
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 2})  # the shirt package ships free
+    q2 = await quote(other)
+    assert q2["summary"]["shipping_total"] == 9000  # still only the package that pays
+    r = await buyer.post("/api/orders", {"address_id": other, "payment_method": "cod", "idempotency_key": str(uuid.uuid4()), "expected_total": q2["summary"]["grand_total"]})
+    assert r.status_code == 201, r.text
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": False}})).status_code == 200
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+    assert (await quote(other))["summary"]["shipping_total"] == 4000  # switched off: the marketplace fee again
