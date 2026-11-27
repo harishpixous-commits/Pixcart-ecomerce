@@ -1,4 +1,4 @@
-# CONTINUE HERE — handover for the next AI agent (written 2026-11-26 11:00 IST)
+# CONTINUE HERE — handover for the next AI agent (written 2026-11-26 11:00 IST, updated 2026-11-27)
 
 You are continuing the PixCart rebuild exactly where the previous agent stopped. Read this whole file before you touch
 anything. It tells you what the project is, the rules you must never break, what is done, what is half done, and the
@@ -278,6 +278,70 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   (`tools/publish-windows.ps1 -Output C:\Users\haris\pixcart-tools\e2e-site`) and run the browser suite on it
   before shipping changes to the pipeline.
 
+### 6.8 Multi-gateway payments in the company version (in progress, branch feature/payments)
+- Worktree C:\Users\haris\Downloads\PixCart-company-payments (branch feature/payments, started from port/company
+  5d78b3a, pushed to origin). Build and test there; never run its tests while another API test run is going (both use
+  the MySQL test database pixcart_test_auth). Merge into port/company only when the whole feature is complete and
+  verified, because the company export ships everything on port/company.
+- The contract: docs/PAYMENT_GATEWAYS.md in C:\Users\haris\Downloads\PixCart-python-dev (newest; copy it into this
+  repo's docs when merging). The code to mirror is the local Python branch feature/advanced there (commits
+  df86194..b4dcb86): backend/app/services/payments/*, services/orders.py (order_payment_query, payment_customer,
+  start_payment, checkout_payload, mark_paid, confirm_attempt, check_with_gateway, check_order_payments, process_refund,
+  sync_refund, sync_pending_refunds, expire_unpaid_orders), routers/orders.py (shopper_checkout, payment_status,
+  switch_payment, gateway_callback, gateway_webhook), routers/admin_payments.py, integrations registry/checks/store,
+  jobs.py; website frontend/src/lib/payments.ts, components/order-payment.tsx, app/admin/payments/page.tsx; tests
+  backend/tests/test_payment_*.py (30 tests).
+- Done in C# (build 0 warnings, tests pass): step 1 settings in AppSettings and IntegrationSettings (OnlinePayments =
+  any gateway set up and switched on), PaymentModel.ClientData and CapturedAt, migration V005; step 2
+  BAL/Payments/PaymentGateway.cs (contract, PaymentHttp with the local-mock rule and one test hook, PaymentGateways
+  registry) and BAL/Payments/Gateways.cs (Razorpay, Cashfree, PhonePe, PayU, Stripe); step 3 PaymentHealth (with
+  DAL/PaymentEventsDAL) and PaymentRouting; Tests/PaymentGatewayTests.cs (7 tests). All registered in
+  ServiceConfiguration.
+- Step 4 (next), the order flow in OrdersBAL and friends, mirroring the Python functions above: start the payment with
+  failover in PlaceOrderAsync (the Razorpay block near line 410); ShopperCheckoutAsync returns provider, mode, the mode
+  fields (client_data, Razorpay rebuilt from settings) and alternatives (saved cards only for Razorpay); MarkPaidAsync
+  sets CapturedAt and refunds a capture on another attempt as "Duplicate payment"; ConfirmAttempt, a generic
+  CheckWithGatewayAsync and CheckOrderPaymentsAsync (payment-status and admin check-payment look at every attempt);
+  ProcessRefundAsync through the payment's own gateway (never resend a refund that has a gateway reference; a retry asks
+  RefundStatusAsync first only where RefundLookupByOurId); SyncRefund and SyncPendingRefunds from the refund worker;
+  ExpireUnpaidOrdersAsync through each payment's gateway; order detail paid.provider/paid.gateway and the admin
+  "payments" list; the order's payment is the earliest COALESCE(captured_at, created_at) everywhere (cancel, returns,
+  order detail).
+- Step 5: endpoints POST /api/orders/{id}/payment/switch, GET|POST /api/payments/{code}/callback (the literal Razorpay
+  routes keep winning), POST /api/payments/{code}/webhook (503 gateway_unavailable when the gateway cannot be asked, so
+  it retries), admin GET /api/admin/payments/gateways, PUT /api/admin/payments/routing, POST
+  /api/admin/payments/gateways/{code}/test (permission settings); IntegrationRegistry entries for cashfree, phonepe, payu
+  and stripe exactly as Python's registry (fields, help, setup steps, webhook paths and events), checks calling each
+  adapter's TestAsync, status mode and warnings; jobs: prune events daily, reconcile pending refunds.
+- Step 6: Angular screens (mirror the Next.js ones): one opener for every mode (Razorpay modal as today, Cashfree JS
+  SDK v3, PhonePe and Stripe redirect, PayU form post), pay another way and try another way on the order page, Admin →
+  Payments (gateways in routing order, health, test, routing form), payment attempts on the admin order.
+- Step 7: Flutter customer app: open every mode (Razorpay as today; redirect and form in an in-app browser that closes
+  on /orders/), pay another way.
+- Then: the whole API suite, publish the package, browser suite, both crawls and the order flow, merge into
+  port/company, ship with update_company.sh.
+
+### 6.9 Python version (branch feature/advanced, local only)
+- C:\Users\haris\Downloads\PixCart-python-dev, commits e8c3b8b..b4dcb86: multi-gateway payments (backend, website
+  screens, 30 tests); the whole suite passes (252). Never push this branch and never merge it to main without the
+  owner's word: the repository may build pushed branches on Vercel (preview deployments that could run migrations).
+- Next: the independent review of the payments change (money and concurrency, security, gateway API correctness)
+  and the local multi-gateway simulator tools/payment-sim; workflow script payments-python-review-and-sim-wf_7942838f-36c.js
+  (in the session's workflows/scripts folder; resume run wf_7942838f-36c). Every change made in one version must be
+  made in the other.
+
+### 6.10 The owner's direction: every module at the most advanced level, in both versions (2026-11-27)
+- Every module must have every useful option and setting, at the most advanced level (nothing more could sensibly be
+  added), user friendly, and working well, in BOTH versions, which must stay equal. Only verified, correct code goes to
+  the company GitHub.
+- Method: audit one module group at a time in both versions (how each kind of user works, what fails in real daily
+  use, missing options and settings, the most advanced feature set), verify every reported bug, write the result into
+  docs/ROADMAP.md, then build each epic in both versions with tests. The audit workflow script
+  module-audit-roadmap-wf_7aa8363f-0ee.js has 12 module groups (accounts, catalogue and search, checkout,
+  post-purchase, delivery, sellers, marketing, storefront, admin core with an advanced admin search, messaging, AI,
+  platform). Run one group at a time and save each result to a file as soon as it finishes (usage limits have stopped
+  long runs several times).
+
 ### 6.7 Storefront search reproduces the Python search exactly (2026-11-26)
 - Engine `PixCartAPI/Utils/TextSearch/` is PostgreSQL's text search as the Python version uses it, written in C#
   (company-facing comments are neutral on purpose; this mapping lives only here):
@@ -309,17 +373,19 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
 
 ---------------------------------------------------------------------------------------------------------------------
 
-## 7. Order of work from here
+## 7. Order of work from here (updated 2026-11-27)
 
-1. Backend review against the Python code (section 6.6), fixing every confirmed divergence with a test.
-2. Flutter: verify the customer app, build the partner app and the seller app (section 6.4).
-3. Click-through of every dialog, form and second tab of the last 55 pages (section 6.2).
-4. The five videos.
-5. At the very end: `python -I tools/handover-kit/otp_limits.py restore` (product sign-in limits back), stop the
-   dev servers you started, final ship to both company repos.
+1. Finish the backend review (section 6.6): 15 slices left. Fix every confirmed finding with a test, run the API
+   suite, publish the package, run the browser suite, both crawls and the order flow, then ship with update_company.sh.
+2. Multi-gateway payments in the company version (section 6.8): steps 4 to 7, then verify, merge and ship.
+3. Python version (section 6.9): payments review and simulator, mirrored in the company version where they change code.
+4. Module-by-module advancement in both versions (section 6.10).
+5. Flutter apps (section 6.4) and the click-through of the last pages (section 6.2).
+6. At the very end: `python -I tools/handover-kit/otp_limits.py restore`, stop the dev servers you started, final
+   ships to both company repos. The demo database package `db/` is never changed (section 6.6 and the owner's rule).
 
-After every step: commit (neutral identity, no trailers), push `port/company` (and the branch you worked on) to the
-personal repo, update this file's section 6 so the next agent knows the state.
+After every step: commit (neutral identity, no trailers), push port/company and feature/payments to the personal repo,
+update section 6 so the next agent knows the state.
 
 ---------------------------------------------------------------------------------------------------------------------
 
