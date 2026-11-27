@@ -41,3 +41,36 @@ async def test_scorecard_flags_a_slow_seller(client, admin, categories):
     items = (await admin.get("/api/admin/growth/scorecard")).json()["items"]
     assert items and items[0]["late"] == 1 and items[0]["level"] == "critical"
     assert (await buyer.get("/api/admin/growth/scorecard")).status_code == 403
+
+
+async def test_points_are_earned_once_when_a_package_is_delivered(client, admin, categories):
+    import uuid
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import ship_and_deliver
+    from tests.test_orders import marketplace
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000002")
+    addr = await add_address(buyer)
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 0
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).json()["order"]
+    sub = o["sub_orders"][0]
+    # switched off: nothing is earned
+    await ship_and_deliver(seller, sub["id"])
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 0
+
+    # switched on: the next delivered package earns points, once
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "points_per_100": 2}})).status_code == 200
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    o2 = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).json()["order"]
+    await ship_and_deliver(seller, o2["sub_orders"][0]["id"])
+    me = (await buyer.get("/api/loyalty")).json()
+    expect = (o2["sub_orders"][0]["items_total"] // 10000) * 2
+    assert expect > 0 and me["balance"] == expect and me["tier"] == "member" and me["history"][0]["kind"] == "earn"
+
+    # staff adjust, never below zero
+    r = await admin.post("/api/admin/growth/loyalty/adjust", {"user_id": buyer.user["id"], "points": 10, "note": "Goodwill"})
+    assert r.status_code == 200 and r.json()["balance"] == expect + 10
+    r = await admin.post("/api/admin/growth/loyalty/adjust", {"user_id": buyer.user["id"], "points": -(expect + 11), "note": "Too much"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "balance_too_low"

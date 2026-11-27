@@ -691,6 +691,8 @@ async def transition(session: AsyncSession, sub: SubOrder, dst: str, actor: str,
         held = await collect_amount(session, sub, order) if order.payment_method == "cod" and sub.shipping_provider == "manual" else 0
         await post_delivery(session, sub, cod_held_by_seller=held)
         await fee_invoices.issue(session, order)  # the marketplace's own invoice for its fees, at the first delivery
+        from app.services import loyalty  # points for the delivered package (off unless staff switch loyalty on)
+        await loyalty.earn_for_delivery(session, sub, order.user_id)
         await notify(
             session, "order_delivered", await session.get(User, order.user_id),
             {"order_number": order.number, "item": await _first_title(session, sub), "return_by": sub.settlement_due_at.astimezone(IST).strftime("%d %b %Y")},
