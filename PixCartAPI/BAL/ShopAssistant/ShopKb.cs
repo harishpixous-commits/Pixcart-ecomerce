@@ -18,7 +18,7 @@ public static class ShopKb
     public static string Inr(long paise)
     {
         var rupees = paise / 100m;
-        return rupees == Math.Floor(rupees) ? $"₹{rupees:#,0}" : $"₹{rupees:#,0.00}";
+        return rupees == Math.Floor(rupees) ? FormattableString.Invariant($"₹{rupees:#,0}") : FormattableString.Invariant($"₹{rupees:#,0.00}");
     }
 
     public static string Normalize(string text)

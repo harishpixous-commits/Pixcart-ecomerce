@@ -110,7 +110,7 @@ public partial class DeliveryFleetBAL(
     }
 
     private static string Rupees(long paise) =>
-        paise % 100 == 0 ? $"₹{paise / 100m:N0}" : $"₹{paise / 100m:N2}";
+        paise % 100 == 0 ? FormattableString.Invariant($"₹{paise / 100m:N0}") : FormattableString.Invariant($"₹{paise / 100m:N2}");
 
     /// <summary>What a partner earns for one delivery before the tip (reference: fee_for).</summary>
     private static long FeeFor(JsonObject cfg, double? distanceKm)

@@ -61,6 +61,6 @@ public static class Money
     {
         var sign = paise < 0 ? "-" : "";
         var abs = Math.Abs(paise);
-        return $"{sign}₹{abs / 100:#,0}.{abs % 100:00}";
+        return FormattableString.Invariant($"{sign}₹{abs / 100:#,0}.{abs % 100:00}");  // digits grouped in thousands on every server
     }
 }

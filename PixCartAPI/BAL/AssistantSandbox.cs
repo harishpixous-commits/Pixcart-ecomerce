@@ -116,7 +116,7 @@ public static class AssistantSandbox
                         parts.Add($"{(o["name"]?.GetValue<string>() is { Length: > 0 } n ? n : o["phone"]?.GetValue<string>())}: {AssistantToolsBAL.Lng(o, "orders")} orders, net spend {AssistantQueriesDAL.Inr(AssistantToolsBAL.Lng(o, "net_spend"))}, joined {o["joined"]?.GetValue<string>()}.");
                         break;
                     case "file_overview":
-                        parts.Add($"I read {o["filename"]?.GetValue<string>()}: {AssistantToolsBAL.Lng(o, "rows"):N0} rows. Column totals are below.");
+                        parts.Add(FormattableString.Invariant($"I read {o["filename"]?.GetValue<string>()}: {AssistantToolsBAL.Lng(o, "rows"):N0} rows. Column totals are below."));
                         break;
                     case "sales_breakdown":
                         parts.Add($"Sales by {o["by"]!.GetValue<string>()} for {o["period"]!["label"]!.GetValue<string>()} are in the chart below.");

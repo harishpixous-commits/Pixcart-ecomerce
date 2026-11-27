@@ -316,6 +316,26 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("123,457", CouponsBAL.ShortfallRupees(12345678));  // grouped in thousands on every server
     }
 
+    [Fact]
+    public void Amounts_read_the_same_whatever_the_servers_regional_settings()
+    {
+        var before = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var name in new[] { "en-IN", "de-DE", "en-US" })
+            {
+                System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo(name);
+                Assert.Equal("₹123,456.50", BAL.Money.Rupees(12345650));
+                Assert.Equal("-₹1,000.05", BAL.Money.Rupees(-100005));
+                Assert.Equal("123,457", CouponsBAL.ShortfallRupees(12345678));
+            }
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = before;
+        }
+    }
+
     private sealed record RefundRow
     {
         public string ProviderPaymentId { get; init; } = "";

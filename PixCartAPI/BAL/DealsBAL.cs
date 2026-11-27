@@ -237,7 +237,7 @@ public class DealsBAL(CatalogSupportDAL support, DealsDAL deals, CatalogDAL cata
         var maxPrice = v.PricePaise * (100 - cfg.Int("deal_min_discount_pct")) / 100;
         if (dealPrice > maxPrice)
             throw new AppException(
-                $"The deal price must be at least {cfg.Int("deal_min_discount_pct")}% below the selling price (₹{maxPrice / 100.0:N2} or less)",
+                FormattableString.Invariant($"The deal price must be at least {cfg.Int("deal_min_discount_pct")}% below the selling price (₹{maxPrice / 100.0:N2} or less)"),
                 "discount_too_small", 400);
         if (kind == "lightning")
         {
