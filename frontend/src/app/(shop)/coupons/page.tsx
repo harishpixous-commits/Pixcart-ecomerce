@@ -34,7 +34,7 @@ export default function CouponsPage() {
     <div className="flex flex-col gap-4">
       <header className="rounded-xl bg-white p-4 sm:p-6">
         <h1 className="flex items-center gap-2 text-2xl font-semibold sm:text-3xl"><Tag className="h-7 w-7 text-vermilion" /> Coupons</h1>
-        <p className="text-ink-soft">Copy a code and apply it at checkout. Store offers work across sellers; seller offers work on that seller&apos;s products.</p>
+        <p className="text-ink-soft">Copy a code and apply it at checkout. Store offers work across sellers; seller offers work on that seller&apos;s products. Have points or a gift card? <Link href="/rewards" className="font-semibold text-peacock">Go to Rewards</Link></p>
         <div className="mt-3 flex gap-2">
           {([["all", "All offers"], ["platform", "Store offers"], ["seller", "Seller offers"]] as const).map(([k, label]) => (
             <button key={k} type="button" onClick={() => setFilter(k)} aria-pressed={filter === k}
