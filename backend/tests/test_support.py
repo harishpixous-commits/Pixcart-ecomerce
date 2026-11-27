@@ -22,3 +22,22 @@ async def test_customers_rate_a_resolved_request_once_and_staff_see_it(client, a
     assert summary["recent"][0]["comment"] == "Quick help"
     assert (await admin.get(f"/api/admin/tickets/{tid}")).json()["csat_rating"] == 4
     assert (await buyer.get("/api/admin/tickets/satisfaction")).status_code == 403
+
+
+async def test_support_staff_are_told_about_new_requests_replies_and_low_ratings(client, admin, categories):
+    buyer = await login_phone(client, "9600000051")
+
+    async def inbox() -> list[str]:
+        return [n["title"] for n in (await admin.get("/api/notifications")).json()["items"]]
+
+    tid = (await buyer.post("/api/support/tickets", {"category": "order", "subject": "Wrong colour", "message": "I got blue, not red.", "is_grievance": True})).json()["id"]
+    assert any(t.startswith("New grievance TK") for t in await inbox())
+    await buyer.post(f"/api/support/tickets/{tid}/messages", {"body": "Any update?"})
+    assert any(t.startswith("Customer replied on TK") for t in await inbox())
+    await admin.post(f"/api/admin/tickets/{tid}/reply", {"body": "Sorry, a replacement is on the way.", "status": "resolved"})
+    await buyer.post(f"/api/support/tickets/{tid}/rating", {"rating": 2, "comment": "Slow"})
+    assert any(t.startswith("Low rating on TK") for t in await inbox())
+    tid2 = (await buyer.post("/api/support/tickets", {"category": "order", "subject": "Thanks for the help", "message": "All fine now, thank you"})).json()["id"]
+    await admin.post(f"/api/admin/tickets/{tid2}/reply", {"body": "Great.", "status": "resolved"})
+    await buyer.post(f"/api/support/tickets/{tid2}/rating", {"rating": 5})
+    assert sum(t.startswith("Low rating") for t in await inbox()) == 1

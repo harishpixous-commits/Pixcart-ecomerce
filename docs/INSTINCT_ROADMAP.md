@@ -374,3 +374,6 @@ Customer ticket page: once a request is resolved or closed and unrated, a 1-5 ra
 
 ## Push 120: full-suite re-run
 Python 297 passed, 0 failed. .NET 400 passed, 0 failed (5 groups after a clean rebuild). Covers Alembic 0045 / V022 and the exports and satisfaction work of Pushes 115 to 119. Not run: browser, Flutter, live gateways.
+
+## Push 121: support staff are now told about tickets
+Gap: nobody on the support desk was notified of a new request, a customer reply, or a bad rating, even though replies are due within 48 hours. New staff event staff_ticket (in-app and push, to everyone with the support permission): New support request or grievance, Customer replied on TKxxxx, and Low rating on TKxxxx (rating 2 or less). Always on, like the delivery staff alerts. Both versions. Tests: Python support/accounts/admin-prefs 16 passed; .NET satisfaction/notification tests passed. Not run: email or SMS for staff (in-app and push only), browser.

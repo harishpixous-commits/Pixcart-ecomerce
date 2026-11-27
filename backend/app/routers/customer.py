@@ -14,6 +14,7 @@ from sqlalchemy import func, select, update
 
 from app.config import settings
 from app.core.deps import CurrentUser, OptionalUser, SessionDep, audit, client_ip, rate_limit
+from app.services.notify import notify_staff
 from app.core.errors import ApiError, Conflict, NotFound
 from app.core.validators import STATES, validate_pincode
 from app.db import utcnow
@@ -665,6 +666,7 @@ async def reply_ticket(ticket_id: uuid.UUID, body: MessageIn, user: CurrentUser,
     session.add(TicketMessage(ticket_id=t.id, author_id=user.id, author_role="customer", body=body.body.strip(), created_at=utcnow()))
     t.status = "open"
     t.updated_at = utcnow()
+    await notify_staff(session, "support", "staff_ticket", {"subject": f"Customer replied on {t.number}", "message": body.body.strip()[:200]}, link=f"/admin/support/{t.id}")
     await session.commit()
     return await get_ticket(ticket_id, user, session)
 
@@ -687,6 +689,8 @@ async def rate_ticket(ticket_id: uuid.UUID, body: RatingIn, user: CurrentUser, s
     t.csat_rating = body.rating
     t.csat_comment = " ".join(body.comment.split())
     t.csat_at = utcnow()
+    if body.rating <= 2:
+        await notify_staff(session, "support", "staff_ticket", {"subject": f"Low rating on {t.number}", "message": f"{body.rating}/5. {t.csat_comment}".strip()}, link=f"/admin/support/{t.id}")
     await session.commit()
     return await get_ticket(ticket_id, user, session)
 

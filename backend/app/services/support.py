@@ -48,4 +48,8 @@ async def create_ticket(session: AsyncSession, user: User, *, category: str, sub
     session.add(t)
     await session.flush()
     session.add(TicketMessage(ticket_id=t.id, author_id=user.id, author_role="customer", body=message.strip(), created_at=now))
+    from app.services.notify import notify_staff
+
+    label = "New grievance" if is_grievance else "New support request"
+    await notify_staff(session, "support", "staff_ticket", {"subject": f"{label} {t.number}", "message": f"{subject.strip()}. A reply is due within 48 hours."}, link=f"/admin/support/{t.id}")
     return t
