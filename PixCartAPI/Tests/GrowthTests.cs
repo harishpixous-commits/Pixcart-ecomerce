@@ -36,4 +36,13 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal(200,(int)(await c.GetAsync("/sitemap.xml")).StatusCode);var robots=await (await c.GetAsync("/robots.txt")).Content.ReadAsStringAsync();Assert.Contains("Disallow: /admin",robots);Assert.Contains("/sitemap.xml",robots);
         Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{seo=new{sitemap_enabled=false}})).Status);Assert.Equal(404,(int)(await c.GetAsync("/api/seo/sitemap.xml")).StatusCode);
     }
+    [Fact]public async Task Cod_risk_rules_refuse_cash_orders_by_pincode_value_and_first_order()
+    {
+        var admin=await Admin();using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();var uid=Guid.NewGuid();
+        async Task<string?> Check(string pin,long total){await using var tx=await db.BeginAsync();return await BAL.CodRisk.ReasonAsync(tx,uid,pin,total);}
+        Assert.Null(await Check("641001",99999999));
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{cod_risk=new{enabled=true,max_cod_paise=500000,new_account_max_cod_paise=200000,blocked_pincodes=new[]{"641001"}}})).Status);
+        Assert.Contains("pincode",await Check("641001",100));Assert.Contains("order value",await Check("641002",600000));Assert.Contains("first order",await Check("641002",300000));Assert.Null(await Check("641002",150000));
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{cod_risk=new{enabled=false}})).Status);Assert.Null(await Check("641001",99999999));
+    }
 }

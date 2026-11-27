@@ -222,6 +222,7 @@ public class OrdersBAL(
             if (!cfg.Bool("cod_enabled")) throw new AppException("Cash on delivery is not available", "cod_unavailable");
             if (grandTotal > cfg.Int("cod_max_order_paise"))
                 throw new AppException("Cash on delivery is not available for this order value. Please pay online.", "cod_limit");
+            if (await CodRisk.ReasonAsync(uow, user.Id, address.Pincode, grandTotal) is { } risk) throw new AppException(risk, "cod_risk"); // Growth → COD risk rules
         }
         else if (!await razorpay.OnlinePaymentsAsync())
         {
