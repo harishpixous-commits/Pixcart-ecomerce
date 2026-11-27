@@ -317,3 +317,7 @@ Python: whole suite ran to the end, no failures (run with -x, all dots). .NET: 3
 ## Push 106: Flash sales `show_countdown` now works (was a dead setting)
 
 Admin → Growth → Flash sales → show_countdown (on by default) now decides whether the product page badge and the two theme tiles show the ticking clock. The deal object carries `show_countdown`; the web apps hide the clock when it is false. Both versions (React and Angular type-check clean); backend test on each side. Not wired: the home "deal of the day" strip and the deals list still show their own clock. Not run: browser.
+
+## Push 107: Rewards page warns about points that expire soon
+
+`GET /api/loyalty` now returns `expiring_soon` (points that lapse within `expiring_days`, fixed at 30) and the Rewards page shows "N points expire within 30 days. Use them at checkout." Computed from the same oldest-first rule as the expiry itself; 0 when expiry is off. Both versions (React and Angular type-check clean); a test on each side. Not wired: no email or push reminder before expiry. Not run: browser.

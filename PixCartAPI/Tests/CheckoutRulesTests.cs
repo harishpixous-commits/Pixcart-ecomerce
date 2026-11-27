@@ -1064,7 +1064,12 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         var me = (await buyer.Get("/api/loyalty")).Json;
         Assert.Equal(40, me["balance"]!.GetValue<long>()); // 100 - 30 spent = 70 lapse; the recent 40 stays
         Assert.StartsWith("Points expired", me["history"]![0]!["note"]!.GetValue<string>());
-        Assert.Equal(40, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>()); // lapses once
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { expiry_days = 90 } })).Status);
+        Assert.Equal(0, (await buyer.Get("/api/loyalty")).Json["expiring_soon"]!.GetValue<long>());
+        await Row("earn", 15, "aging", 70);
+        me = (await buyer.Get("/api/loyalty")).Json;
+        Assert.Equal(15, me["expiring_soon"]!.GetValue<long>()); Assert.Equal(30, me["expiring_days"]!.GetValue<int>()); // 70 days old of 90: lapses in 20 days, inside the window
+        Assert.Equal(55, me["balance"]!.GetValue<long>()); // lapses once
     }
 
     [Fact]

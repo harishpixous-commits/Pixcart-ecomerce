@@ -8,7 +8,7 @@ import { date, rupees } from "../../core/format";
 import { Icon } from "../../shared/ui/icon";
 import { Toast } from "../../shared/ui/ui";
 
-type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; free_delivery?: boolean; review_points?: number; first_order_points?: number; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
+type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; free_delivery?: boolean; review_points?: number; first_order_points?: number; expiring_soon?: number; expiring_days?: number; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
 type Referral = { enabled: boolean; code: string; referrer_reward_paise: number; friend_reward_paise: number; min_order_paise: number; joined: number; rewarded: number; earned_paise: number; used_code: boolean };
 type Made = { code: string; discount_paise: number; min_order_paise: number; valid_days: number };
 type Options = { can_buy: boolean; min_paise: number; max_paise: number };
@@ -39,6 +39,9 @@ type CardInfo = { balance_paise: number; status: string; expires_at: string };
           <section class="rounded-xl bg-white p-4 sm:p-6">
             <h2 class="flex items-center gap-2 text-xl font-semibold"><svg [pcIcon]="Heart" class="h-5 w-5 text-vermilion" /> Loyalty points</h2>
             <p class="mt-1">{{ l.balance }} points ({{ rupees(l.value_paise) }}) · {{ l.tier }} tier{{ l.bonus_percent ? " (+" + l.bonus_percent + "% points on every delivery)" : "" }}{{ l.free_delivery ? " · free delivery on your orders" : "" }}</p>
+            @if (l.expiring_soon) {
+              <p class="mt-1 text-sm font-medium text-vermilion">{{ l.expiring_soon }} points expire within {{ l.expiring_days ?? 30 }} days. Use them at checkout.</p>
+            }
             @if (l.review_points || l.first_order_points) {
               <p class="mt-1 text-sm text-ink-soft">
                 @if (l.first_order_points) {+{{ l.first_order_points }} bonus points on your first delivered order. }

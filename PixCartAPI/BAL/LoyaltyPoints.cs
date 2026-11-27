@@ -164,6 +164,21 @@ public static class LoyaltyPoints
 
     /// <summary>Points not used within expiry_days lapse (Admin → Growth → Loyalty, 0 = never). Oldest points are spent first, so what lapses is
     /// what was earned before the cut-off minus everything spent or lost since. One negative row; the next call finds nothing left. Returns the points that lapsed.</summary>
+    public const int ExpiryWarnDays = 30;
+
+    /// <summary>Points earned on or before the cut-off that the member has not spent (oldest points are spent first), never more than the balance.</summary>
+    public static async Task<long> LapsingAsync(IMySqlDapperHelper db, Guid userId, DateTime cutoff)
+    {
+        var old = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0 AND created_at <= @cutoff", new { userId, cutoff });
+        var spent = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(-points),0) FROM loyalty_ledger WHERE user_id = @userId AND points < 0", new { userId });
+        var balance = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId", new { userId });
+        return Math.Max(0, Math.Min(balance, old - spent));
+    }
+
+    /// <summary>Points that lapse within the next ExpiryWarnDays days (0 when expiry is off), so the Rewards page can warn the member.</summary>
+    public static async Task<long> ExpiringSoonAsync(IMySqlDapperHelper db, Guid userId, JsonObject cfg) =>
+        !cfg.Bool("enabled") || cfg.Int("expiry_days") <= 0 ? 0 : await LapsingAsync(db, userId, DateTime.UtcNow.AddDays(-cfg.Int("expiry_days") + ExpiryWarnDays));
+
     public static async Task<int> ExpireOldAsync(IUnitOfWork uow, Guid userId)
     {
         var cfg = await LoyaltyCfgAsync(uow);
