@@ -100,3 +100,17 @@ class GiftCardPurchase(IdMixin, Base):
 
     __table_args__ = (CheckConstraint("status IN ('created','issued','failed')", name="status"),
                       UniqueConstraint("gateway", "gateway_ref", name="uq_gift_purchase_ref"))
+
+
+class SegmentCampaign(IdMixin, Base):
+    """One in-app message staff sent to a customer segment (opted-in customers only)."""
+
+    __tablename__ = "segment_campaigns"
+
+    segment: Mapped[str] = mapped_column(String(20))
+    title: Mapped[str] = mapped_column(String(80))
+    message: Mapped[str] = mapped_column(String(300))
+    link: Mapped[str] = mapped_column(String(200), default="")
+    recipients: Mapped[int] = mapped_column(Integer, default=0)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

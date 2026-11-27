@@ -1,7 +1,7 @@
 """Growth and trust settings, edited in Admin -> Growth. Stored in ``platform_settings['growth']``.
 
 One section per module: loyalty, referral, abandoned_cart, flash_sales, gift_cards, scorecard, cod_risk, seo,
-bulk_edit, segments. Every module ships switched OFF so nothing changes until staff turn it on.
+bulk_edit, segments, campaigns. Every module ships switched OFF so nothing changes until staff turn it on.
 Seller scorecard is computed from sub orders (no extra tables)."""
 from __future__ import annotations
 
@@ -40,6 +40,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
                  "new_account_max_cod_paise": (200000, "int", 0, 100000000), "blocked_pincodes": ([], "list", 0, 500)},
     "seo": {"sitemap_enabled": (True, "bool", 0, 0), "sitemap_include_categories": (True, "bool", 0, 0), "sitemap_include_sellers": (False, "bool", 0, 0)},
     "bulk_edit": {"enabled": (True, "bool", 0, 0), "max_rows": (500, "int", 1, 5000)},
+    "campaigns": {"enabled": (False, "bool", 0, 0), "max_recipients": (500, "int", 1, 5000), "max_per_day": (3, "int", 1, 20)},
     "segments": {"enabled": (False, "bool", 0, 0), "vip_spend_paise": (2500000, "int", 0, 1000000000), "lapsed_days": (90, "int", 7, 1000),
                  "new_days": (30, "int", 1, 365)},
 }

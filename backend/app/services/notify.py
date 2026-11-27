@@ -45,6 +45,9 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
         "email": ("{{item}} is still in your {{brand}} cart", "Hi {{name}},\n\n{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}\n\nFinish your order: {{link}}"),
     },
+    "marketing_message": {
+        "inapp": ("{{title}}", "{{message}}"),
+    },
     "order_cancelled": {
         "inapp": ("Order cancelled", "{{item}} was cancelled: {{reason}}."),
         "email": ("Cancelled: part of order {{order_number}}", "Hi {{name}},\n\n{{item}} was cancelled ({{reason}}). {{refund_text}}\n\n{{link}}"),

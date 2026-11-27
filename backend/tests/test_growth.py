@@ -642,3 +642,39 @@ async def test_tier_bonus_adds_points_only_for_silver_and_up(client, admin, cate
     assert me["balance"] == base + 10 + base * 150 // 100 and "50% tier bonus" in me["history"][0]["note"]
     bad = await admin.put("/api/admin/growth/settings", {"loyalty": {"gold_bonus_percent": 900}})
     assert bad.status_code == 400
+
+
+async def test_segment_campaign_goes_only_to_opted_in_customers_within_the_caps(client, admin):
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models import User
+    from tests.conftest import login_phone
+
+    body = {"segment": "never_ordered", "title": "Weekend offer", "message": "Free shipping this weekend", "link": "/offers"}
+    assert (await admin.post("/api/admin/growth/campaigns", body)).json()["error"]["code"] == "campaigns_off"
+    assert (await admin.put("/api/admin/growth/settings", {"campaigns": {"enabled": True, "max_recipients": 2, "max_per_day": 2}})).status_code == 200
+    assert (await admin.post("/api/admin/growth/campaigns", body)).json()["error"]["code"] == "segments_off"
+    assert (await admin.put("/api/admin/growth/settings", {"segments": {"enabled": True}})).status_code == 200
+    people = [await login_phone(client, f"96100000{i:02d}", name=f"Camp {i}") for i in range(4)]
+    async with SessionLocal() as s:
+        await s.execute(update(User).where(User.phone.in_([f"96100000{i:02d}" for i in range(3)])).values(marketing_opt_in=True))  # the 4th has not opted in
+        await s.commit()
+    r = (await admin.post("/api/admin/growth/campaigns", body)).json()
+    assert r["dry_run"] and r["opted_in"] == 3 and r["recipients"] == 2 and r["capped"] is True
+    assert (await admin.get("/api/admin/growth/campaigns")).json()["items"] == []  # a preview sends and logs nothing
+    async def has(p):
+        return any(n["title"] == "Weekend offer" for n in (await p.get("/api/notifications")).json()["items"])
+
+    assert [await has(pp) for pp in people] == [False] * 4
+    r = (await admin.post("/api/admin/growth/campaigns", body | {"dry_run": False})).json()
+    assert r["recipients"] == 2 and r["id"]
+    seen = [await has(pp) for pp in people]
+    assert sum(seen) == 2 and seen[3] is False
+    log = (await admin.get("/api/admin/growth/campaigns")).json()["items"]
+    assert len(log) == 1 and log[0]["recipients"] == 2 and log[0]["segment"] == "never_ordered"
+    assert (await admin.post("/api/admin/growth/campaigns", body | {"dry_run": False})).status_code == 200
+    assert (await admin.post("/api/admin/growth/campaigns", body | {"dry_run": False})).json()["error"]["code"] == "campaign_limit"
+    assert (await admin.post("/api/admin/growth/campaigns", body | {"link": "https://evil.example"})).json()["error"]["code"] == "invalid_link"
+    assert (await admin.post("/api/admin/growth/campaigns", body | {"segment": "nope"})).json()["error"]["code"] == "invalid_segment"
+    assert (await people[0].post("/api/admin/growth/campaigns", body)).status_code == 403

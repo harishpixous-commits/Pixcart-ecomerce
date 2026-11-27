@@ -15,7 +15,7 @@ from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
 from app.config import settings
-from app.services import cart_reminders, gift_cards, growth, loyalty, referral, segments, seo
+from app.services import campaigns, cart_reminders, gift_cards, growth, loyalty, referral, segments, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -60,6 +60,29 @@ async def customer_segments(admin: Perm("marketing"), session: SessionDep, segme
     if segment:
         out["items"] = await segments.members(session, cfg, segment)
     return out
+
+
+class CampaignIn(BaseModel):
+    segment: str
+    title: str = Field(max_length=80)
+    message: str = Field(max_length=300)
+    link: str = Field(default="", max_length=200)
+    dry_run: bool = True
+
+
+@router.post("/campaigns")
+async def send_campaign(body: CampaignIn, admin: Perm("marketing"), session: SessionDep) -> dict:
+    """In-app message to a customer segment. dry_run=true (default) only counts who would get it."""
+    res = await campaigns.send(session, admin, body.segment, body.title, body.message, body.link, body.dry_run)
+    if not body.dry_run:
+        audit(session, admin, "campaign.send", "segment", body.segment, f"{body.title[:60]} x{res['recipients']}")
+    await session.commit()
+    return res
+
+
+@router.get("/campaigns")
+async def campaign_log(admin: Perm("marketing"), session: SessionDep) -> dict:
+    return {"items": await campaigns.recent(session)}
 
 
 class AdjustIn(BaseModel):
