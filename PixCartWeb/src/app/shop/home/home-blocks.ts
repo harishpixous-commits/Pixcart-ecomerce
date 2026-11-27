@@ -307,7 +307,7 @@ export class CardRow {
 export class DealsRail {
   readonly title = input("");
   readonly items = input.required<ProductCard[]>();
-  protected readonly soonest = computed(() => this.items().map((p) => p.deal?.ends_at).filter((x): x is string => Boolean(x)).sort()[0]);
+  protected readonly soonest = computed(() => this.items().filter((p) => p.deal?.show_countdown !== false).map((p) => p.deal?.ends_at).filter((x): x is string => Boolean(x)).sort()[0]);
 }
 
 @Component({
