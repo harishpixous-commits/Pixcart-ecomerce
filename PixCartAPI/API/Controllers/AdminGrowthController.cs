@@ -37,7 +37,7 @@ public class ReferralController(Utils.Interface.IMySqlDapperHelper db, ICurrentU
 }
 
 [ApiController, SignedIn]
-public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me, IRateLimitBAL limits, IAuditBAL audit) : ControllerBase
+public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me, IRateLimitBAL limits, IAuditBAL audit, IPaymentGatewayBAL gateways, IIntegrationBAL integrations) : ControllerBase
 {
     public record IssueIn { [System.ComponentModel.DataAnnotations.Range(100, 100000000)] public int AmountPaise { get; init; } [System.ComponentModel.DataAnnotations.StringLength(200)] public string Note { get; init; } = ""; [System.ComponentModel.DataAnnotations.Range(1, 50)] public int Quantity { get; init; } = 1; public int? ValidityDays { get; init; } }
     public record RedeemIn { [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(20, MinimumLength = 4)] public string Code { get; init; } = ""; public int? AmountPaise { get; init; } }
@@ -68,6 +68,19 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
     {
         var u = await me.RequireAsync(); await limits.RateLimitAsync($"giftcard:{u.Id}", 20, 600);
         await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.BalanceAsync(tx, b.Code); await tx.CommitAsync(); return r;
+    }
+    public record BuyIn { [System.ComponentModel.DataAnnotations.Range(100, 100000000)] public int AmountPaise { get; init; } }
+    [HttpPost("/api/gift-cards/purchase"), RouteGuard("signed_in")]
+    public async Task<IActionResult> Buy(BuyIn b)
+    {
+        var u = await me.RequireAsync(); await limits.RateLimitAsync($"giftbuy:{u.Id}", 10, 3600);
+        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.StartPurchaseAsync(tx, gateways, integrations, u, b.AmountPaise); await tx.CommitAsync(); return StatusCode(201, r);
+    }
+    [HttpPost("/api/gift-cards/purchase/{id:guid}/check"), RouteGuard("signed_in")]
+    public async Task<object> CheckBuy(Guid id)
+    {
+        var u = await me.RequireAsync();
+        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.CheckPurchaseAsync(tx, gateways, u.Id, id); await tx.CommitAsync(); return r;
     }
     [HttpPost("/api/gift-cards/redeem"), RouteGuard("signed_in")]
     public async Task<object> Redeem(RedeemIn b)

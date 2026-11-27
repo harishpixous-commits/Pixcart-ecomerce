@@ -26,6 +26,9 @@ public class PaymentGatewayBAL(IIntegrationBAL integrations, IRazorpayBAL razorp
         return i >= 0 ? [.. list.Skip(i + 1), .. list.Take(i + 1)] : list;
     }
 
+    public async Task<List<string>> EligibleAsync(string currency) =>
+        await CandidatesAsync(await PaymentRouting.GetAsync(settings), await integrations.GetAsync(), currency);
+
     public async Task<JsonArray> AlternativesAsync(string currency, string current)
     {
         var cfg = await integrations.GetAsync();

@@ -2,12 +2,13 @@ using BAL.Interface;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Utils;
+using Model.DomainModel;
 using Utils.Interface;
 namespace BAL;
 
 /// <summary>Gift cards (mirror of services/gift_cards.py). Staff issue a card; the holder turns all or part of the balance into
 /// a single-use platform-funded flat coupon (30 days) applied at checkout like any coupon. A coupon that runs out unused gives
-/// the amount back to the card. Off unless staff switch gift cards on in Admin → Growth. Not built: shoppers buying a card online.</summary>
+/// the amount back to the card. Off unless staff switch gift cards on in Admin → Growth. Shoppers can buy a card online when allow_purchase is on: the card is issued once, only after the gateway's own records show the full amount captured (no webhook for purchases yet; the shopper's return page calls check). Razorpay is not used for this.</summary>
 public static class GiftCards
 {
     public const int CouponDays = 30;
@@ -43,6 +44,74 @@ public static class GiftCards
             items.Add(Item(card));
         }
         return items;
+    }
+
+    // ---- buying a card online (mirror of start_purchase / check_purchase)
+    private sealed record Purchase(Guid Id, Guid UserId, int Amount, string Gateway, string Ref, string Status, Guid? CardId, string Error);
+    private const string PurchaseSql = "SELECT id AS Id, user_id AS UserId, amount_paise AS Amount, gateway AS Gateway, gateway_ref AS Ref, status AS Status, gift_card_id AS CardId, error AS Error FROM gift_card_purchases ";
+
+    private static JsonObject PurchaseView(Purchase p, Card? card = null)
+    {
+        var o = new JsonObject { ["id"] = p.Id.ToString(), ["amount_paise"] = p.Amount, ["status"] = p.Status, ["gateway"] = p.Gateway, ["error"] = p.Error };
+        if (card is not null && p.Status == "issued") { o["code"] = card.Code; o["expires_at"] = DateTime.SpecifyKind(card.ExpiresAt, DateTimeKind.Utc).ToString("o"); }
+        return o;
+    }
+
+    public static async Task<JsonObject> StartPurchaseAsync(IUnitOfWork uow, IPaymentGatewayBAL gateways, IIntegrationBAL integrations, UserModel user, int amountPaise)
+    {
+        var cfg = await CfgAsync(uow);
+        if (!(cfg.Bool("enabled") && cfg.Bool("allow_purchase"))) throw new AppException("Gift cards cannot be bought right now.", "gift_cards_off");
+        if (amountPaise < cfg.Int("min_paise") || amountPaise > cfg.Int("max_paise"))
+            throw new AppException($"Amount must be between ₹{cfg.Int("min_paise") / 100:N0} and ₹{cfg.Int("max_paise") / 100:N0}.", "invalid_amount");
+        var cands = (await gateways.EligibleAsync("INR")).Where(c => c != "razorpay").ToList();
+        if (cands.Count == 0) throw new AppException("Online payment for gift cards is not available right now.", "online_unavailable", 409);
+        var id = Guid.NewGuid(); var code = cands[0];
+        var b = (await integrations.GetAsync()).PublicWebUrl.TrimEnd('/');
+        var cust = new JsonObject { ["id"] = user.Id.ToString(), ["name"] = user.Name, ["contact"] = string.IsNullOrEmpty(user.Phone) ? "" : $"+91{user.Phone}", ["email"] = user.Email ?? "" };
+        GatewayPayment made;
+        try { made = await (await gateways.AdapterAsync(code)).CreateAsync(amountPaise, "INR", $"GC-{id.ToString("N")[..10]}", cust, $"{b}/api/payments/{code}/callback", $"{b}/api/payments/{code}/webhook"); }
+        catch (RazorpayBAL.GatewayException e) { throw new AppException($"Could not start the payment: {e.Message}", "gateway_error", 502); }
+        var data = new JsonObject { ["mode"] = made.Mode };
+        foreach (var (k, v) in made.Fields) data[k] = v?.DeepClone();
+        await uow.ExecuteAsync("INSERT INTO gift_card_purchases (id, user_id, amount_paise, gateway, gateway_ref, client_data, status, error, created_at) VALUES (@id, @uid, @amountPaise, @code, @r, CAST(@data AS JSON), 'created', '', @now)",
+            new { id, uid = user.Id, amountPaise, code, r = made.Reference, data = data.ToJsonString(), now = DateTime.UtcNow });
+        var view = PurchaseView(new Purchase(id, user.Id, amountPaise, code, made.Reference, "created", null, ""));
+        view["payment"] = data;
+        return view;
+    }
+
+    public static async Task<JsonObject> CheckPurchaseAsync(IUnitOfWork uow, IPaymentGatewayBAL gateways, Guid userId, Guid purchaseId)
+    {
+        var p = await uow.QueryFirstOrDefaultAsync<Purchase>(PurchaseSql + "WHERE id = @purchaseId FOR UPDATE", new { purchaseId });
+        if (p is null || p.UserId != userId) throw new NotFoundException("Purchase");
+        if (p.Status == "issued") return PurchaseView(p, await uow.QueryFirstOrDefaultAsync<Card>(CardSql + "WHERE id = @id", new { id = p.CardId }));
+        List<GatewayAttempt> attempts;
+        try { attempts = await (await gateways.AdapterAsync(p.Gateway)).AttemptsAsync(p.Ref); }
+        catch (RazorpayBAL.GatewayException) { throw new AppException("We could not reach the payment gateway. Try again in a minute.", "gateway_error", 502); }
+        var done = attempts.FirstOrDefault(a => a.Status is "captured" or "authorized");
+        if (done is null)
+        {
+            if (attempts.Count > 0 && attempts.All(a => a.Status == "failed"))
+            {
+                var err = attempts[0].Error.Length > 0 ? attempts[0].Error : "The payment did not go through";
+                await uow.ExecuteAsync("UPDATE gift_card_purchases SET status = 'failed', error = @err WHERE id = @id", new { err = err.Length > 500 ? err[..500] : err, id = p.Id });
+                p = p with { Status = "failed", Error = err };
+            }
+            return PurchaseView(p);
+        }
+        if (done.Amount != p.Amount)
+        {
+            const string err = "The amount paid does not match the card. Contact support.";
+            await uow.ExecuteAsync("UPDATE gift_card_purchases SET status = 'failed', error = @err WHERE id = @id", new { err, id = p.Id });
+            return PurchaseView(p with { Status = "failed", Error = err });
+        }
+        // paid in full: issue even if purchases were switched off meanwhile, the money is already taken
+        var cfg = await CfgAsync(uow);
+        var now = DateTime.UtcNow;
+        var card = new Card(Guid.NewGuid(), "GC" + Hex(5), p.Amount, p.Amount, now.AddDays(cfg.Int("validity_days")), "active", $"Bought online ({p.Gateway})");
+        await uow.ExecuteAsync("INSERT INTO gift_cards (id, code, initial_paise, balance_paise, expires_at, status, note, created_at) VALUES (@Id, @Code, @Initial, @Balance, @ExpiresAt, 'active', @Note, @now)", new { card.Id, card.Code, card.Initial, card.Balance, card.ExpiresAt, card.Note, now });
+        await uow.ExecuteAsync("UPDATE gift_card_purchases SET status = 'issued', gift_card_id = @cid, error = '' WHERE id = @id", new { cid = card.Id, id = p.Id });
+        return PurchaseView(p with { Status = "issued", CardId = card.Id }, card);
     }
 
     public static async Task<List<JsonObject>> ListAsync(IMySqlDapperHelper db) =>

@@ -11,6 +11,8 @@ public interface IPaymentGatewayBAL
     /// 409 when no gateway can take it, 502 when every one failed.</summary>
     Task<PaymentModel> StartAsync(OrderModel order, UserModel user, long amount, long? charge, string chargeCurrency, IUnitOfWork uow, string? preferred = null, string? after = null);
     Task<JsonArray> AlternativesAsync(string currency, string current);
+    /// <summary>The gateways that can take a payment in this currency right now, best first (used for gift card purchases).</summary>
+    Task<List<string>> EligibleAsync(string currency);
     /// <summary>The `payment` object of section 4 for a gateway other than Razorpay.</summary>
     Task<JsonObject> PayloadAsync(OrderModel order, PaymentModel payment, UserModel user, string brand);
     /// <summary>check_with_gateway for the non-Razorpay gateways.</summary>

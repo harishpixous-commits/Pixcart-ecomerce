@@ -23,7 +23,7 @@ public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessB
         ["abandoned_cart"] = [new("enabled", false, K.Bool), new("first_reminder_hours", 4, K.Int, 1, 720), new("second_reminder_hours", 24, K.Int, 1, 720),
             new("max_reminders", 2, K.Int, 1, 5), new("min_cart_paise", 29900, K.Int, 0, 10000000), new("offer_coupon", "", K.Text, 0, 30)],
         ["flash_sales"] = [new("enabled", false, K.Bool), new("max_duration_hours", 48, K.Int, 1, 720), new("max_discount_percent", 70, K.Int, 1, 95), new("show_countdown", true, K.Bool)],
-        ["gift_cards"] = [new("enabled", false, K.Bool), new("min_paise", 10000, K.Int, 100, 10000000), new("max_paise", 1000000, K.Int, 100, 100000000), new("validity_days", 365, K.Int, 1, 3650)],
+        ["gift_cards"] = [new("enabled", false, K.Bool), new("min_paise", 10000, K.Int, 100, 10000000), new("max_paise", 1000000, K.Int, 100, 100000000), new("validity_days", 365, K.Int, 1, 3650), new("allow_purchase", false, K.Bool)],
         ["scorecard"] = [new("enabled", false, K.Bool), new("window_days", 30, K.Int, 7, 365), new("ship_within_hours", 48, K.Int, 1, 720),
             new("late_warn_percent", 10, K.Int, 0, 100), new("late_critical_percent", 25, K.Int, 0, 100),
             new("cancel_warn_percent", 5, K.Int, 0, 100), new("cancel_critical_percent", 10, K.Int, 0, 100),

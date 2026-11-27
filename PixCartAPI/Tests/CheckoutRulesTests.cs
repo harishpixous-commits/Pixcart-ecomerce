@@ -365,6 +365,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         }
         public Task<PaymentModel> StartAsync(OrderModel o, UserModel u, long a, long? c, string cc, IUnitOfWork uow, string? p = null, string? af = null) => throw new InvalidOperationException();
         public Task<JsonArray> AlternativesAsync(string c, string cur) => throw new InvalidOperationException();
+        public Task<List<string>> EligibleAsync(string c) => throw new InvalidOperationException();
         public Task<JsonObject> PayloadAsync(OrderModel o, PaymentModel p, UserModel u, string b) => throw new InvalidOperationException();
         public Task<GatewayRefund> RefundAsync(PaymentModel p, string pp, long c, string r, string n) => throw new InvalidOperationException();
         public Task<PaymentGateway> AdapterAsync(string code) => throw new InvalidOperationException();
