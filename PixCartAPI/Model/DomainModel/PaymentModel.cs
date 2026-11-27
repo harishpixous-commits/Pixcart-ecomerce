@@ -24,6 +24,8 @@ public class PaymentModel
     public string Method { get; set; } = "";
     /// <summary>payments.error</summary>
     public string Error { get; set; } = "";
+    /// <summary>payments.client_data: what the browser needs to open this attempt again (JSON, never a secret)</summary>
+    public string? ClientData { get; set; }
     /// <summary>payments.id</summary>
     public Guid Id { get; set; }
     /// <summary>payments.created_at</summary>

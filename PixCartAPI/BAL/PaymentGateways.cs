@@ -9,7 +9,7 @@ namespace BAL;
 /// <summary>Gateway adapters for Cashfree, PhonePe, PayU and Stripe (docs/PAYMENT_GATEWAYS.md section 6). Mirror of services/gateways.py.
 /// Built from a plain credentials dictionary and an HttpClient the caller owns; nothing here reads the database.
 /// Amounts in and out are paise; adapters convert to rupees where the gateway wants them.</summary>
-public sealed class GatewayException(string message) : Exception(message);
+public sealed class GatewayException(string message) : RazorpayBAL.GatewayException(message); // one error type for every gateway: existing catches keep working
 
 public sealed record GatewayPayment(string Reference, string Mode, JsonObject Fields);
 public sealed record GatewayAttempt(string Id, string Status, string Method, long Amount, string Error);

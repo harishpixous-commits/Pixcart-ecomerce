@@ -16,7 +16,7 @@ namespace BAL;
 public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpClientFactory http) : IRazorpayBAL
 {
     /// <summary>The gateway could not do what was asked (reference: razorpay.GatewayError).</summary>
-    public sealed class GatewayException(string message) : Exception(message);
+    public class GatewayException(string message) : Exception(message);
 
     public async Task<bool> OnlinePaymentsAsync() => (await integrations.GetAsync()).OnlinePayments;
 

@@ -30,6 +30,7 @@ public class OrdersBAL(
     IInventoryBAL inventory,
     IRegionalBAL regional,
     IRazorpayBAL razorpay,
+    IPaymentGatewayBAL gateways,
     IIntegrationBAL integrations,
     ICatalogNotifyBAL notify,
     IRateLimitBAL rateLimit,
@@ -404,35 +405,9 @@ public class OrdersBAL(
         PaymentModel? payment = null;
         if (isOnline)
         {
-            // Created inside the transaction: if the gateway call fails, nothing above is committed.
-            JsonObject rp;
-            try
-            {
-                rp = await razorpay.CreateOrderAsync(charge ?? grandTotal, order.Number,
-                    new Dictionary<string, string> { ["order_number"] = order.Number }, chargeCurrency);
-            }
-            catch (RazorpayBAL.GatewayException exc)
-            {
-                if (chargeCurrency != RegionalBAL.Base)
-                    throw new AppException(
-                        $"Paying in {chargeCurrency} is not available right now ({exc.Message}). Switch the currency to ₹ (INR) and try again.",
-                        "currency_unavailable", 502);
-                throw new AppException($"Could not start the payment: {exc.Message}", "gateway_error", 502);
-            }
-            payment = new PaymentModel
-            {
-                Id = Guid.NewGuid(),
-                OrderId = order.Id,
-                Provider = "razorpay",
-                ProviderOrderId = rp["id"]?.GetValue<string>() ?? "",
-                AmountPaise = grandTotal,
-                Currency = chargeCurrency,
-                ChargeAmount = charge,
-                Status = "created",
-                CreatedAt = now,
-                UpdatedAt = now,
-            };
-            await orders.InsertPaymentAsync(payment, uow);
+            // Created inside the transaction: if every gateway fails, nothing above is committed. Routing and failover
+            // between gateways live in PaymentGatewayBAL (the payment row is inserted there).
+            payment = await gateways.StartAsync(order, user, grandTotal, charge, chargeCurrency, uow);
         }
 
         try
@@ -667,9 +642,10 @@ public class OrdersBAL(
         if (payment is null || order.Status != "pending_payment") return null;
         var integ = await integrations.GetAsync();
         var brand = await SiteSettingsReader.BrandNameAsync(settings, app);
-        var data = new JsonObject
+        var data = payment.Provider != "razorpay" ? await gateways.PayloadAsync(order, payment, user, brand) : new JsonObject
         {
             ["provider"] = "razorpay",
+            ["mode"] = "modal",
             ["key_id"] = integ.RazorpayKeyId,
             ["checkout_url"] = integ.RazorpayCheckoutUrl,
             ["razorpay_order_id"] = payment.ProviderOrderId,
@@ -685,6 +661,7 @@ public class OrdersBAL(
             },
             ["expires_at"] = order.PaymentExpiresAt?.ToString("o"),
         };
+        data["alternatives"] = await gateways.AlternativesAsync(data["currency"]!.GetValue<string>(), data["provider"]!.GetValue<string>());
         var reg = await regional.GetAsync();
         data["methods"] = reg["pay_methods"]?.DeepClone();
         data["card_networks"] = reg["card_networks"]?.DeepClone();
@@ -814,6 +791,7 @@ public class OrdersBAL(
                 ["payment"] = new JsonObject { ["id"] = payment.ProviderPaymentId, ["method"] = payment.Method, ["status"] = "captured" },
                 ["waiting"] = false, ["reason"] = "",
             };
+        if (payment.Provider != "razorpay") return await gateways.CheckAsync(payment, uow, MarkPaidAsync);
         var attempts = (await razorpay.OrderPaymentsAsync(payment.ProviderOrderId))
             .OrderByDescending(a => a["created_at"]?.GetValue<long>() ?? 0).ToList();
         var seen = new JsonArray(attempts.Select(a => (JsonNode?)new JsonObject
@@ -1285,13 +1263,23 @@ public class OrdersBAL(
         refund.Attempts += 1;
         try
         {
-            var data = await razorpay.RefundPaymentAsync(
-                refund.ProviderPaymentId ?? payment.ProviderPaymentId ?? "",
-                RefundCharge(payment, refund.AmountPaise),
-                refund.Id.ToString(),
-                new Dictionary<string, string> { ["refund_id"] = refund.Id.ToString() });
-            refund.ProviderRefundId = data["id"]?.GetValue<string>();
-            refund.Status = data["status"]?.GetValue<string>() == "processed" ? "processed" : "pending";
+            string? refundRef; string refundStatus;
+            if (payment.Provider != "razorpay")
+            {
+                var made = await gateways.RefundAsync(payment, refund.ProviderPaymentId ?? payment.ProviderPaymentId ?? "", RefundCharge(payment, refund.AmountPaise), refund.Id.ToString(), refund.Reason.Length > 0 ? refund.Reason : "Refund");
+                refundRef = made.Id; refundStatus = made.Status;
+            }
+            else
+            {
+                var data = await razorpay.RefundPaymentAsync(
+                    refund.ProviderPaymentId ?? payment.ProviderPaymentId ?? "",
+                    RefundCharge(payment, refund.AmountPaise),
+                    refund.Id.ToString(),
+                    new Dictionary<string, string> { ["refund_id"] = refund.Id.ToString() });
+                refundRef = data["id"]?.GetValue<string>(); refundStatus = data["status"]?.GetValue<string>() ?? "";
+            }
+            refund.ProviderRefundId = refundRef;
+            refund.Status = refundStatus == "processed" ? "processed" : "pending";
             if (refund.Status == "pending") refund.LastError = "";
             await orders.UpdateRefundAsync(refund, uow);
             await uow.CommitAsync();

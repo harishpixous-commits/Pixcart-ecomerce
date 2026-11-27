@@ -196,7 +196,14 @@ public sealed class IntegrationSettings
     public bool RazorpayEnabled => RazorpayKeyId.Length > 0 && RazorpayKeySecret.Length > 0;
 
     /// <summary>Customers can choose online payment at checkout.</summary>
-    public bool OnlinePayments => RazorpayEnabled && RazorpayCheckout;
+    public bool OnlinePayments => (RazorpayEnabled && RazorpayCheckout) || OtherGatewayReady;
+
+    /// <summary>Keys and switch of any gateway besides Razorpay (Cashfree, PhonePe, PayU, Stripe).</summary>
+    public bool OtherGatewayReady =>
+        (CashfreeClientId.Length > 0 && CashfreeClientSecret.Length > 0 && CashfreeCheckout)
+        || (PhonepeClientId.Length > 0 && PhonepeClientSecret.Length > 0 && PhonepeCheckout)
+        || (PayuKey.Length > 0 && PayuSalt.Length > 0 && PayuCheckout)
+        || (StripeSecretKey.Length > 0 && StripeCheckout);
 
     /// <summary>Firebase push can be sent (project, service account email and private key are set).</summary>
     public bool PushConfigured => FirebaseProjectId.Length > 0 && FirebaseClientEmail.Length > 0 && FirebasePrivateKey.Length > 0;

@@ -107,10 +107,16 @@ public class OrdersDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync(
             """
             INSERT INTO payments (id, order_id, provider, provider_order_id, amount_paise, currency, charge_amount,
-                status, method, error, created_at, updated_at)
+                status, method, error, client_data, created_at, updated_at)
             VALUES (@Id, @OrderId, @Provider, @ProviderOrderId, @AmountPaise, @Currency, @ChargeAmount,
-                @Status, @Method, @Error, @CreatedAt, @UpdatedAt)
+                @Status, @Method, @Error, @ClientData, @CreatedAt, @UpdatedAt)
             """, p);
+
+    public Task<PaymentModel?> PaymentByProviderOrderAsync(string providerOrderId) =>
+        db.QueryFirstOrDefaultAsync<PaymentModel>("SELECT * FROM payments WHERE provider_order_id = @providerOrderId", new { providerOrderId });
+
+    public async Task<int> PaymentCountAsync(Guid orderId, IUnitOfWork uow) =>
+        (await uow.QueryAsync<int>("SELECT COUNT(*) FROM payments WHERE order_id = @orderId", new { orderId })).First();
 
     public Task<PaymentModel?> LatestPaymentAsync(Guid orderId, IUnitOfWork? uow = null) =>
         uow is null
