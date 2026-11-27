@@ -38,6 +38,7 @@ const PACKAGE_STATUSES = ["placed", "confirmed", "packed", "shipped", "delivered
         <option value="" [selected]="f().package_status === ''">Any package status</option>
         @for (s of packageStatuses; track s) {<option [value]="s" [selected]="f().package_status === s">{{ s[0].toUpperCase() + s.slice(1) }}</option>}
       </select>
+      <label class="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" [checked]="!!f().late" (change)="set({ late: $any($event.target).checked ? '1' : '', page: 1 })" />Late to ship only</label>
       <select pcSelect (change)="set({ payment_method: $any($event.target).value, page: 1 })" aria-label="Payment method">
         <option value="" [selected]="f().payment_method === ''">COD and online</option><option value="cod" [selected]="f().payment_method === 'cod'">Cash on delivery</option><option value="online" [selected]="f().payment_method === 'online'">Paid online</option>
       </select>
