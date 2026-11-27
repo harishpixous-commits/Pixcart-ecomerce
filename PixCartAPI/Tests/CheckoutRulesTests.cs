@@ -451,4 +451,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         public long AmountPaise { get; init; }
         public string Reason { get; init; } = "";
     }
+
+    [Fact]
+    public async Task Seller_bulk_edit_previews_then_applies_and_skips_bad_rows()
+    {
+        var admin = await Admin();
+        var (vid, _, _) = await ShirtInStock("9400000401", "bulk-a");
+        var otherVid = Guid.NewGuid(); // not one of this seller's versions
+        var tn = await LoginPhone("9400000401", "Bulk Owner");
+        async Task<long> Price() { using var scope = Factory.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>().QueryFirstOrDefaultAsync<long>("SELECT price_paise FROM variants WHERE id=@vid", new { vid }); }
+        var body = new { variant_ids = new[] { vid }, action = "price_percent", value = 10 };
+        var r = await tn.Post("/api/seller/variants/bulk-edit", body);
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.True(r.Json["dry_run"]!.GetValue<bool>()); Assert.Equal(1, r.Json["changed"]!.GetValue<int>()); Assert.Equal(110000, r.Json["rows"]![0]!["after"]!.GetValue<long>()); Assert.Equal(100000, await Price());
+        r = await tn.Post("/api/seller/variants/bulk-edit", new { variant_ids = new[] { vid }, action = "price_percent", value = 10, dry_run = false });
+        Assert.Equal(1, r.Json["changed"]!.GetValue<int>()); Assert.Equal(110000, await Price());
+        r = await tn.Post("/api/seller/variants/bulk-edit", new { variant_ids = new[] { vid }, action = "price_percent", value = 500, dry_run = false });
+        Assert.Equal(0, r.Json["changed"]!.GetValue<int>()); Assert.Equal("price_out_of_range", r.Json["rows"]![0]!["reason"]!.GetValue<string>()); Assert.Equal(110000, await Price());
+        r = await tn.Post("/api/seller/variants/bulk-edit", new { variant_ids = new[] { otherVid }, action = "price_percent", value = 10, dry_run = false });
+        Assert.Equal("not_yours", r.Json["rows"]![0]!["reason"]!.GetValue<string>());
+        r = await tn.Post("/api/seller/variants/bulk-edit", new { variant_ids = new[] { vid }, action = "stock_add", value = 5, dry_run = false });
+        Assert.Equal(1, r.Json["changed"]!.GetValue<int>()); Assert.Equal(15, r.Json["rows"]![0]!["after"]!.GetValue<long>());
+        Assert.Equal("invalid_action", (await tn.Post("/api/seller/variants/bulk-edit", new { variant_ids = new[] { vid }, action = "nope" })).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { bulk_edit = new { enabled = false } })).Status);
+        Assert.Equal("bulk_edit_off", (await tn.Post("/api/seller/variants/bulk-edit", body)).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { bulk_edit = new { enabled = true } })).Status);
+    }
 }

@@ -35,6 +35,8 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
         [Range(0,1000000)]public int? Stock {get;init;}
         public bool? IsActive {get;init;}
     }
+    public record BulkEditIn{[Required,MinLength(1),MaxLength(5000)]public List<Guid> VariantIds{get;init;}=[];[Required]public string Action{get;init;}="";public int? Value{get;init;}public bool DryRun{get;init;}=true;}
+    [HttpPost("variants/bulk-edit"),RouteGuard("seller")] public async Task<object> BulkEdit(BulkEditIn b)=>await bal.BulkEditAsync(await me.RequireAsync(),await Seller(),b.VariantIds,b.Action,b.Value,b.DryRun);
     [HttpPatch("variants/{id}")] public async Task<object> Patch(Guid id,VariantPatch b)=>await bal.PatchAsync(await Seller(),id,b.PricePaise,b.MrpPaise,b.Stock,b.IsActive);
     private static async Task<byte[]> ReadBoundedAsync(IFormFile file,long max,CancellationToken ct)
     {
