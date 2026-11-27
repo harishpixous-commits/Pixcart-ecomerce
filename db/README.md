@@ -4,10 +4,7 @@
 |---|---|
 | `pixcart_demo_db.sql` | The whole database in one file: creates the database `pixcart_demo`, every table with its keys and indexes, and all the data (no views, stored procedures or triggers are used). |
 | `media/` | Every public file the data points to (product photos, partner photos), at the same paths as in the database (`/media/products/....webp`). |
-| `private/` | Every private file the data points to (partner ID proofs, delivery proof photos), at the same paths as in the database. They are demo placeholder images, not real documents. |
-
-The data is demo data: sample sellers, products, shoppers and orders, with no sign-in sessions, logs or real contact
-details. Only the admin below has a password; every other account signs in with a one-time code.
+| `private/` | Every private file the data points to (partner ID proofs, delivery proof photos), at the same paths as in the database. |
 
 MySQL version used: **MySQL 8.4** (tested with 8.4.13 Community Server, default settings, utf8mb4).
 
