@@ -43,7 +43,7 @@ from app.models import (
     Variant,
     Warehouse,
 )
-from app.services import fee_invoices, inventory, razorpay, regional
+from app.services import fee_invoices, inventory, payment_gateways, razorpay, regional
 from app.services import fees as fees_svc
 from app.services.catalog import images_for, refresh_product_aggregates, variant_label
 from app.services.coupons import CouponResult, evaluate
@@ -489,17 +489,10 @@ async def place_order(
         order.currency, order.fx_rate = shown, shown_rate
     charge_currency, _, charge = regional.charge_plan(reg, currency, grand_total) if is_online else (regional.BASE, None, None)
     if is_online:
-        # Created inside the transaction: if the gateway call fails, nothing above is committed.
-        try:
-            rp = await razorpay.create_order(charge or grand_total, order.number, {"order_number": order.number}, currency=charge_currency)
-        except razorpay.GatewayError as exc:
-            if charge_currency != regional.BASE:
-                raise ApiError(f"Paying in {charge_currency} is not available right now ({exc}). Switch the currency to ₹ (INR) and try again.",
-                               "currency_unavailable", 502) from exc
-            raise ApiError(f"Could not start the payment: {exc}", "gateway_error", 502) from exc
-        payment = Payment(order_id=order.id, provider="razorpay", provider_order_id=rp["id"], amount_paise=grand_total,
-                          currency=charge_currency, charge_amount=charge)
-        session.add(payment)
+        # Created inside the transaction: if every gateway fails, nothing above is committed. Routing and failover
+        # between gateways live in services/payment_gateways.py.
+        payment = await payment_gateways.start_payment(session, order, user, amount=grand_total, charge=charge, charge_currency=charge_currency,
+                                                       cfg=await get_integrations(session))
     else:
         await _announce_placed(session, order, user)
     await session.commit()
@@ -523,8 +516,11 @@ async def _announce_placed(session: AsyncSession, order: Order, user: User | Non
 def checkout_payload(order: Order, payment: Payment | None, user: User, brand: str, cfg: Settings) -> dict | None:
     if payment is None or order.status != "pending_payment":
         return None
+    if payment.provider != "razorpay":
+        return payment_gateways.payload(order, payment, user, brand, cfg)
     return {
         "provider": "razorpay",
+        "mode": "modal",
         "key_id": cfg.razorpay_key_id,
         "checkout_url": cfg.razorpay_checkout_url,
         "razorpay_order_id": payment.provider_order_id,
@@ -615,6 +611,8 @@ async def check_with_gateway(session: AsyncSession, payment: Payment) -> dict:
     if payment.status == "captured":
         return {"result": "already_paid", "attempts": [], "payment": {"id": payment.provider_payment_id, "method": payment.method, "status": "captured"},
                 "waiting": False, "reason": ""}
+    if payment.provider != "razorpay":
+        return await payment_gateways.check(session, payment, mark_paid)
     attempts = await razorpay.order_payments(payment.provider_order_id)
     attempts = sorted(attempts, key=lambda a: int(a.get("created_at") or 0), reverse=True)
     seen = [{"id": a.get("id"), "status": a.get("status"), "method": a.get("method", ""), "error": a.get("error_description") or ""} for a in attempts]
@@ -809,8 +807,12 @@ async def process_refund(session: AsyncSession, refund_id: uuid.UUID) -> None:
     payment = await session.get(Payment, refund.payment_id)
     refund.attempts += 1
     try:
-        data = await razorpay.refund_payment(refund.provider_payment_id or payment.provider_payment_id or "", refund_charge(payment, refund.amount_paise), str(refund.id),
-                                             {"refund_id": str(refund.id)})
+        if payment.provider != "razorpay":
+            data = await payment_gateways.refund(session, payment, refund.provider_payment_id or payment.provider_payment_id or "",
+                                                 refund_charge(payment, refund.amount_paise), str(refund.id), refund.reason or "Refund")
+        else:
+            data = await razorpay.refund_payment(refund.provider_payment_id or payment.provider_payment_id or "", refund_charge(payment, refund.amount_paise), str(refund.id),
+                                                 {"refund_id": str(refund.id)})
     except razorpay.GatewayError as exc:
         refund.last_error = str(exc)[:500]
         if refund.attempts >= 8:

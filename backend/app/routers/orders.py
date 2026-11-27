@@ -32,6 +32,7 @@ from app.models import (
     WebhookEvent,
 )
 from app.routers.addresses import get_owned_address
+from app.services import payment_gateways
 from app.services import fees as fees_svc
 from app.services import fleet, razorpay, regional
 from app.services.cms import get_site
@@ -344,6 +345,7 @@ async def shopper_checkout(session, order: Order, payment: Payment | None, user)
     if data is None:
         return None
     reg = await regional.get_regional(session)
+    data["alternatives"] = await payment_gateways.alternatives(session, await get_integrations(session), data["currency"], data["provider"])
     data["methods"] = reg["pay_methods"]
     data["card_networks"] = reg["card_networks"]
     if reg["save_cards"] and (user.phone or user.email):
@@ -633,4 +635,99 @@ async def razorpay_webhook(request: Request, session: SessionDep, background: Ba
     await session.commit()
     if refund_ids:
         background.add_task(run_refunds, refund_ids)
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------------------- other gateways (docs/PAYMENT_GATEWAYS.md section 5)
+_EXTRA = ("cashfree", "phonepe", "payu", "stripe")
+
+
+class SwitchIn(BaseModel):
+    provider: str | None = None
+
+
+@router.post("/api/orders/{order_id}/payment/switch")
+async def switch_payment(order_id: uuid.UUID, body: SwitchIn, user: CurrentUser, session: SessionDep) -> dict:
+    """Pay another way: a new payment with the chosen gateway, or the next eligible one after the latest attempt."""
+    o = await _own_order(session, user, order_id)
+    latest = (await session.execute(select(Payment).where(Payment.order_id == o.id).order_by(Payment.created_at.desc()).limit(1).with_for_update())).scalar_one_or_none()
+    if o.status != "pending_payment" or latest is None or latest.status == "captured":
+        raise ApiError("Nothing is waiting to be paid on this order.", "not_pending", 409)
+    if body.provider is not None and body.provider not in ("razorpay", *_EXTRA):
+        raise ApiError("Unknown payment method", "unknown_gateway", 400)
+    await rate_limit(session, f"payswitch:{o.id}", limit=20, window_seconds=600)
+    cfg = await get_integrations(session)
+    await payment_gateways.start_payment(session, o, user, amount=latest.amount_paise, charge=latest.charge_amount, charge_currency=latest.currency or "INR",
+                                         cfg=cfg, preferred=body.provider, after=latest.provider)
+    new = (await session.execute(select(Payment).where(Payment.order_id == o.id).order_by(Payment.created_at.desc()).limit(1))).scalar_one()
+    await session.commit()
+    return {"payment": await shopper_checkout(session, o, new, user)}
+
+
+async def _params(request: Request) -> dict[str, str]:
+    data: dict[str, str] = dict(request.query_params)
+    if request.method == "POST":
+        try:
+            form = await request.form()
+            data.update({k: str(v) for k, v in form.items()})
+        except Exception:  # noqa: BLE001 - a malformed post counts as "no details"
+            pass
+    return data
+
+
+async def _gateway_payment(session, code: str, ref: str | None) -> Payment | None:
+    if not ref:
+        return None
+    return (await session.execute(select(Payment).where(Payment.provider == code, Payment.provider_order_id == ref[:100]).with_for_update())).scalar_one_or_none()
+
+
+@router.api_route("/api/payments/{code}/callback", methods=["GET", "POST"])
+async def gateway_callback(code: str, request: Request, session: SessionDep, background: BackgroundTasks) -> Response:
+    """The shopper's return from a gateway page. Nothing in the request is trusted: the payment is found by the gateway's
+    reference and checked with the gateway before the order is marked paid."""
+    if code not in _EXTRA:
+        raise NotFound("Gateway")
+    adapter = payment_gateways.gateways.build(await get_integrations(session), code)
+    payment = await _gateway_payment(session, code, adapter.reference_from_return(await _params(request)))
+    if payment is None:
+        return _back_to_order(None, "unknown")
+    order_id = payment.order_id
+    try:
+        res = await _check_and_refund(session, payment, background)
+    except (razorpay.GatewayError, ApiError) as exc:
+        log.warning("%s return for %s could not be confirmed yet: %s", code, payment.provider_order_id, exc)
+        await session.rollback()
+        return _back_to_order(order_id, "checking")
+    if res["result"] in ("paid", "already", "already_paid", "refund"):
+        return _back_to_order(order_id, "success")
+    if res["waiting"]:
+        return _back_to_order(order_id, "checking")
+    return _back_to_order(order_id, "failed", res["reason"] or "The payment did not go through")
+
+
+@router.post("/api/payments/{code}/webhook")
+async def gateway_webhook(code: str, request: Request, session: SessionDep, background: BackgroundTasks) -> dict:
+    """A verified event only triggers a check with the gateway; the event body is never trusted for amounts or states."""
+    if code not in _EXTRA:
+        raise NotFound("Gateway")
+    body = await request.body()
+    adapter = payment_gateways.gateways.build(await get_integrations(session), code)
+    ref = adapter.verify_webhook(dict(request.headers), body)
+    if not ref:
+        raise ApiError("Invalid signature", "bad_signature", 400)
+    session.add(WebhookEvent(provider=code, event_id=hashlib.sha256(body).hexdigest()[:80], event_type="notification", received_at=utcnow()))
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        return {"ok": True, "duplicate": True}
+    payment = await _gateway_payment(session, code, ref)
+    if payment is not None:
+        try:
+            await _check_and_refund(session, payment, background)
+        except (razorpay.GatewayError, ApiError) as exc:
+            log.warning("%s webhook check for %s failed: %s", code, ref, exc)
+            await session.rollback()
+            raise ApiError("Could not check the payment yet", "gateway_error", 503) from exc
+    await session.commit()
     return {"ok": True}

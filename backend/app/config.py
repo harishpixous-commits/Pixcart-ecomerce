@@ -153,7 +153,17 @@ class Settings(BaseSettings):
     @property
     def online_payments(self) -> bool:
         """Customers can choose online payment at checkout."""
-        return self.razorpay_enabled and self.razorpay_checkout
+        return (self.razorpay_enabled and self.razorpay_checkout) or self.other_gateway_ready
+
+    @property
+    def other_gateway_ready(self) -> bool:
+        """Keys and switch of any gateway besides Razorpay (Cashfree, PhonePe, PayU, Stripe)."""
+        return bool(
+            (self.cashfree_client_id and self.cashfree_client_secret and self.cashfree_checkout)
+            or (self.phonepe_client_id and self.phonepe_client_secret and self.phonepe_checkout)
+            or (self.payu_key and self.payu_salt and self.payu_checkout)
+            or (self.stripe_secret_key and self.stripe_checkout)
+        )
 
     def validate_for_production(self) -> None:
         if self.environment != "production":

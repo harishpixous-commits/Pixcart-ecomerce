@@ -18,8 +18,7 @@ import httpx
 transport: httpx.AsyncBaseTransport | None = None
 
 
-class GatewayError(Exception):
-    pass
+from app.services.razorpay import GatewayError  # noqa: E402  one error type for every gateway, so callers catch one class
 
 
 def _rupees(paise: int) -> str:
@@ -317,7 +316,7 @@ def configured(cfg: Any, code: str) -> bool:
 def enabled(cfg: Any, code: str) -> bool:
     """Keys present and the Admin → Integrations switch on (Razorpay uses its own settings)."""
     if code == "razorpay":
-        return bool(getattr(cfg, "online_payments", False))
+        return bool(getattr(cfg, "razorpay_enabled", False) and getattr(cfg, "razorpay_checkout", True))
     return configured(cfg, code) and bool(getattr(cfg, f"{code}_checkout", True))
 
 
