@@ -15,7 +15,7 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
     [Fact]
     public async Task Seller_list_detail_requirements_and_lifecycle()
     {
-        var (user,seller,p,v,cat)=await Seed();
+        var (user,seller,p,v,cat)=await Seed(); var adminApi=await Admin();
         var r=await user.Get("/api/seller/products?q=UNIQUE-SKU&low_stock=true"); Assert.True(r.Status==200,r.ToString()); Assert.Equal(1,r.Json["total"]!.GetValue<int>());
         Assert.Equal(1,r.Json["status_counts"]!["draft"]!.GetValue<int>());
         Assert.Equal(0,(await user.Get("/api/seller/products?status=approved")).Json["total"]!.GetValue<int>());
@@ -25,6 +25,7 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("listing_incomplete",(await user.Post($"/api/seller/products/{p}/submit")).ErrorCode);
         await ApiFactory.DbExecAsync("INSERT INTO product_images (id,product_id,url,position) VALUES (@id,@p,'/media/products/test.webp',0)",new { id=Guid.NewGuid().ToString(),p });
         r=await user.Post($"/api/seller/products/{p}/submit"); Assert.True(r.Status==200,r.ToString()); Assert.Equal("pending",r.Json["status"]!.GetValue<string>());
+        Assert.Contains((await adminApi.Get("/api/notifications")).Json["items"]!.AsArray(),n=>n!["title"]!.GetValue<string>()=="Listing waiting for review");
         Assert.Equal("invalid_status",(await user.Post($"/api/seller/products/{p}/submit")).ErrorCode);
         Assert.Equal("archived",(await user.Post($"/api/seller/products/{p}/archive")).Json["status"]!.GetValue<string>());
         Assert.Equal("draft",(await user.Post($"/api/seller/products/{p}/restore")).Json["status"]!.GetValue<string>());

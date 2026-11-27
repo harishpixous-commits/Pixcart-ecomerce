@@ -368,3 +368,6 @@ Python 297 passed, 0 failed. .NET 400 passed, 0 failed (5 groups after a clean r
 
 ## Push 121: support staff are now told about tickets
 Gap: nobody on the support desk was notified of a new request, a customer reply, or a bad rating, even though replies are due within 48 hours. New staff event staff_ticket (in-app and push, to everyone with the support permission): New support request or grievance, Customer replied on TKxxxx, and Low rating on TKxxxx (rating 2 or less). Always on, like the delivery staff alerts. Both versions. Tests: Python support/accounts/admin-prefs 16 passed; .NET satisfaction/notification tests passed. Not run: email or SMS for staff (in-app and push only), browser.
+
+## Push 122: staff alerts for seller and listing review
+New staff event `staff_review` (in-app, no setting, always on). Fires when a seller submits onboarding (sellers permission) and when a seller submits a listing (catalog permission), with a link to the admin page. Both versions. Tests: Python test_support, .NET SellerOnboarding and SellerProducts assertions. Not run: email/push delivery, browser.

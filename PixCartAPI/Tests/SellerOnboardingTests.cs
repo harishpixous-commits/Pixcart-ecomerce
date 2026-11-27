@@ -47,6 +47,7 @@ public class SellerOnboardingTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200,(await a.Put("/api/seller/pickup-address",Pickup())).Status);
         Assert.Equal("33",await ApiFactory.DbScalarAsync<string>("SELECT state_code FROM warehouses WHERE seller_id=@id",new { id }));
         r = await a.Post("/api/seller/submit"); Assert.Equal("submitted",r.Json["status"]!.GetValue<string>());
+        Assert.Contains((await admin.Get("/api/notifications")).Json["items"]!.AsArray(),n=>n!["title"]!.GetValue<string>()=="Seller waiting for review");
         Assert.Equal(409,(await a.Put("/api/seller/bank",Bank("999999999"))).Status);
         Assert.Equal(409,(await a.Put("/api/seller/profile",Profile(Gst()))).Status);
         Assert.Equal(403,(await a.Post($"/api/admin/sellers/{id}/approve")).Status);

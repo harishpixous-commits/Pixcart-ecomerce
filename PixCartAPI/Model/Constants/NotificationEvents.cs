@@ -212,6 +212,10 @@ public static class NotificationEvents
             {
                 ["inapp"] = ("No delivery partner took {{order_number}}", "{{reason}} Assign it by hand in Delivery → Queue."),
             },
+            ["staff_review"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("{{subject}}", "{{message}}"),
+            },
             ["staff_ticket"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("{{subject}}", "{{message}}"),

@@ -11,7 +11,7 @@ namespace BAL;
 
 /// <summary>Seller-side KYC workflow from routers/seller_onboarding.py. No payout-provider calls.</summary>
 public class SellerOnboardingBAL(SellerAccountDAL dal, AccountDAL accounts, SellerModerationBAL profiles,
-    IAuthSettingsBAL auth, IAuditBAL audit, EncryptDecrypt crypto, IMySqlDapperHelper db, IImageUpload storage, IAccessBAL access) : ISellerOnboardingBAL
+    IAuthSettingsBAL auth, IAuditBAL audit, EncryptDecrypt crypto, IMySqlDapperHelper db, IImageUpload storage, IAccessBAL access, INotifyBAL notifier) : ISellerOnboardingBAL
 {
     private static readonly string[] DocumentKinds = ["pan_card", "gst_certificate", "cancelled_cheque", "address_proof"];
     public async Task<SellerModel> OwnAsync(UserModel user) => await accounts.GetSellerByUserAsync(user.Id)
@@ -37,6 +37,7 @@ public class SellerOnboardingBAL(SellerAccountDAL dal, AccountDAL accounts, Sell
         await dal.InsertAsync(s, tx.Transaction);
         await audit.AuditAsync(u, "seller.register", "seller", s.Id, uow: tx);
         await tx.CommitAsync();
+        await notifier.NotifyStaffAsync("sellers", "staff_review", new Dictionary<string, object?> { ["subject"] = "Seller waiting for review", ["message"] = s.DisplayName + " submitted their documents. Check them in Sellers." }, "/admin/sellers/" + s.Id);
         return await profiles.ProfileAsync(s, false);
     }
     public async Task<JsonObject> ProfileAsync(UserModel u, SellerProfileIn b)

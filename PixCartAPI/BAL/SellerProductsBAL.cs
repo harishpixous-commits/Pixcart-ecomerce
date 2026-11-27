@@ -7,7 +7,7 @@ using Utils.Interface;
 namespace BAL;
 /// <summary>Seller catalogue read, lifecycle and variant price/stock paths from seller_products.py.</summary>
 public partial class SellerProductsBAL(SellerProductsDAL dal,ProductModerationBAL detail,CatalogDAL catalog,DealsDAL deals,
-    IPlatformSettingsBAL platform,IInventoryBAL inventory,IAuditBAL audit,IMySqlDapperHelper db,AppSettings env,IRateLimitBAL rateLimit) : ISellerProductsBAL
+    IPlatformSettingsBAL platform,IInventoryBAL inventory,IAuditBAL audit,IMySqlDapperHelper db,AppSettings env,IRateLimitBAL rateLimit,INotifyBAL notifier) : ISellerProductsBAL
 {
     public async Task<JsonObject> DetailAsync(SellerModel s,Guid id) => await detail.DetailAsync(await dal.OwnedAsync(s.Id,id) ?? throw new NotFoundException("Product"));
     public async Task<JsonObject> RequirementsAsync(SellerModel s,Guid categoryId)
@@ -63,6 +63,7 @@ public partial class SellerProductsBAL(SellerProductsDAL dal,ProductModerationBA
             else if(action=="archive") p.Status="archived";
             else { if(p.Status!="archived") throw new ConflictException("Only archived products can be restored","invalid_status"); p.Status="draft"; }
             await dal.SetStatusAsync(p,tx); await audit.AuditAsync(user,"product."+action,"product",p.Id,uow:tx); await tx.CommitAsync();
+            if(action=="submit") await notifier.NotifyStaffAsync("catalog","staff_review",new Dictionary<string,object?>{["subject"]="Listing waiting for review",["message"]=s.DisplayName+" submitted \""+(p.Title.Length>80?p.Title[..80]:p.Title)+"\"."},"/admin/products/"+p.Id);
         }
         return await DetailAsync(s,id);
     }
