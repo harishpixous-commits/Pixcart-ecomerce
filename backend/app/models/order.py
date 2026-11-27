@@ -221,9 +221,10 @@ class Payment(IdMixin, TimestampMixin, Base):
     __tablename__ = "payments"
 
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"), index=True)
-    provider: Mapped[str] = mapped_column(String(12))  # razorpay
-    provider_order_id: Mapped[str] = mapped_column(String(40), unique=True)
-    provider_payment_id: Mapped[str | None] = mapped_column(String(40), unique=True)
+    provider: Mapped[str] = mapped_column(String(12))  # razorpay | cashfree | phonepe | payu | stripe
+    provider_order_id: Mapped[str] = mapped_column(String(100), unique=True)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(100), unique=True)
+    client_data: Mapped[dict | None] = mapped_column(JSONB)  # what the browser needs to open this attempt again (never a secret)
     amount_paise: Mapped[int] = mapped_column(BigInteger)  # the order's total in paise (the books)
     # what Razorpay charges: in rupees (charge_amount empty) or the shopper's currency, in its smallest unit
     currency: Mapped[str] = mapped_column(String(3), default="INR", server_default="INR")
@@ -292,3 +293,18 @@ class PlatformSetting(Base):
     key: Mapped[str] = mapped_column(String(60), primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PaymentGatewayEvent(Base):
+    """Health of the payment gateways: one row per call that creates, checks or refunds a payment. Kept 7 days."""
+
+    __tablename__ = "payment_gateway_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    gateway: Mapped[str] = mapped_column(String(12))
+    ok: Mapped[bool] = mapped_column(Boolean)
+    ms: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_payment_gateway_events_gateway_created_at", "gateway", "created_at"),)
