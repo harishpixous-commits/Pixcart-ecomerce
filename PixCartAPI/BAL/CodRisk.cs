@@ -13,6 +13,13 @@ public static class CodRisk
         var cfg = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["cod_risk"]!;
         if (!cfg.Bool("enabled")) return null;
         if ((cfg["blocked_pincodes"] as JsonArray ?? []).Any(x => x?.GetValue<string>() == pincode)) return "Cash on delivery is not available for this pincode. Please pay online.";
+        if (cfg.Int("block_after_refused") > 0)
+        {
+            // cash packages that came back undelivered (refused, nobody home, address not found); every return-to-seller path writes this reason
+            var refused = await uow.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sub_orders so JOIN orders o ON o.id = so.order_id WHERE o.user_id = @userId AND o.payment_method = 'cod' AND so.status = 'cancelled' AND so.cancel_reason LIKE 'Returned to the seller%'", new { userId });
+            if (refused >= cfg.Int("block_after_refused")) return "Cash on delivery is no longer available on this account because earlier cash packages came back undelivered. Please pay online.";
+        }
         if (cfg.Int("max_cod_paise") > 0 && grandTotal > cfg.Int("max_cod_paise")) return "Cash on delivery is not available for this order value. Please pay online.";
         if (cfg.Int("new_account_max_cod_paise") > 0 && grandTotal > cfg.Int("new_account_max_cod_paise"))
         {

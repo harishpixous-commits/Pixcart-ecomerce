@@ -305,3 +305,7 @@ When a customer deletes their own review, the review bonus points are taken back
 ## Push 103: loyalty points now expire (expiry_days was a dead setting)
 
 The Growth loyalty setting `expiry_days` (365 by default, 0 = never) was stored but never used. Now, while loyalty is on, points earned before the cut-off and not spent lapse (oldest spent first): one negative "Points expired" row, applied lazily when the member opens Rewards or redeems, and it lapses once. Both versions; a test on each side. Not wired: no advance warning message to members. Not run: browser.
+
+## Push 104: COD risk `block_after_refused` now works (was a dead setting)
+
+With the COD risk module on, a customer whose cash packages came back undelivered (every return-to-seller path: seller RTO, courier webhook, delivery partner) that many times (default 2) can no longer choose cash on delivery; online payment stays open. Checked at order placement. Both versions; a test on each side. Note: with the module on, the default of 2 is now live. Not run: browser.

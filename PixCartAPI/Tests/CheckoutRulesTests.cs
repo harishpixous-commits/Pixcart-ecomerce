@@ -1066,4 +1066,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.StartsWith("Points expired", me["history"]![0]!["note"]!.GetValue<string>());
         Assert.Equal(40, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>()); // lapses once
     }
+
+    [Fact]
+    public async Task Cod_is_blocked_after_repeated_undelivered_cash_packages()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000351", "cod-refused-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000201", "Refusing Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { cod_risk = new { enabled = true, max_cod_paise = 0, new_account_max_cod_paise = 0, block_after_refused = 2 } })).Status);
+        async Task<Res> Order(string method)
+        {
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            return await buyer.Post("/api/orders", new { address_id = addr, payment_method = method, idempotency_key = Guid.NewGuid().ToString("N") });
+        }
+        for (var n = 0; n < 2; n++)
+        {
+            var r = await Order("cod");
+            Assert.True(r.Status == 201, r.ToString());
+            var sid = r.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+            await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'cancelled', cancel_reason = 'Returned to the seller by the courier (RTO)' WHERE id = @sid", new { sid });
+        }
+        var blocked = await Order("cod");
+        Assert.Equal(400, blocked.Status); Assert.Equal("cod_risk", blocked.ErrorCode);
+        Assert.NotEqual("cod_risk", (await Order("online")).ErrorCode); // paying online is never blocked by this rule
+    }
 }
