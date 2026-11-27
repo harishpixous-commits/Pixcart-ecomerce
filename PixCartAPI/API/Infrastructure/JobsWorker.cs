@@ -90,6 +90,9 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
         // Abandoned-cart reminders (Admin → Growth; off unless switched on).
         new("cart_reminders", async sp => await CartReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromMinutes(30))),
+        // Scheduled segment campaigns (Admin → Growth; sent when their time comes).
+        new("campaigns", async sp => await SegmentCampaigns.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
+            Every(TimeSpan.FromMinutes(5))),
         // Saved searches: tell shoppers about new matching products (Admin → Growth; off unless switched on).
         new("saved_searches", async sp => await SavedSearches.SendMatchesAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromMinutes(30))),

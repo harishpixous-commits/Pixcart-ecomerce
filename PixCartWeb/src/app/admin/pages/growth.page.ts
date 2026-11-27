@@ -13,7 +13,7 @@ type Val = boolean | number | string | string[];
 type Section = Record<string, Val>;
 type Settings = Record<string, Section>;
 type CampaignPreview = { opted_in: number; recipients: number; capped: boolean };
-type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string };
+type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string; status?: string; send_at?: string | null };
 type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
 type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
 type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
@@ -130,11 +130,14 @@ const label = (k: string): string => {
           <input class="rounded-lg border px-3 py-2 text-sm" maxlength="80" placeholder="Title" [value]="cTitle()" (input)="cTitle.set($any($event.target).value); cPreview.set(null)" />
           <textarea class="rounded-lg border px-3 py-2 text-sm" maxlength="300" rows="3" placeholder="Message" [value]="cMessage()" (input)="cMessage.set($any($event.target).value); cPreview.set(null)"></textarea>
           <input class="rounded-lg border px-3 py-2 text-sm" maxlength="200" placeholder="Page to open, like /offers (optional)" [value]="cLink()" (input)="cLink.set($any($event.target).value); cPreview.set(null)" />
+          <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">Send later (optional, 2 minutes to 30 days ahead)</span>
+            <input type="datetime-local" class="rounded-lg border px-3 py-2 text-sm" [value]="cSendAt()" (input)="cSendAt.set($any($event.target).value); cPreview.set(null)" data-testid="campaign-send-at" />
+          </label>
           <pc-error-note [message]="error()" />
           <div class="flex items-center gap-2">
             <button pcButton (click)="campaign(true)" [loading]="busy() && !cPreview()" [disabled]="!cTitle().trim() || !cMessage().trim()">Preview</button>
             @if (cPreview(); as p) {
-              @if (p.recipients > 0) {<button pcButton variant="buy" (click)="campaign(false)" [loading]="busy()">Send to {{ p.recipients }}</button>}
+              @if (p.recipients > 0) {<button pcButton variant="buy" (click)="campaign(false)" [loading]="busy()">{{ cSendAt() ? "Schedule for " + p.recipients + " people" : "Send to " + p.recipients }}</button>}
               <span class="text-sm text-ink-soft" data-testid="campaign-preview">{{ p.opted_in }} opted in{{ p.capped ? ", capped at " + p.recipients : "" }}</span>
             }
           </div>
@@ -142,10 +145,11 @@ const label = (k: string): string => {
         @if (campaigns().length) {
           <div class="overflow-x-auto rounded-xl bg-white">
             <table class="w-full text-left text-sm" data-testid="campaigns">
-              <thead><tr class="border-b border-line"><th class="p-3">Sent</th><th class="p-3">Segment</th><th class="p-3">Title</th><th class="p-3">People</th></tr></thead>
+              <thead><tr class="border-b border-line"><th class="p-3">When</th><th class="p-3">Segment</th><th class="p-3">Title</th><th class="p-3">People</th><th class="p-3">Status</th></tr></thead>
               <tbody>
                 @for (c of campaigns(); track c.id) {
-                  <tr class="border-b border-line/50"><td class="p-3">{{ date(c.at) }}</td><td class="p-3">{{ c.segment.replaceAll("_", " ") }}</td><td class="p-3 font-semibold">{{ c.title }}</td><td class="p-3">{{ c.recipients }}</td></tr>
+                  <tr class="border-b border-line/50"><td class="p-3">{{ date(c.status === "scheduled" && c.send_at ? c.send_at : c.at) }}</td><td class="p-3">{{ c.segment.replaceAll("_", " ") }}</td><td class="p-3 font-semibold">{{ c.title }}</td><td class="p-3">{{ c.status === "scheduled" ? "-" : c.recipients }}</td>
+                    <td class="p-3 capitalize">{{ c.status ?? "sent" }}@if (c.status === "scheduled") {<button type="button" class="ml-2 font-semibold text-vermilion" (click)="cancelScheduled(c.id)">Cancel</button>}</td></tr>
                 }
               </tbody>
             </table>
@@ -215,6 +219,7 @@ export class AdminGrowthPage {
   protected readonly cTitle = signal("");
   protected readonly cMessage = signal("");
   protected readonly cLink = signal("");
+  protected readonly cSendAt = signal("");
   protected readonly cPreview = signal<CampaignPreview | null>(null);
   protected readonly campaigns = signal<CampaignRow[]>([]);
   protected readonly segs = signal<Seg[]>([]);
@@ -241,11 +246,21 @@ export class AdminGrowthPage {
     api<{ items: CampaignRow[] }>("/api/admin/growth/campaigns").then((x) => this.campaigns.set(x.items)).catch(quietly);
   }
 
+  protected async cancelScheduled(id: string): Promise<void> {
+    try {
+      await api(`/api/admin/growth/campaigns/${id}`, { method: "DELETE" });
+      this.toast.show("Campaign cancelled");
+      this.loadCampaigns();
+    } catch (x) {
+      this.toast.show(x instanceof ApiError ? x.message : "Could not cancel", "error");
+    }
+  }
+
   protected async campaign(dry: boolean): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     try {
-      const body = { segment: this.cSegment(), title: this.cTitle(), message: this.cMessage(), link: this.cLink(), dry_run: dry };
+      const body = { segment: this.cSegment(), title: this.cTitle(), message: this.cMessage(), link: this.cLink(), dry_run: dry, send_at: this.cSendAt() ? new Date(this.cSendAt()).toISOString() : null };
       const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body });
       if (dry) this.cPreview.set(r);
       else {
@@ -253,7 +268,9 @@ export class AdminGrowthPage {
         this.cTitle.set("");
         this.cMessage.set("");
         this.cLink.set("");
-        this.toast.show(`Sent to ${r.recipients} customers`);
+        const scheduled = this.cSendAt() !== "";
+        this.cSendAt.set("");
+        this.toast.show(scheduled ? "Campaign scheduled" : `Sent to ${r.recipients} customers`);
         this.loadCampaigns();
       }
     } catch (x) {

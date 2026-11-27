@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+using BAL.Interface;
 using Microsoft.Extensions.DependencyInjection;
 using Utils.Interface;
 namespace Tests;
@@ -159,5 +161,33 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal(20,await Run(tx=>BAL.LoyaltyPoints.ReverseForReturnAsync(tx,sub,"SYNTH-RET-1",200000,200000,uid)));
         Assert.Equal(0,(await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
         Assert.Equal("reverse",(await buyer.Get("/api/loyalty")).Json["history"]![0]!["kind"]!.GetValue<string>());
+    }
+    [Fact]public async Task Scheduled_campaign_is_held_until_its_time_and_can_be_cancelled()
+    {
+        var admin=await Admin();
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{campaigns=new{enabled=true,max_per_day=5},segments=new{enabled=true}})).Status);
+        var fan=await LoginPhone("9610100001","Sched Fan");
+        await ApiFactory.DbExecAsync("UPDATE users SET marketing_opt_in=1 WHERE id=@id",new{id=fan.Id});
+        var soon=DateTime.UtcNow.AddHours(2);
+        object Body(string title,DateTime at)=>new{segment="never_ordered",title,message="See you soon",link="/offers",dry_run=false,send_at=at};
+        Assert.Equal("invalid_send_at",(await admin.Post("/api/admin/growth/campaigns",Body("Later offer",DateTime.UtcNow.AddSeconds(30)))).ErrorCode);
+        Assert.Equal("invalid_send_at",(await admin.Post("/api/admin/growth/campaigns",Body("Later offer",DateTime.UtcNow.AddDays(40)))).ErrorCode);
+        var r=await admin.Post("/api/admin/growth/campaigns",Body("Later offer",soon));
+        Assert.True(r.Status==200&&r.Json["scheduled"]!.GetValue<bool>(),r.ToString());
+        var cid=r.Json["id"]!.GetValue<string>();
+        using var scope=Factory.Services.CreateScope();
+        var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();var notify=scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        async Task<bool> Has()=>(await fan.Get("/api/notifications")).Json["items"]!.AsArray().Any(n=>n!["title"]!.GetValue<string>()=="Later offer");
+        Task<int> Due()=>BAL.SegmentCampaigns.SendDueAsync(db,notify);
+        Assert.Equal(0,await Due());Assert.False(await Has());
+        JsonNode Row(string id)=>(admin.Get("/api/admin/growth/campaigns").Result).Json["items"]!.AsArray().First(i=>i!["id"]!.GetValue<string>()==id)!;
+        Assert.Equal("scheduled",Row(cid)["status"]!.GetValue<string>());
+        await ApiFactory.DbExecAsync("UPDATE segment_campaigns SET send_at=@t WHERE id=@id",new{t=DateTime.UtcNow.AddMinutes(-1),id=cid});
+        Assert.Equal(1,await Due());Assert.True(await Has());Assert.Equal(0,await Due());
+        Assert.Equal("sent",Row(cid)["status"]!.GetValue<string>());Assert.True(Row(cid)["recipients"]!.GetValue<int>()>=1);
+        Assert.Equal("not_scheduled",(await admin.Delete("/api/admin/growth/campaigns/"+cid)).ErrorCode);
+        var r2=await admin.Post("/api/admin/growth/campaigns",Body("Never goes",soon));var id2=r2.Json["id"]!.GetValue<string>();
+        Assert.Equal(200,(await admin.Delete("/api/admin/growth/campaigns/"+id2)).Status);
+        Assert.Equal("cancelled",Row(id2)["status"]!.GetValue<string>());
     }
 }
