@@ -15,6 +15,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effec
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-angular";
 import { ApiError, api } from "../../core/api";
 import { dateTime, money, rupees } from "../../core/format";
+import { payWithGateway } from "../../core/gateway-pay";
 import { clearPaying, payWithRazorpay, payingSince } from "../../core/razorpay";
 import { RegionalService } from "../../core/regional";
 import { SiteService } from "../../core/site";
@@ -67,6 +68,12 @@ export type PaymentArrival = { outcome: string; reason: string; open: boolean };
           <button pcButton variant="buy" (click)="pay()">Try again · Pay {{ total() }}</button>
           <button pcButton variant="ghost" (click)="startPolling()" [loading]="checkingNow()"><svg [pcIcon]="RefreshCw" class="h-4 w-4" /> I have paid, check again</button>
         </div>
+        @if (alternatives().length) {
+        <div class="flex flex-wrap items-center gap-2 text-sm" data-testid="pay-another-way">
+          <span class="text-ink-soft">Pay another way:</span>
+          @for (a of alternatives(); track a.provider) { <button pcButton variant="ghost" size="sm" (click)="switchTo(a.provider)">{{ a.name }}</button> }
+        </div>
+      }
       </div>
     } @else if (phase() === "checking" || phase() === "waiting" || phase() === "open") {
       <div class="flex flex-col gap-3 rounded-2xl bg-marigold-light p-4 ring-1 ring-marigold/30" role="status" aria-live="polite" data-testid="payment-checking">
@@ -91,6 +98,12 @@ export type PaymentArrival = { outcome: string; reason: string; open: boolean };
           <button pcButton variant="ghost" size="sm" (click)="startPolling()" [loading]="checkingNow()">Already paid? Check</button>
           <button pcButton variant="buy" (click)="pay()">Pay {{ total() }}</button>
         </div>
+        @if (alternatives().length) {
+        <div class="flex flex-wrap items-center gap-2 text-sm" data-testid="pay-another-way">
+          <span class="text-ink-soft">Pay another way:</span>
+          @for (a of alternatives(); track a.provider) { <button pcButton variant="ghost" size="sm" (click)="switchTo(a.provider)">{{ a.name }}</button> }
+        </div>
+      }
       </div>
     }
   `,
@@ -231,6 +244,22 @@ export class OrderPayment implements OnInit {
     void this.check(false);
   }
 
+  protected readonly alternatives = computed(() => this.order().payment?.alternatives ?? []);
+
+  /** pay another way: a new attempt with another gateway */
+  protected async switchTo(provider: string): Promise<void> {
+    this.reason.set("");
+    try {
+      const r = await api<{ payment: NonNullable<OrderDetail["payment"]> }>(`/api/orders/${this.id()}/payment/switch`, { method: "POST", body: { provider } });
+      this.orderChange.emit({ ...this.order(), payment: r.payment });
+      this.phase.set("idle");
+      if (r.payment.provider !== "razorpay") await payWithGateway(r.payment, this.id());
+    } catch (e) {
+      this.reason.set(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Could not switch the payment method");
+      this.phase.set("failed");
+    }
+  }
+
   protected async pay(): Promise<void> {
     const payment = this.order().payment;
     const id = this.id();
@@ -239,6 +268,13 @@ export class OrderPayment implements OnInit {
     this.reason.set("");
     this.lastFail = "";
     try {
+      if (payment.provider !== "razorpay") {
+        await payWithGateway(payment, id);
+        this.phase.set("checking");
+        const status = await this.check(false);
+        if (status !== "paid") this.startPolling();
+        return;
+      }
       const done = await payWithRazorpay(payment, {
         orderId: id,
         returnMode: this.site().payment_return,
