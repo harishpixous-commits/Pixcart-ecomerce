@@ -556,4 +556,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("bad_number", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up($"id,price\n{vid},abc\n"))).Json["rows"]![0]!["reason"]!.GetValue<string>());
         Assert.Equal("invalid_file", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up("sku,price\nX,1\n"))).ErrorCode);
     }
+
+    [Fact]
+    public async Task Scorecard_auto_suspend_stops_a_critical_seller_once_and_only_when_switched_on()
+    {
+        var admin = await Admin();
+        var (variantId, productId, sellerId) = await ShirtInStock("9400000421", "auto-susp");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000421", "Susp Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.Equal(201, (await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") })).Status);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { scorecard = new { enabled = true, min_orders = 1, ship_within_hours = 1 } })).Status);
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET created_at = @t WHERE seller_id = @sellerId", new { t = Now.AddHours(-5), sellerId });
+        using var scope = Factory.Services.CreateScope();
+        var growth = scope.ServiceProvider.GetRequiredService<IGrowthBAL>();
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        async Task<string> Status() => await db.QueryFirstOrDefaultAsync<string>("SELECT status FROM sellers WHERE id = @sellerId", new { sellerId }) ?? "";
+        Assert.Equal(0, await growth.AutoSuspendAsync(notify)); Assert.Equal("approved", await Status()); // auto_suspend is off
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { scorecard = new { auto_suspend = true } })).Status);
+        Assert.Equal(1, await growth.AutoSuspendAsync(notify)); Assert.Equal("suspended", await Status());
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM audit_logs WHERE action = 'seller.auto_suspend' AND actor_user_id IS NULL AND detail LIKE '%late shipments%'"));
+        Assert.Equal(0, await growth.AutoSuspendAsync(notify)); // already suspended
+        Assert.Equal(200, (await admin.Post($"/api/admin/sellers/{sellerId}/approve", new { })).Status);
+        Assert.Equal(0, await growth.AutoSuspendAsync(notify)); Assert.Equal("approved", await Status()); // not suspended again for the same old orders
+    }
 }

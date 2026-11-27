@@ -11,6 +11,7 @@ public interface IGrowthBAL
     Task<JsonObject> SettingsAsync(UserModel admin);
     Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body);
     Task<JsonObject> ScorecardAsync(UserModel admin);
+    Task<int> AutoSuspendAsync(ICatalogNotifyBAL notify);
     Task<JsonObject> LoyaltyAsync(Guid userId);
     /// <summary>Points to a single-use coupon (POST /api/loyalty/redeem).</summary>
     Task<JsonObject> RedeemPointsAsync(Guid userId, int points);

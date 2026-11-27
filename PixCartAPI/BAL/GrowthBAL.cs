@@ -7,7 +7,7 @@ using Utils;
 using Utils.Interface;
 namespace BAL;
 
-public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db, AppSettings app) : IGrowthBAL
+public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db, AppSettings app) : IGrowthBAL
 {
     public const string Key = "growth";
     private enum K { Bool, Int, Text, List }

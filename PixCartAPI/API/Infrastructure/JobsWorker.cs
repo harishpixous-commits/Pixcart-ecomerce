@@ -90,6 +90,9 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
         // Abandoned-cart reminders (Admin → Growth; off unless switched on).
         new("cart_reminders", async sp => await CartReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromMinutes(30))),
+        // Seller scorecard auto-suspend (Admin → Growth; needs the scorecard and auto_suspend both switched on).
+        new("seller_auto_suspend", async sp => await sp.GetRequiredService<IGrowthBAL>().AutoSuspendAsync(sp.GetRequiredService<ICatalogNotifyBAL>()),
+            Every(TimeSpan.FromHours(1))),
         new("delivery_payouts", async sp => await sp.GetRequiredService<DeliveryAdminBAL>().GenerateScheduledAsync(),
             WeeklyAtIst(DayOfWeek.Monday, 10, 15)),
         // Reference: jobs.review_summary_job (hourly). Summaries are published on product pages, so they are written
