@@ -748,7 +748,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
         var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
         Task<int> Run() => ReviewReminders.SendDueAsync(db, notify);
-        async Task<long> Count(string who) => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'review_reminder'", new { uid = Guid.Parse(who) });
+        async Task<long> Count(string who) => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'review_reminder' AND channel = 'inapp'", new { uid = Guid.Parse(who) });
         Assert.Equal(0, await Run()); Assert.Equal(0, await Count(a.Id));
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { review_reminders = new { enabled = true, after_days = 5, max_age_days = 30 } })).Status);
         Assert.Equal(1, await Run());
@@ -830,7 +830,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
         var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
         Task<int> Run() => ShipReminders.SendDueAsync(db, notify);
-        async Task<long> Count() => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_ship_reminder'", new { });
+        async Task<long> Count() => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_ship_reminder' AND channel = 'inapp'", new { });
         Assert.Equal(0, await Run()); Assert.Equal(0, await Count());
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { ship_reminders = new { enabled = true, after_hours = 24, max_age_days = 14 } })).Status);
         var owner = await LoginPhone("9400000311", "Ship Owner");
