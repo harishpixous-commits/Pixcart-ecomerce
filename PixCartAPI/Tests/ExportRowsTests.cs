@@ -94,5 +94,14 @@ public class ExportRowsTests(ApiFactory f):ApiTest(f)
         var tickets=await Read("tickets",C("tickets"));Assert.Single(tickets);Assert.Equal(true,tickets[0][10]);Assert.Equal(false,tickets[0][13]);
         var runs=await Read("ai-runs",C("ai-runs"));Assert.Single(runs);Assert.Equal(10,Convert.ToInt32(runs[0][6]));Assert.Equal("product:"+a.Product,runs[0][11]);
     }
-
+    [Fact]
+    public async Task Gift_card_and_referral_exports_mask_codes_and_show_money()
+    {
+        await Admin();var u1=await LoginPhone("9876100091","Synthetic Referrer");var u2=await LoginPhone("9876100092","Synthetic Friend");
+        await ApiFactory.DbExecAsync("INSERT INTO gift_cards(id,code,initial_paise,balance_paise,expires_at,status,note,created_at)VALUES(UUID(),'GCSYNTH1234',50000,20000,'2030-01-01','active','Diwali',UTC_TIMESTAMP(6))");
+        await ApiFactory.DbExecAsync("INSERT INTO referrals(id,referrer_id,referee_id,status,reward_paise,created_at,rewarded_at)VALUES(UUID(),@a,@b,'rewarded',2500,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",new{a=u1.Id,b=u2.Id});
+        var cards=await Read("gift-cards",ExportDefinitions.Parse(Spec("gift-cards")));Assert.Single(cards);Assert.Equal("1234",cards[0][0]);Assert.Equal("500.00",cards[0][4]);Assert.Equal("200.00",cards[0][5]);Assert.Equal("300.00",cards[0][6]);Assert.Equal("Diwali",cards[0][7]);
+        var voided=ExportDefinitions.Parse(Spec("gift-cards"),status:"void");Assert.Empty(await Read("gift-cards",voided));
+        var refs=await Read("referrals",ExportDefinitions.Parse(Spec("referrals")));Assert.Single(refs);Assert.Equal("Synthetic Referrer",refs[0][0]);Assert.Equal("Synthetic Friend",refs[0][1]);Assert.Equal("rewarded",refs[0][3]);Assert.Equal("25.00",refs[0][4]);
+    }
 }

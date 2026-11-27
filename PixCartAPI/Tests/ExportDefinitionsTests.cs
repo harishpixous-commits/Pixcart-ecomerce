@@ -6,7 +6,7 @@ public class ExportDefinitionsTests
     [Fact]
     public void Registry_keeps_every_source_scope_permission_header_and_filter()
     {
-        Assert.Equal(12,ExportDefinitions.All.Count(s=>s.Scope=="admin")); Assert.Equal(7,ExportDefinitions.All.Count(s=>s.Scope=="seller"));
+        Assert.Equal(14,ExportDefinitions.All.Count(s=>s.Scope=="admin")); Assert.Equal(7,ExportDefinitions.All.Count(s=>s.Scope=="seller"));
         Assert.Equal("orders",Get("orders").Permission); Assert.Equal("reports",Get("order-items").Permission);
         Assert.Equal(30,Get("orders").Headers.Count); Assert.Equal(24,Get("order-items").Headers.Count);
         Assert.Equal(new[]{"sku","warehouse_code","quantity"},Get("stock").Headers.Take(3));

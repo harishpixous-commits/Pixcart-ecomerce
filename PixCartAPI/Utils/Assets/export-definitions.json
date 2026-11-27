@@ -633,6 +633,67 @@
       ]
     },
     {
+      "name": "gift-cards",
+      "label": "Gift cards",
+      "description": "Every gift card with value, balance and expiry. Only the last 4 characters of the code are shown.",
+      "scope": "admin",
+      "permission": "marketing",
+      "headers": [
+        "Card (last 4)",
+        "Issued (IST)",
+        "Expires (IST)",
+        "Status",
+        "Value",
+        "Balance",
+        "Used",
+        "Note"
+      ],
+      "date_label": "date the card was issued",
+      "statuses": [
+        [
+          "active",
+          "Active"
+        ],
+        [
+          "void",
+          "Void"
+        ]
+      ],
+      "date_optional": true
+    },
+    {
+      "name": "referrals",
+      "label": "Referrals",
+      "description": "Friends who joined with a referral code, with the reward status. Contains personal data: share only as the privacy notice allows.",
+      "scope": "admin",
+      "permission": "marketing",
+      "headers": [
+        "Referrer",
+        "Friend",
+        "Joined (IST)",
+        "Status",
+        "Reward",
+        "Rewarded (IST)"
+      ],
+      "date_label": "date the friend joined",
+      "statuses": [
+        [
+          "joined",
+          "Joined"
+        ],
+        [
+          "rewarded",
+          "Rewarded"
+        ],
+        [
+          "capped",
+          "Over the cap"
+        ]
+      ],
+      "contains_personal_data": true,
+      "date_optional": true
+    },
+    {
       "name": "orders",
       "label": "Orders",
       "description": "Your packages with totals, deductions, payout and shipping details.",

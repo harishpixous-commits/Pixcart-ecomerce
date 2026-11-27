@@ -24,6 +24,12 @@ public sealed partial class ExportsDAL
         "ai-runs" => new("ai_runs r LEFT JOIN users u ON u.id=r.created_by",
             [new("r.created_at","ist"),new("r.task"),new("COALESCE(u.name,'System')"),new("r.status"),new("r.mode"),new("r.model"),new("r.input_tokens"),new("r.output_tokens"),new("r.cache_creation_tokens"),new("r.cache_read_tokens"),new("r.latency_ms"),new("IF(r.subject_type='', '', CONCAT(r.subject_type,':',r.subject_id))"),new("r.error")],
             "r.created_at,r.id",Date:"r.created_at",Seller:"r.seller_id",Status:"r.status"),
+        "gift-cards" => new("gift_cards g",
+            [new("RIGHT(g.code,4)"),new("g.created_at","ist"),new("g.expires_at","ist"),new("g.status"),new("g.initial_paise","money"),new("g.balance_paise","money"),new("g.initial_paise-g.balance_paise","money"),new("g.note")],
+            "g.created_at,g.id",Date:"g.created_at",Status:"g.status"),
+        "referrals" => new("referrals f JOIN users a ON a.id=f.referrer_id JOIN users b ON b.id=f.referee_id",
+            [new("COALESCE(a.name,'')"),new("COALESCE(b.name,'')"),new("f.created_at","ist"),new("f.status"),new("f.reward_paise","money"),new("f.rewarded_at","ist")],
+            "f.created_at,f.id",Date:"f.created_at",Status:"f.status"),
         _ => throw new NotSupportedException("Export data plan has not been implemented: " + name),
     };
 }

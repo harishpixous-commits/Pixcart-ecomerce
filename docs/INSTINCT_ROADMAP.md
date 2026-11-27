@@ -347,3 +347,6 @@ Python 293 passed. .NET 395 passed, 0 failed (5 groups, after clean rebuild). An
 
 ## Push 114: Referrals tab on admin Growth
 Both web apps now show the referrals list (referrer, friend, status, reward, joined) from GET /api/admin/growth/referrals, which already existed with the same shape in Python and .NET. No backend change. Validated: type-check clean in both apps. Not run: browser.
+
+## Push 115: gift card and referral exports
+Two new admin exports (CSV, Excel, PDF) in both versions, needing the marketing permission: Gift cards (code shown as last 4 only, value, balance, used, expiry, status) and Referrals (referrer, friend, joined, status, reward). The Exports page lists them from the API, so no screen change. Hunt result: every admin GET with no literal caller was a false positive; no dead growth settings remain. Tests: Python exports 8 passed; .NET export tests 17 passed (count pins updated deliberately). Not run: browser.
