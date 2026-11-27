@@ -236,7 +236,23 @@ To refresh the MySQL copy from the demo PostgreSQL data: `dotnet run --project t
   on start (API set like FastAPI, page set like next.config.mjs) and web.config no longer duplicates them. Unknown
   API/media paths answer 404 `{"detail":"Not Found"}` and wrong methods 405 `{"detail":"Method Not Allowed"}` with
   Allow (`UnmatchedRouteMiddleware`; the SPA fallback no longer catches /api).
-- Next: resume the workflow (it continues at cart-checkout-orders), fix each confirmed finding with a test, ship.
+- 2026-11-27: cart-checkout-orders and payments-fees-coupons reviewed (5 of 20 done); every confirmed finding fixed
+  with tests in `Tests/CheckoutRulesTests.cs` and shipped (company commits 6ac5933 and the next one): GSTIN 400, double
+  submit placed once, save-for-later limit, deleted address in the quote, not_cancellable 400, expiry confirms every
+  attempt, checkout locks only cart and variant rows (`FOR UPDATE OF c, v`), RazorpayX payout and Shiprocket webhooks
+  applied (`BAL/WebhookTargets.cs`, registered in ServiceConfiguration), fee GST half-even, coupon shares as doubles,
+  shortfall text, non-JSON Razorpay errors. Also: `App__ExternalProviderMode=open` in the package's web.config (production
+  refuses to start without it).
+- The owner's rule (2026-11-27): never change the demo database package (test sign-ins, data, images); `db/` is exactly
+  as first delivered. For the browser suite only, the local pixcart_e2e copy sets every partner offline (the demo
+  partner "Arun Kumar" is online in the data and the delivery test signs up another "Arun Kumar").
+- Open (lower priority): formatting follows the server's culture (this machine is en-IN: amounts from a lakh up are
+  grouped 1,23,456 here but 123,456 in Python); pin the culture at start-up and run every suite.
+- Next: the remaining 15 slices. The review script is split: `review-backend-vs-python-seq-wf_7e328aa3-01c.js` (stream A,
+  resume run wf_7e328aa3-01c: continues at returns-refunds-invoices up to admin-ops) and `review-backend-vs-python-seq-b.js`
+  (stream B, admin-extras to llm-ai, start fresh) in the same scripts folder. Run one stream at a time (usage limits).
+  Fix each confirmed finding with a test, run the API suite, publish the package, run the browser suite and both crawls
+  and the order flow, then ship with update_company.sh.
 
 ### 6.6b Differential and visual checks after the fixes (2026-11-26, data refreshed with DataMigrator first)
 - `tools/parity/api_diff.py` (every GET route, 5 roles): 668 identical, 17 different, all understood: session
