@@ -103,6 +103,7 @@ export class Progress {
             <div class="min-w-0">
               <h1 class="break-words text-2xl font-semibold">Order {{ o.number }}</h1>
               <p class="text-sm text-ink-faint">Placed {{ dateTime(o.created_at) }}</p>
+              <button pcButton variant="secondary" size="sm" class="mt-2" data-testid="order-again" (click)="orderAgain(o.id)">Order again</button>
             </div>
             <div class="flex items-center justify-between gap-3 border-t border-dashed border-line pt-3 sm:flex-col sm:items-end sm:gap-1 sm:border-0 sm:pt-0">
               <p class="font-display text-2xl font-bold leading-tight tabular-nums">{{ rupees(o.grand_total) }}</p>
@@ -350,6 +351,16 @@ export class ShopOrdersIdPage {
 
   protected refreshOrder(): void {
     api<OrderDetail>(`/api/orders/${this.id()}`).then((o) => this.order.set(o)).catch(() => {});
+  }
+
+  protected async orderAgain(orderId: string): Promise<void> {
+    try {
+      const r = await api<{ added: number; skipped: { title: string; reason: string }[] }>(`/api/cart/reorder/${orderId}`, { method: "POST" });
+      this.toast.show(r.skipped.length ? `${r.added} added to your cart. Not available now: ${r.skipped.map((x) => x.title).join(", ")}` : `${r.added} item${r.added === 1 ? "" : "s"} added to your cart`, r.added ? "ok" : "error");
+      if (r.added) void this.router.navigateByUrl("/cart");
+    } catch (e) {
+      this.toast.show(e instanceof ApiError ? e.message : "Could not add these items", "error");
+    }
   }
 
   protected pdf(path: string): void {

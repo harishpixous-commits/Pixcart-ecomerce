@@ -15,6 +15,8 @@ public interface ICartBAL
     Task<string> SetAsync(Guid userId, Guid variantId, int qty, bool add = false);
 
     /// <summary>Moves a signed-out (browser) cart into the account after login; unavailable items are skipped.</summary>
+    /// <summary>"Order again": one of the shopper's own orders back into the cart; lines that cannot be bought now come back in "skipped".</summary>
+    Task<JsonObject> ReorderAsync(Guid userId, Guid orderId);
     Task<JsonObject> MergeAsync(Guid userId, IReadOnlyList<(Guid VariantId, int Qty)> items);
 
     /// <summary>The saved lines for the view.</summary>

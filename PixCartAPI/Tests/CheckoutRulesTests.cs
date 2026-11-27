@@ -801,6 +801,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Order_again_puts_the_items_of_a_past_order_back_in_the_cart()
+    {
+        var (variantId, productId, _) = await ShirtInStock("9400000310", "order-again-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000130", "Again Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 2 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.Equal(201, o.Status);
+        var oid = o.Json["order"]!["id"]!.GetValue<string>();
+        Assert.Empty((await buyer.Get("/api/cart")).Json["groups"]!.AsArray());
+        var r = await buyer.Post($"/api/cart/reorder/{oid}", new { });
+        Assert.Equal(1, r.Json["added"]!.GetValue<int>()); Assert.Empty(r.Json["skipped"]!.AsArray());
+        Assert.Equal(2, r.Json["groups"]![0]!["lines"]![0]!["qty"]!.GetValue<int>());
+        await buyer.Put("/api/cart/items", new { variant_id = variantId, qty = 0 });
+        await ApiFactory.DbExecAsync("UPDATE variants SET stock = 0 WHERE id = @variantId", new { variantId });
+        r = await buyer.Post($"/api/cart/reorder/{oid}", new { });
+        Assert.Equal(0, r.Json["added"]!.GetValue<int>()); Assert.Equal("This item is out of stock", r.Json["skipped"]![0]!["reason"]!.GetValue<string>());
+        var other = await LoginPhone("9770000131", "Other Buyer");
+        Assert.Equal(404, (await other.Post($"/api/cart/reorder/{oid}", new { })).Status);
+        Assert.Equal(404, (await buyer.Post($"/api/cart/reorder/{Guid.NewGuid()}", new { })).Status);
+    }
+
+    [Fact]
     public async Task Free_delivery_amount_can_differ_by_destination_state()
     {
         var admin = await Admin();

@@ -49,6 +49,9 @@ public class CartController(ICartBAL cart, ICurrentUser current) : ControllerBas
     public async Task<JsonObject> Merge(MergeIn body) =>
         await cart.MergeAsync(await UserId(), body.Items.Select(i => (i.VariantId, i.Qty)).ToList());
 
+    [HttpPost("reorder/{orderId}")]
+    public async Task<JsonObject> Reorder(Guid orderId) => await cart.ReorderAsync(await UserId(), orderId);
+
     [HttpGet("saved")]
     public async Task<JsonObject> Saved() => await cart.SavedViewAsync(await UserId());
 

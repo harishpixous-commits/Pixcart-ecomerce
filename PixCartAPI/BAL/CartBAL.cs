@@ -255,6 +255,26 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         return await SavedViewAsync(userId);
     }
 
+    public async Task<JsonObject> ReorderAsync(Guid userId, Guid orderId)
+    {
+        var owned = await db.QueryFirstOrDefaultAsync<int>("SELECT COUNT(*) FROM orders WHERE id = @orderId AND user_id = @userId", new { orderId, userId });
+        if (owned == 0) throw new NotFoundException("Order");
+        var lines = (await db.QueryAsync<(Guid VariantId, int Qty, string Title)>(
+            "SELECT i.variant_id AS VariantId, i.qty AS Qty, i.title AS Title FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.order_id = @orderId ORDER BY i.title", new { orderId })).ToList();
+        int added = 0; var skipped = new JsonArray(); var notices = new JsonArray();
+        foreach (var (variantId, qty, title) in lines)
+        {
+            string note;
+            try { note = await SetAsync(userId, variantId, Math.Max(1, Math.Min(qty, 10)), add: true); }
+            catch (AppException e) { skipped.Add(new JsonObject { ["title"] = title, ["reason"] = e.Message }); continue; }
+            added++;
+            if (!string.IsNullOrEmpty(note)) notices.Add($"{title}: {note}");
+        }
+        var view = await ViewAsync(userId);
+        view["added"] = added; view["skipped"] = skipped; view["notices"] = notices;
+        return view;
+    }
+
     /// <summary>Moves a signed-out (browser) cart into the account after login; unavailable items are skipped.</summary>
     public async Task<JsonObject> MergeAsync(Guid userId, IReadOnlyList<(Guid VariantId, int Qty)> items)
     {
