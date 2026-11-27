@@ -85,6 +85,16 @@ class Cashfree:
                          json={"refund_amount": float(_rupees(amount)), "refund_id": refund_id, "refund_note": note[:100]})).json()
         return {"id": str(d.get("cf_refund_id") or refund_id), "status": "processed" if d.get("refund_status") == "SUCCESS" else "pending"}
 
+    async def ping(self) -> str:
+        """One harmless authenticated call: look up an order that does not exist. 404 means the keys work."""
+        try:
+            await _http("GET", f"{self.base}/orders/pixcart_connection_test", self.timeout, headers=self._h())
+        except GatewayError as exc:
+            if "not found" in str(exc).lower() or "does not exist" in str(exc).lower():
+                return "ok"
+            raise
+        return "ok"
+
     def verify_webhook(self, headers: dict[str, str], body: bytes) -> str | None:
         h = {k.lower(): v for k, v in headers.items()}
         ts, sig = h.get("x-webhook-timestamp", ""), h.get("x-webhook-signature", "")
@@ -139,6 +149,10 @@ class PhonePe:
         d = (await _http("POST", f"{self.base}/payments/v2/refund", self.timeout, headers=await self._auth(),
                          json={"merchantRefundId": refund_id, "originalMerchantOrderId": reference, "amount": amount})).json()
         return {"id": str(d.get("refundId") or refund_id), "status": "processed" if d.get("state") == "COMPLETED" else "pending"}
+
+    async def ping(self) -> str:
+        await self._auth()
+        return "ok"
 
     def verify_webhook(self, headers: dict[str, str], body: bytes) -> str | None:
         h = {k.lower(): v for k, v in headers.items()}
@@ -196,6 +210,10 @@ class PayU:
             raise GatewayError(str(d.get("msg") or "PayU refund failed"))
         return {"id": str(d.get("request_id") or refund_id), "status": "pending"}
 
+    async def ping(self) -> str:
+        await self.attempts("pixcart_connection_test")
+        return "ok"
+
     def verify_post(self, p: dict[str, str]) -> bool:
         parts = [self.salt, p.get("status", ""), *[p.get(f"udf{i}", "") for i in range(5, 0, -1)], "", "", "", "", "",
                  p.get("email", ""), p.get("firstname", ""), p.get("productinfo", ""), p.get("amount", ""), p.get("txnid", ""), self.key]
@@ -250,6 +268,10 @@ class Stripe:
                          data={"payment_intent": payment_id, "amount": str(amount)})).json()
         return {"id": str(d.get("id") or refund_id), "status": "processed" if d.get("status") == "succeeded" else "pending"}
 
+    async def ping(self) -> str:
+        await _http("GET", f"{self.base}/balance", self.timeout, headers=self._h())
+        return "ok"
+
     def verify_webhook(self, headers: dict[str, str], body: bytes, now: float | None = None) -> str | None:
         h = {k.lower(): v for k, v in headers.items()}
         parts = dict(x.split("=", 1) for x in h.get("stripe-signature", "").split(",") if "=" in x)
@@ -269,3 +291,35 @@ class Stripe:
 
 
 ADAPTERS = {"cashfree": Cashfree, "phonepe": PhonePe, "payu": PayU, "stripe": Stripe}
+
+
+def credentials(cfg: Any, code: str) -> dict[str, str]:
+    """Plain credentials for one gateway from the effective settings (see integrations/registry.py)."""
+    g = lambda n: str(getattr(cfg, n, "") or "")  # noqa: E731
+    if code == "cashfree":
+        return {"client_id": g("cashfree_client_id"), "client_secret": g("cashfree_client_secret")}
+    if code == "phonepe":
+        return {"client_id": g("phonepe_client_id"), "client_secret": g("phonepe_client_secret"), "client_version": g("phonepe_client_version"),
+                "webhook_username": g("phonepe_webhook_username"), "webhook_password": g("phonepe_webhook_password"), "mode": g("phonepe_mode")}
+    if code == "payu":
+        return {"key": g("payu_key"), "salt": g("payu_salt"), "mode": g("payu_mode")}
+    if code == "stripe":
+        return {"secret_key": g("stripe_secret_key"), "webhook_secret": g("stripe_webhook_secret")}
+    return {}
+
+
+def configured(cfg: Any, code: str) -> bool:
+    c = credentials(cfg, code)
+    need = {"cashfree": ("client_id", "client_secret"), "phonepe": ("client_id", "client_secret"), "payu": ("key", "salt"), "stripe": ("secret_key",)}.get(code)
+    return bool(need) and all(c.get(k) for k in need)
+
+
+def enabled(cfg: Any, code: str) -> bool:
+    """Keys present and the Admin → Integrations switch on (Razorpay uses its own settings)."""
+    if code == "razorpay":
+        return bool(getattr(cfg, "online_payments", False))
+    return configured(cfg, code) and bool(getattr(cfg, f"{code}_checkout", True))
+
+
+def build(cfg: Any, code: str, timeout: float = 8.0):
+    return ADAPTERS[code](credentials(cfg, code), timeout)

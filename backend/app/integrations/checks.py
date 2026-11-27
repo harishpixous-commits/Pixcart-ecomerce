@@ -61,6 +61,36 @@ async def razorpay(cfg: Settings, **_) -> CheckResult:
     return CheckResult(True, f"Connected to Razorpay in {mode} mode.{extra}")
 
 
+async def _gateway(code: str, label: str, cfg: Settings) -> CheckResult:
+    from app.services import gateways
+
+    if not gateways.configured(cfg, code):
+        return CheckResult(False, f"Enter the {label} keys first.")
+    adapter = gateways.build(cfg, code, timeout=10.0)
+    try:
+        await adapter.ping()
+    except gateways.GatewayError as exc:
+        return CheckResult(False, f"{label} did not accept the keys: {exc}")
+    mode = "test" if adapter.sandbox else "live"
+    return CheckResult(True, f"Connected to {label} in {mode} mode.")
+
+
+async def cashfree(cfg: Settings, **_) -> CheckResult:
+    return await _gateway("cashfree", "Cashfree", cfg)
+
+
+async def phonepe(cfg: Settings, **_) -> CheckResult:
+    return await _gateway("phonepe", "PhonePe", cfg)
+
+
+async def payu(cfg: Settings, **_) -> CheckResult:
+    return await _gateway("payu", "PayU", cfg)
+
+
+async def stripe(cfg: Settings, **_) -> CheckResult:
+    return await _gateway("stripe", "Stripe", cfg)
+
+
 async def razorpayx(cfg: Settings, **_) -> CheckResult:
     if not cfg.razorpay_enabled:
         return CheckResult(False, "RazorpayX uses the Razorpay API keys. Fill them in under Razorpay payments first.")
@@ -199,6 +229,10 @@ async def firebase(cfg: Settings, **_) -> CheckResult:
 CHECKS = {
     "razorpay": razorpay,
     "razorpayx": razorpayx,
+    "cashfree": cashfree,
+    "phonepe": phonepe,
+    "payu": payu,
+    "stripe": stripe,
     "msg91": msg91,
     "email": email,
     "whatsapp": whatsapp,

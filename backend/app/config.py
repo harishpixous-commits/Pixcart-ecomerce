@@ -51,6 +51,24 @@ class Settings(BaseSettings):
     razorpay_api_base: str = "https://api.razorpay.com/v1"
     razorpay_checkout: bool = True  # Admin → Integrations switch; off hides online payment at checkout
     razorpay_checkout_url: str = "https://checkout.razorpay.com/v1/checkout.js"
+    # More payment gateways (docs/PAYMENT_GATEWAYS.md). Each has an Admin → Integrations switch; keys empty = not configured.
+    cashfree_client_id: str = ""
+    cashfree_client_secret: str = ""
+    cashfree_checkout: bool = True
+    phonepe_client_id: str = ""
+    phonepe_client_secret: str = ""
+    phonepe_client_version: str = "1"
+    phonepe_webhook_username: str = ""
+    phonepe_webhook_password: str = ""
+    phonepe_mode: str = "sandbox"
+    phonepe_checkout: bool = True
+    payu_key: str = ""
+    payu_salt: str = ""
+    payu_mode: str = "sandbox"
+    payu_checkout: bool = True
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_checkout: bool = True
     payment_window_minutes: int = 30  # unpaid online orders are cancelled after this
 
     # --- payouts (RazorpayX) ------------------------------------------------------
