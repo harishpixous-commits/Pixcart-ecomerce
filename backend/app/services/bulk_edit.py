@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ApiError
@@ -118,13 +118,25 @@ async def apply_csv(session: AsyncSession, seller: Seller, data: bytes, dry_run:
         raise ApiError("Save the file as CSV (UTF-8)", "invalid_file") from None
     reader = csv.DictReader(io.StringIO(text))
     fields = {(f or "").strip().lower() for f in (reader.fieldnames or [])}
-    if "id" not in fields or not fields & {"price", "stock", "active"}:
-        raise ApiError("The file needs an id column and at least one of price, stock, active", "invalid_file")
+    if not fields & {"id", "sku"} or not fields & {"price", "stock", "active"}:
+        raise ApiError("The file needs an id or sku column and at least one of price, stock, active", "invalid_file")
     parsed = [{(k or "").strip().lower(): (v or "").strip() for k, v in r.items()} for r in reader]
     if not parsed or len(parsed) > cfg["max_rows"]:
         raise ApiError(f"The file needs between 1 and {cfg['max_rows']} rows", "invalid_rows")
     ids: dict[int, uuid.UUID | None] = {}
+    by_sku: dict[str, list[Variant]] = {}
+    wanted = {r.get("sku", "").lstrip("'").lower() for r in parsed if not r.get("id") and r.get("sku")}
+    if wanted:  # a row with no id is matched on its SKU, among this seller's own versions
+        for sv in (await session.execute(select(Variant).where(Variant.seller_id == seller.id, func.lower(Variant.sku).in_(wanted)).with_for_update())).scalars():
+            by_sku.setdefault(sv.sku.lower(), []).append(sv)
+    ambiguous: set[int] = set()
     for n, r in enumerate(parsed, start=2):
+        if not r.get("id") and r.get("sku"):
+            hits = by_sku.get(r["sku"].lstrip("'").lower(), [])
+            ids[n] = hits[0].id if len(hits) == 1 else None
+            if len(hits) > 1:
+                ambiguous.add(n)
+            continue
         try:
             ids[n] = uuid.UUID(r.get("id", ""))
         except ValueError:
@@ -137,8 +149,11 @@ async def apply_csv(session: AsyncSession, seller: Seller, data: bytes, dry_run:
         v = rows.get(vid) if vid else None
         item: dict[str, Any] = {"row": n, "id": str(vid) if vid else r.get("id"), "sku": v.sku if v else None, "ok": False, "reason": None, "changes": {}}
         out.append(item)
+        if n in ambiguous:
+            item["reason"] = "ambiguous_sku"
+            continue
         if vid is None:
-            item["reason"] = "bad_id"
+            item["reason"] = "unknown_sku" if (not r.get("id") and r.get("sku")) else "bad_id"
             continue
         if v is None:
             item["reason"] = "not_yours"

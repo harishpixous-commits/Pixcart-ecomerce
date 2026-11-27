@@ -574,7 +574,15 @@ async def test_seller_bulk_edit_csv_round_trip(client, admin, categories):
     r = await send(f"id,price\n{vid},900\n", dry=False, who=ka)  # someone else's version
     assert r["rows"][0]["reason"] == "not_yours" and await price() == 110000
     assert (await send(f"id,price\n{vid},abc\n"))["rows"][0]["reason"] == "bad_number"
-    assert (await send("sku,price\nX,1\n"))["error"]["code"] == "invalid_file"
+    assert (await send("name,price\nX,1\n"))["error"]["code"] == "invalid_file"
+    sku = mine["sku"]
+    assert (await send(f"sku,price\n{sku},1100\n"))["rows"][0]["reason"] == "no_change"  # matched by SKU; already ₹1,100
+    r = await send(f"sku,price,stock\n{sku.lower()},1150,9\nNOPE-1,5,1\n{vid},1,1\n", dry=False)  # lower case SKU matches; an unknown SKU and an id typed in the sku column do not
+    assert r["rows"][0]["ok"] and r["rows"][0]["id"] == vid and r["rows"][0]["changes"]["price"]["after"] == 115000 and await price() == 115000
+    assert r["rows"][1]["reason"] == "unknown_sku" and r["rows"][2]["reason"] == "unknown_sku"
+    r = await send(f"id,sku,price\n{vid},{sku},1200\n,{sku},1250\n", dry=False)  # id wins when both are given; a blank id falls back to the SKU
+    assert r["rows"][0]["ok"] and r["rows"][1]["reason"] == "duplicate_row" and await price() == 120000
+    assert (await send(f"sku,price\n{sku},900\n", dry=False, who=ka))["rows"][0]["reason"] == "unknown_sku"  # another seller's SKU is never matched
     r = await send(f"id,active\n{vid},no\n", dry=False)
     assert r["changed"] == 1 and r["rows"][0]["changes"]["active"]["after"] is False
 

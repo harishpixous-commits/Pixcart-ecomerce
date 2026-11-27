@@ -209,3 +209,7 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 ## Push 75: repeating campaigns
 - A scheduled segment campaign can repeat every 7, 14 or 30 days, 1 to 12 more times (needs a first send time). After each send the next one is created as its own scheduled row, never earlier than an hour ahead; cancelling that row ends the series. The list is worked out again at each send, so people who opted out are left out. Python migration 0043, .NET V020. Campaigns form has a Repeat control in both frontends.
 - Tested: one new test each side (invalid combinations, two repeats, cancel ends it). Repeats are not counted against max_per_day when they run. Known gap unchanged: a .NET campaign claimed as "sending" that crashes mid-send is not retried.
+
+
+## Push 76: CSV bulk edit matches by SKU
+The seller CSV upload now accepts an id or sku column. A row with a blank id is matched on its SKU (case-insensitive, leading apostrophe ignored) among that seller own versions. New row reasons: unknown_sku, ambiguous_sku (SKU shared by two versions). An id still wins over a SKU; another seller SKU is never matched. The downloaded template is unchanged. Both versions, with tests (Python 2 bulk_edit tests, .NET Seller_bulk_edit_csv_round_trip). Screens type-checked only. The old "sku only file is invalid" assertion was flipped on purpose.

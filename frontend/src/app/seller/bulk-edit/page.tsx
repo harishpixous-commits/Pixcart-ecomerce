@@ -115,7 +115,7 @@ export default function BulkEdit() {
       </section>
       <section className="flex flex-col gap-3 rounded-xl bg-white p-5">
         <h2 className="font-semibold">Or edit in a spreadsheet</h2>
-        <p className="text-sm text-ink-soft">Download all your options, change price (in rupees), stock or active (yes/no), then upload the file. Leave a cell blank to keep it. Check it first, then apply.</p>
+        <p className="text-sm text-ink-soft">Download all your options, change price (in rupees), stock or active (yes/no), then upload the file. Leave a cell blank to keep it. If you add rows of your own, leave the id blank and fill the sku. Check it first, then apply.</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => downloadFile("/api/seller/variants/bulk-edit.csv", undefined, "my-versions.csv").catch(() => {})}>Download CSV</Button>
           <input type="file" accept=".csv,text/csv" aria-label="Edited CSV file" className="text-sm" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setCsv(null); }} />
