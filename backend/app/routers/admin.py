@@ -528,10 +528,15 @@ async def list_orders(
     customer_id: uuid.UUID | None = None,
     date_from: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     date_to: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    late: bool = False,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     stmt = select(Order, User.name, User.phone).join(User, User.id == Order.user_id)
+    if late:  # the same packages the dashboard counts: open and older than their seller's dispatch days
+        stmt = stmt.where(exists().where(
+            SubOrder.order_id == Order.id, SubOrder.status.in_(("placed", "confirmed", "packed")),
+            SubOrder.seller_id == Seller.id, SubOrder.created_at < utcnow() - func.make_interval(0, 0, 0, func.greatest(Seller.dispatch_days, 1))))
     if status:
         stmt = stmt.where(Order.status == status)
     if payment_method:

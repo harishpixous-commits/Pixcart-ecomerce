@@ -373,9 +373,11 @@ async def test_seller_orders_list_counts_open_orders_older_than_the_dispatch_tim
         await s.commit()
     assert (await tn.get("/api/seller/orders")).json()["late_count"] == 1
     assert (await admin.get("/api/admin/dashboard")).json()["orders_late_to_ship"] == 1  # staff see it too
+    assert (await admin.get("/api/admin/orders?late=1")).json()["total"] == 1  # and can open the list behind that number
     assert (await tn.post(f"/api/seller/orders/{sid}/confirm")).status_code == 200  # still open, still late
     assert (await tn.get("/api/seller/orders")).json()["late_count"] == 1
     assert (await tn.post(f"/api/seller/orders/{sid}/pack")).status_code == 200
     assert (await tn.post(f"/api/seller/orders/{sid}/ship", {"courier_name": "DTDC", "tracking_number": "AWB9"})).status_code == 200
     assert (await tn.get("/api/seller/orders")).json()["late_count"] == 0  # shipped: no longer waiting on the seller
     assert (await admin.get("/api/admin/dashboard")).json()["orders_late_to_ship"] == 0
+    assert (await admin.get("/api/admin/orders?late=1")).json()["total"] == 0

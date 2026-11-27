@@ -148,9 +148,9 @@ export default function AdminHome() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat label="Sellers waiting for verification" value={d.sellers_pending_review} href="/admin/sellers?status=submitted" />
           <Stat label="Listings waiting for review" value={d.products_pending_review} href="/admin/products" />
-          {!!d.orders_late_to_ship && <Stat label="Orders late to ship" value={d.orders_late_to_ship} href="/admin/orders" />}
+          {!!d.orders_late_to_ship && <Stat label="Orders late to ship" value={d.orders_late_to_ship} href="/admin/orders?late=1" />}
           <Stat label="Refunds that failed" value={d.refunds_needing_attention} href="/admin/refunds?status=failed" />
-          {k?.tickets_ack_overdue !== undefined ? <Stat label="Tickets past the 48-hour reply limit" value={k.tickets_ack_overdue} href="/admin/support?overdue=1" /> : <Stat label="Orders today" value={d.orders_today} href="/admin/orders" />}
+          {k?.tickets_ack_overdue !== undefined ? <Stat label="Tickets past the 48-hour reply limit" value={k.tickets_ack_overdue} href="/admin/support?overdue=1" /> : <Stat label="Orders today" value={d.orders_today} href="/admin/orders?late=1" />}
         </div>
       )}
       {!k ? <PageLoader /> : (

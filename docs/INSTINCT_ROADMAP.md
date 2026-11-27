@@ -269,3 +269,6 @@ New email template for `seller_ship_reminder` (editable in admin templates), bot
 
 ## Push 89: full-suite re-run and fixes
 Python: 285 passed (whole suite). .NET run in groups: all pass after two test fixes. The admin dashboard test pinned 18 keys (now 19 with `orders_late_to_ship`), and the two reminder tests counted email rows with the in-app ones (now count in-app only). Note: the .NET test runner script does not rebuild, so the Push 87 and 88 .NET tests had run against a stale build until now; they are rebuilt and pass. Not run: browser, Flutter, live gateways, deploy.
+
+## Push 90: admin orders list can show only the late ones
+`GET /api/admin/orders?late=1` lists orders with a package that is open (placed/confirmed/packed) and older than its seller dispatch days. The dashboard "Orders late to ship" number now links there, so the number and the list agree. Both versions, tested (list total 1 then 0 once shipped). The Orders page keeps the filter in the address bar like the other filters; there is no on-page control for it yet.
