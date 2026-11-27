@@ -16,6 +16,7 @@ type CampaignPreview = { opted_in: number; recipients: number; capped: boolean }
 type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string; status?: string; send_at?: string | null };
 type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
 type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
+type LoyaltyView = { enabled: boolean; members_with_points: number; points_held: number; value_held_paise: number; earned_30d: number; redeemed_30d: number; expired_30d: number };
 type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
 type Seg = { key: string; label: string; count: number };
 type Member = { id: string; name: string; phone: string | null; email: string | null; marketing_opt_in: boolean; orders: number; spent_paise: number; last_order_at: string | null };
@@ -107,6 +108,20 @@ const label = (k: string): string => {
             </table>
           </div>
         }
+      </div>
+    } @else if (tab() === "loyalty") {
+      <div class="flex flex-col gap-4" data-testid="loyalty-overview">
+        @if (loyaltyView(); as v) {
+          @if (!v.enabled) { <p class="rounded-lg bg-white p-4 text-sm">Loyalty points are switched off in Settings.</p> }
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div class="rounded-xl bg-white p-4"><p class="text-sm text-ink-soft">Members holding points</p><p class="mt-1 text-2xl font-semibold">{{ v.members_with_points }}</p></div>
+            <div class="rounded-xl bg-white p-4"><p class="text-sm text-ink-soft">Points held</p><p class="mt-1 text-2xl font-semibold">{{ v.points_held }}</p></div>
+            <div class="rounded-xl bg-white p-4"><p class="text-sm text-ink-soft">Value held (what you owe in rewards)</p><p class="mt-1 text-2xl font-semibold">{{ rupees(v.value_held_paise) }}</p></div>
+            <div class="rounded-xl bg-white p-4"><p class="text-sm text-ink-soft">Earned, last 30 days</p><p class="mt-1 text-2xl font-semibold">{{ v.earned_30d }}</p></div>
+            <div class="rounded-xl bg-white p-4"><p class="text-sm text-ink-soft">Redeemed, last 30 days</p><p class="mt-1 text-2xl font-semibold">{{ v.redeemed_30d }}</p></div>
+            <div class="rounded-xl bg-white p-4"><p class="text-sm text-ink-soft">Expired, last 30 days</p><p class="mt-1 text-2xl font-semibold">{{ v.expired_30d }}</p></div>
+          </div>
+        } @else { <p class="rounded-lg bg-white p-4 text-sm">Loading</p> }
       </div>
     } @else if (tab() === "cart-reminders") {
       <div class="flex flex-col gap-4">
@@ -225,7 +240,7 @@ export class AdminGrowthPage {
   protected readonly titles = TITLES;
   protected readonly label = label;
   protected readonly tab = signal("settings");
-  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "cart-reminders", label: "Cart reminders" }];
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }];
   protected readonly rupees = rupees;
   protected readonly date = date;
   protected readonly cards = signal<Card[]>([]);
@@ -253,12 +268,14 @@ export class AdminGrowthPage {
   protected readonly scoreOn = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
+  protected readonly loyaltyView = signal<LoyaltyView | null>(null);
   private readonly text = new Map<string, string>();
 
   constructor() {
     api<{ settings: Settings }>("/api/admin/growth/settings").then((x) => this.s.set(x.settings)).catch(quietly);
     this.loadCards();
     this.loadCampaigns();
+    api<LoyaltyView>("/api/admin/growth/loyalty").then((x) => this.loyaltyView.set(x)).catch(quietly);
     api<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] }>("/api/admin/growth/cart-reminders").then((x) => this.reminders.set(x)).catch(quietly);
     api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => this.segs.set(x.segments)).catch((e) => this.segError.set(e instanceof ApiError ? e.message : null));
     api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);

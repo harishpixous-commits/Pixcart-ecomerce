@@ -202,6 +202,23 @@ public static class LoyaltyPoints
         return sent;
     }
 
+    /// <summary>The programme at a glance for Admin → Growth → Loyalty: points members hold (what the shop owes in rewards) and the last 30 days.</summary>
+    public static async Task<JsonObject> OverviewAsync(IMySqlDapperHelper db)
+    {
+        var saved = JsonHelper.Object(await db.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(BAL.GrowthBAL.Defaults(), saved)["loyalty"]!;
+        var since = DateTime.UtcNow.AddDays(-30);
+        var members = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM (SELECT user_id FROM loyalty_ledger GROUP BY user_id HAVING SUM(points) > 0) b");
+        var held = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(b.bal), 0) FROM (SELECT SUM(points) AS bal FROM loyalty_ledger GROUP BY user_id HAVING SUM(points) > 0) b");
+        async Task<long> Total(string where) => await db.ExecuteScalarAsync<long>($"SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE created_at >= @since AND {where}", new { since });
+        return new JsonObject
+        {
+            ["enabled"] = cfg.Bool("enabled"), ["members_with_points"] = members, ["points_held"] = held, ["value_held_paise"] = held * cfg.Int("point_value_paise"),
+            ["earned_30d"] = await Total("kind = 'earn'"), ["redeemed_30d"] = -await Total("kind = 'redeem'"),
+            ["expired_30d"] = -await Total("kind = 'reverse' AND note LIKE 'Points expired%'"),
+        };
+    }
+
     public static async Task<int> ExpireOldAsync(IUnitOfWork uow, Guid userId)
     {
         var cfg = await LoyaltyCfgAsync(uow);

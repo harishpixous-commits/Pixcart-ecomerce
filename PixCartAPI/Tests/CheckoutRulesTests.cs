@@ -1133,4 +1133,22 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.True(await LoyaltyPoints.SendExpiryRemindersAsync(db, notify) >= 1); Assert.Equal(1, await Mine()); // 70 days old of 90: lapses in 20 days
         Assert.Equal(0, await LoyaltyPoints.SendExpiryRemindersAsync(db, notify)); Assert.Equal(1, await Mine()); // once per 30 day window
     }
+
+    [Fact]
+    public async Task Admin_loyalty_overview_shows_points_held_and_the_last_30_days()
+    {
+        var admin = await Admin();
+        var buyer = await LoginPhone("9770000221", "Overview Buyer");
+        var uid = Guid.Parse(buyer.Id);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, point_value_paise = 100 } })).Status);
+        var b = (await admin.Get("/api/admin/growth/loyalty")).Json;
+        foreach (var (kind, pts, note, days) in new[] { ("earn", 100, "a", 2), ("redeem", -30, "b", 1), ("earn", 50, "old", 90), ("reverse", -20, "Points expired (not used within 30 days)", 3) })
+            await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (@id, @uid, @kind, @pts, @note, @at)",
+                new { id = Guid.NewGuid(), uid, kind, pts, note, at = DateTime.UtcNow.AddDays(-days) });
+        var me = (await admin.Get("/api/admin/growth/loyalty")).Json;
+        long D(string k) => me[k]!.GetValue<long>() - b[k]!.GetValue<long>();
+        Assert.Equal(100, D("points_held")); Assert.Equal(1, D("members_with_points")); Assert.Equal(10000, D("value_held_paise")); // 100 - 30 + 50 - 20
+        Assert.Equal(100, D("earned_30d")); Assert.Equal(30, D("redeemed_30d")); Assert.Equal(20, D("expired_30d"));
+        Assert.Equal(403, (await buyer.Get("/api/admin/growth/loyalty")).Status); // staff only
+    }
 }

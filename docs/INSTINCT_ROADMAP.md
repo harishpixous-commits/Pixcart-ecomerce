@@ -333,3 +333,7 @@ New loyalty setting `expiry_reminder` (off by default; needs loyalty on and expi
 ## Push 110: Growth admin loyalty hint covers expiry and review deletion
 
 Hint text on Admin → Growth → Loyalty now explains expiry_days, expiry_reminder and that deleting a review also takes its points back. Web text only, both apps.
+
+## Push 111: admin Loyalty overview tab
+
+New `GET /api/admin/growth/loyalty` (marketing permission) and a "Loyalty" tab on Admin → Growth: members holding points, points held and their rupee value (what the shop owes in rewards), and points earned, redeemed and expired in the last 30 days. Both versions (React and Angular type-check clean); a test on each side. Not wired: no per-member list or export. Not run: browser.
