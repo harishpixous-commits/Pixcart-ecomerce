@@ -68,7 +68,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     public static long FreeThreshold(SellerModel seller, JsonObject cfg, (long Min, long Max)? bounds) =>
         bounds is null || seller.FreeShippingThresholdPaise is null ? cfg.Int("free_shipping_threshold_paise") : Math.Min(Math.Max(seller.FreeShippingThresholdPaise.Value, bounds.Value.Min), bounds.Value.Max);
 
-    public static List<SellerGroup> GroupBySeller(IEnumerable<CartLine> lines, JsonObject cfg, (long Amount, bool Waive) remote = default, (long Min, long Max)? bounds = null)
+    public static List<SellerGroup> GroupBySeller(IEnumerable<CartLine> lines, JsonObject cfg, (long Amount, bool Waive) remote = default, (long Min, long Max)? bounds = null, long? stateFee = null)
     {
         var groups = new Dictionary<Guid, SellerGroup>();
         foreach (var line in lines)
@@ -79,7 +79,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         foreach (var g in groups.Values)
         {
             var hasItems = g.ItemsTotal > 0;
-            g.ShippingFee = !hasItems || g.ItemsTotal >= FreeThreshold(g.Seller, cfg, bounds) ? 0 : cfg.Int("shipping_fee_paise");
+            g.ShippingFee = !hasItems || g.ItemsTotal >= FreeThreshold(g.Seller, cfg, bounds) ? 0 : stateFee ?? cfg.Int("shipping_fee_paise");
             // Remote-area surcharge (Admin → Growth → Shipping zones): once per seller package.
             if (hasItems && remote.Amount > 0 && !(remote.Waive && g.ShippingFee == 0)) g.ShippingFee += remote.Amount;
         }
@@ -148,11 +148,11 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     }
 
     /// <summary>The full cart view (reference: routers/cart.py _view).</summary>
-    public async Task<JsonObject> ViewAsync(Guid userId, string? pincode = null)
+    public async Task<JsonObject> ViewAsync(Guid userId, string? pincode = null, string? stateCode = null)
     {
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
-        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode), await ShippingZones.SellerFreeBoundsAsync(db)), cfg, await razorpay.OnlinePaymentsAsync(), ck, await ShippingZones.SellerFreeBoundsAsync(db));
+        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode), await ShippingZones.SellerFreeBoundsAsync(db), stateCode is null ? null : await ShippingZones.StateFeeAsync(db, stateCode)), cfg, await razorpay.OnlinePaymentsAsync(), ck, await ShippingZones.SellerFreeBoundsAsync(db));
     }
 
     /// <summary>

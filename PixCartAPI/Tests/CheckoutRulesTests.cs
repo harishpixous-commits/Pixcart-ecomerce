@@ -791,4 +791,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, cleared.Status); Assert.Null(cleared.Json["free_shipping_threshold_paise"]);
         Assert.Equal((baseShip, baseGap), await Quote());
     }
+
+    [Fact]
+    public async Task Delivery_fee_can_differ_by_destination_state()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000308", "state-fee-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000121", "State Fee Buyer");
+        var home = await AddAddress(buyer, state: "33");
+        var other = await AddAddress(buyer, state: "29", pincode: "560001");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        async Task<(long Ship, long Total)> Quote(string addr)
+        {
+            var q = (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json;
+            return (q["groups"]![0]!["shipping_fee"]!.GetValue<long>(), q["summary"]!["grand_total"]!.GetValue<long>());
+        }
+        var (baseShip, _) = await Quote(other);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = true, min_paise = 0, max_paise = 5000000 } })).Status);
+        var seller = await LoginPhone("9400000308", "Kovai Owner");
+        Assert.Equal(200, (await seller.Put("/api/seller/preferences", new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 5000000 })).Status); // the package must pay delivery
+        var (paying, _) = await Quote(other); Assert.True(paying > 0);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { enabled = true, state_fees = "29:9000, 99 : 1, junk" } })).Status);
+        Assert.Equal(paying, (await Quote(home)).Ship); // state not listed: the marketplace fee
+        var (ship, total) = await Quote(other); Assert.Equal(9000, ship);
+        var r = await buyer.Post("/api/orders", new { address_id = other, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), expected_total = total });
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal(total, r.Json["order"]!["grand_total"]!.GetValue<long>());
+    }
 }

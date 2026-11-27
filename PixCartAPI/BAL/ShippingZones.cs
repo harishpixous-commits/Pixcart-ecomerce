@@ -19,6 +19,17 @@ public static class ShippingZones
         return (min, Math.Max(min, (long)cfg.Int("max_paise")));
     }
 
+    /// <summary>"state_fees" ("33:3000, 29:5000"): the delivery fee in paise for a package that does not ship free, by destination state; null when off or not listed.</summary>
+    public static async Task<long?> StateFeeAsync(IMySqlDapperHelper db, string? stateCode)
+    {
+        var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["shipping_zones"]!;
+        if (!cfg.Bool("enabled")) return null;
+        foreach (Match m in Regex.Matches(cfg["state_fees"]?.ToString() ?? "", @"(\d{2})\s*[:=]\s*(\d{1,7})"))
+            if (m.Groups[1].Value == (stateCode ?? "")) return long.Parse(m.Groups[2].Value);
+        return null;
+    }
+
     public static async Task<(long Amount, bool Waive)> SurchargeAsync(IMySqlDapperHelper db, string? pincode)
     {
         var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));

@@ -185,3 +185,8 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 - Admin Growth "Seller free delivery" (off by default) with min_paise and max_paise. When on, a seller sets their own free-delivery amount in Settings (empty = the marketplace amount). It is kept inside the bounds when used, so tightening the bounds later takes effect at once. The cart gap hint, checkout quote and order placement all use it. Python migration 0042, .NET V019.
 - Saving the form with an unchanged stored value is accepted even when the module is off; a changed value is checked against the bounds.
 - Tested: one new test each side; Python orders, money, growth and seller test files pass (57). Screens type-checked only. The cart and product pages still show the marketplace amount in any static text.
+
+
+## Push 73: delivery fee by destination state
+- Growth "Shipping zones" has a new text setting state_fees ("33:3000, 29:5000": state code, then the fee in paise). While Shipping zones is on, a seller package that does not ship free pays that fee for an address in the listed state; other states use the marketplace fee. Used by the checkout quote and order placement. No schema change.
+- Tested: one new test each side. The cart page (no address yet) shows the marketplace fee. Free-delivery thresholds are not changed by state.

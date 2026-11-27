@@ -33,7 +33,7 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
         if (address is null || address.UserId != user.Id || address.IsDeleted) throw new NotFoundException("Address");
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
-        var view = await cart.ViewAsync(user.Id, address.Pincode);
+        var view = await cart.ViewAsync(user.Id, address.Pincode, address.StateCode);
         var summary = view["summary"]!.AsObject();
         var codFee = body.PaymentMethod == "cod" ? cfg.Int("cod_fee_paise") : 0;
         summary["cod_fee"] = codFee;
