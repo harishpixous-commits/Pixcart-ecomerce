@@ -15,7 +15,7 @@ from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
 from app.config import settings
-from app.services import gift_cards, growth, loyalty, referral, segments, seo
+from app.services import cart_reminders, gift_cards, growth, loyalty, referral, segments, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -40,6 +40,12 @@ async def put_settings(body: dict[str, Any], admin: Perm("marketing"), session: 
 async def scorecard(admin: Perm("dashboard"), session: SessionDep) -> dict:
     cfg = (await growth.get(session))["scorecard"]
     return {"enabled": cfg["enabled"], "window_days": cfg["window_days"], "items": await growth.seller_scorecard(session, cfg)}
+
+
+@router.get("/cart-reminders")
+async def cart_reminder_log(admin: Perm("marketing"), session: SessionDep) -> dict:
+    """The latest abandoned-cart reminders sent and how many customers ordered afterwards."""
+    return await cart_reminders.recent(session)
 
 
 @router.get("/segments")

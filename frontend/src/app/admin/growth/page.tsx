@@ -90,6 +90,30 @@ function GiftCardsTab() {
   );
 }
 
+type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
+
+function CartRemindersTab() {
+  const [rl, setRl] = useState<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] } | null>(null);
+  useEffect(() => { api<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] }>("/api/admin/growth/cart-reminders").then(setRl).catch(quietly); }, []);
+  if (!rl) return <PageLoader />;
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="rounded-lg bg-white p-4 text-sm" data-testid="reminder-summary">{rl.sent_30d} reminders in the last 30 days. {rl.ordered_after} of the latest {rl.items.length} customers ordered afterwards.{!rl.enabled && " Reminders are switched off in Settings."}</p>
+      <div className="overflow-x-auto rounded-xl bg-white">
+        <table className="w-full text-left text-sm" data-testid="reminders">
+          <thead><tr className="border-b border-line"><th className="p-3">Customer</th><th className="p-3">Contact</th><th className="p-3">Reminder</th><th className="p-3">Cart</th><th className="p-3">Sent</th><th className="p-3">Ordered after</th></tr></thead>
+          <tbody>
+            {rl.items.length === 0 && <tr><td className="p-4 text-ink-soft" colSpan={6}>No reminders sent yet.</td></tr>}
+            {rl.items.map((r) => (
+              <tr key={r.id} className="border-b border-line/50"><td className="p-3 font-semibold">{r.customer}</td><td className="p-3">{r.contact}</td><td className="p-3">#{r.stage}</td><td className="p-3">{rupees(r.cart_paise)}</td><td className="p-3">{date(r.sent_at)}</td><td className="p-3">{r.ordered_after ? "Yes" : "No"}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function SegmentsTab() {
   const [segs, setSegs] = useState<Seg[]>([]);
   const [key, setKey] = useState("");
@@ -173,8 +197,8 @@ export default function AdminGrowthPage() {
   return (
     <div>
       <PageHeader title="Growth" sub="Loyalty, referrals, reminders, flash sales, gift cards, seller quality and risk. Every module starts switched off." />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }]} />
-      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "segments" ? <SegmentsTab /> : tab === "scorecard-view" ? (
+      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "cart-reminders", label: "Cart reminders" }]} />
+      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "segments" ? <SegmentsTab /> : tab === "scorecard-view" ? (
         !score ? <PageLoader /> : (
           <>
             {!scoreOn && <p className="mb-3 rounded-lg bg-white p-3 text-sm text-ink-soft">The scorecard is switched off in Settings. Figures below are for information.</p>}

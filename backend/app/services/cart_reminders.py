@@ -60,3 +60,20 @@ async def send_due(session: AsyncSession) -> int:
         sent += 1
     await session.flush()
     return sent
+
+
+async def recent(session: AsyncSession, limit: int = 100) -> dict:
+    """What staff see: the latest reminders sent, and whether the customer ordered after each one."""
+    from datetime import timedelta
+
+    cfg = (await growth.get(session))["abandoned_cart"]
+    since = utcnow() - timedelta(days=30)
+    sent_30d = (await session.execute(select(func.count()).select_from(CartReminder).where(CartReminder.sent_at >= since))).scalar_one()
+    rows = (await session.execute(
+        select(CartReminder, User.name, User.phone, User.email).join(User, User.id == CartReminder.user_id).order_by(CartReminder.sent_at.desc()).limit(limit)
+    )).all()
+    items = []
+    for r, name, phone, email in rows:
+        ordered = (await session.execute(select(Order.id).where(Order.user_id == r.user_id, Order.created_at >= r.sent_at).limit(1))).first() is not None
+        items.append({"id": str(r.id), "customer": name, "contact": phone or email, "stage": r.stage, "cart_paise": r.cart_paise, "sent_at": r.sent_at.isoformat(), "ordered_after": ordered})
+    return {"enabled": cfg["enabled"], "sent_30d": sent_30d, "ordered_after": sum(1 for i in items if i["ordered_after"]), "items": items}

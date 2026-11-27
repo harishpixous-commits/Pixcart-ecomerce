@@ -270,6 +270,8 @@ async def test_abandoned_cart_reminders_follow_the_settings_and_stop_after_an_or
         await s.execute(update(CartItem).where(CartItem.user_id == uid).values(updated_at=utcnow() - timedelta(hours=1)))
         await s.commit()
     assert await run() == 0
+    log = (await admin.get("/api/admin/growth/cart-reminders")).json()
+    assert log["enabled"] and log["sent_30d"] == 2 and [i["stage"] for i in log["items"]] == [2, 1] and log["items"][0]["ordered_after"] is True and log["ordered_after"] == 2
 
 
 async def test_gift_cards_are_issued_by_staff_and_redeemed_into_a_coupon(client, admin, categories):
