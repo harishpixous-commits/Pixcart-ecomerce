@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PageHeader, Tabs } from "@/components/portal-shell";
 import { Button, ErrorNote, PageLoader, useToast } from "@/components/ui";
 import { api, ApiError, quietly } from "@/lib/api";
+import { date, rupees } from "@/lib/format";
 
 // Admin -> Growth. Same endpoints, defaults and wording as the .NET/Angular version (/api/admin/growth/*).
 // Every module ships switched off.
@@ -29,6 +30,99 @@ function label(k: string): string {
   const base = k.replace(/_paise$/, "").replace(/_percent$/, "").replace(/_/g, " ");
   const unit = k.endsWith("_paise") ? " (₹)" : k.endsWith("_percent") ? " (%)" : "";
   return base.charAt(0).toUpperCase() + base.slice(1) + unit;
+}
+
+type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
+type Seg = { key: string; label: string; count: number };
+type Member = { id: string; name: string; phone: string | null; email: string | null; marketing_opt_in: boolean; orders: number; spent_paise: number; last_order_at: string | null };
+
+function GiftCardsTab() {
+  const toast = useToast();
+  const [cards, setCards] = useState<Card[]>([]);
+  const [amount, setAmount] = useState("500");
+  const [qty, setQty] = useState("1");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => { api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => setCards(x.items)).catch(quietly); };
+  useEffect(load, []);
+  async function issue(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const quantity = Number(qty) || 1;
+      await api("/api/admin/growth/gift-cards", { method: "POST", body: { amount_paise: Math.round((Number(amount.replace(/[^\d.]/g, "")) || 0) * 100), quantity, note: note.trim() } });
+      toast(quantity > 1 ? "Gift cards issued" : "Gift card issued");
+      load();
+    } catch (x) {
+      setError(x instanceof ApiError ? x.message : "Could not issue");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function voidCard(c: Card) {
+    try { await api(`/api/admin/growth/gift-cards/${c.id}/void`, { method: "POST", body: {} }); load(); } catch (x) { setError(x instanceof ApiError ? x.message : "Could not void"); }
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <ErrorNote message={error} />
+      <form onSubmit={issue} className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-4" data-testid="gift-issue">
+        <label className="flex flex-col gap-1 text-sm"><span className="font-semibold">Amount (₹)</span><input className="rounded-lg border border-line px-3 py-2" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Gift card amount" /></label>
+        <label className="flex flex-col gap-1 text-sm"><span className="font-semibold">How many (1 to 50)</span><input className="rounded-lg border border-line px-3 py-2" value={qty} onChange={(e) => setQty(e.target.value)} aria-label="Gift card quantity" /></label>
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span className="font-semibold">Note</span><input className="rounded-lg border border-line px-3 py-2" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Gift card note" /></label>
+        <Button type="submit" loading={busy} className="self-start sm:col-span-4">Issue gift cards</Button>
+        <p className="text-sm text-ink-soft sm:col-span-4">Gift cards must be switched on in Settings first. Codes are shown here and in the list below.</p>
+      </form>
+      <div className="overflow-x-auto rounded-xl bg-white">
+        <table className="w-full text-left text-sm" data-testid="gift-cards">
+          <thead><tr className="border-b border-line"><th className="p-3">Code</th><th className="p-3">Balance</th><th className="p-3">Issued</th><th className="p-3">Expires</th><th className="p-3">Status</th><th className="p-3">Note</th><th className="p-3" /></tr></thead>
+          <tbody>
+            {cards.length === 0 && <tr><td className="p-4 text-ink-soft" colSpan={7}>No gift cards yet.</td></tr>}
+            {cards.map((c) => (
+              <tr key={c.id} className="border-b border-line/50"><td className="p-3 font-mono font-semibold">{c.code}</td><td className="p-3">{rupees(c.balance_paise)}</td><td className="p-3">{rupees(c.initial_paise)}</td><td className="p-3">{date(c.expires_at)}</td><td className="p-3">{c.status}</td><td className="p-3">{c.note}</td>
+                <td className="p-3">{c.status === "active" && <button type="button" className="font-semibold text-vermilion" onClick={() => voidCard(c)}>Void</button>}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SegmentsTab() {
+  const [segs, setSegs] = useState<Seg[]>([]);
+  const [key, setKey] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => setSegs(x.segments)).catch((e) => setErr(e instanceof ApiError ? e.message : null)); }, []);
+  async function open(k: string) {
+    setKey(k);
+    try { setMembers((await api<{ items: Member[] }>("/api/admin/growth/segments", { query: { segment: k } })).items); } catch (e) { setErr(e instanceof ApiError ? e.message : null); }
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      {err && <p className="rounded-lg bg-white p-4 text-sm text-ink-soft" data-testid="segments-off">{err}</p>}
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {segs.map((g) => (
+          <button key={g.key} type="button" onClick={() => open(g.key)} aria-pressed={key === g.key} className="rounded-xl bg-white p-4 text-left hover:ring-2 hover:ring-peacock">
+            <p className="text-2xl font-bold">{g.count}</p><p className="text-sm text-ink-soft">{g.label}</p></button>
+        ))}
+      </div>
+      {members.length > 0 && (
+        <div className="overflow-x-auto rounded-xl bg-white">
+          <table className="w-full text-left text-sm" data-testid="segment-members">
+            <thead><tr className="border-b border-line"><th className="p-3">Customer</th><th className="p-3">Contact</th><th className="p-3">Orders</th><th className="p-3">Spent</th><th className="p-3">Last order</th><th className="p-3">Marketing</th></tr></thead>
+            <tbody>
+              {members.map((m) => (
+                <tr key={m.id} className="border-b border-line/50"><td className="p-3 font-semibold">{m.name}</td><td className="p-3">{m.phone || m.email}</td><td className="p-3">{m.orders}</td><td className="p-3">{rupees(m.spent_paise)}</td><td className="p-3">{m.last_order_at ? date(m.last_order_at) : "None"}</td><td className="p-3">{m.marketing_opt_in ? "Opted in" : "No"}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdminGrowthPage() {
@@ -79,8 +173,8 @@ export default function AdminGrowthPage() {
   return (
     <div>
       <PageHeader title="Growth" sub="Loyalty, referrals, reminders, flash sales, gift cards, seller quality and risk. Every module starts switched off." />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }]} />
-      {tab === "scorecard-view" ? (
+      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }]} />
+      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "segments" ? <SegmentsTab /> : tab === "scorecard-view" ? (
         !score ? <PageLoader /> : (
           <>
             {!scoreOn && <p className="mb-3 rounded-lg bg-white p-3 text-sm text-ink-soft">The scorecard is switched off in Settings. Figures below are for information.</p>}
