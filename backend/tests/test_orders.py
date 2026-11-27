@@ -314,3 +314,37 @@ async def test_guest_cart_merge(client, admin, categories):
     assert r.status_code == 200
     lines = [line for g in r.json()["groups"] for line in g["lines"]]
     assert sorted(line["qty"] for line in lines) == [2, 10]
+
+
+async def test_order_again_puts_the_items_of_a_past_order_back_in_the_cart(client, admin, categories):
+    import uuid
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models import Variant
+    from tests.conftest import add_address, login_phone
+
+    _, _, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000130")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": str(uuid.uuid4())})
+    assert r.status_code == 201, r.text
+    oid = r.json()["order"]["id"]
+    assert (await buyer.get("/api/cart")).json()["groups"] == []  # placing the order emptied the cart
+    out = (await buyer.post(f"/api/cart/reorder/{oid}")).json()
+    assert out["added"] == 2 and out["skipped"] == []
+    qtys = sorted(i["qty"] for g in out["groups"] for i in g["lines"])
+    assert qtys == [1, 2]
+    async with SessionLocal() as s:  # the cable goes out of stock
+        await s.execute(update(Variant).where(Variant.id == uuid.UUID(cable["variants"][0]["id"])).values(stock=0))
+        await s.commit()
+    await buyer.put("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 0})
+    await buyer.put("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 0})
+    out = (await buyer.post(f"/api/cart/reorder/{oid}")).json()
+    assert out["added"] == 1 and len(out["skipped"]) == 1 and out["skipped"][0]["reason"] == "This item is out of stock"
+    other = await login_phone(client, "9770000131")
+    assert (await other.post(f"/api/cart/reorder/{oid}")).status_code == 404  # not their order
+    assert (await buyer.post(f"/api/cart/reorder/{uuid.uuid4()}")).status_code == 404

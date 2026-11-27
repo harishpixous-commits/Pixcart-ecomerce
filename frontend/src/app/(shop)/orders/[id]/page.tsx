@@ -137,6 +137,13 @@ function OrderView() {
           <div className="min-w-0">
             <h1 className="break-words text-2xl font-semibold">Order {order.number}</h1>
             <p className="text-sm text-ink-faint">Placed {dateTime(order.created_at)}</p>
+            <Button variant="secondary" size="sm" className="mt-2" onClick={async () => {
+              try {
+                const r = await api<{ added: number; skipped: { title: string; reason: string }[] }>(`/api/cart/reorder/${order.id}`, { method: "POST" });
+                toast(r.skipped.length ? `${r.added} added to your cart. Not available now: ${r.skipped.map((x) => x.title).join(", ")}` : `${r.added} item${r.added === 1 ? "" : "s"} added to your cart`, r.added ? "ok" : "error");
+                if (r.added) router.push("/cart");
+              } catch (e) { toast(e instanceof ApiError ? e.message : "Could not add these items", "error"); }
+            }}>Order again</Button>
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-dashed border-line pt-3 sm:flex-col sm:items-end sm:gap-1 sm:border-0 sm:pt-0">
             <p className="font-display text-2xl font-bold leading-tight tabular-nums">{rupees(order.grand_total)}</p>

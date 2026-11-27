@@ -226,3 +226,8 @@ The review reminder note now links to the first unreviewed product page (#review
 ## Push 79: free-delivery amount by destination state
 - Growth "Shipping zones" has a new text setting state_free_above ("33:80000, 29:150000": state code, then the item total in paise from which a seller package ships free there). While Shipping zones is on, it replaces the marketplace free-delivery amount for an address in a listed state; other states are unchanged. A seller own amount (Seller shipping) still wins. Used by the checkout quote, order placement and the cart view when an address is known. No schema change.
 - Tested: one new test each side (listed and unlisted state, lower and higher amount, switched off). The cart page with no address still shows the marketplace amount.
+
+
+## Push 80: "Order again" on an order
+- New POST /api/cart/reorder/{order_id} (signed in; own orders only, others get 404). Puts every item of the order back in the cart through the normal cart rules (stock, per-item limit, deal units), adding to what is already there. Returns the cart view plus added, skipped (title and reason, for example out of stock) and notices. An "Order again" button on the order page calls it and opens the cart. No schema change, no setting (always on).
+- Tested: one new test each side (cart refilled, out-of-stock line skipped with reason, another shopper and an unknown id get 404). Screens type-checked only; the button was not clicked in a browser.

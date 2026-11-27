@@ -119,6 +119,32 @@ async def merge_guest_cart(body: MergeIn, user: CurrentUser, session: SessionDep
     return await _view(session, user)
 
 
+@router.post("/reorder/{order_id}")
+async def reorder(order_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
+    """"Order again": puts the items of one of the shopper's own orders back in the cart. Each line follows the normal cart rules
+    (stock, per-item limit, deal units); lines that cannot be bought now are listed in "skipped" with the reason."""
+    from app.models import Order, OrderItem, SubOrder
+
+    order = await session.get(Order, order_id)
+    if order is None or order.user_id != user.id:
+        raise NotFound("Order")
+    lines = (await session.execute(
+        select(OrderItem.variant_id, OrderItem.qty, OrderItem.title).join(SubOrder, SubOrder.id == OrderItem.sub_order_id)
+        .where(SubOrder.order_id == order.id).order_by(OrderItem.title))).all()
+    added, skipped, notices = 0, [], []
+    for variant_id, qty, title in lines:
+        try:
+            note = await _set(session, user, variant_id, max(1, min(qty, 10)), add=True)
+        except ApiError as e:
+            skipped.append({"title": title, "reason": e.message})
+            continue
+        added += 1
+        if note:
+            notices.append(f"{title}: {note}")
+    await session.commit()
+    return {**(await _view(session, user)), "added": added, "skipped": skipped, "notices": notices}
+
+
 # ----------------------------------------------------------------------------- saved for later
 
 
