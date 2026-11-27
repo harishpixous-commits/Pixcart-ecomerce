@@ -1,0 +1,143 @@
+/* Admin → Growth: one switch and a few numbers per module (loyalty, referral, abandoned carts, flash sales, gift cards,
+ * seller scorecard, COD risk, SEO, bulk edit, segments), plus the seller scorecard. Mirrors /api/admin/growth/* in both
+ * the .NET and the Python versions. Modules ship OFF; saving a module changes only what is shown here. */
+
+import { ChangeDetectionStrategy, Component, inject, signal } from "@angular/core";
+import { api, ApiError, quietly } from "../../core/api";
+import { PageHeader, Tabs } from "../../shared/portal-shell";
+import { PageLoader } from "../../shared/ui/page-loader";
+import { Button, ErrorNote, Toast } from "../../shared/ui/ui";
+
+type Val = boolean | number | string | string[];
+type Section = Record<string, Val>;
+type Settings = Record<string, Section>;
+type Score = { seller_id: string; seller: string; orders: number; late: number; cancelled_by_seller: number; returned: number; late_percent: number; cancel_percent: number; return_percent: number; level: string };
+
+const TITLES: Record<string, { title: string; hint: string }> = {
+  loyalty: { title: "Loyalty points", hint: "Customers earn points on delivered orders and spend them at checkout." },
+  referral: { title: "Referral rewards", hint: "A customer shares a code; both sides get store credit after the friend's first order." },
+  abandoned_cart: { title: "Abandoned cart reminders", hint: "Remind shoppers who left items in the cart. Optional coupon in the reminder." },
+  flash_sales: { title: "Flash sales", hint: "Time-limited discounts. Sellers pick a window within these limits." },
+  gift_cards: { title: "Gift cards", hint: "Prepaid codes customers can buy and send." },
+  scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
+  cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
+  seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
+  bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
+  segments: { title: "Customer segments", hint: "VIP, new and lapsed customers for targeted offers." },
+};
+
+const label = (k: string): string => {
+  const base = k.replace(/_paise$/, "").replace(/_percent$/, "").replace(/_/g, " ");
+  const unit = k.endsWith("_paise") ? " (₹)" : k.endsWith("_percent") ? " (%)" : k.endsWith("_hours") ? "" : "";
+  return base.charAt(0).toUpperCase() + base.slice(1) + unit;
+};
+
+@Component({
+  selector: "pc-admin-growth-page",
+  imports: [PageHeader, Tabs, PageLoader, Button, ErrorNote],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: "block" },
+  template: `
+    <pc-page-header title="Growth" sub="Loyalty, referrals, reminders, flash sales, gift cards, seller quality and risk. Every module starts switched off." />
+    <pc-tabs [value]="tab()" (valueChange)="tab.set($event)" [items]="tabs" />
+    @if (tab() === "scorecard-view") {
+      @if (!score()) { <pc-page-loader /> } @else {
+        @if (!scoreOn()) { <p class="mb-3 rounded-lg bg-white p-3 text-sm text-ink-soft">The scorecard is switched off in Settings. Figures below are for information.</p> }
+        <div class="overflow-x-auto rounded-xl bg-white">
+          <table class="w-full text-left text-sm" data-testid="scorecard">
+            <thead><tr class="border-b border-line"><th class="p-3">Seller</th><th class="p-3">Orders</th><th class="p-3">Late</th><th class="p-3">Seller cancels</th><th class="p-3">Returns</th><th class="p-3">Status</th></tr></thead>
+            <tbody>
+              @for (r of score()!; track r.seller_id) {
+                <tr class="border-b border-line/50"><td class="p-3 font-semibold">{{ r.seller }}</td><td class="p-3">{{ r.orders }}</td>
+                  <td class="p-3">{{ r.late }} ({{ r.late_percent }}%)</td><td class="p-3">{{ r.cancelled_by_seller }} ({{ r.cancel_percent }}%)</td><td class="p-3">{{ r.returned }} ({{ r.return_percent }}%)</td>
+                  <td class="p-3">{{ levelText(r.level) }}</td></tr>
+              } @empty { <tr><td class="p-4 text-ink-soft" colspan="6">No orders in the window yet.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+      }
+    } @else if (!s()) {
+      <pc-page-loader />
+    } @else {
+      <form class="flex flex-col gap-4" (submit)="save($event)">
+        @if (error()) { <pc-error-note [message]="error()!" /> }
+        @for (sec of sections(); track sec) {
+          <section class="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2" [attr.data-testid]="'growth-' + sec">
+            <div class="sm:col-span-2"><h2 class="text-lg font-semibold">{{ titles[sec].title }}</h2><p class="text-sm text-ink-soft">{{ titles[sec].hint }}</p></div>
+            @for (k of keys(sec); track k) {
+              @if (kind(sec, k) === "bool") {
+                <label class="flex items-center gap-3 rounded-lg border border-line p-3"><input type="checkbox" class="h-4 w-4 accent-peacock" [checked]="s()![sec][k]" (change)="set(sec, k, $any($event.target).checked)" /> <span class="font-semibold">{{ label(k === 'enabled' ? 'Switched on' : k) }}</span></label>
+              } @else {
+                <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">{{ label(k) }}</span>
+                  <input class="rounded-lg border border-line px-3 py-2" [value]="show(sec, k)" (input)="edit(sec, k, $any($event.target).value)" [attr.aria-label]="titles[sec].title + ' ' + label(k)" /></label>
+              }
+            }
+          </section>
+        }
+        <button pcButton type="submit" [loading]="busy()" class="self-start">Save growth settings</button>
+      </form>
+    }
+  `,
+})
+export class AdminGrowthPage {
+  private readonly toast = inject(Toast);
+  protected readonly titles = TITLES;
+  protected readonly label = label;
+  protected readonly tab = signal("settings");
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }];
+  protected readonly s = signal<Settings | null>(null);
+  protected readonly score = signal<Score[] | null>(null);
+  protected readonly scoreOn = signal(false);
+  protected readonly error = signal<string | null>(null);
+  protected readonly busy = signal(false);
+  private readonly text = new Map<string, string>();
+
+  constructor() {
+    api<{ settings: Settings }>("/api/admin/growth/settings").then((x) => this.s.set(x.settings)).catch(quietly);
+    api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);
+  }
+
+  protected sections = (): string[] => Object.keys(this.s() ?? {}).filter((k) => TITLES[k]);
+  protected keys = (sec: string): string[] => Object.keys(this.s()![sec]).sort((a, b) => (a === "enabled" ? -1 : b === "enabled" ? 1 : 0));
+  protected kind = (sec: string, k: string): string => { const v = this.s()![sec][k]; return typeof v === "boolean" ? "bool" : typeof v === "number" ? "num" : Array.isArray(v) ? "list" : "text"; };
+  protected levelText = (l: string): string => ({ ok: "Good", warning: "Warning", critical: "Critical", not_enough_orders: "Not enough orders" } as Record<string, string>)[l] ?? l;
+
+  protected show(sec: string, k: string): string {
+    const key = sec + "." + k;
+    if (this.text.has(key)) return this.text.get(key)!;
+    const v = this.s()![sec][k];
+    return Array.isArray(v) ? v.join(", ") : typeof v === "number" && k.endsWith("_paise") ? String(v / 100) : String(v);
+  }
+
+  protected set(sec: string, k: string, v: Val): void {
+    this.s.update((s) => (s ? { ...s, [sec]: { ...s[sec], [k]: v } } : s));
+  }
+
+  protected edit(sec: string, k: string, raw: string): void {
+    this.text.set(sec + "." + k, raw);
+    const kind = this.kind(sec, k);
+    if (kind === "list") this.set(sec, k, raw.split(",").map((x) => x.trim()).filter(Boolean));
+    else if (kind === "num") this.set(sec, k, Math.round((Number(raw.replace(/[^\d.]/g, "")) || 0) * (k.endsWith("_paise") ? 100 : 1)));
+    else this.set(sec, k, raw);
+  }
+
+  protected async save(e: Event): Promise<void> {
+    e.preventDefault();
+    const s = this.s();
+    if (!s) return;
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const body: Settings = {};
+      for (const sec of this.sections()) body[sec] = s[sec];
+      const x = await api<{ settings: Settings }>("/api/admin/growth/settings", { method: "PUT", body });
+      this.text.clear();
+      this.s.set(x.settings);
+      this.toast.show("Growth settings saved");
+    } catch (x) {
+      this.error.set(x instanceof ApiError ? x.message : "Could not save");
+    } finally {
+      this.busy.set(false);
+    }
+  }
+}

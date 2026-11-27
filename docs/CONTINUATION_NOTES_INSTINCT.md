@@ -22,4 +22,4 @@ company repositories. Work is pushed to `instinct/*` branches only.
 - Build: 0 warnings, 0 errors at 29d57e6. Focused run of DeliveryTrackingTests: 3 of 3 pass.
 
 ## Advanced work log (see docs/INSTINCT_ROADMAP.md)
-- 27 Nov 20:34 .NET: Admin -> Growth settings + seller scorecard (IGrowthBAL/GrowthBAL, AdminGrowthController, GrowthTests). Same endpoints and defaults as Python `instinct/python-advanced` 1175d98. Guards declared with [RouteGuard] (no reference rows). Settings only; module behaviours are not wired yet in either version. Angular admin page: pending.
+- 27 Nov 20:34 .NET: Admin -> Growth settings + seller scorecard (IGrowthBAL/GrowthBAL, AdminGrowthController, GrowthTests). Same endpoints and defaults as Python `instinct/python-advanced` 1175d98. Guards declared with [RouteGuard] (no reference rows). Settings only; module behaviours are not wired yet in either version. Angular admin page: done (admin/pages/growth.page.ts, menu "Growth", type-checked with ngc; not run in a browser).

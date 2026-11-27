@@ -48,6 +48,7 @@ import { AdminRefundsPage } from "./pages/refunds.page";
 import { AdminRegionalPage } from "./pages/regional.page";
 import { AdminReportsPage } from "./pages/reports.page";
 import { AdminReturnsPage } from "./pages/returns.page";
+import { AdminGrowthPage } from "./pages/growth.page";
 import { AdminReviewsPage } from "./pages/reviews.page";
 import { AdminSellersIdPage } from "./pages/sellers-id.page";
 import { AdminSellersPage } from "./pages/sellers.page";
@@ -102,6 +103,7 @@ export const ADMIN_ROUTES: Routes = [
   { path: "regional", component: AdminRegionalPage },
   { path: "reports", component: AdminReportsPage },
   { path: "returns", component: AdminReturnsPage },
+  { path: "growth", component: AdminGrowthPage },
   { path: "reviews", component: AdminReviewsPage },
   { path: "sellers", component: AdminSellersPage },
   { path: "sellers/:id", component: AdminSellersIdPage },
