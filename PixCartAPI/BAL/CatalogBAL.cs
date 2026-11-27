@@ -20,7 +20,8 @@ public class CatalogBAL(
     ISiteBAL site,
     IRazorpayBAL razorpay,
     IEnumerable<IDealSync> dealSync,
-    IEnumerable<ISponsoredProducts> ads) : ICatalogBAL
+    IEnumerable<ISponsoredProducts> ads,
+    IMySqlDapperHelper sellerDb) : ICatalogBAL
 {
     public static readonly string[] Sorts = ["relevance", "price_asc", "price_desc", "newest", "rating", "discount", "popular"];
 
@@ -578,6 +579,8 @@ public class CatalogBAL(
                 ["state"] = IndianStates.Name(seller.PickupStateCode),
                 ["grievance_officer"] = new JsonObject { ["name"] = seller.GrievanceName, ["email"] = seller.GrievanceEmail },
                 ["dispatch_days"] = seller.DispatchDays,
+                // The amount from which this seller's package ships free (the seller's own when Seller shipping is on, else the marketplace's).
+                ["free_shipping_threshold_paise"] = CartBAL.FreeThreshold(seller, cfg, await ShippingZones.SellerFreeBoundsAsync(sellerDb)),
             },
             ["similar"] = Arr(await ProductCardsAsync(similar)),
         };

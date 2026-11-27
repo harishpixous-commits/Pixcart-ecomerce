@@ -782,6 +782,8 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         var big = await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 5000000 });
         Assert.True(big.Status == 200, big.ToString());
         Assert.Equal(5000000, big.Json["free_shipping_threshold_paise"]!.GetValue<long>());
+        async Task<long> PdpAmount() => (await buyer.Get("/api/catalog/products/own-free-shirt")).Json["seller"]!["free_shipping_threshold_paise"]!.GetValue<long>();
+        Assert.Equal(5000000, await PdpAmount()); // the product page shows this seller's own amount
         var (s1, g1) = await Quote(); Assert.True(s1 > 0 && g1 > 0, $"ship {s1} gap {g1}");
         var zero = await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 0 });
         Assert.Equal(200, zero.Status);
@@ -792,6 +794,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.True((await Quote()).Ship > 0);
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = false } })).Status);
         Assert.Equal((baseShip, baseGap), await Quote());
+        Assert.NotEqual(5000000, await PdpAmount()); // module off: the marketplace amount again
         Assert.Equal(200, (await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 0 })).Status); // the stored value sent back while off is fine
         Assert.Null((await seller.Get("/api/seller/preferences")).Json["free_shipping_bounds"]);
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = true, min_paise = 0 } })).Status);

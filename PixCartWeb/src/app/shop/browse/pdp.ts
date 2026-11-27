@@ -113,11 +113,12 @@ export class ServiceIcons {
   private readonly site = inject(SiteService).site;
   protected readonly items = computed(() => {
     const site = this.site(), p = this.p();
-    const free = this.price() >= site.free_shipping_threshold_paise;
+    const threshold = p.seller?.free_shipping_threshold_paise ?? site.free_shipping_threshold_paise;
+    const free = this.price() >= threshold;
     const items: { icon: LucideIconData; label: string; detail: string; tone?: string }[] = [
       free
         ? { icon: Truck, label: "Free delivery", detail: "No delivery charge on this item" }
-        : { icon: Truck, label: `Delivery ${rupees(site.shipping_fee_paise ?? 4000)}`, detail: `Free when you buy ${rupees(site.free_shipping_threshold_paise)} or more from this seller` },
+        : { icon: Truck, label: `Delivery ${rupees(site.shipping_fee_paise ?? 4000)}`, detail: `Free when you buy ${rupees(threshold)} or more from this seller` },
     ];
     if (site.cod_enabled) items.push({ icon: Banknote, label: "Pay on delivery", detail: "Cash, UPI or card when the parcel arrives" });
     items.push(p.return_window_days > 0

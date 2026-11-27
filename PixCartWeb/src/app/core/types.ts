@@ -212,6 +212,7 @@ export interface ProductPage {
     state: string;
     grievance_officer: { name: string; email: string };
     dispatch_days?: number;
+    free_shipping_threshold_paise?: number;
   };
   similar: ProductCard[];
   deal?: DealInfo | null;
