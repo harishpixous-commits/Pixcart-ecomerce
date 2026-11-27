@@ -20,3 +20,6 @@ company repositories. Work is pushed to `instinct/*` branches only.
   needs libaio (extract the .deb into the home folder and set LD_LIBRARY_PATH). Port 3307, user root, password pixcart,
   as the tests expect. A background MySQL dies when the shell call ends, so start it in the same command as the tests.
 - Build: 0 warnings, 0 errors at 29d57e6. Focused run of DeliveryTrackingTests: 3 of 3 pass.
+
+## Advanced work log (see docs/INSTINCT_ROADMAP.md)
+- 27 Nov 20:34 .NET: Admin -> Growth settings + seller scorecard (IGrowthBAL/GrowthBAL, AdminGrowthController, GrowthTests). Same endpoints and defaults as Python `instinct/python-advanced` 1175d98. Guards declared with [RouteGuard] (no reference rows). Settings only; module behaviours are not wired yet in either version. Angular admin page: pending.

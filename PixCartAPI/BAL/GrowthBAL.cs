@@ -1,0 +1,174 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using BAL.Interface;
+using DAL;
+using Model.DomainModel;
+using Utils;
+using Utils.Interface;
+namespace BAL;
+
+public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db) : IGrowthBAL
+{
+    public const string Key = "growth";
+    private enum K { Bool, Int, Text, List }
+    private sealed record F(string Name, object Default, K Kind, long Lo = 0, long Hi = 0);
+
+    private static readonly Dictionary<string, F[]> Schema = new()
+    {
+        ["loyalty"] = [new("enabled", false, K.Bool), new("points_per_100", 1, K.Int, 0, 100), new("point_value_paise", 100, K.Int, 1, 10000),
+            new("min_redeem_points", 100, K.Int, 1, 100000), new("max_redeem_percent", 20, K.Int, 1, 100), new("expiry_days", 365, K.Int, 0, 3650),
+            new("tier_silver_points", 500, K.Int, 0, 10000000), new("tier_gold_points", 2000, K.Int, 0, 10000000)],
+        ["referral"] = [new("enabled", false, K.Bool), new("referrer_reward_paise", 10000, K.Int, 0, 1000000), new("friend_reward_paise", 5000, K.Int, 0, 1000000),
+            new("min_order_paise", 49900, K.Int, 0, 10000000), new("max_per_user", 20, K.Int, 1, 1000)],
+        ["abandoned_cart"] = [new("enabled", false, K.Bool), new("first_reminder_hours", 4, K.Int, 1, 720), new("second_reminder_hours", 24, K.Int, 1, 720),
+            new("max_reminders", 2, K.Int, 1, 5), new("min_cart_paise", 29900, K.Int, 0, 10000000), new("offer_coupon", "", K.Text, 0, 30)],
+        ["flash_sales"] = [new("enabled", false, K.Bool), new("max_duration_hours", 48, K.Int, 1, 720), new("max_discount_percent", 70, K.Int, 1, 95), new("show_countdown", true, K.Bool)],
+        ["gift_cards"] = [new("enabled", false, K.Bool), new("min_paise", 10000, K.Int, 100, 10000000), new("max_paise", 1000000, K.Int, 100, 100000000), new("validity_days", 365, K.Int, 1, 3650)],
+        ["scorecard"] = [new("enabled", false, K.Bool), new("window_days", 30, K.Int, 7, 365), new("ship_within_hours", 48, K.Int, 1, 720),
+            new("late_warn_percent", 10, K.Int, 0, 100), new("late_critical_percent", 25, K.Int, 0, 100),
+            new("cancel_warn_percent", 5, K.Int, 0, 100), new("cancel_critical_percent", 10, K.Int, 0, 100),
+            new("return_warn_percent", 15, K.Int, 0, 100), new("return_critical_percent", 30, K.Int, 0, 100),
+            new("min_orders", 10, K.Int, 1, 10000), new("auto_suspend", false, K.Bool)],
+        ["cod_risk"] = [new("enabled", false, K.Bool), new("max_cod_paise", 500000, K.Int, 0, 100000000), new("block_after_refused", 2, K.Int, 1, 20),
+            new("new_account_max_cod_paise", 200000, K.Int, 0, 100000000), new("blocked_pincodes", Array.Empty<string>(), K.List, 0, 500)],
+        ["seo"] = [new("sitemap_enabled", true, K.Bool), new("sitemap_include_categories", true, K.Bool), new("sitemap_include_sellers", false, K.Bool)],
+        ["bulk_edit"] = [new("enabled", true, K.Bool), new("max_rows", 500, K.Int, 1, 5000)],
+        ["segments"] = [new("enabled", false, K.Bool), new("vip_spend_paise", 2500000, K.Int, 0, 1000000000), new("lapsed_days", 90, K.Int, 7, 1000), new("new_days", 30, K.Int, 1, 365)],
+    };
+
+    private static JsonNode Def(F f)
+    {
+        if (f.Kind == K.List) return new JsonArray();
+        if (f.Default is bool b) return JsonValue.Create(b);
+        if (f.Default is int i) return JsonValue.Create(i);
+        return JsonValue.Create((string)f.Default)!;
+    }
+
+    public static JsonObject Defaults()
+    {
+        var o = new JsonObject();
+        foreach (var (sec, fs) in Schema)
+        {
+            var s = new JsonObject();
+            foreach (var f in fs) s[f.Name] = Def(f);
+            o[sec] = s;
+        }
+        return o;
+    }
+
+    public async Task<JsonObject> GetAsync() => SettingsDAL.Merge(Defaults(), await settings.GetAsync(Key));
+
+    private static JsonNode Clean(string sec, F f, JsonNode? v)
+    {
+        string bad(string m) => $"{sec}.{f.Name} {m}";
+        switch (f.Kind)
+        {
+            case K.Bool:
+                if (v?.GetValueKind() is not (JsonValueKind.True or JsonValueKind.False)) throw new AppException(bad("must be on or off"), "invalid_setting");
+                return v.GetValueKind() == JsonValueKind.True;
+            case K.Int:
+                if (!SettingsJson.IsWholeNumber(v, out var n) || n < f.Lo || n > f.Hi) throw new AppException(bad($"must be a whole number between {f.Lo} and {f.Hi}"), "invalid_setting");
+                return n;
+            case K.Text:
+                if (v?.GetValueKind() != JsonValueKind.String || v.GetValue<string>().Trim().Length > f.Hi) throw new AppException(bad("is too long"), "invalid_setting");
+                return v.GetValue<string>().Trim().ToUpperInvariant();
+            default:
+                if (v is not JsonArray a || a.Count > f.Hi) throw new AppException(bad("has too many entries"), "invalid_setting");
+                var items = a.Select(x => SettingsJson.Text(x).Trim()).Where(x => x.Length == 6 && x.All(char.IsAsciiDigit)).Distinct();
+                return new JsonArray(items.Select(x => (JsonNode)x).ToArray());
+        }
+    }
+
+    public async Task<JsonObject> SettingsAsync(UserModel admin)
+    {
+        await access.RequireAsync(admin, "marketing");
+        return new JsonObject { ["settings"] = await GetAsync(), ["defaults"] = Defaults() };
+    }
+
+    public async Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body)
+    {
+        await access.RequireAsync(admin, "marketing");
+        var clean = new JsonObject();
+        foreach (var (sec, vals) in body)
+        {
+            if (!Schema.TryGetValue(sec, out var fs) || vals is not JsonObject vo) throw new AppException($"Unknown section: {sec}", "invalid_setting");
+            var c = new JsonObject();
+            foreach (var (k, v) in vo)
+            {
+                var f = fs.FirstOrDefault(x => x.Name == k) ?? throw new AppException($"Unknown setting: {sec}.{k}", "invalid_setting");
+                c[k] = Clean(sec, f, v);
+            }
+            clean[sec] = c;
+        }
+        var cur = await GetAsync();
+        JsonObject Merged(string sec) => SettingsDAL.Merge((JsonObject)cur[sec]!, clean[sec] as JsonObject ?? new());
+        if (clean.ContainsKey("loyalty"))
+        {
+            var m = Merged("loyalty");
+            if (m.Int("tier_gold_points") != 0 && m.Int("tier_gold_points") <= m.Int("tier_silver_points")) throw new AppException("Gold tier needs more points than silver", "invalid_setting");
+        }
+        if (clean.ContainsKey("scorecard"))
+        {
+            var m = Merged("scorecard");
+            foreach (var a in new[] { "late", "cancel", "return" })
+                if (m.Int(a + "_critical_percent") < m.Int(a + "_warn_percent")) throw new AppException($"{a}: critical level must not be below the warning level", "invalid_setting");
+        }
+        await using var tx = await db.BeginAsync();
+        var saved = await settings.GetForUpdateAsync(Key, tx.Transaction);
+        foreach (var (sec, vals) in clean)
+        {
+            var s = saved[sec] as JsonObject ?? new JsonObject();
+            foreach (var (k, v) in (JsonObject)vals!) s[k] = v?.DeepClone();
+            saved[sec] = s;
+        }
+        await settings.SaveAsync(Key, saved, tx.Transaction);
+        var detail = string.Join(", ", body.Select(x => x.Key).Order());
+        await audit.AuditAsync(admin, "settings.growth", "settings", "growth", detail[..Math.Min(200, detail.Length)], tx);
+        await tx.CommitAsync();
+        return await SettingsAsync(admin);
+    }
+
+    private static string Level(double pct, int warn, int crit) => crit > 0 && pct >= crit ? "critical" : warn > 0 && pct >= warn ? "warning" : "ok";
+
+    private sealed record Row(Guid SellerId, string Name, string Status, DateTime CreatedAt, DateTime? ShippedAt, string CancelledBy, long ReturnedTotal);
+
+    public async Task<JsonObject> ScorecardAsync(UserModel admin)
+    {
+        await access.RequireAsync(admin, "dashboard");
+        var cfg = (JsonObject)(await GetAsync())["scorecard"]!;
+        var now = DateTime.UtcNow;
+        var since = now.AddDays(-cfg.Int("window_days"));
+        var limit = TimeSpan.FromHours(cfg.Int("ship_within_hours"));
+        var rows = await db.QueryAsync<Row>(
+            "SELECT so.seller_id AS SellerId, s.display_name AS Name, so.status AS Status, so.created_at AS CreatedAt, so.shipped_at AS ShippedAt, " +
+            "so.cancelled_by AS CancelledBy, so.returned_total AS ReturnedTotal FROM sub_orders so JOIN sellers s ON s.id = so.seller_id " +
+            "WHERE so.created_at >= @since AND so.status <> 'pending_payment'", new { since });
+        var items = new List<(int Rank, int Orders, JsonObject Item)>();
+        foreach (var g in rows.GroupBy(r => r.SellerId))
+        {
+            int orders = 0, late = 0, cancelled = 0, returned = 0;
+            foreach (var r in g)
+            {
+                orders++;
+                if (r.Status == "cancelled") { if (r.CancelledBy == "seller") cancelled++; continue; }
+                DateTime? shipped = r.ShippedAt ?? (r.Status is "placed" or "confirmed" or "packed" ? now : null);
+                if (shipped != null && shipped - r.CreatedAt > limit) late++;
+                if (r.ReturnedTotal > 0) returned++;
+            }
+            double P(int x) => Math.Round(100.0 * x / orders, 1);
+            var levels = new[] { Level(P(late), cfg.Int("late_warn_percent"), cfg.Int("late_critical_percent")), Level(P(cancelled), cfg.Int("cancel_warn_percent"), cfg.Int("cancel_critical_percent")), Level(P(returned), cfg.Int("return_warn_percent"), cfg.Int("return_critical_percent")) };
+            var level = orders < cfg.Int("min_orders") ? "not_enough_orders" : levels.Contains("critical") ? "critical" : levels.Contains("warning") ? "warning" : "ok";
+            var rank = level switch { "critical" => 0, "warning" => 1, "ok" => 2, _ => 3 };
+            items.Add((rank, orders, new JsonObject
+            {
+                ["seller_id"] = g.Key.ToString(), ["seller"] = g.First().Name, ["orders"] = orders, ["late"] = late, ["cancelled_by_seller"] = cancelled, ["returned"] = returned,
+                ["late_percent"] = P(late), ["cancel_percent"] = P(cancelled), ["return_percent"] = P(returned), ["level"] = level,
+            }));
+        }
+        return new JsonObject
+        {
+            ["enabled"] = cfg.Bool("enabled"), ["window_days"] = cfg.Int("window_days"),
+            ["items"] = new JsonArray(items.OrderBy(x => x.Rank).ThenByDescending(x => x.Orders).Select(x => (JsonNode)x.Item).ToArray()),
+        };
+    }
+}
