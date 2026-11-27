@@ -388,3 +388,24 @@ async def test_data_export_includes_loyalty_referral_and_support_requests(client
     data = (await buyer.get("/api/account/export")).json()
     assert data["loyalty"]["balance"] == 25 and data["loyalty"]["history"][0]["note"] == "Goodwill"
     assert data["support_tickets"][0]["subject"] == "Question about things" and data["referral_code"] and data["wishlist_count"] == 0
+
+
+async def test_returned_items_take_back_their_share_of_earned_points(client, admin, categories):
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import key, setup, ship_and_deliver
+
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "points_per_100": 2}})).status_code == 200
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)  # shirt ₹1,000
+    buyer = await login_phone(client, "9600000971", name="Return Points")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 2})
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+    sub_id = o["sub_orders"][0]["id"]
+    await ship_and_deliver(tn, sub_id)
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 40  # ₹2,000 x 2 points per ₹100
+    item = (await buyer.get(f"/api/orders/{o['id']}/returnable")).json()["items"][sub_id][0]["order_item_id"]
+    rid = (await buyer.post("/api/returns", {"sub_order_id": sub_id, "items": [{"order_item_id": item, "qty": 1}], "reason": "size_fit", "refund_upi": "ret@okaxis"})).json()["id"]
+    await tn.post(f"/api/seller/returns/{rid}", {"action": "approve"})
+    assert (await tn.post(f"/api/seller/returns/{rid}", {"action": "received"})).json()["status"] == "received"
+    me = (await buyer.get("/api/loyalty")).json()
+    assert me["balance"] == 20 and me["history"][0]["kind"] == "reverse" and me["history"][0]["points"] == -20  # half the package came back

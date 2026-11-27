@@ -39,6 +39,26 @@ async def earn_for_delivery(session: AsyncSession, sub: SubOrder, user_id: uuid.
     return points
 
 
+async def reverse_for_return(session: AsyncSession, sub: SubOrder, user_id: uuid.UUID) -> int:
+    """Takes back the share of a package's earned points that matches what has been returned (call after sub.returned_total
+    is updated). Safe to call again: only the not-yet-reversed part is taken. Never takes the balance below zero (points already
+    spent stay spent). Returns the points taken."""
+    earned = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.sub_order_id == sub.id, LoyaltyEntry.kind == "earn"))).scalar_one()
+    if not earned or not sub.items_total:
+        return 0
+    target = (int(earned) * min(sub.returned_total, sub.items_total)) // sub.items_total
+    prefix = f"Returned items, package {sub.number}"
+    done = (await session.execute(select(func.coalesce(func.sum(-LoyaltyEntry.points), 0)).where(
+        LoyaltyEntry.user_id == user_id, LoyaltyEntry.kind == "reverse", LoyaltyEntry.note.like(prefix + "%")))).scalar_one()
+    balance = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id))).scalar_one()
+    take = min(target - int(done), int(balance))
+    if take <= 0:
+        return 0
+    session.add(LoyaltyEntry(user_id=user_id, kind="reverse", points=-take, note=prefix, created_at=utcnow()))
+    await session.flush()
+    return take
+
+
 REDEEM_DAYS = 30
 CODE_PREFIX = "LP"
 

@@ -227,6 +227,9 @@ async def _receive(session: AsyncSession, ret: ReturnRequest, conditions: dict[u
         if sub.warehouse_id:
             await inventory.change(session, variant, sub.warehouse_id, ri.qty, "return", reference=ret.number)
     sub.returned_total += ret.refund_amount
+    from app.services import loyalty  # takes back the matching share of the points earned on this package (no-op when none were earned)
+
+    await loyalty.reverse_for_return(session, sub, order.user_id)
     await post_return(session, sub, ret, s_value)
     ret.credit_note_number = await next_number(session, seller, "CN", utcnow())
     refund_ids: list[uuid.UUID] = []
