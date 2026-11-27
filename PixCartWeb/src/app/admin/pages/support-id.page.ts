@@ -12,7 +12,7 @@ import { Button, ErrorNote, Field, Pill, Select, Textarea, Toast } from "../../s
 const STATUS: Record<string, string> = { open: "Open", awaiting_customer: "Waiting for customer", resolved: "Resolved", closed: "Closed" };
 
 type T = {
-  id: string; number: string; subject: string; category_label: string; status: string; priority: string; is_grievance: boolean; order_id: string | null; order_number: string | null;
+  id: string; number: string; subject: string; category_label: string; csat_rating?: number | null; csat_comment?: string; status: string; priority: string; is_grievance: boolean; order_id: string | null; order_number: string | null;
   created_at: string; ack_due_at: string; resolve_due_at: string; ack_overdue: boolean; resolve_overdue: boolean; acknowledged_at: string | null;
   customer: { name: string; phone: string; email: string }; messages: { id: string; author_role: string; body: string; internal: boolean; at: string }[];
 };
@@ -87,6 +87,7 @@ const CANNED = [
                 </select>
               </pc-field>
               <p>Reply by: <span [class]="tk.ack_overdue ? 'font-semibold text-vermilion' : ''">{{ tk.acknowledged_at ? "done" : dateTime(tk.ack_due_at) }}</span></p>
+              @if (tk.csat_rating) {<p data-testid="csat">Customer rating: <span class="font-semibold">{{ tk.csat_rating }}/5</span>@if (tk.csat_comment) {, "{{ tk.csat_comment }}"}</p>}
               <p>Resolve by: <span [class]="tk.resolve_overdue ? 'font-semibold text-vermilion' : ''">{{ dateTime(tk.resolve_due_at) }}</span></p>
             </section>
           </aside>

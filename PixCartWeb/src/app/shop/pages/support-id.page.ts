@@ -13,7 +13,7 @@ import { Button, ErrorNote, Pill, Textarea } from "../../shared/ui/ui";
 
 type T = {
   id: string; number: string; subject: string; status: string; category_label: string; order_id: string | null; is_grievance: boolean; created_at: string;
-  acknowledged_at: string | null; messages: { id: string; author_role: string; body: string; at: string }[];
+  acknowledged_at: string | null; csat_rating: number | null; csat_comment: string; messages: { id: string; author_role: string; body: string; at: string }[];
 };
 
 @Component({
@@ -44,6 +44,22 @@ type T = {
             </li>
           }
         </ol>
+        @if (tk.status === "resolved" || tk.status === "closed") {
+          @if (tk.csat_rating) {
+            <p class="rounded-xl bg-white p-4 text-sm" data-testid="csat-done">You rated this {{ tk.csat_rating }}/5. Thank you for telling us.</p>
+          } @else {
+            <form (submit)="rate($event)" class="flex flex-col gap-2 rounded-xl bg-white p-4" data-testid="csat-form">
+              <p class="text-sm font-medium">How did we handle this request?</p>
+              <div class="flex gap-1" role="radiogroup" aria-label="Rating">
+                @for (n of [1, 2, 3, 4, 5]; track n) {
+                  <button type="button" role="radio" [attr.aria-checked]="stars() === n" [attr.aria-label]="n + ' out of 5'" (click)="stars.set(n)" [class]="stars() >= n ? 'h-10 w-10 rounded-lg border text-lg font-semibold border-amber-400 bg-amber-100' : 'h-10 w-10 rounded-lg border text-lg font-semibold border-line'">{{ n }}</button>
+                }
+              </div>
+              <textarea pcTextarea [value]="comment()" (input)="comment.set($any($event.target).value)" maxlength="500" placeholder="Anything you want to add (optional)" aria-label="Comment"></textarea>
+              <div><button pcButton type="submit" [loading]="busy()" [disabled]="stars() === 0">Send rating</button></div>
+            </form>
+          }
+        }
         @if (tk.status !== "closed") {
           <form (submit)="send($event)" class="flex flex-col gap-2 rounded-xl bg-white p-4">
             <pc-error-note [message]="error()" />
@@ -66,6 +82,8 @@ export class ShopSupportIdPage {
   protected readonly body = signal("");
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
+  protected readonly stars = signal(0);
+  protected readonly comment = signal("");
   protected readonly dateTime = dateTime;
 
   constructor() {
@@ -87,6 +105,18 @@ export class ShopSupportIdPage {
       this.body.set("");
     } catch (err) {
       this.error.set(err instanceof ApiError ? err.message : "Could not send");
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async rate(e: Event): Promise<void> {
+    e.preventDefault();
+    this.busy.set(true);
+    try {
+      this.t.set(await api<T>(`/api/support/tickets/${this.id()}/rating`, { method: "POST", body: { rating: this.stars(), comment: this.comment() } }));
+    } catch (err) {
+      this.error.set(err instanceof ApiError ? err.message : "Could not save your rating");
     } finally {
       this.busy.set(false);
     }

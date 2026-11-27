@@ -359,3 +359,6 @@ Seller hunt: every seller API has a caller; GET /api/seller/earnings is intentio
 
 ## Push 118: ticket satisfaction rating (backend, both versions)
 Hunt: no orphan delivery or support APIs. Gap found: customers could not rate how a request was handled. New columns on support_tickets (csat_rating 1-5, csat_comment, csat_at; Alembic 0045, .NET V022). POST /api/support/tickets/{id}/rating: owner only, only when resolved or closed, once. Ticket JSON now carries csat_rating, csat_comment, csat_at for the customer and staff. GET /api/admin/tickets/satisfaction (support permission): rated count, average, 1-5 spread, resolved-but-unrated count, latest 10 comments. Always on, no setting (it only collects feedback). Tests: Python 10 passed (support + platform), .NET 6 passed (satisfaction + route guards). Screens (customer rating form, admin summary) come in Push 119. Not run: browser.
+
+## Push 119: ticket satisfaction screens (both web apps)
+Customer ticket page: once a request is resolved or closed and unrated, a 1-5 rating with optional comment; after rating it says "You rated this N/5". Admin ticket page shows the customer rating and comment. Admin Support desk has a Customer satisfaction card (average, rated count, unrated resolved count, 5-to-1 spread, latest comments). Validated: type-check clean in both apps (tsc, ngc). Not run: browser.

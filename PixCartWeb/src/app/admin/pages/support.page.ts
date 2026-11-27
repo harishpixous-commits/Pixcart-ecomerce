@@ -12,6 +12,7 @@ import { EmptyState, Input, Pagination, Pill } from "../../shared/ui/ui";
 import { searchParam } from "../shared/admin-helpers";
 
 type T = { id: string; number: string; subject: string; category_label: string; status: string; priority: string; is_grievance: boolean; customer: string; created_at: string; ack_due_at: string; ack_overdue: boolean; resolve_overdue: boolean; acknowledged_at: string | null };
+type Csat = { rated: number; unrated_closed: number; average: number | null; spread: Record<string, number>; recent: { id: string; number: string; subject: string; rating: number; comment: string }[] };
 type D = { items: T[]; status_counts: Record<string, number>; total: number; page: number; page_size: number };
 
 const TICKET_STATUS: Record<string, string> = { open: "Open", awaiting_customer: "Waiting for customer", resolved: "Resolved", closed: "Closed" };
@@ -26,6 +27,20 @@ const TICKET_STATUS: Record<string, string> = { open: "Open", awaiting_customer:
       <pc-page-header title="Support desk" sub="E-commerce rules: acknowledge every complaint within 48 hours and resolve it within one month." [withActions]="true">
         <pc-export-button actions scope="admin" name="tickets" [status]="status() === 'all' ? undefined : status()" />
       </pc-page-header>
+      @if (csat(); as c) {
+        <section class="mb-4 rounded-xl bg-white p-4 text-sm" data-testid="csat-summary">
+          <h2 class="font-semibold">Customer satisfaction</h2>
+          @if (c.rated === 0) {
+            <p class="text-ink-soft">No ratings yet. {{ c.unrated_closed }} resolved requests are waiting for one.</p>
+          } @else {
+            <p class="mt-1">Average <span class="text-lg font-semibold">{{ c.average }}/5</span> from {{ c.rated }} ratings. {{ c.unrated_closed }} resolved requests are not rated yet.</p>
+            <p class="mt-1 text-ink-soft">{{ spreadText(c) }}</p>
+            <ul class="mt-2 flex flex-col gap-1">
+              @for (r of commented(c); track r.id) {<li><a [pcLink]="'/admin/support/' + r.id" class="font-semibold text-peacock">{{ r.number }}</a> {{ r.rating }}/5, "{{ r.comment }}"</li>}
+            </ul>
+          }
+        </section>
+      }
       <div class="flex flex-wrap items-center gap-3">
         <pc-tabs [value]="status()" (valueChange)="go({ status: $event })" [items]="tabs()" />
         <label class="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" class="accent-peacock" [checked]="overdue()" (change)="setOverdue($any($event.target).checked)" /> Not acknowledged in time</label>
@@ -71,6 +86,9 @@ export class AdminSupportPage {
   protected readonly overdue = computed(() => this.overdueParam() === "1");
   protected readonly grievance = computed(() => this.grievanceParam() === "1");
   protected readonly d = signal<D | null>(null);
+  protected readonly csat = signal<Csat | null>(null);
+  protected spreadText(c: Csat): string { return [5, 4, 3, 2, 1].map((n) => `${n}: ${c.spread[String(n)] ?? 0}`).join("   "); }
+  protected commented(c: Csat) { return c.recent.filter((r) => r.comment).slice(0, 3); }
   protected readonly q = signal("");
   protected readonly page = signal(1);
   protected readonly tabs = computed(() => {
@@ -79,6 +97,7 @@ export class AdminSupportPage {
   });
 
   constructor() {
+    api<Csat>("/api/admin/tickets/satisfaction").then((x) => this.csat.set(x)).catch(quietly);
     let t: ReturnType<typeof setTimeout> | undefined;
     effect(() => {
       const status = this.status(), overdue = this.overdue(), grievance = this.grievance(), q = this.q(), page = this.page();
