@@ -59,7 +59,7 @@ type Result = { dry_run: boolean; changed: number; skipped: number; rows: Row[] 
       </section>
       <section class="flex flex-col gap-3 rounded-xl bg-white p-5">
         <h2 class="font-semibold">Or edit in a spreadsheet</h2>
-        <p class="text-sm text-ink-soft">Download all your options, change price (in rupees), stock or active (yes/no), then upload the file. Leave a cell blank to keep it. Check it first, then apply.</p>
+        <p class="text-sm text-ink-soft">Download all your options, change price (in rupees), stock or active (yes/no), then upload the file. Leave a cell blank to keep it. If you add rows of your own, leave the id blank and fill the sku. Check it first, then apply.</p>
         <div class="flex flex-wrap items-center gap-2">
           <button pcButton variant="secondary" (click)="downloadCsv()">Download CSV</button>
           <input type="file" accept=".csv,text/csv" aria-label="Edited CSV file" class="text-sm" (change)="pickFile($event)" />

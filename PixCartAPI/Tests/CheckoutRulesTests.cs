@@ -554,7 +554,14 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         r = await tn.Post("/api/seller/variants/bulk-edit.csv?dry_run=false", Up($"id,price\n{Guid.NewGuid()},900\n")); // not one of this seller's versions
         Assert.Equal("not_yours", r.Json["rows"]![0]!["reason"]!.GetValue<string>()); Assert.Equal(110000, await Price());
         Assert.Equal("bad_number", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up($"id,price\n{vid},abc\n"))).Json["rows"]![0]!["reason"]!.GetValue<string>());
-        Assert.Equal("invalid_file", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up("sku,price\nX,1\n"))).ErrorCode);
+        Assert.Equal("invalid_file", (await tn.Post("/api/seller/variants/bulk-edit.csv", Up("name,price\nX,1\n"))).ErrorCode);
+        var sku = line.Split(',')[1];
+        string[] Reasons(Res res) => res.Json["rows"]!.AsArray().Select(x => x!["reason"]?.GetValue<string>() ?? "ok").ToArray();
+        Assert.Equal(["no_change"], Reasons(await tn.Post("/api/seller/variants/bulk-edit.csv", Up($"sku,price\n{sku},1100\n")))); // matched on SKU
+        r = await tn.Post("/api/seller/variants/bulk-edit.csv?dry_run=false", Up($"sku,price,stock\n{sku.ToLowerInvariant()},1150,9\nNOPE-1,5,1\n{vid},1,1\n"));
+        Assert.Equal(["ok", "unknown_sku", "unknown_sku"], Reasons(r)); Assert.Equal(vid.ToString(), r.Json["rows"]![0]!["id"]!.GetValue<string>()); Assert.Equal(115000, await Price());
+        r = await tn.Post("/api/seller/variants/bulk-edit.csv?dry_run=false", Up($"id,sku,price\n{vid},{sku},1200\n,{sku},1250\n"));
+        Assert.Equal(["ok", "duplicate_row"], Reasons(r)); Assert.Equal(120000, await Price());
     }
 
     [Fact]

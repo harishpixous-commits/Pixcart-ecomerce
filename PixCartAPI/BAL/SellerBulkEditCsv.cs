@@ -60,7 +60,7 @@ public partial class SellerProductsBAL
         catch (ArgumentException) { throw new AppException("Save the file as CSV (UTF-8)", "invalid_file", 400); }
         var table = ParseCsv(text);
         var head = table.Count > 0 ? table[0].Select(h => h.Trim().ToLowerInvariant()).ToList() : [];
-        if (!head.Contains("id") || !head.Intersect(["price", "stock", "active"]).Any()) throw new AppException("The file needs an id column and at least one of price, stock, active", "invalid_file", 400);
+        if (!head.Intersect(["id", "sku"]).Any() || !head.Intersect(["price", "stock", "active"]).Any()) throw new AppException("The file needs an id or sku column and at least one of price, stock, active", "invalid_file", 400);
         var body = table.Skip(1).ToList();
         if (body.Count < 1 || body.Count > max) throw new AppException($"The file needs between 1 and {max} rows", "invalid_rows", 400);
         string Cell(List<string> r, string name) { var i = head.IndexOf(name); return i >= 0 && i < r.Count ? r[i].Trim() : ""; }
@@ -68,15 +68,23 @@ public partial class SellerProductsBAL
         await using var tx = await db.BeginAsync();
         await rateLimit.RateLimitAsync($"bulk-edit-csv:{s.Id}", 60, 3600, tx);
         var found = new Dictionary<Guid, VariantModel>();
-        foreach (var r in body) if (Guid.TryParse(Cell(r, "id"), out var g) && !found.ContainsKey(g) && await dal.VariantAsync(s.Id, g, tx) is { } v) found[g] = v;
+        // A row with no id is matched on its SKU, among this seller's own versions (a SKU shared by two versions is refused).
+        var skuHit = new Dictionary<int, List<Guid>>();
+        for (var k = 0; k < body.Count; k++)
+            if (Cell(body[k], "id") == "" && Cell(body[k], "sku") != "")
+                skuHit[k] = (await tx.QueryAsync<Guid>("SELECT id FROM variants WHERE seller_id = @sid AND LOWER(sku) = @sku LIMIT 2", new { sid = s.Id, sku = Cell(body[k], "sku").TrimStart('\'').ToLowerInvariant() })).ToList();
+        string IdOf(int k) => skuHit.TryGetValue(k, out var h) && h.Count == 1 ? h[0].ToString() : Cell(body[k], "id");
+        for (var k = 0; k < body.Count; k++) if (Guid.TryParse(IdOf(k), out var g) && !found.ContainsKey(g) && await dal.VariantAsync(s.Id, g, tx) is { } v) found[g] = v;
         var busy = await deals.ActiveVariantIdsAsync(found.Keys.ToList());
         var rows = new JsonArray(); int changed = 0, n = 1; var seen = new HashSet<Guid>(); var touched = new HashSet<Guid>();
         foreach (var r in body)
         {
             n++;
-            var item = new JsonObject { ["row"] = n, ["id"] = Cell(r, "id"), ["sku"] = null, ["ok"] = false, ["reason"] = null, ["changes"] = new JsonObject() };
+            var ri = n - 2; var bySku = Cell(r, "id") == "" && Cell(r, "sku") != "";
+            var item = new JsonObject { ["row"] = n, ["id"] = IdOf(ri), ["sku"] = null, ["ok"] = false, ["reason"] = null, ["changes"] = new JsonObject() };
             rows.Add(item);
-            if (!Guid.TryParse(Cell(r, "id"), out var vid)) { item["reason"] = "bad_id"; continue; }
+            if (bySku && skuHit[ri].Count > 1) { item["reason"] = "ambiguous_sku"; continue; }
+            if (!Guid.TryParse(IdOf(ri), out var vid)) { item["reason"] = bySku ? "unknown_sku" : "bad_id"; continue; }
             item["id"] = vid.ToString();
             if (!found.TryGetValue(vid, out var v)) { item["reason"] = "not_yours"; continue; }
             item["sku"] = v.Sku;
