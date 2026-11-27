@@ -22,7 +22,7 @@ type Member = { id: string; name: string; phone: string | null; email: string | 
 type Score = { seller_id: string; seller: string; orders: number; late: number; cancelled_by_seller: number; returned: number; late_percent: number; cancel_percent: number; return_percent: number; level: string };
 
 const TITLES: Record<string, { title: string; hint: string }> = {
-  loyalty: { title: "Loyalty points", hint: "Customers earn points on delivered orders and spend them at checkout." },
+  loyalty: { title: "Loyalty points", hint: "Customers earn points on delivered orders and spend them at checkout. Optional extras (all off until set): bonus percent for silver and gold, free delivery for silver or gold (silver_free_delivery, gold_free_delivery), extra points on a first delivered order (first_order_points), and points for a published review of something they received (review_points, with review_min_chars as the shortest review that counts). Hiding a review takes its points back." },
   referral: { title: "Referral rewards", hint: "A customer shares a code; both sides get store credit after the friend's first order." },
   abandoned_cart: { title: "Abandoned cart reminders", hint: "Remind shoppers who left items in the cart. Optional coupon in the reminder." },
   flash_sales: { title: "Flash sales", hint: "Time-limited discounts. Sellers pick a window within these limits." },
