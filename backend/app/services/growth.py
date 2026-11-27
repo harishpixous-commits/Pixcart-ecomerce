@@ -42,7 +42,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "seo": {"sitemap_enabled": (True, "bool", 0, 0), "sitemap_include_categories": (True, "bool", 0, 0), "sitemap_include_sellers": (False, "bool", 0, 0)},
     "bulk_edit": {"enabled": (True, "bool", 0, 0), "max_rows": (500, "int", 1, 5000)},
     "campaigns": {"enabled": (False, "bool", 0, 0), "max_recipients": (500, "int", 1, 5000), "max_per_day": (3, "int", 1, 20)},
-    "shipping_zones": {"enabled": (False, "bool", 0, 0), "remote_prefixes": ("", "text", 0, 300), "remote_surcharge_paise": (6000, "int", 0, 100000), "state_fees": ("", "text", 0, 400), "waive_when_free": (True, "bool", 0, 0)},
+    "shipping_zones": {"enabled": (False, "bool", 0, 0), "remote_prefixes": ("", "text", 0, 300), "remote_surcharge_paise": (6000, "int", 0, 100000), "state_fees": ("", "text", 0, 400), "state_free_above": ("", "text", 0, 400), "waive_when_free": (True, "bool", 0, 0)},
     "saved_searches": {"enabled": (False, "bool", 0, 0), "max_per_user": (10, "int", 1, 50), "min_hours_between_alerts": (24, "int", 1, 720)},
     "review_reminders": {"enabled": (False, "bool", 0, 0), "after_days": (5, "int", 1, 60), "max_age_days": (30, "int", 1, 180)},
     "seller_shipping": {"enabled": (False, "bool", 0, 0), "min_paise": (0, "int", 0, 10000000), "max_paise": (500000, "int", 0, 10000000)},
@@ -270,6 +270,19 @@ async def seller_free_bounds(session: AsyncSession) -> tuple[int, int] | None:
     if not cfg["enabled"]:
         return None
     return int(cfg["min_paise"]), max(int(cfg["min_paise"]), int(cfg["max_paise"]))
+
+
+async def with_state_threshold(session: AsyncSession, cfg: dict, state_code: str) -> dict:
+    """Admin -> Growth -> Shipping zones -> state_free_above ("33:80000, 29:150000": state code, then the item total in paise from which a
+    package ships free there): a copy of the marketplace settings with that threshold. A seller's own threshold (Seller shipping) still wins.
+    The settings unchanged while switched off or when the state is not listed."""
+    zc = (await get(session))["shipping_zones"]
+    if not zc["enabled"]:
+        return cfg
+    for code, paise in re.findall(r"(\d{2})\s*[:=]\s*(\d{1,9})", zc["state_free_above"] or ""):
+        if code == (state_code or ""):
+            return {**cfg, "free_shipping_threshold_paise": int(paise)}
+    return cfg
 
 
 async def state_fee(session: AsyncSession, state_code: str) -> int | None:

@@ -1034,6 +1034,29 @@ async def test_delivery_fee_can_differ_by_destination_state(client, admin, categ
     assert (await quote(other))["summary"]["shipping_total"] == 4000  # switched off: the marketplace fee again
 
 
+async def test_free_delivery_amount_can_differ_by_destination_state(client, admin, categories):
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, _, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000122")
+    home = await add_address(buyer, state="33")
+    other = await add_address(buyer, state="29", pincode="560001")
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})  # 299 rupees: pays delivery
+
+    async def ship(addr):
+        return (await buyer.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})).json()["summary"]["shipping_total"]
+
+    assert await ship(other) == 4000
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": True, "state_free_above": "29:20000, 99 : 1, junk"}})).status_code == 200
+    assert await ship(home) == 4000  # state not listed: the marketplace amount
+    assert await ship(other) == 0  # 299 rupees is above 200 rupees in that state
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"state_free_above": "29:90000"}})).status_code == 200
+    assert await ship(other) == 4000  # a higher amount there than the marketplace's
+    assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": False}})).status_code == 200
+    assert await ship(other) == 4000
+
+
 async def test_a_repeating_campaign_makes_the_next_one_after_each_send_and_cancel_ends_it(client, admin):
     import uuid
     from datetime import timedelta

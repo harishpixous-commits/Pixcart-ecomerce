@@ -309,6 +309,7 @@ async def place_order(
 
     from app.services import growth as growth_svc
 
+    cfg = await growth_svc.with_state_threshold(session, cfg, address.state_code)
     groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode), await growth_svc.seller_free_bounds(session), await growth_svc.state_fee(session, address.state_code))
     now = utcnow()
     is_online = payment_method == "online"
