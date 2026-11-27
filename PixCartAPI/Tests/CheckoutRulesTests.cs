@@ -110,6 +110,46 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Abandoned_cart_reminders_follow_the_settings_and_stop_after_an_order()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000401", "cart-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000401", "Cart Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        var uid = Guid.Parse(buyer.Id);
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        Task Age(int hours) => ApiFactory.DbExecAsync("UPDATE cart_items SET updated_at = @t WHERE user_id = @uid", new { t = Now.AddHours(-hours), uid });
+        Task<int> Run() => CartReminders.SendDueAsync(db, notify);
+        async Task<long> Count() => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'abandoned_cart'", new { uid });
+
+        await Age(30);
+        Assert.Equal(0, await Run());   // off by default
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { abandoned_cart = new { enabled = true, min_cart_paise = 100, offer_coupon = "COMEBACK" } })).Status);
+        Assert.Equal(0, await Run());   // not opted in to marketing messages
+        await ApiFactory.DbExecAsync("UPDATE users SET marketing_opt_in = 1 WHERE id = @uid", new { uid });
+        await Age(1);
+        Assert.Equal(0, await Run());   // too fresh
+        await Age(5);
+        Assert.Equal(1, await Run()); Assert.Equal(0, await Run());   // stage 1 once
+        Assert.True(await Count() >= 1);
+        var body = await db.ExecuteScalarAsync<string>("SELECT body FROM notifications WHERE user_id = @uid AND event = 'abandoned_cart' LIMIT 1", new { uid });
+        Assert.Contains("COMEBACK", body);
+        await Age(30);
+        Assert.Equal(1, await Run()); Assert.Equal(0, await Run());   // stage 2 after 24 hours, no third (max_reminders 2)
+        // an order after the last change ends it
+        await Age(40);
+        var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(r.Status == 201, r.ToString());
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        await Age(1);
+        Assert.Equal(0, await Run());
+    }
+
+    [Fact]
     public async Task A_wrong_gstin_is_refused_with_its_reason_and_a_right_one_is_kept()
     {
         var admin = await Admin();

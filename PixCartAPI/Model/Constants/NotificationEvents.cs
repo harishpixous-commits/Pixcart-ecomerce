@@ -28,6 +28,11 @@ public static class NotificationEvents
                 ["inapp"] = ("Delivered", "{{item}} was delivered. Tell others what you think by writing a review."),
                 ["email"] = ("Delivered: {{item}}", "Hi {{name}},\n\nYour package was delivered. If something is wrong, you can request a return until {{return_by}}.\n\n{{link}}"),
             },
+            ["abandoned_cart"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
+                ["email"] = ("{{item}} is still in your {{brand}} cart", "Hi {{name}},\n\n{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}\n\nFinish your order: {{link}}"),
+            },
             ["order_cancelled"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("Order cancelled", "{{item}} was cancelled: {{reason}}."),

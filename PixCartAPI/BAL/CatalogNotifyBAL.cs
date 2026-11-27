@@ -23,6 +23,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["seller_new_question"] = ("New customer question", "A shopper asked about {{item}}: {{question}}"),
         ["order_placed"] = ("Order placed", "Your order {{order_number}} for {{amount}} is placed."),
         ["seller_new_order"] = ("New order {{order_number}}", "{{items}} for {{amount}}. Confirm it from your orders page."),
+        ["abandoned_cart"] = ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
         ["order_cancelled"] = ("Order cancelled", "{{item}} was cancelled: {{reason}}."),
         ["seller_order_cancelled"] = ("Order {{order_number}} cancelled", "The customer cancelled {{order_number}}. Do not ship it."),
         ["refund_processed"] = ("Refund started", "We have refunded {{amount}} for order {{order_number}}. It reaches your account in 5 to 7 working days."),
