@@ -1114,4 +1114,23 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { flash_sales = new { show_countdown = false } })).Status);
         Assert.False(await Shown());
     }
+
+    [Fact]
+    public async Task Points_expiry_reminder_goes_out_once_per_window()
+    {
+        var admin = await Admin();
+        var buyer = await LoginPhone("9770000211", "Reminder Buyer");
+        var uid = Guid.Parse(buyer.Id);
+        await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (@id, @uid, 'earn', 15, 'aging', @at)",
+            new { id = Guid.NewGuid(), uid, at = DateTime.UtcNow.AddDays(-70) });
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        async Task<long> Mine() => await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'points_expiring' AND channel = 'inapp'", new { uid });
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, expiry_days = 90 } })).Status);
+        Assert.Equal(0, await LoyaltyPoints.SendExpiryRemindersAsync(db, notify)); Assert.Equal(0, await Mine()); // reminder switched off
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { expiry_reminder = true } })).Status);
+        Assert.True(await LoyaltyPoints.SendExpiryRemindersAsync(db, notify) >= 1); Assert.Equal(1, await Mine()); // 70 days old of 90: lapses in 20 days
+        Assert.Equal(0, await LoyaltyPoints.SendExpiryRemindersAsync(db, notify)); Assert.Equal(1, await Mine()); // once per 30 day window
+    }
 }

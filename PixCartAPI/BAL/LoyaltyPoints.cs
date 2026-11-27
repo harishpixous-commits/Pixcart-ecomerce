@@ -179,6 +179,29 @@ public static class LoyaltyPoints
     public static async Task<long> ExpiringSoonAsync(IMySqlDapperHelper db, Guid userId, JsonObject cfg) =>
         !cfg.Bool("enabled") || cfg.Int("expiry_days") <= 0 ? 0 : await LapsingAsync(db, userId, DateTime.UtcNow.AddDays(-cfg.Int("expiry_days") + ExpiryWarnDays));
 
+    /// <summary>One in-app note and email per member whose points lapse within ExpiryWarnDays (expiry_reminder, off by default). Not sent again
+    /// while the last one is less than that many days old. Returns the notes sent.</summary>
+    public static async Task<int> SendExpiryRemindersAsync(IMySqlDapperHelper db, ICatalogNotifyBAL notify, int batch = 200)
+    {
+        var saved = JsonHelper.Object(await db.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(BAL.GrowthBAL.Defaults(), saved)["loyalty"]!;
+        if (!cfg.Bool("enabled") || cfg.Int("expiry_days") <= 0 || !cfg.Bool("expiry_reminder")) return 0;
+        var now = DateTime.UtcNow;
+        var soon = now.AddDays(-cfg.Int("expiry_days") + ExpiryWarnDays);
+        var users = (await db.QueryAsync<Guid>("SELECT DISTINCT user_id FROM loyalty_ledger WHERE points > 0 AND created_at <= @soon LIMIT @batch", new { soon, batch })).ToList();
+        var sent = 0;
+        foreach (var uid in users)
+        {
+            var points = await ExpiringSoonAsync(db, uid, cfg);
+            if (points <= 0) continue;
+            var recent = await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'points_expiring' AND channel = 'inapp' AND created_at > @since", new { uid, since = now.AddDays(-ExpiryWarnDays) });
+            if (recent > 0) continue;
+            await notify.NotifyUserAsync(uid, "points_expiring", new Dictionary<string, string> { ["points"] = points.ToString(), ["days"] = ExpiryWarnDays.ToString() }, "/rewards");
+            sent++;
+        }
+        return sent;
+    }
+
     public static async Task<int> ExpireOldAsync(IUnitOfWork uow, Guid userId)
     {
         var cfg = await LoyaltyCfgAsync(uow);

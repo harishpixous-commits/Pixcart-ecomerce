@@ -99,6 +99,9 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
         // Review reminders: one in-app note per delivered package after a few days (Admin → Growth; off unless switched on).
         new("review_reminders", async sp => await ReviewReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromHours(1))),
+        // Points expiry reminder: one in-app note and email per member whose points lapse within 30 days (Admin → Growth → Loyalty → expiry_reminder; off unless switched on).
+        new("points_expiry", async sp => await LoyaltyPoints.SendExpiryRemindersAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
+            Every(TimeSpan.FromHours(6))),
         // Saved searches: tell shoppers about new matching products (Admin → Growth; off unless switched on).
         new("saved_searches", async sp => await SavedSearches.SendMatchesAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromMinutes(30))),

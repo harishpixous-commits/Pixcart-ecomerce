@@ -43,6 +43,11 @@ public static class NotificationEvents
                 ["inapp"] = ("How was {{item}}?", "Tell other shoppers what you think. It takes a minute."),
                 ["email"] = ("How was {{item}}?", "Hi {{name}},\n\nTell other shoppers what you think of {{item}}. It takes a minute.\n\n{{link}}"),
             },
+            ["points_expiring"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("{{points}} points expire soon", "{{points}} of your loyalty points expire within {{days}} days. Use them at checkout."),
+                ["email"] = ("{{points}} points expire soon", "Hi {{name}},\n\n{{points}} of your loyalty points expire within {{days}} days. Use them on your next order.\n\n{{link}}"),
+            },
             ["saved_search_match"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("New for your search: {{query}}", "{{item}}{{more}} just arrived."),

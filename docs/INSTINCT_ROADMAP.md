@@ -325,3 +325,7 @@ Admin → Growth → Flash sales → show_countdown (on by default) now decides 
 ## Push 108: home "Today's deals" rail honours show_countdown
 
 Completes Push 106: the home deals rail hides its ticking clock too when Admin → Growth → Flash sales → show_countdown is off. Web apps only (React and Angular type-check clean); the data was already served. Not run: browser.
+
+## Push 109: points expiry reminder (in-app and email)
+
+New loyalty setting `expiry_reminder` (off by default; needs loyalty on and expiry_days above 0). A job every 6 hours sends each member whose points lapse within 30 days one in-app note and one email ("N points expire soon", editable template `points_expiring`, links to Rewards), not again until 30 days have passed. Both versions; a test on each side. Not run: real email delivery, browser. Admin Growth page shows the new switch from the settings schema; its hint text is not updated.
