@@ -319,6 +319,9 @@ async def write_review(slug: str, body: ReviewIn, user: CurrentUser, session: Se
         r.media_status = "pending" if rcfg["media_need_approval"] else "published"
     await session.flush()
     await refresh_ratings(session, p.id)
+    from app.services import loyalty as loyalty_svc  # review bonus points (off unless set in Admin -> Growth -> Loyalty)
+
+    await loyalty_svc.award_review(session, r)
     await session.commit()
     return {"ok": True, "status": r.status, "media_status": r.media_status, "held_for_check": flagged}
 

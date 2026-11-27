@@ -119,6 +119,26 @@ async def restore_expired(session: AsyncSession, user_id: uuid.UUID) -> int:
     return back
 
 
+async def award_review(session: AsyncSession, review) -> int:
+    """Points for a published review of a package the member received (Admin -> Growth -> Loyalty: review_points, 0 = off).
+    Once per delivered package (the ledger allows one 'adjust' per package), and only for a review of at least review_min_chars.
+    Returns the points given."""
+    cfg = (await growth.get(session))["loyalty"]
+    if not cfg["enabled"] or not cfg["review_points"] or review.status != "published" or not review.verified or review.sub_order_id is None:
+        return 0
+    if len((review.body or "").strip()) < cfg["review_min_chars"]:
+        return 0
+    if (await session.execute(select(LoyaltyEntry.id).where(LoyaltyEntry.sub_order_id == review.sub_order_id, LoyaltyEntry.kind == "adjust"))).first():
+        return 0
+    from app.models import Product
+
+    product = await session.get(Product, review.product_id)
+    session.add(LoyaltyEntry(user_id=review.user_id, sub_order_id=review.sub_order_id, kind="adjust", points=cfg["review_points"],
+                             note=f"Review bonus: {product.title if product else 'product'}"[:200], created_at=utcnow()))
+    await session.flush()
+    return cfg["review_points"]
+
+
 def tier_free_delivery(cfg: dict, tier: str) -> bool:
     """Whether this tier carries free delivery (gold keeps what silver gets)."""
     return (tier == "gold" and bool(cfg["gold_free_delivery"] or cfg["silver_free_delivery"])) or (tier == "silver" and bool(cfg["silver_free_delivery"]))

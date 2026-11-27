@@ -242,6 +242,10 @@ async def moderate_review(review_id: uuid.UUID, action: Literal["publish", "hide
         r.report_count = 0
     await session.flush()
     await refresh_ratings(session, r.product_id)
+    if action == "publish":
+        from app.services import loyalty as loyalty_svc
+
+        await loyalty_svc.award_review(session, r)
     audit(session, admin, f"review.{action}", "review", r.id)
     await session.commit()
     return {"ok": True, "status": r.status, "media_status": r.media_status}

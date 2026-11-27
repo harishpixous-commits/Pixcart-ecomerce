@@ -1278,3 +1278,27 @@ async def test_tier_free_delivery_waives_shipping_for_silver_and_gold_members(cl
     assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "silver_free_delivery": False, "gold_free_delivery": True}})).status_code == 200
     assert await ship() == base  # silver no longer has it, gold only
     assert (await buyer.get("/api/loyalty")).json()["free_delivery"] is False
+
+
+async def test_review_bonus_points_once_per_delivered_package_only_for_a_real_review(client, admin, categories):
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import key, setup, ship_and_deliver
+
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    a = await login_phone(client, "9770000171", name="Review Bonus A")
+    addr = await add_address(a, state="33")
+    await a.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
+    o = (await a.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+    await ship_and_deliver(tn, o["sub_orders"][0]["id"])
+    url = f"/api/catalog/products/{shirt['slug']}/reviews"
+    text = "Works well, fits true to size and the cotton feels good."
+
+    async def balance():
+        return (await a.get("/api/loyalty")).json()["balance"]
+
+    assert (await a.put(url, {"rating": 5, "title": "Good", "body": text})).status_code in (200, 201) and await balance() == 0  # switched off
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "review_points": 25, "review_min_chars": 30}})).status_code == 200
+    assert (await a.put(url, {"rating": 5, "title": "Good", "body": "Nice"})).status_code in (200, 201) and await balance() == 0  # too short
+    assert (await a.put(url, {"rating": 5, "title": "Good", "body": text})).status_code in (200, 201) and await balance() == 25
+    assert (await a.put(url, {"rating": 4, "title": "Good", "body": text + " Edited."})).status_code in (200, 201) and await balance() == 25  # once
+    assert (await a.get("/api/loyalty")).json()["history"][0]["note"].startswith("Review bonus")
