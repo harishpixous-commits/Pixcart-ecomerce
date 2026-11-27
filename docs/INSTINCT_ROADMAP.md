@@ -296,3 +296,6 @@ Python: 288 passed (whole suite). .NET in groups on a fresh build: 102 + 85 + 82
 
 ## Push 98: first order bonus points
 Loyalty setting `first_order_points` in Admin → Growth (0 = off, default). The first package a member has delivered earns that many extra points on top of the normal points, in the same ledger row, with a note on the history line. Later packages get no bonus. Both versions, tested. Only applies where the package already earns points (loyalty on, points per 100 above 0, goods worth at least 100 rupees).
+
+## Push 99: Rewards page lists the ways to earn
+`GET /api/loyalty` also returns `review_points` and `first_order_points` (the first one only until the member has earned anything). The Rewards page shows a line for each that is set. Both versions; tested in the first-order test; screens type-checked only.

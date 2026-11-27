@@ -183,6 +183,7 @@ async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
     rows = (await session.execute(select(LoyaltyEntry).where(LoyaltyEntry.user_id == user_id).order_by(LoyaltyEntry.created_at.desc()).limit(50))).scalars().all()
     return {
         "enabled": cfg["enabled"], "balance": int(balance), "lifetime": int(lifetime), "tier": tier_for(cfg, int(lifetime)), "bonus_percent": bonus_percent(cfg, tier_for(cfg, int(lifetime))),
+        "review_points": cfg["review_points"], "first_order_points": cfg["first_order_points"] if int(lifetime) == 0 else 0,  # ways to earn the member can still use
         "free_delivery": bool(cfg["enabled"]) and tier_free_delivery(cfg, tier_for(cfg, int(lifetime))),
         "value_paise": int(balance) * cfg["point_value_paise"],
         "history": [{"kind": r.kind, "points": r.points, "note": r.note, "at": r.created_at.isoformat()} for r in rows],

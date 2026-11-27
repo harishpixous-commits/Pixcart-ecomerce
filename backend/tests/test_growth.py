@@ -1331,9 +1331,11 @@ async def test_first_order_bonus_is_added_to_the_first_delivered_package_only(cl
         await ship_and_deliver(seller, o["sub_orders"][0]["id"])
         return (o["sub_orders"][0]["items_total"] // 10000) * 2
 
+    assert (await buyer.get("/api/loyalty")).json()["first_order_points"] == 50  # the rewards page can tell them
     base1 = await deliver()
     me = (await buyer.get("/api/loyalty")).json()
     assert base1 > 0 and me["balance"] == base1 + 50 and "first order bonus" in me["history"][0]["note"]
+    assert me["first_order_points"] == 0  # used up
     base2 = await deliver()
     me = (await buyer.get("/api/loyalty")).json()
     assert me["balance"] == base1 + 50 + base2 and "first order bonus" not in me["history"][0]["note"]
