@@ -23,7 +23,11 @@ public partial class SellerHubBAL
             await tx.ExecuteAsync("INSERT INTO coupons(code,description,kind,value,max_discount_paise,min_order_paise,starts_at,ends_at,usage_limit,per_user_limit,used_count,funded_by,seller_id,category_id,first_order_only,is_active,show_on_checkout,id,created_at,updated_at)VALUES(@Code,@Description,@Kind,@Value,@MaxDiscountPaise,@MinOrderPaise,@StartsAt,@EndsAt,@UsageLimit,@PerUserLimit,@UsedCount,@FundedBy,@SellerId,@CategoryId,@FirstOrderOnly,@IsActive,@ShowOnCheckout,@Id,@CreatedAt,@UpdatedAt)",c);
             await audit.AuditAsync(user,"coupon.create","coupon",c.Code,uow:tx);
         }
-        else await tx.ExecuteAsync("UPDATE coupons SET description=@Description,kind=@Kind,value=@Value,max_discount_paise=@MaxDiscountPaise,min_order_paise=@MinOrderPaise,starts_at=@StartsAt,ends_at=@EndsAt,usage_limit=@UsageLimit,per_user_limit=@PerUserLimit,is_active=@IsActive,updated_at=@UpdatedAt WHERE id=@Id",c);
+        else
+        {
+            await tx.ExecuteAsync("UPDATE coupons SET description=@Description,kind=@Kind,value=@Value,max_discount_paise=@MaxDiscountPaise,min_order_paise=@MinOrderPaise,starts_at=@StartsAt,ends_at=@EndsAt,usage_limit=@UsageLimit,per_user_limit=@PerUserLimit,is_active=@IsActive,updated_at=@UpdatedAt WHERE id=@Id",c);
+            await audit.AuditAsync(user,"coupon.update","coupon",c.Code,uow:tx);
+        }
         await tx.CommitAsync();return CouponAdminBAL.AdminOut(c);
     }
 }

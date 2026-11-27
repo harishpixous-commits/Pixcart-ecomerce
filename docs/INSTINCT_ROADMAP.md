@@ -120,3 +120,6 @@ Python: tests/test_orders.py, test_order_money.py, test_phase2_money.py, test_or
 
 ## Push 56: assistant action stuck in "running" (Instinct)
 Closes the gap noted in Push 51. Claiming an action now also stamps decided_at; when someone confirms again and the action has been "running" for more than 10 minutes, it is marked failed ("Interrupted while running, check the result by hand") and the call gets 409. It is checked lazily on the next confirm, not by a background job, so an abandoned action shows as running until someone touches it. Both versions; tests: Python test_an_action_stuck_running_ends_failed_after_ten_minutes (9 assistant tests pass), .NET An_action_stuck_running_ends_failed_after_ten_minutes (11 pass). No schema change.
+
+## Push 57: seller coupon update is now audited (Instinct)
+Held item from slice 9 fixed in both versions: a seller changing a coupon now writes a "coupon.update" audit row, like create already did. Python seller_extras.py plus an assertion in test_promotions; .NET SellerCouponsBAL plus the existing test, which had pinned the old count of 0 and now expects 1. Notifications read-all (slice 3) stays as is: it also marks email-channel rows read, which is harmless.
