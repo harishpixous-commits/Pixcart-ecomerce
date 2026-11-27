@@ -99,6 +99,19 @@ const codeChars = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
           }
           <label class="flex items-center gap-2 sm:col-span-2"><input type="checkbox" class="accent-peacock" [checked]="f().is_active" (change)="set('is_active', $any($event.target).checked)" /> Coupon is on</label>
           <button pcButton type="submit" class="self-start">Save coupon</button>
+          @if (admin() && editRow(); as row) {
+            <div class="rounded-lg border border-line p-3 sm:col-span-2" data-testid="coupon-batch">
+              <p class="font-semibold">Make copies with their own codes</p>
+              <p class="mb-2 text-sm text-ink-soft">Each copy has the same offer and a random code. Single-use copies work once in total and stay off the offers list. Save any changes above first.</p>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <pc-text-field label="How many (1 to 200)" inputmode="numeric" [value]="batchCount()" (valueChange)="batchCount.set($event)" [filter]="digits" />
+                <pc-text-field label="Code starts with" [value]="batchPrefix()" (valueChange)="batchPrefix.set($event)" [filter]="codeChars" [maxlength]="10" />
+                <label class="flex items-center gap-2 sm:col-span-2"><input type="checkbox" class="accent-peacock" [checked]="batchSingle()" (change)="batchSingle.set($any($event.target).checked)" /> Single use each</label>
+              </div>
+              <button pcButton type="button" class="mt-2" (click)="makeCopies(row.id)">Make codes</button>
+              @if (batchCodes()) {<textarea readonly rows="6" class="mt-2 w-full rounded-lg border border-line p-2 font-mono text-sm" aria-label="New codes" [value]="batchCodes()"></textarea>}
+            </div>
+          }
         </form>
       }
     </pc-modal>
@@ -122,6 +135,14 @@ export class CouponManager {
   protected readonly modalTitle = computed(() => {
     const e = this.edit();
     return e === "new" ? "New coupon" : `Edit ${(e as CouponRow | null)?.code ?? ""}`;
+  });
+  protected readonly batchCount = signal("10");
+  protected readonly batchPrefix = signal("");
+  protected readonly batchSingle = signal(true);
+  protected readonly batchCodes = signal("");
+  protected readonly editRow = computed(() => {
+    const e = this.edit();
+    return e && e !== "new" ? e : null;
   });
   protected readonly sellerOwned = computed(() => {
     const e = this.edit();
@@ -162,6 +183,19 @@ export class CouponManager {
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
       category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_active: c.is_active,
     });
+  }
+
+  protected async makeCopies(id: string): Promise<void> {
+    try {
+      const r = await api<{ count: number; codes: string[] }>(`${this.base()}/${id}/generate`, {
+        method: "POST", body: { count: Number(this.batchCount()), prefix: this.batchPrefix(), single_use: this.batchSingle() },
+      });
+      this.batchCodes.set(r.codes.join("\n"));
+      this.toast.show(`${r.count} codes made`);
+      this.load();
+    } catch (e) {
+      this.toast.show(e instanceof ApiError ? e.message : "Could not make the codes", "error");
+    }
   }
 
   protected async save(e: Event): Promise<void> {

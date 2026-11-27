@@ -160,3 +160,7 @@ Admin > Growth > Return reasons: label_<code> renames a reason, off_<code> switc
 
 ## Push 67: bulk coupon codes
 POST /api/admin/coupons/{id}/generate {count 1..200, prefix 2..10 letters or digits, single_use default true} (marketing permission). Copies a platform coupon into N copies with unique random codes (prefix + 6 characters, no 0/O/1/I). Single-use copies get usage_limit 1, per-user 1, and stay off the checkout list. Seller coupons and coupons made for one person cannot be copied. Audited. Python admin_extras.generate_coupons, .NET CouponBatch. No schema change. Tests: one per stack pass. Not built: an admin screen for it (API only), CSV export of the codes, expiry override per batch.
+
+
+## Push 68: admin screen for bulk coupon codes
+Admin > Coupons: open a platform coupon and use "Make copies with their own codes" (how many, prefix, single use each). The new codes show in a box to copy. Both frontends. No backend change. Type-checked only; not run in a browser.
