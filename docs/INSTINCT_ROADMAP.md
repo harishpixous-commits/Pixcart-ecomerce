@@ -174,3 +174,8 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 - Private staff notes on an order: GET/POST /api/admin/orders/{id}/notes (Orders permission, up to 1000 chars each, 100 per order, audit "order.note"). Never shown to customers or sellers. Python migration 0040, .NET V017.
 - "Staff notes" section on the admin order page in both frontends.
 - Tested: one new Python test and one new .NET test pass. Screens type-checked only. Notes cannot be edited or deleted.
+
+
+## Push 71: review reminders
+- Admin Growth "Review reminders" (off by default): one in-app note per delivered package, after_days (5) after delivery, if the shopper reviewed nothing in it. max_age_days (30) stops old orders being messaged when it is switched on. Hourly job. Once per package (sub_orders.review_reminded_at). Python migration 0041, .NET V018.
+- Tested: one new test each side. In-app only; no email or SMS reminder, and the note links to the order page, not the review form.

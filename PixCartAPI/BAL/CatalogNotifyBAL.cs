@@ -24,6 +24,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["order_placed"] = ("Order placed", "Your order {{order_number}} for {{amount}} is placed."),
         ["seller_new_order"] = ("New order {{order_number}}", "{{items}} for {{amount}}. Confirm it from your orders page."),
         ["abandoned_cart"] = ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
+        ["review_reminder"] = ("How was {{item}}?", "Tell other shoppers what you think. It takes a minute."),
         ["saved_search_match"] = ("New for your search: {{query}}", "{{item}}{{more}} just arrived."),
         ["marketing_message"] = ("{{title}}", "{{message}}"),
         ["order_cancelled"] = ("Order cancelled", "{{item}} was cancelled: {{reason}}."),

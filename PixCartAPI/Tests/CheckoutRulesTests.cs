@@ -716,4 +716,37 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.DoesNotContain("Customer called", (await buyer.Get($"/api/orders/{oid}")).ToString());
         Assert.Equal(2, (await admin.Get(url)).Json["items"]!.AsArray().Count);
     }
+
+    [Fact]
+    public async Task Review_reminder_goes_once_per_delivered_package_that_is_not_reviewed()
+    {
+        var admin = await Admin();
+        var (variantId, productId, slug) = await ShirtInStock("9400000306", "remind-shirt");
+        await Refresh(productId);
+        var a = await LoginPhone("9770000101", "Reminder A"); var b = await LoginPhone("9770000102", "Reminder B"); var c = await LoginPhone("9770000103", "Reminder C");
+        async Task<string> Order(dynamic who, int daysAgo)
+        {
+            var addr = await AddAddress(who, state: "33");
+            await who.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            var o = await who.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+            Assert.True(o.Status == 201, o.ToString());
+            var sid = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+            await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'delivered', delivered_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL @d DAY) WHERE id = @sid", new { d = daysAgo, sid });
+            return sid;
+        }
+        var sa = await Order(a, 6); var sb = await Order(b, 1); var sc = await Order(c, 6);
+        await ApiFactory.DbExecAsync("INSERT INTO reviews (id, product_id, user_id, sub_order_id, verified, rating, title, body, status, seller_reply, helpful_count, created_at, updated_at) SELECT UUID(), @productId, @uid, @sc, 1, 5, 'Good', 'Fits well', 'published', '', 0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)", new { productId, uid = Guid.Parse(c.Id), sc });
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        Task<int> Run() => ReviewReminders.SendDueAsync(db, notify);
+        async Task<long> Count(string who) => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'review_reminder'", new { uid = Guid.Parse(who) });
+        Assert.Equal(0, await Run()); Assert.Equal(0, await Count(a.Id));
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { review_reminders = new { enabled = true, after_days = 5, max_age_days = 30 } })).Status);
+        Assert.Equal(1, await Run());
+        Assert.Equal(1, await Count(a.Id)); Assert.Equal(0, await Count(b.Id)); Assert.Equal(0, await Count(c.Id));
+        Assert.Equal(0, await Run());
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET delivered_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 6 DAY) WHERE id = @sb", new { sb });
+        Assert.Equal(1, await Run()); Assert.Equal(1, await Count(b.Id));
+    }
 }
