@@ -667,4 +667,25 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("invalid_reason", (await buyer.Post("/api/returns", body)).ErrorCode);
         Assert.NotEqual("invalid_reason", (await buyer.Post("/api/returns", new { body.sub_order_id, body.items, reason = "size_fit", body.refund_upi })).ErrorCode);
     }
+
+    [Fact]
+    public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
+    {
+        var admin = await Admin();
+        var made = await admin.Post("/api/admin/coupons", new { code = "SPRING10", description = "", kind = "percent", value = 1000, max_discount_paise = 50000, min_order_paise = 0, usage_limit = 500, per_user_limit = 1, is_active = true, show_on_checkout = true });
+        Assert.True(made.Status == 201, made.ToString());
+        var cid = made.Json["id"]!.GetValue<string>();
+        var r = await admin.Post($"/api/admin/coupons/{cid}/generate", new { count = 5, prefix = "mail" });
+        Assert.True(r.Status == 201, r.ToString());
+        var codes = r.Json["codes"]!.AsArray().Select(x => x!.GetValue<string>()).ToList();
+        Assert.Equal(5, codes.Distinct().Count()); Assert.All(codes, c => { Assert.StartsWith("MAIL", c); Assert.Equal(10, c.Length); });
+        var rows = await ApiFactory.DbQueryAsync<(string Code, int? Limit, int Value, bool OnList)>("SELECT code AS Code, usage_limit AS `Limit`, value AS Value, show_on_checkout AS OnList FROM coupons WHERE code LIKE 'MAIL%' OR code = 'SPRING10'");
+        Assert.All(rows.Where(x => x.Code.StartsWith("MAIL")), x => { Assert.Equal(1, x.Limit); Assert.Equal(1000, x.Value); Assert.False(x.OnList); });
+        Assert.Equal(500, rows.First(x => x.Code == "SPRING10").Limit);
+        Assert.Equal("invalid_count", (await admin.Post($"/api/admin/coupons/{cid}/generate", new { count = 201, prefix = "mail" })).ErrorCode);
+        Assert.Equal("invalid_prefix", (await admin.Post($"/api/admin/coupons/{cid}/generate", new { count = 1, prefix = "a!" })).ErrorCode);
+        Assert.Equal(404, (await admin.Post($"/api/admin/coupons/{Guid.Empty}/generate", new { count = 1, prefix = "mail" })).Status);
+        var nobody = await LoginPhone("9770000081", "Nobody");
+        Assert.Equal(403, (await nobody.Post($"/api/admin/coupons/{cid}/generate", new { count = 1, prefix = "mail" })).Status);
+    }
 }

@@ -131,3 +131,11 @@ public class SavedSearchesController(Utils.Interface.IMySqlDapperHelper db, ICur
     [HttpPost, RouteGuard("signed_in")] public async Task<IActionResult> Follow(FollowIn b) => StatusCode(201, await BAL.SavedSearches.AddAsync(db, (await me.RequireAsync()).Id, b.Query, b.MaxPricePaise));
     [HttpDelete("{id:guid}"), RouteGuard("signed_in")] public async Task<object> Unfollow(Guid id) { await BAL.SavedSearches.RemoveAsync(db, (await me.RequireAsync()).Id, id); return new { ok = true }; }
 }
+
+[ApiController, SignedIn]
+public class CouponBatchController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me) : ControllerBase
+{
+    public record BatchIn { public int Count { get; init; } public string Prefix { get; init; } = ""; public bool SingleUse { get; init; } = true; }
+    [HttpPost("/api/admin/coupons/{id:guid}/generate"), RouteGuard("perm:marketing")]
+    public async Task<IActionResult> Generate(Guid id, BatchIn b) => StatusCode(201, await BAL.CouponBatch.GenerateAsync(db, await me.RequireAsync(), id, b.Count, b.Prefix, b.SingleUse));
+}

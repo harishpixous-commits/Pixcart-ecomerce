@@ -156,3 +156,7 @@ Admin > Growth > Shipping zones (off by default): remote_prefixes (pincode prefi
 
 ## Push 66: admin-editable return reasons
 Admin > Growth > Return reasons: label_<code> renames a reason, off_<code> switches it off (codes stay, defect rules stay, empty label keeps the built-in text, all stay if every one is switched off). Used by the customer reasons list, return validation, the seller note and the return view. New "label" setting kind keeps typed case (the text kind upper-cases). Python growth.return_reasons, .NET ReturnReasonsConfig. Tests: one per stack; Python growth, returns, delivery, ledger tests pass (42); .NET Growth + new test pass (13). Not wired: the shop assistant still quotes the built-in reason texts; the Python assistant knowledge base uses the renamed list.
+
+
+## Push 67: bulk coupon codes
+POST /api/admin/coupons/{id}/generate {count 1..200, prefix 2..10 letters or digits, single_use default true} (marketing permission). Copies a platform coupon into N copies with unique random codes (prefix + 6 characters, no 0/O/1/I). Single-use copies get usage_limit 1, per-user 1, and stay off the checkout list. Seller coupons and coupons made for one person cannot be copied. Audited. Python admin_extras.generate_coupons, .NET CouponBatch. No schema change. Tests: one per stack pass. Not built: an admin screen for it (API only), CSV export of the codes, expiry override per batch.
