@@ -50,6 +50,7 @@ public class CartController(ICartBAL cart, ICurrentUser current) : ControllerBas
         await cart.MergeAsync(await UserId(), body.Items.Select(i => (i.VariantId, i.Qty)).ToList());
 
     [HttpPost("reorder/{orderId}")]
+    [RouteGuard("signed_in")]
     public async Task<JsonObject> Reorder(Guid orderId) => await cart.ReorderAsync(await UserId(), orderId);
 
     [HttpGet("saved")]
