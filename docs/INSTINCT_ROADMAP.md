@@ -353,3 +353,6 @@ The admin adjust-points API existed in both versions but no screen used it. New 
 
 ## Push 113: full-suite re-run
 Python 293 passed. .NET 395 passed, 0 failed (5 groups, after clean rebuild). An earlier Python run stalled on leftover DB state from an aborted run; a clean rerun finished in under 6 minutes. Not run: browser, Flutter, live gateways.
+
+## Push 114: Referrals tab on admin Growth
+Both web apps now show the referrals list (referrer, friend, status, reward, joined) from GET /api/admin/growth/referrals, which already existed with the same shape in Python and .NET. No backend change. Validated: type-check clean in both apps. Not run: browser.

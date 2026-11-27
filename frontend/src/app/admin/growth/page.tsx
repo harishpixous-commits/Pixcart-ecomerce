@@ -146,6 +146,30 @@ function CartRemindersTab() {
   );
 }
 
+type ReferralRow = { referrer: string; friend: string; status: string; reward_paise: number; at: string };
+
+function ReferralsTab() {
+  const [items, setItems] = useState<ReferralRow[] | null>(null);
+  useEffect(() => { api<{ items: ReferralRow[] }>("/api/admin/growth/referrals").then((x) => setItems(x.items)).catch(quietly); }, []);
+  if (!items) return <PageLoader />;
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="rounded-lg bg-white p-4 text-sm" data-testid="referral-summary">{items.length} latest referrals, {items.filter((r) => r.status === "rewarded").length} rewarded.</p>
+      <div className="overflow-x-auto rounded-xl bg-white">
+        <table className="w-full text-left text-sm" data-testid="referrals">
+          <thead><tr className="border-b border-line"><th className="p-3">Referrer</th><th className="p-3">Friend</th><th className="p-3">Status</th><th className="p-3">Reward</th><th className="p-3">Joined</th></tr></thead>
+          <tbody>
+            {items.length === 0 && <tr><td className="p-4 text-ink-soft" colSpan={5}>No referrals yet.</td></tr>}
+            {items.map((r, i) => (
+              <tr key={i} className="border-b border-line/50"><td className="p-3 font-semibold">{r.referrer}</td><td className="p-3">{r.friend}</td><td className="p-3">{r.status}</td><td className="p-3">{r.reward_paise ? rupees(r.reward_paise) : "-"}</td><td className="p-3">{date(r.at)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 type LoyaltyView = { enabled: boolean; members_with_points: number; points_held: number; value_held_paise: number; earned_30d: number; redeemed_30d: number; expired_30d: number };
 
 function LoyaltyTab() {
@@ -331,8 +355,8 @@ export default function AdminGrowthPage() {
   return (
     <div>
       <PageHeader title="Growth" sub="Loyalty, referrals, reminders, flash sales, gift cards, seller quality and risk. Every module starts switched off." />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }]} />
-      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "loyalty" ? <LoyaltyTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "segments" ? <SegmentsTab /> : tab === "campaigns" ? <CampaignsTab /> : tab === "scorecard-view" ? (
+      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }, { value: "referrals", label: "Referrals" }]} />
+      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "loyalty" ? <LoyaltyTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "referrals" ? <ReferralsTab /> : tab === "segments" ? <SegmentsTab /> : tab === "campaigns" ? <CampaignsTab /> : tab === "scorecard-view" ? (
         !score ? <PageLoader /> : (
           <>
             {!scoreOn && <p className="mb-3 rounded-lg bg-white p-3 text-sm text-ink-soft">The scorecard is switched off in Settings. Figures below are for information.</p>}
