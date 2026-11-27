@@ -861,6 +861,29 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Seller_orders_list_counts_open_orders_older_than_the_dispatch_time()
+    {
+        var (variantId, productId, _) = await ShirtInStock("9400000313", "late-count-shirt");
+        await Refresh(productId);
+        var seller = await LoginPhone("9400000313", "Late Owner");
+        var buyer = await LoginPhone("9770000150", "Late Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.Equal(201, o.Status);
+        var sid = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+        var r = (await seller.Get("/api/seller/orders")).Json;
+        Assert.Equal(0, r["late_count"]!.GetValue<int>()); var days = r["late_after_days"]!.GetValue<int>(); Assert.True(days >= 1);
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET created_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL @d DAY) WHERE id = @sid", new { d = days + 1, sid });
+        Assert.Equal(1, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>());
+        Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/confirm")).Status);
+        Assert.Equal(1, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>());
+        Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/pack")).Status);
+        Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/ship", new { courier_name = "DTDC", tracking_number = "AWB9" })).Status);
+        Assert.Equal(0, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>()); // shipped: no longer waiting on the seller
+    }
+
+    [Fact]
     public async Task Order_again_puts_the_items_of_a_past_order_back_in_the_cart()
     {
         var (variantId, productId, _) = await ShirtInStock("9400000310", "order-again-shirt");

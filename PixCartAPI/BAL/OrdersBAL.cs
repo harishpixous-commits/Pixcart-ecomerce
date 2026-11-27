@@ -1401,6 +1401,9 @@ public class OrdersBAL(
             ["page_size"] = pageSize,
             ["status_counts"] = new JsonObject((await orders.SellerStatusCountsAsync(seller.Id)).Select(
                 kv => new KeyValuePair<string, JsonNode?>(kv.Key, JsonValue.Create(kv.Value))).ToArray()),
+            // Open packages older than the seller's own dispatch time (at least a day): the ones to ship first.
+            ["late_count"] = await orders.SellerLateCountAsync(seller.Id, DateTime.UtcNow.AddDays(-Math.Max(1, seller.DispatchDays))),
+            ["late_after_days"] = Math.Max(1, seller.DispatchDays),
         };
     }
 

@@ -32,6 +32,11 @@ const TABS = [
       <pc-page-header title="Orders" sub="Confirm, pack and ship each order. Customers can cancel until you ship." [withActions]="true">
         <pc-export-button actions scope="seller" name="orders" [status]="status() || undefined" />
       </pc-page-header>
+      @if (data()?.late_count; as n) {
+        <p class="mb-3 rounded-lg bg-marigold-light px-3 py-2 text-sm text-ink" role="status">
+          {{ n }} open order{{ n === 1 ? " is" : "s are" }} more than {{ data()?.late_after_days }} day{{ data()?.late_after_days === 1 ? "" : "s" }} old. Ship {{ n === 1 ? "it" : "them" }} first.
+        </p>
+      }
       <pc-tabs [value]="status()" (valueChange)="tab($event)" [items]="tabs()" />
       <input pcInput placeholder="Search by order number" [value]="q()" (input)="search($any($event.target).value)" class="mb-3 max-w-sm" aria-label="Search orders" />
       @if (!data()) {

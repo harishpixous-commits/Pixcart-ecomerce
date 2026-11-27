@@ -496,6 +496,8 @@ export interface Paged<T> {
   page: number;
   page_size: number;
   status_counts?: Record<string, number>;
+  late_count?: number;
+  late_after_days?: number;
 }
 
 export interface SellerProfile {

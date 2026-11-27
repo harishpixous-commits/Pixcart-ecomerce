@@ -417,6 +417,10 @@ public class OrdersDAL(IMySqlDapperHelper db)
     }
 
     /// <summary>Packages per step, for the queue tabs (reference: the status_counts group-by).</summary>
+    /// <summary>Open packages (placed, confirmed, packed) created before the cut-off: the ones the seller should ship first.</summary>
+    public async Task<long> SellerLateCountAsync(Guid sellerId, DateTime before) =>
+        await db.QueryFirstOrDefaultAsync<long>("SELECT COUNT(*) FROM sub_orders WHERE seller_id = @sellerId AND status IN ('placed', 'confirmed', 'packed') AND created_at < @before", new { sellerId, before });
+
     public async Task<IReadOnlyDictionary<string, long>> SellerStatusCountsAsync(Guid sellerId)
     {
         var rows = await db.QueryAsync<(string Status, long N)>(
