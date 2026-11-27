@@ -332,6 +332,9 @@ async def delete_review(slug: str, user: CurrentUser, session: SessionDep) -> di
     r = (await session.execute(select(Review).where(Review.product_id == p.id, Review.user_id == user.id))).scalar_one_or_none()
     if r is None:
         raise NotFound("Review")
+    from app.services import loyalty as loyalty_svc
+
+    await loyalty_svc.take_back_review(session, r)  # a deleted review keeps no bonus (once per package, so re-writing it does not pay again)
     await session.delete(r)
     await session.flush()
     await refresh_ratings(session, p.id)

@@ -1306,6 +1306,8 @@ async def test_review_bonus_points_once_per_delivered_package_only_for_a_real_re
     assert (await a.put(url, {"rating": 5, "title": "Good", "body": text})).status_code in (200, 201) and await balance() == 25
     assert (await a.put(url, {"rating": 4, "title": "Good", "body": text + " Edited."})).status_code in (200, 201) and await balance() == 25  # once
     assert (await a.get("/api/loyalty")).json()["history"][0]["note"].startswith("Review bonus")
+    assert (await a.delete(url)).status_code == 200 and await balance() == 0  # deleting the review takes the bonus back
+    assert (await a.put(url, {"rating": 5, "title": "Good", "body": text})).status_code in (200, 201) and await balance() == 0  # and writing it again does not pay twice
     from sqlalchemy import select
 
     from app.db import SessionLocal

@@ -306,3 +306,7 @@ The Loyalty section hint on the Growth admin page (both frontends) now names the
 ## Push 101: product-page delivery estimate knows the member tier
 
 The pincode delivery-estimate on the product page now shows free delivery (fee 0, `member_free_delivery: true`) to a signed-in Silver/Gold member whose tier carries free delivery, matching the cart and checkout. Visitors still see the fee. Both versions; tests extended on each side. Not run: browser.
+
+## Push 102: deleting a review takes its bonus points back
+
+When a customer deletes their own review, the review bonus points are taken back (once, never below a zero balance), same as when staff hide it. Re-writing the review does not pay again. Both versions; the review-bonus test extended on each side. Not run: browser.
