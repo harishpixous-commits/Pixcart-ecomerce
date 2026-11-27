@@ -47,8 +47,16 @@ Result: `publish\PixCart\` (API.dll, web.config, wwwroot\ with the Angular site,
 
 ## 5. Settings and secrets
 
-Edit `C:\inetpub\PixCart\web.config` → `<environmentVariables>` (or create `appsettings.Production.json` next to
-API.dll; never commit secrets to git). Required:
+Put them in `C:\inetpub\PixCart\appsettings.Production.json` next to API.dll (recommended: updates never overwrite it)
+or as `<environmentVariables>` in `web.config` (then keep your `web.config` when you update, step 7). Never commit
+secrets to git. In `appsettings.Production.json` the names go inside an `"App"` section without the `App__` prefix,
+for example `{"App": {"ConnectionString": "...", "JwtSecret": "...", "CookieSecure": true}}`.
+
+The package's `web.config` already sets `App__Environment=production` and `App__ExternalProviderMode=open` (the
+shop may call the real payment, message and shipping providers). Keep both: in production the site refuses to start
+without them, and it also refuses the development values of the secrets below.
+
+Required:
 
 | Variable | Example |
 |---|---|
@@ -69,7 +77,9 @@ entered later in **Admin → Integrations** (stored encrypted in the database); 
 
 1. Browse to the site: the database tables are created on the first request.
 2. Create the first admin on the server (PowerShell in the site folder):
-   `dotnet API.dll create-admin --email admin@yourcompany.in --name "Owner"` (asks for the password).
+   `dotnet API.dll create-admin --email admin@yourcompany.in --name "Owner"` (asks for the password). The command
+   reads `appsettings.Production.json`; settings kept only in `web.config` do not apply outside IIS, so in that case
+   first run `$env:App__ConnectionString = "<the same connection string>"` in the same PowerShell window.
 3. Sign in at `/admin/login`, then follow Admin → Go-live checklist (business details, Razorpay, SMS, email, pages).
 4. Razorpay Dashboard → Webhooks: add `https://<your domain>/api/payments/razorpay/webhook` with the events listed in
    Admin → Integrations → Razorpay.
@@ -77,8 +87,8 @@ entered later in **Admin → Integrations** (stored encrypted in the database); 
 ## 7. Updates
 
 Build a new package (step 3), then on the server: stop the site (or drop `app_offline.htm` into the folder), copy the
-new files over the old ones (keep `var\`, `logs\`, `appsettings.Production.json`), start the site. Database changes
-apply themselves on start.
+new files over the old ones (keep `var\`, `logs\`, `appsettings.Production.json`, and `web.config` if you put settings
+in it), start the site. Database changes apply themselves on start.
 
 ## 8. Checks and troubleshooting
 

@@ -121,6 +121,9 @@ public class AppSettings
             problems.Add("App__FieldEncryptionKey must be set (a new Fernet key: 32 random bytes, urlsafe base64)");
         if (!CookieSecure)
             problems.Add("App__CookieSecure must be true in production");
+        if (ExternalProviderMode != "open")
+            // without it every Razorpay, email, SMS, WhatsApp and Shiprocket call is refused (the package's web.config sets it)
+            problems.Add("App__ExternalProviderMode must be \"open\" in production, so the shop can reach the payment, message and shipping providers");
         if (problems.Count > 0)
             throw new InvalidOperationException("Unsafe production configuration:" + string.Concat(problems.Select(p => System.Environment.NewLine + " - " + p)));
     }
