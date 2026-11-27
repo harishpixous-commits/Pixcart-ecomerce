@@ -41,7 +41,11 @@ async def send_otp(phone: str, code: str) -> None:
                 params={"template_id": cfg.msg91_otp_template_id, "mobile": f"91{phone}", "otp": code},
                 headers={"authkey": cfg.msg91_auth_key, "accept": "application/json"},
             )
-        if resp.status_code >= 400 or resp.json().get("type") == "error":
+        try:
+            body = resp.json()
+        except ValueError:  # a proxy or maintenance page answered 200 with HTML: not a sent code
+            body = {"type": "error"}
+        if resp.status_code >= 400 or (isinstance(body, dict) and body.get("type") == "error") or not isinstance(body, dict):
             log.error("MSG91 send failed: %s %s", resp.status_code, resp.text[:300])
             raise SmsError("Could not send the OTP right now")
         return
