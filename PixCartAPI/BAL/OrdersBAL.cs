@@ -183,7 +183,7 @@ public class OrdersBAL(
                 gstin = IndianStates.ValidateGstin(buyerGstin);
                 business = BAL.FeesBAL.CheckBusiness(buyerBusiness);
             }
-            catch (AppException exc)
+            catch (Exception exc) when (exc is AppException or ArgumentException) // the GSTIN check throws ArgumentException
             {
                 throw new AppException(exc.Message, "invalid_gstin", 400, new Dictionary<string, string> { ["buyer_gstin"] = "Invalid" });
             }
