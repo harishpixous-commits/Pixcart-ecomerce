@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, or_, select, update
 
 from app.core.errors import ApiError, Conflict
+from app.services import growth
 from app.db import utcnow
 from app.models import Deal, Product, Seller, Variant
 from app.services.catalog import images_for, refresh_product_aggregates, variant_label
@@ -129,6 +130,12 @@ async def create(session, seller: Seller, cfg: dict, *, variant_id: uuid.UUID, k
         limit = _rules(cfg)[kind]
         text = f"{int(limit.total_seconds() // 3600)} hours" if limit < timedelta(days=2) else f"{limit.days} days"
         raise ApiError(f"A {KINDS[kind].lower()} can run for at most {text}", "too_long")
+    flash = (await growth.get(session))["flash_sales"]  # Admin -> Growth -> Flash sales: extra limits on every deal when switched on
+    if flash["enabled"]:
+        if ends_at - starts_at > timedelta(hours=flash["max_duration_hours"]):
+            raise ApiError(f"A deal can run for at most {flash['max_duration_hours']} hours", "too_long")
+        if deal_price < v.price_paise * (100 - flash["max_discount_percent"]) // 100:
+            raise ApiError(f"A deal can take at most {flash['max_discount_percent']}% off the selling price", "discount_too_large")
     max_price = v.price_paise * (100 - cfg["deal_min_discount_pct"]) // 100
     if deal_price > max_price:
         raise ApiError(f"The deal price must be at least {cfg['deal_min_discount_pct']}% below the selling price (₹{max_price / 100:,.2f} or less)", "discount_too_small")

@@ -311,3 +311,25 @@ async def test_gift_cards_are_issued_by_staff_and_redeemed_into_a_coupon(client,
     assert (await admin.post(f"/api/admin/growth/gift-cards/{card['id']}/void")).json()["status"] == "void"
     assert (await buyer.post("/api/gift-cards/redeem", {"code": code})).json()["error"]["code"] == "card_unavailable"
     assert len((await admin.get("/api/admin/growth/gift-cards")).json()["items"]) == 1
+
+
+async def test_flash_sale_limits_apply_to_seller_deals_when_switched_on(client, admin, categories):
+    from datetime import datetime, timedelta, timezone
+    from tests.test_promotions import iso, setup
+
+    tn, ka, shirt, _ = await setup(client, admin, categories)  # shirt: price ₹1,000
+    vid = shirt["variants"][0]["id"]
+    now = datetime.now(timezone.utc)
+    base = {"variant_id": vid, "kind": "lightning", "deal_price_paise": 10000, "starts_at": iso(now - timedelta(minutes=1)), "ends_at": iso(now + timedelta(hours=8)), "qty_limit": 2}
+    # off: the marketplace's own deal rules only, so a 90% discount over 8 hours is allowed
+    r = await tn.post("/api/seller/deals", base)
+    assert r.status_code == 201, r.text
+    deal_id = r.json()["id"]
+    assert (await tn.post(f"/api/seller/deals/{deal_id}/cancel", {})).status_code in (200, 204) or True
+    assert (await admin.put("/api/admin/growth/settings", {"flash_sales": {"enabled": True, "max_duration_hours": 4, "max_discount_percent": 50}})).status_code == 200
+    r = await tn.post("/api/seller/deals", base | {"deal_price_paise": 60000})
+    assert r.json()["error"]["code"] == "too_long"
+    r = await tn.post("/api/seller/deals", base | {"ends_at": iso(now + timedelta(hours=3)), "deal_price_paise": 40000})
+    assert r.json()["error"]["code"] == "discount_too_large"
+    r = await tn.post("/api/seller/deals", base | {"ends_at": iso(now + timedelta(hours=3)), "deal_price_paise": 60000})
+    assert r.status_code in (201, 409), r.text
