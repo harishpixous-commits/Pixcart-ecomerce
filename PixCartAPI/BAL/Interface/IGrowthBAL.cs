@@ -12,6 +12,8 @@ public interface IGrowthBAL
     Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body);
     Task<JsonObject> ScorecardAsync(UserModel admin);
     Task<JsonObject> LoyaltyAsync(Guid userId);
+    /// <summary>Points to a single-use coupon (POST /api/loyalty/redeem).</summary>
+    Task<JsonObject> RedeemPointsAsync(Guid userId, int points);
     /// <summary>The seller's own scorecard against the levels staff set (GET /api/seller/scorecard).</summary>
     Task<JsonObject> MyScorecardAsync(Guid sellerId);
     /// <summary>The sitemap XML, or null when staff switched it off (Admin → Growth → Search engines).</summary>

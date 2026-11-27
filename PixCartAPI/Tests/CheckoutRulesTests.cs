@@ -76,6 +76,40 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     };
 
     [Fact]
+    public async Task Points_become_a_single_use_coupon_and_come_back_if_unused()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000301", "points-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000301", "Points Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        Assert.Equal("loyalty_off", (await buyer.Post("/api/loyalty/redeem", new { points = 100 })).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, min_redeem_points = 100, max_redeem_percent = 50, point_value_paise = 100 } })).Status);
+        Assert.Equal(200, (await admin.Post("/api/admin/growth/loyalty/adjust", new { user_id = buyer.Id, points = 300, note = "Goodwill" })).Status);
+        Assert.Equal("below_minimum", (await buyer.Post("/api/loyalty/redeem", new { points = 50 })).ErrorCode);
+        Assert.Equal("balance_too_low", (await buyer.Post("/api/loyalty/redeem", new { points = 400 })).ErrorCode);
+        var red = await buyer.Post("/api/loyalty/redeem", new { points = 100 });
+        Assert.True(red.Status == 200, red.ToString());
+        var code = red.Json["code"]!.GetValue<string>();
+        Assert.Equal(10000, red.Json["discount_paise"]!.GetValue<long>()); Assert.Equal(200, red.Json["balance"]!.GetValue<long>()); Assert.Equal(20000, red.Json["min_order_paise"]!.GetValue<long>());
+        Assert.Equal(200, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = code });
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal(10000, r.Json["order"]!["discount_total"]!.GetValue<long>());
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = code });
+        Assert.Equal(400, r.Status);   // single use
+
+        var second = (await buyer.Post("/api/loyalty/redeem", new { points = 100 })).Json["code"]!.GetValue<string>();
+        Assert.Equal(100, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        await ApiFactory.DbExecAsync("UPDATE coupons SET ends_at = @past WHERE code = @second", new { past = Now.AddDays(-1), second });
+        Assert.Equal(200, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        Assert.Equal(200, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());   // only once
+    }
+
+    [Fact]
     public async Task A_wrong_gstin_is_refused_with_its_reason_and_a_right_one_is_kept()
     {
         var admin = await Admin();

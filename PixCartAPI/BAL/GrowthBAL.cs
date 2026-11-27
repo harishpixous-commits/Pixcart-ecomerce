@@ -188,8 +188,17 @@ public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessB
         };
     }
 
+    public async Task<JsonObject> RedeemPointsAsync(Guid userId, int points)
+    {
+        await using var tx = await db.BeginAsync();
+        var r = await LoyaltyPoints.RedeemAsync(tx, userId, points);
+        await tx.CommitAsync();
+        return r;
+    }
+
     public async Task<JsonObject> LoyaltyAsync(Guid userId)
     {
+        await using (var tx = await db.BeginAsync()) { if (await LoyaltyPoints.RestoreExpiredAsync(tx, userId) > 0) await tx.CommitAsync(); }
         var cfg = (JsonObject)(await GetAsync())["loyalty"]!;
         var balance = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId", new { userId });
         var lifetime = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0", new { userId });

@@ -20,6 +20,8 @@ public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me) : Controller
 public class LoyaltyController(IGrowthBAL bal, ICurrentUser me) : ControllerBase
 {
     [HttpGet, RouteGuard("signed_in")] public async Task<object> Mine() => await bal.LoyaltyAsync((await me.RequireAsync()).Id);
+    public record RedeemIn { [System.ComponentModel.DataAnnotations.Range(1, 1000000)] public int Points { get; init; } }
+    [HttpPost("redeem"), RouteGuard("signed_in")] public async Task<object> Redeem(RedeemIn b) => await bal.RedeemPointsAsync((await me.RequireAsync()).Id, b.Points);
 }
 
 [ApiController, SignedIn]

@@ -27,4 +27,56 @@ public static class LoyaltyPoints
             new { id = Guid.NewGuid(), userId, subId, points, note = "Delivered package " + subNumber, now = DateTime.UtcNow });
         return points;
     }
+
+    public const int RedeemDays = 30;
+    public const string CodePrefix = "LP";
+
+    private static async Task<JsonObject> LoyaltyCfgAsync(IUnitOfWork uow)
+    {
+        var saved = JsonHelper.Object(await uow.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        return (JsonObject)DAL.SettingsDAL.Merge(BAL.GrowthBAL.Defaults(), saved)["loyalty"]!;
+    }
+
+    /// <summary>Turns points into a single-use platform-funded flat coupon, applied at checkout like any coupon (mirror of loyalty.redeem).
+    /// The cart must be at least discount / max_redeem_percent. Unused after 30 days: the points come back.</summary>
+    public static async Task<JsonObject> RedeemAsync(IUnitOfWork uow, Guid userId, int points)
+    {
+        var cfg = await LoyaltyCfgAsync(uow);
+        if (!cfg.Bool("enabled")) throw new AppException("Loyalty points are not available right now.", "loyalty_off");
+        if (points < cfg.Int("min_redeem_points")) throw new AppException($"Redeem at least {cfg.Int("min_redeem_points")} points at a time.", "below_minimum");
+        await RestoreExpiredAsync(uow, userId);
+        var balance = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId FOR UPDATE", new { userId });
+        if (points > balance) throw new AppException("You do not have that many points.", "balance_too_low");
+        var discount = (long)points * cfg.Int("point_value_paise");
+        var minOrder = (discount * 100 + cfg.Int("max_redeem_percent") - 1) / cfg.Int("max_redeem_percent");
+        var now = DateTime.UtcNow;
+        var code = CodePrefix + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4));
+        await uow.ExecuteAsync(
+            "INSERT INTO coupons (id, code, description, kind, value, min_order_paise, ends_at, usage_limit, per_user_limit, used_count, funded_by, first_order_only, is_active, show_on_checkout) " +
+            "VALUES (@id, @code, 'Loyalty points', 'flat', @discount, @minOrder, @ends, 1, 1, 0, 'platform', 0, 1, 0)",
+            new { id = Guid.NewGuid(), code, discount, minOrder, ends = now.AddDays(RedeemDays) });
+        await uow.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, NULL, 'redeem', @points, @note, @now)",
+            new { id = Guid.NewGuid(), userId, points = -points, note = "Redeemed for coupon " + code, now });
+        return new JsonObject { ["code"] = code, ["discount_paise"] = discount, ["min_order_paise"] = minOrder, ["valid_days"] = RedeemDays, ["balance"] = balance - points };
+    }
+
+    /// <summary>Gives back the points of a redeemed coupon that ran out unused (once per coupon).</summary>
+    public static async Task<int> RestoreExpiredAsync(IUnitOfWork uow, Guid userId)
+    {
+        var now = DateTime.UtcNow; var back = 0;
+        var rows = await uow.QueryAsync<(int Points, string Note)>("SELECT points AS Points, note AS Note FROM loyalty_ledger WHERE user_id = @userId AND kind = 'redeem'", new { userId });
+        foreach (var (pts, note) in rows.ToList())
+        {
+            var code = note[(note.LastIndexOf(' ') + 1)..];
+            if (!code.StartsWith(CodePrefix)) continue;
+            var marker = $"Coupon {code} expired unused";
+            if (await uow.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM loyalty_ledger WHERE user_id = @userId AND kind = 'reverse' AND note = @marker", new { userId, marker }) > 0) continue;
+            var live = await uow.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM coupons WHERE code = @code AND used_count = 0 AND ends_at IS NOT NULL AND ends_at <= @now", new { code, now });
+            if (live == 0) continue;
+            await uow.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, NULL, 'reverse', @points, @marker, @now)",
+                new { id = Guid.NewGuid(), userId, points = -pts, marker, now });
+            back += -pts;
+        }
+        return back;
+    }
 }
