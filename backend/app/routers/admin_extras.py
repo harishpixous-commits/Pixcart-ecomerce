@@ -116,6 +116,42 @@ async def create_coupon(body: AdminCouponIn, admin: Perm("marketing"), session: 
     return coupon_admin_out(c)
 
 
+class CouponBatchIn(BaseModel):
+    count: int = Field(ge=1, le=200)
+    prefix: str = Field(min_length=2, max_length=10, pattern="^[A-Za-z0-9]+$")
+    single_use: bool = True
+
+
+_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
+
+
+@router.post("/coupons/{coupon_id}/generate", status_code=201)
+async def generate_coupons(coupon_id: uuid.UUID, body: CouponBatchIn, admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Make `count` copies of a platform coupon, each with its own random code (for a mailer, a giveaway or a partner).
+    Single-use copies can be redeemed once in total and stay off the checkout list."""
+    base = await session.get(Coupon, coupon_id)
+    if base is None:
+        raise NotFound("Coupon")
+    if base.funded_by != "platform" or base.only_user_id is not None:
+        raise ApiError("Only a platform coupon can be copied in bulk", "not_copyable")
+    prefix = body.prefix.upper()
+    codes: list[str] = []
+    while len(codes) < body.count:
+        want = {prefix + "".join(secrets.choice(_CODE_CHARS) for _ in range(6)) for _ in range(body.count - len(codes))}
+        taken = set((await session.execute(select(Coupon.code).where(Coupon.code.in_(want)))).scalars())
+        codes += sorted(want - taken - set(codes))
+    for code in codes:
+        session.add(Coupon(
+            code=code, description=base.description, kind=base.kind, value=base.value, max_discount_paise=base.max_discount_paise,
+            min_order_paise=base.min_order_paise, starts_at=base.starts_at, ends_at=base.ends_at,
+            usage_limit=1 if body.single_use else base.usage_limit, per_user_limit=1, funded_by="platform", category_id=base.category_id,
+            first_order_only=base.first_order_only, is_active=base.is_active, show_on_checkout=False,
+        ))
+    audit(session, admin, "coupon.generate", "coupon", f"{base.code} x{len(codes)}")
+    await session.commit()
+    return {"count": len(codes), "codes": codes}
+
+
 @router.put("/coupons/{coupon_id}")
 async def update_coupon(coupon_id: uuid.UUID, body: AdminCouponIn, admin: Perm("marketing"), session: SessionDep) -> dict:
     c = await session.get(Coupon, coupon_id)

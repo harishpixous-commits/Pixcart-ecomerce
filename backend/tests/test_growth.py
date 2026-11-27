@@ -779,3 +779,29 @@ async def test_staff_can_rename_and_switch_off_return_reasons(client, admin, cat
     made = await buyer.post("/api/returns", {**body, "reason": "size_fit"})
     assert made.status_code in (200, 201), made.text
     assert made.json()["reason_label"] == "Does not fit me"
+
+
+async def test_staff_can_make_a_batch_of_single_use_codes_from_a_coupon(client, admin):
+    from tests.conftest import login_phone
+
+    made = await admin.post("/api/admin/coupons", {"code": "SPRING10", "kind": "percent", "value": 1000, "max_discount_paise": 50000, "usage_limit": 500})
+    assert made.status_code == 201, made.text
+    cid = made.json()["id"]
+    r = await admin.post(f"/api/admin/coupons/{cid}/generate", {"count": 5, "prefix": "mail"})
+    assert r.status_code == 201, r.text
+    codes = r.json()["codes"]
+    assert len(set(codes)) == 5 and all(c.startswith("MAIL") and len(c) == 10 for c in codes)
+    rows = {c["code"]: c for c in (await admin.get("/api/admin/coupons")).json()}
+    assert all(rows[c]["usage_limit"] == 1 and rows[c]["value"] == 1000 and rows[c]["show_on_checkout"] is False for c in codes)
+    assert rows["SPRING10"]["usage_limit"] == 500  # the original is untouched
+    r2 = await admin.post(f"/api/admin/coupons/{cid}/generate", {"count": 3, "prefix": "mail", "single_use": False})
+    assert all(rows_c["usage_limit"] == 500 for rows_c in (await admin.get("/api/admin/coupons")).json() if rows_c["code"] in r2.json()["codes"])
+    assert (await admin.post(f"/api/admin/coupons/{cid}/generate", {"count": 201, "prefix": "mail"})).status_code == 422
+    assert (await admin.post(f"/api/admin/coupons/{cid}/generate", {"count": 1, "prefix": "a!"})).status_code == 422
+    assert (await admin.post(f"/api/admin/coupons/{uuid_zero()}/generate", {"count": 1, "prefix": "mail"})).status_code == 404
+    nobody = await login_phone(client, "9770000081")
+    assert (await nobody.post(f"/api/admin/coupons/{cid}/generate", {"count": 1, "prefix": "mail"})).status_code == 403
+
+
+def uuid_zero() -> str:
+    return "00000000-0000-0000-0000-000000000000"
