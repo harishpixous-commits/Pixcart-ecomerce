@@ -23,3 +23,4 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 
 ## Progress log
 - 27 Nov 20:31 Python: Admin -> Growth settings (all modules, default OFF, validated) + seller scorecard. Endpoints: GET/PUT /api/admin/growth/settings, GET /api/admin/growth/scorecard. Files: services/growth.py, routers/growth.py, tests/test_growth.py. Settings are stored, the module behaviours (loyalty accrual, referral, cart reminders, flash sales, gift cards, COD checks) are NOT wired yet. .NET mirror: pending.
+- 27 Nov 20:39 Python/Next.js: admin Growth page (frontend/src/app/admin/growth/page.tsx, menu "Growth"), type-checked with tsc, not run in a browser. Matches the Angular page.
