@@ -178,6 +178,24 @@ async def redeem_gift_card(body: GiftRedeemIn, user: CurrentUser, session: Sessi
     return out
 
 
+class GiftBuyIn(BaseModel):
+    amount_paise: int = Field(ge=100, le=100000000)
+
+
+@me_router.post("/gift-cards/purchase", status_code=201)
+async def buy_gift_card(body: GiftBuyIn, user: CurrentUser, session: SessionDep) -> dict:
+    out = await gift_cards.start_purchase(session, user, body.amount_paise)
+    await session.commit()
+    return out
+
+
+@me_router.post("/gift-cards/purchase/{purchase_id}/check")
+async def check_gift_card_purchase(purchase_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
+    out = await gift_cards.check_purchase(session, user.id, purchase_id)
+    await session.commit()
+    return out
+
+
 @me_router.get("/seo/sitemap.xml")
 async def sitemap(session: SessionDep) -> Response:
     base = getattr(settings, "public_web_url", "") or settings.cors_origin_list[0]

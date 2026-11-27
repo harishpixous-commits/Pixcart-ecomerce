@@ -29,7 +29,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "flash_sales": {"enabled": (False, "bool", 0, 0), "max_duration_hours": (48, "int", 1, 720), "max_discount_percent": (70, "int", 1, 95),
                     "show_countdown": (True, "bool", 0, 0)},
     "gift_cards": {"enabled": (False, "bool", 0, 0), "min_paise": (10000, "int", 100, 10000000), "max_paise": (1000000, "int", 100, 100000000),
-                   "validity_days": (365, "int", 1, 3650)},
+                   "validity_days": (365, "int", 1, 3650), "allow_purchase": (False, "bool", 0, 0)},
     "scorecard": {"enabled": (False, "bool", 0, 0), "window_days": (30, "int", 7, 365), "ship_within_hours": (48, "int", 1, 720),
                   "late_warn_percent": (10, "int", 0, 100), "late_critical_percent": (25, "int", 0, 100),
                   "cancel_warn_percent": (5, "int", 0, 100), "cancel_critical_percent": (10, "int", 0, 100),

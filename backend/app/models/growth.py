@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, IdMixin
@@ -81,3 +81,22 @@ class GiftCardUse(IdMixin, Base):
     amount_paise: Mapped[int] = mapped_column(Integer)
     restored: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GiftCardPurchase(IdMixin, Base):
+    """A shopper buying a gift card online. The card is issued only after the gateway itself reports the money as captured."""
+
+    __tablename__ = "gift_card_purchases"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    amount_paise: Mapped[int] = mapped_column(Integer)
+    gateway: Mapped[str] = mapped_column(String(20))
+    gateway_ref: Mapped[str] = mapped_column(String(100))
+    client_data: Mapped[dict | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(8), default="created")
+    gift_card_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("gift_cards.id", ondelete="SET NULL"))
+    error: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (CheckConstraint("status IN ('created','issued','failed')", name="status"),
+                      UniqueConstraint("gateway", "gateway_ref", name="uq_gift_purchase_ref"))

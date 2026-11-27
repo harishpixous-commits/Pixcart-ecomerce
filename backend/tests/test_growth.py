@@ -411,3 +411,77 @@ async def test_returned_items_take_back_their_share_of_earned_points(client, adm
     assert (await tn.post(f"/api/seller/returns/{rid}", {"action": "received"})).json()["status"] == "received"
     me = (await buyer.get("/api/loyalty")).json()
     assert me["balance"] == 20 and me["history"][0]["kind"] == "reverse" and me["history"][0]["points"] == -20  # half the package came back
+
+
+class _PayFake:
+    """A gateway that reports whatever attempts the test sets. Never talks to a real provider."""
+
+    def __init__(self):
+        self.attempts_now: list[dict] = []
+        self.created: list[int] = []
+
+    def build(self, cfg, code, timeout=8.0):
+        fake = self
+
+        class A:
+            async def create(self, amount, currency, receipt, customer, return_url, notify_url):
+                fake.created.append(amount)
+                return {"reference": f"ref_{len(fake.created)}", "mode": "redirect", "fields": {"url": "https://pay.example/x"}}
+
+            async def attempts(self, reference):
+                return fake.attempts_now
+
+        return A()
+
+
+async def test_buying_a_gift_card_issues_it_once_and_only_after_the_gateway_says_paid(client, admin, monkeypatch):
+    from sqlalchemy import func, select
+    from app.db import SessionLocal
+    from app.models import GiftCard
+    from app.services import payment_gateways
+    from tests.conftest import login_phone
+
+    fake = _PayFake()
+    monkeypatch.setattr(payment_gateways.gateways, "build", fake.build)
+
+    async def cands(*a, **k):
+        return ["razorpay", "cashfree"]
+
+    monkeypatch.setattr(payment_gateways, "candidates", cands)
+    buyer = await login_phone(client, "9876501234")
+    # off by default, and the staff switch for purchase is separate from the staff-issue switch
+    assert (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["error"]["code"] == "gift_cards_off"
+    await admin.put("/api/admin/growth/settings", {"gift_cards": {"enabled": True, "min_paise": 10000, "max_paise": 100000}})
+    assert (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["error"]["code"] == "gift_cards_off"
+    await admin.put("/api/admin/growth/settings", {"gift_cards": {"allow_purchase": True}})
+    assert (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 500000})).json()["error"]["code"] == "invalid_amount"
+
+    r = await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})
+    assert r.status_code == 201, r.text
+    pid = r.json()["id"]
+    assert r.json()["gateway"] == "cashfree" and "code" not in r.json()  # Razorpay is skipped, no code before payment
+
+    async def cards() -> int:
+        async with SessionLocal() as s:
+            return (await s.execute(select(func.count()).select_from(GiftCard))).scalar_one()
+
+    # nothing paid yet, then a failed attempt: no card
+    assert (await buyer.post(f"/api/gift-cards/purchase/{pid}/check", {})).json()["status"] == "created"
+    fake.attempts_now = [{"id": "a1", "status": "failed", "method": "upi", "error": "declined", "amount": 20000}]
+    assert (await buyer.post(f"/api/gift-cards/purchase/{pid}/check", {})).json()["status"] == "failed"
+    assert await cards() == 0
+    # a capture for a different amount is refused
+    fake.attempts_now = [{"id": "a2", "status": "captured", "method": "upi", "error": "", "amount": 100}]
+    assert (await buyer.post(f"/api/gift-cards/purchase/{pid}/check", {})).json()["status"] == "failed"
+    assert await cards() == 0
+    # another shopper cannot read or trigger it
+    other = await login_phone(client, "9876509999")
+    assert (await other.post(f"/api/gift-cards/purchase/{pid}/check", {})).status_code == 404
+    # a fresh purchase, paid in full: issued once, even when asked twice
+    pid2 = (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["id"]
+    fake.attempts_now = [{"id": "a3", "status": "captured", "method": "upi", "error": "", "amount": 20000}]
+    a = (await buyer.post(f"/api/gift-cards/purchase/{pid2}/check", {})).json()
+    b = (await buyer.post(f"/api/gift-cards/purchase/{pid2}/check", {})).json()
+    assert a["status"] == "issued" and a["code"].startswith("GC") and b["code"] == a["code"]
+    assert await cards() == 1
+    assert (await buyer.post("/api/gift-cards/balance", {"code": a["code"]})).json()["balance_paise"] == 20000
