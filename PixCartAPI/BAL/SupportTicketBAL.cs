@@ -8,7 +8,7 @@ using Utils.Interface;
 namespace BAL;
 
 /// <inheritdoc cref="ISupportTicketBAL"/>
-public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISupportTicketBAL
+public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db, INotifyBAL notifier) : ISupportTicketBAL
 {
     public const int MaxOpen = 10;
 
@@ -48,8 +48,12 @@ public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISu
             Id = Guid.NewGuid(), TicketId = t.Id, AuthorId = user.Id, AuthorRole = "customer", Body = message.Trim(), CreatedAt = now,
         }, uow.Transaction);
         await uow.CommitAsync();
+        await TellStaffAsync(isGrievance ? "New grievance " + t.Number : "New support request " + t.Number, subject.Trim() + ". A reply is due within 48 hours.", t.Id);
         return t;
     }
+
+    private Task TellStaffAsync(string subject, string message, Guid ticketId) =>
+        notifier.NotifyStaffAsync("support", "staff_ticket", new Dictionary<string, object?> { ["subject"] = subject, ["message"] = message }, "/admin/support/" + ticketId);
 
     public Dictionary<string, object?> TicketOut(SupportTicketModel t, IEnumerable<TicketMessageModel>? messages = null, bool staff = false)
     {
@@ -109,6 +113,7 @@ public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISu
             t.UpdatedAt = now;
             await dal.UpdateStatusAsync(t, uow.Transaction);
             await uow.CommitAsync();
+            await TellStaffAsync("Customer replied on " + t.Number, body.Trim().Length > 200 ? body.Trim()[..200] : body.Trim(), t.Id);
         }
         return await GetTicketAsync(user, id);
     }
@@ -124,6 +129,11 @@ public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISu
             await uow.ExecuteAsync("UPDATE support_tickets SET csat_rating = @rating, csat_comment = @comment, csat_at = @at WHERE id = @id",
                 new { rating, comment = string.Join(' ', comment.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)), at = DateTimeFunctions.UtcNow(), id });
             await uow.CommitAsync();
+            if (rating <= 2)
+            {
+                var cleaned = string.Join(' ', comment.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+                await TellStaffAsync("Low rating on " + t.Number, (rating + "/5. " + cleaned).Trim(), t.Id);
+            }
         }
         return await GetTicketAsync(user, id);
     }

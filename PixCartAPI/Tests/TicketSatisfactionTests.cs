@@ -16,4 +16,18 @@ public class TicketSatisfactionTests(ApiFactory f):ApiTest(f)
         Assert.Equal(4,(await admin.Get($"/api/admin/tickets/{tid}")).Json["csat_rating"]!.GetValue<int>());
         Assert.Equal(403,(await buyer.Get("/api/admin/tickets/satisfaction")).Status);
     }
+    [Fact]
+    public async Task Support_staff_are_told_about_new_requests_replies_and_low_ratings()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9876200051");
+        async Task<List<string>> Inbox()=>(await admin.Get("/api/notifications")).Json["items"]!.AsArray().Select(n=>n!["title"]!.GetValue<string>()).ToList();
+        var tid=(await buyer.Post("/api/support/tickets",new{category="order",subject="Wrong colour",message="I got blue, not red.",is_grievance=true})).Json["id"]!.GetValue<string>();
+        Assert.Contains(await Inbox(),t=>t.StartsWith("New grievance TK"));
+        await buyer.Post($"/api/support/tickets/{tid}/messages",new{body="Any update?"});Assert.Contains(await Inbox(),t=>t.StartsWith("Customer replied on TK"));
+        await admin.Post($"/api/admin/tickets/{tid}/reply",new{body="Sorry, a replacement is on the way.",status="resolved"});
+        await buyer.Post($"/api/support/tickets/{tid}/rating",new{rating=2,comment="Slow"});Assert.Contains(await Inbox(),t=>t.StartsWith("Low rating on TK"));
+        var tid2=(await buyer.Post("/api/support/tickets",new{category="order",subject="Thanks for the help",message="All fine now, thank you"})).Json["id"]!.GetValue<string>();
+        await admin.Post($"/api/admin/tickets/{tid2}/reply",new{body="Great.",status="resolved"});await buyer.Post($"/api/support/tickets/{tid2}/rating",new{rating=5});
+        Assert.Single((await Inbox()).Where(t=>t.StartsWith("Low rating")));
+    }
 }
