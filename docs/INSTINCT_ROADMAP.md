@@ -272,3 +272,6 @@ Python: 285 passed (whole suite). .NET run in groups: all pass after two test fi
 
 ## Push 90: admin orders list can show only the late ones
 `GET /api/admin/orders?late=1` lists orders with a package that is open (placed/confirmed/packed) and older than its seller dispatch days. The dashboard "Orders late to ship" number now links there, so the number and the list agree. Both versions, tested (list total 1 then 0 once shipped). The Orders page keeps the filter in the address bar like the other filters; there is no on-page control for it yet.
+
+## Push 91: "Late to ship only" checkbox on admin Orders
+Checkbox in the Orders filter bar, both frontends, sets the `late=1` filter from Push 90 (also counts as an active filter for Clear filters). Type-check only; not run in a browser.

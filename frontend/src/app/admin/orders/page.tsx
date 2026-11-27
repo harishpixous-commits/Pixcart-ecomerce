@@ -53,6 +53,7 @@ function Orders() {
           <option value="">Any package status</option>
           {["placed", "confirmed", "packed", "shipped", "delivered", "cancelled"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
         </Select>
+        <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={!!f.late} onChange={(e) => set({ late: e.target.checked ? "1" : "", page: 1 })} />Late to ship only</label>
         <Select value={f.payment_method} onChange={(e) => set({ payment_method: e.target.value, page: 1 })} aria-label="Payment method">
           <option value="">COD and online</option><option value="cod">Cash on delivery</option><option value="online">Paid online</option>
         </Select>
