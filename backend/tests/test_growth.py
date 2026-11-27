@@ -1408,3 +1408,34 @@ async def test_cod_is_blocked_after_repeated_undelivered_cash_packages(client, a
     assert r.status_code == 400 and r.json()["error"]["code"] == "cod_risk", r.text
     r = await cod("online")
     assert r.status_code != 400 or r.json()["error"]["code"] != "cod_risk"  # paying online is never blocked by this rule
+
+
+async def test_points_expiry_reminder_goes_out_once_per_window(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+
+    from sqlalchemy import func, select
+
+    from app.db import SessionLocal, utcnow
+    from app.models import LoyaltyEntry, Notification
+    from app.services import loyalty
+    from tests.conftest import login_phone
+
+    buyer = await login_phone(client, "9770000211")
+    uid = uuid.UUID((await buyer.get("/api/auth/me")).json()["id"])
+    async with SessionLocal() as s:
+        s.add(LoyaltyEntry(user_id=uid, kind="earn", points=15, note="aging", created_at=utcnow() - timedelta(days=70)))
+        await s.commit()
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await loyalty.send_expiry_reminders(s)
+            await s.commit()
+            return n, (await s.execute(select(func.count(Notification.id)).where(Notification.user_id == uid, Notification.event == "points_expiring", Notification.channel == "inapp"))).scalar_one()
+
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "expiry_days": 90}})).status_code == 200
+    assert await run() == (0, 0)  # reminder switched off
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"expiry_reminder": True}})).status_code == 200
+    n, mine = await run()
+    assert n == 1 and mine == 1  # 70 days old of 90: lapses in 20 days
+    assert await run() == (0, 1)  # once per 30 day window

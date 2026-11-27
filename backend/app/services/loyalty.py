@@ -230,3 +230,33 @@ async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
         "expiring_soon": await expiring_soon(session, user_id, cfg), "expiring_days": EXPIRY_WARN_DAYS,  # points that lapse within that many days
         "history": [{"kind": r.kind, "points": r.points, "note": r.note, "at": r.created_at.isoformat()} for r in rows],
     }
+
+
+async def send_expiry_reminders(session: AsyncSession, batch: int = 200) -> int:
+    """One in-app note and email per member whose points lapse within EXPIRY_WARN_DAYS (Admin -> Growth -> Loyalty: expiry_reminder,
+    off by default). Not sent again while the last one is less than that many days old. Returns the notes sent."""
+    from datetime import timedelta
+
+    from app.models import Notification, User
+    from app.services.notify import notify
+
+    cfg = (await growth.get(session))["loyalty"]
+    if not cfg["enabled"] or not cfg["expiry_days"] or not cfg["expiry_reminder"]:
+        return 0
+    now = utcnow()
+    soon = now - timedelta(days=cfg["expiry_days"]) + timedelta(days=EXPIRY_WARN_DAYS)
+    user_ids = (await session.execute(select(LoyaltyEntry.user_id).where(LoyaltyEntry.points > 0, LoyaltyEntry.created_at <= soon).distinct().limit(batch))).scalars().all()
+    sent = 0
+    for uid in user_ids:
+        points = await expiring_soon(session, uid, cfg)
+        if points <= 0:
+            continue
+        recent = (await session.execute(select(Notification.id).where(Notification.user_id == uid, Notification.event == "points_expiring", Notification.channel == "inapp",
+                                                                      Notification.created_at > now - timedelta(days=EXPIRY_WARN_DAYS)).limit(1))).first()
+        user = await session.get(User, uid)
+        if recent or user is None:
+            continue
+        await notify(session, "points_expiring", user, {"points": str(points), "days": str(EXPIRY_WARN_DAYS)}, link="/rewards", channels=("inapp", "email"))
+        sent += 1
+    await session.flush()
+    return sent

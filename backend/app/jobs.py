@@ -41,6 +41,7 @@ _LOCK_CART_REMINDERS = 7_201_015
 _LOCK_SELLER_AUTO_SUSPEND = 7_201_016
 _LOCK_SAVED_SEARCHES = 7_201_017
 _LOCK_REVIEW_REMINDERS = 7_201_019
+_LOCK_POINTS_EXPIRY = 7_201_030
 _LOCK_CAMPAIGNS = 7_201_018
 _LOCK_SHIP_REMINDERS = 7_201_020
 
@@ -108,6 +109,18 @@ async def ship_reminders_job() -> None:
             log.info("sent %d ship reminder(s)", n)
 
     await _with_lock(_LOCK_SHIP_REMINDERS, run)
+
+
+async def points_expiry_job() -> None:
+    async def run(session):
+        from app.services import loyalty
+
+        n = await loyalty.send_expiry_reminders(session)
+        await session.commit()
+        if n:
+            log.info("sent %d points-expiry reminder(s)", n)
+
+    await _with_lock(_LOCK_POINTS_EXPIRY, run)
 
 
 async def review_reminders_job() -> None:
@@ -328,6 +341,7 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(seller_auto_suspend_job, "interval", hours=1, id="seller_auto_suspend", max_instances=1, coalesce=True)
     scheduler.add_job(campaigns_job, "interval", minutes=5, id="campaigns", max_instances=1, coalesce=True)
     scheduler.add_job(ship_reminders_job, "interval", hours=1, id="ship_reminders", max_instances=1, coalesce=True)
+    scheduler.add_job(points_expiry_job, "interval", hours=6, id="points_expiry", max_instances=1, coalesce=True)
     scheduler.add_job(review_reminders_job, "interval", hours=1, id="review_reminders", max_instances=1, coalesce=True)
     scheduler.add_job(saved_searches_job, "interval", minutes=30, id="saved_searches", max_instances=1, coalesce=True)
     scheduler.add_job(cart_reminders_job, "interval", minutes=30, id="cart_reminders", max_instances=1, coalesce=True)
