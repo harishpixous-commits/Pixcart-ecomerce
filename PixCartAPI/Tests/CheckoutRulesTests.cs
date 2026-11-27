@@ -876,11 +876,14 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(0, r["late_count"]!.GetValue<int>()); var days = r["late_after_days"]!.GetValue<int>(); Assert.True(days >= 1);
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET created_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL @d DAY) WHERE id = @sid", new { d = days + 1, sid });
         Assert.Equal(1, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>());
+        var staff = await Admin();
+        Assert.Equal(1, (await staff.Get("/api/admin/dashboard")).Json["orders_late_to_ship"]!.GetValue<int>()); // staff see it too
         Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/confirm")).Status);
         Assert.Equal(1, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>());
         Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/pack")).Status);
         Assert.Equal(200, (await seller.Post($"/api/seller/orders/{sid}/ship", new { courier_name = "DTDC", tracking_number = "AWB9" })).Status);
         Assert.Equal(0, (await seller.Get("/api/seller/orders")).Json["late_count"]!.GetValue<int>()); // shipped: no longer waiting on the seller
+        Assert.Equal(0, (await staff.Get("/api/admin/dashboard")).Json["orders_late_to_ship"]!.GetValue<int>());
     }
 
     [Fact]

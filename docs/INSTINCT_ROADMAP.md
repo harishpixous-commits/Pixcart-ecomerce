@@ -248,3 +248,6 @@ The review reminder note now links to the first unreviewed product page (#review
 ## Push 85: seller orders page flags late orders
 - GET /api/seller/orders now also returns late_count (open packages: placed, confirmed or packed, created more than the seller own dispatch_days ago, at least 1 day) and late_after_days. The seller Orders page shows a note above the tabs ("N open orders are more than D days old. Ship them first."). No new route, no setting, no schema change; always on.
 - Tested: one new test each side (0 when fresh, 1 when old, still 1 after confirm, 0 once shipped). Screens type-checked only.
+
+## Push 86: admin dashboard "Orders late to ship"
+Staff dashboard gets `orders_late_to_ship`: open packages (placed/confirmed/packed) older than their seller own dispatch days (min 1). Stat shown only when above zero, links to admin orders. Both versions. Tested in the late-orders tests on both sides.

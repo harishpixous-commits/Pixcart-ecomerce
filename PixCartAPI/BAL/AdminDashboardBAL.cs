@@ -15,6 +15,7 @@ public class AdminDashboardBAL(AdminDashboardDAL data,IAccessBAL access):IAdminD
             ["gmv_30d"]="SELECT COALESCE(SUM(grand_total-refunded_total),0) FROM orders WHERE status='placed' AND placed_at>=@since",
             ["orders_30d"]="SELECT COUNT(*) FROM orders WHERE status='placed' AND placed_at>=@since",
             ["commission_30d"]="SELECT COALESCE(SUM(commission_paise),0) FROM sub_orders WHERE status NOT IN ('pending_payment','cancelled') AND created_at>=@since",
+            ["orders_late_to_ship"]="SELECT COUNT(*) FROM sub_orders s JOIN sellers k ON k.id=s.seller_id WHERE s.status IN ('placed','confirmed','packed') AND s.created_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL GREATEST(k.dispatch_days,1) DAY)",
             ["refunds_needing_attention"]="SELECT COUNT(*) FROM refunds WHERE status='failed'",
             ["reviews_needing_attention"]="SELECT COUNT(*) FROM reviews WHERE status='pending' OR report_count>0 OR (media_status='pending' AND JSON_LENGTH(media)>0)",
             ["product_reports_open"]="SELECT COUNT(*) FROM product_reports WHERE status='open'",

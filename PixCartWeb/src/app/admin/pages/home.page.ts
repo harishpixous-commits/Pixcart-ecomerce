@@ -18,7 +18,7 @@ import { PcLink } from "../../shared/ui/link";
 import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, ErrorNote, Select } from "../../shared/ui/ui";
 
-type D = { sellers_pending_review: number; products_pending_review: number; orders_today: number; gmv_30d: number; orders_30d: number; commission_30d: number; refunds_needing_attention: number; active_sellers: number; customers: number; live_products: number };
+type D = { orders_late_to_ship?: number; sellers_pending_review: number; products_pending_review: number; orders_today: number; gmv_30d: number; orders_30d: number; commission_30d: number; refunds_needing_attention: number; active_sellers: number; customers: number; live_products: number };
 type K = {
   gmv: number; gmv_prev: number; orders: number; orders_prev: number; aov: number; units: number; commission: number; discounts: number;
   cancellation_rate: number; return_rate: number; returned_value: number; avg_hours_to_ship: number | null; views: number; add_to_cart: number;
@@ -181,6 +181,9 @@ export class FleetGlance {
         <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <pc-stat label="Sellers waiting for verification" [value]="d()!.sellers_pending_review" href="/admin/sellers?status=submitted" />
           <pc-stat label="Listings waiting for review" [value]="d()!.products_pending_review" href="/admin/products" />
+          @if (d()!.orders_late_to_ship) {
+            <pc-stat label="Orders late to ship" [value]="d()!.orders_late_to_ship!" href="/admin/orders" />
+          }
           <pc-stat label="Refunds that failed" [value]="d()!.refunds_needing_attention" href="/admin/refunds?status=failed" />
           @if (tickets() !== undefined) {
             <pc-stat label="Tickets past the 48-hour reply limit" [value]="tickets()!" href="/admin/support?overdue=1" />
