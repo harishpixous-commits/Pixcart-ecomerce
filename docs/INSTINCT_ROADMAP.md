@@ -204,3 +204,7 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 
 ## Push 76: CSV bulk edit matches by SKU
 The seller CSV upload now accepts an id or sku column. A row with a blank id is matched on its SKU (case-insensitive, leading apostrophe ignored) among that seller own versions. New row reasons: unknown_sku, ambiguous_sku (SKU shared by two versions). An id still wins over a SKU; another seller SKU is never matched. The downloaded template is unchanged. Both versions, with tests (Python 2 bulk_edit tests, .NET Seller_bulk_edit_csv_round_trip). Screens type-checked only. The old "sku only file is invalid" assertion was flipped on purpose.
+
+
+## Push 77: review reminder opens the review form
+The review reminder note now links to the first unreviewed product page (#reviews) instead of the order page. Both versions, assertion added to the existing reminder test on each side. Still in-app only (email/SMS channel not built).

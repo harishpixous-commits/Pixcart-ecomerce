@@ -752,6 +752,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { review_reminders = new { enabled = true, after_days = 5, max_age_days = 30 } })).Status);
         Assert.Equal(1, await Run());
         Assert.Equal(1, await Count(a.Id)); Assert.Equal(0, await Count(b.Id)); Assert.Equal(0, await Count(c.Id));
+        Assert.EndsWith("#reviews", await db.ExecuteScalarAsync<string>("SELECT link FROM notifications WHERE user_id = @uid AND event = 'review_reminder'", new { uid = Guid.Parse(a.Id) }));
         Assert.Equal(0, await Run());
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET delivered_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 6 DAY) WHERE id = @sb", new { sb });
         Assert.Equal(1, await Run()); Assert.Equal(1, await Count(b.Id));

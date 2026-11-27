@@ -22,9 +22,10 @@ public static class ReviewReminders
         {
             await db.ExecuteAsync("UPDATE sub_orders SET review_reminded_at = @now WHERE id = @id", new { now, id = r.Id }); // once, whether or not a note goes out
             var item = await db.QueryFirstOrDefaultAsync<string>(
-                "SELECT i.title FROM order_items i WHERE i.sub_order_id = @id AND NOT EXISTS (SELECT 1 FROM reviews v WHERE v.user_id = @userId AND v.product_id = i.product_id) ORDER BY i.title LIMIT 1", new { id = r.Id, userId = r.UserId });
+                "SELECT CONCAT(i.title, '\t', p.slug) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.sub_order_id = @id AND NOT EXISTS (SELECT 1 FROM reviews v WHERE v.user_id = @userId AND v.product_id = i.product_id) ORDER BY i.title LIMIT 1", new { id = r.Id, userId = r.UserId });
             if (item is null) continue;
-            await notify.NotifyUserAsync(r.UserId, "review_reminder", new Dictionary<string, string> { ["item"] = item }, $"/orders/{r.OrderId}");
+            var parts = item.Split('\t'); // title, product slug: the note opens that product's review form
+            await notify.NotifyUserAsync(r.UserId, "review_reminder", new Dictionary<string, string> { ["item"] = parts[0] }, $"/p/{parts[1]}#reviews");
             sent++;
         }
         return sent;
