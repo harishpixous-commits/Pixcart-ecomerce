@@ -1736,6 +1736,24 @@ public class OrdersBAL(
             var paid = false;
             foreach (var pay in await orders.PaymentsForOrderAsync(order.Id))
             {
+                if (pay.Provider != "razorpay")
+                {
+                    // Cashfree, PhonePe, PayU, Stripe: that gateway's own records decide (Razorpay would not know this payment)
+                    try
+                    {
+                        await using var guow = await db.BeginAsync();
+                        var current = await orders.PaymentForUpdateAsync(pay.Id, guow) ?? pay;
+                        var res = await CheckWithGatewayAsync(current, guow);
+                        await guow.CommitAsync();
+                        if (res["result"]?.GetValue<string>() is "paid" or "already_paid" or "already" or "refund") paid = true;
+                    }
+                    catch (Exception)
+                    {
+                        paid = true; // cannot verify right now: leave the order alone
+                    }
+                    if (paid) break;
+                    continue;
+                }
                 IReadOnlyList<System.Text.Json.Nodes.JsonObject>? attempts;
                 try
                 {

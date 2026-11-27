@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Model.Constants;
+using Model.DomainModel;
 using Utils;
 using Utils.Interface;
 
@@ -352,6 +353,55 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
             "SELECT provider_payment_id AS ProviderPaymentId, amount_paise AS AmountPaise, reason AS Reason FROM refunds WHERE order_id = @oid", new { oid });
         var refund = Assert.Single(refunds);
         Assert.Equal(new RefundRow { ProviderPaymentId = "pay_SYNTH_SECOND", AmountPaise = 10000, Reason = "Duplicate payment" }, refund);
+    }
+
+    private sealed class NotPaidGateway : IPaymentGatewayBAL
+    {
+        public List<string> Checked = [];
+        public Task<JsonObject> CheckAsync(PaymentModel payment, IUnitOfWork uow, Func<PaymentModel, string, string, long, IUnitOfWork, Task<string>> markPaid)
+        {
+            Checked.Add(payment.ProviderOrderId);
+            return Task.FromResult(new JsonObject { ["result"] = "not_paid", ["attempts"] = new JsonArray(), ["waiting"] = false, ["reason"] = "" });
+        }
+        public Task<PaymentModel> StartAsync(OrderModel o, UserModel u, long a, long? c, string cc, IUnitOfWork uow, string? p = null, string? af = null) => throw new InvalidOperationException();
+        public Task<JsonArray> AlternativesAsync(string c, string cur) => throw new InvalidOperationException();
+        public Task<JsonObject> PayloadAsync(OrderModel o, PaymentModel p, UserModel u, string b) => throw new InvalidOperationException();
+        public Task<GatewayRefund> RefundAsync(PaymentModel p, string pp, long c, string r, string n) => throw new InvalidOperationException();
+        public Task<PaymentGateway> AdapterAsync(string code) => throw new InvalidOperationException();
+        public Task<JsonObject> GatewaysAsync(UserModel a) => throw new InvalidOperationException();
+        public Task<JsonObject> UpdateRoutingAsync(UserModel a, JsonObject b) => throw new InvalidOperationException();
+        public Task<JsonObject> TestAsync(UserModel a, string c) => throw new InvalidOperationException();
+    }
+
+    [Fact]
+    public async Task The_expiry_job_asks_the_gateway_that_took_the_payment_not_Razorpay()
+    {
+        var buyer = await LoginPhone("9620000205", "Ravi");
+        var oid = Guid.NewGuid();
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+            var orders = scope.ServiceProvider.GetRequiredService<OrdersDAL>();
+            await using var tx = await db.BeginAsync();
+            await orders.InsertOrderAsync(new()
+            {
+                Id = oid, Number = "SYNTH-EXPIRY-CF", UserId = Guid.Parse(buyer.Id), Status = "pending_payment", PaymentMethod = "online", PaymentStatus = "pending",
+                ShipTo = "{}", ItemsTotal = 10000, GrandTotal = 10000, Currency = "INR", FxRate = 1, Fees = "[]", IdempotencyKey = Guid.NewGuid().ToString(),
+                PaymentExpiresAt = Now.AddMinutes(-1), CreatedAt = Now, UpdatedAt = Now,
+            }, tx);
+            await tx.ExecuteAsync("INSERT INTO payments (id, order_id, provider, provider_order_id, amount_paise, currency, status, method, error) " +
+                                  "VALUES (@pid, @oid, 'cashfree', 'cf_SYNTH_EXPIRY', 10000, 'INR', 'created', '', '')", new { pid = Guid.NewGuid(), oid });
+            await tx.CommitAsync();
+        }
+        var fake = new NotPaidGateway();
+        using var isolated = Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.RemoveAll<IPaymentGatewayBAL>();
+            s.AddSingleton<IPaymentGatewayBAL>(fake);
+        }));
+        await using (var scope = isolated.Services.CreateAsyncScope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IOrdersBAL>().ExpireUnpaidOrdersAsync() >= 1);
+        Assert.Contains("cf_SYNTH_EXPIRY", fake.Checked);
     }
 
     [Fact]
