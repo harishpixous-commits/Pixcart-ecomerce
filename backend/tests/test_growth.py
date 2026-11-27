@@ -954,6 +954,7 @@ async def test_review_reminder_goes_once_per_delivered_package_that_is_not_revie
     assert await run() == 1  # the shirt package only: the phone is reviewed, B's package is too recent
     got = await notes(a)
     assert len(got) == 1 and "Handloom Cotton Shirt Blue" in got[0]["title"] and await notes(b) == []
+    assert got[0]["link"] == f"/p/{shirt['slug']}#reviews"
     assert await run() == 0  # once only
     await age(s3, 6)
     assert await run() == 1 and len(await notes(b)) == 1

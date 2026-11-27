@@ -1,6 +1,6 @@
 """Review reminders (Admin -> Growth -> Review reminders, off by default). A job sends one in-app note, once per delivered package,
 after_days after delivery, when the shopper has not reviewed any product in it yet. Packages delivered more than max_age_days ago are
-skipped, so switching the module on does not message old orders."""
+skipped, so switching the module on does not message old orders. The note links to the first unreviewed product's review form."""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -9,7 +9,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import utcnow
-from app.models import Order, OrderItem, Review, SubOrder, User
+from app.models import Order, OrderItem, Product, Review, SubOrder, User
 from app.services import growth
 from app.services.notify import notify
 
@@ -28,17 +28,17 @@ async def send_due(session: AsyncSession, batch: int = 200) -> int:
     sent = 0
     for sub, user_id in rows:
         sub.review_reminded_at = now  # once, whether or not a note goes out
-        item = (await session.execute(
-            select(OrderItem.title).where(
+        first = (await session.execute(
+            select(OrderItem.title, Product.slug).join(Product, Product.id == OrderItem.product_id).where(
                 OrderItem.sub_order_id == sub.id,
                 ~exists().where(Review.user_id == user_id, Review.product_id == OrderItem.product_id))
-            .order_by(OrderItem.title).limit(1))).scalar_one_or_none()
-        if item is None:
+            .order_by(OrderItem.title).limit(1))).first()
+        if first is None:
             continue  # everything in the package is already reviewed
         user = await session.get(User, user_id)
         if user is None:
             continue
-        await notify(session, "review_reminder", user, {"item": item}, link=f"/orders/{sub.order_id}", channels=("inapp",))
+        await notify(session, "review_reminder", user, {"item": first[0]}, link=f"/p/{first[1]}#reviews", channels=("inapp",))
         sent += 1
     await session.flush()
     return sent
