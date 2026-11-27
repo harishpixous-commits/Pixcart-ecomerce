@@ -67,7 +67,20 @@ me_router = APIRouter(prefix="/api", tags=["loyalty"])
 
 @me_router.get("/loyalty")
 async def my_points(user: CurrentUser, session: SessionDep) -> dict:
-    return await loyalty.summary(session, user.id)
+    out = await loyalty.summary(session, user.id)
+    await session.commit()
+    return out
+
+
+class RedeemIn(BaseModel):
+    points: int = Field(ge=1, le=1000000)
+
+
+@me_router.post("/loyalty/redeem")
+async def redeem_points(body: RedeemIn, user: CurrentUser, session: SessionDep) -> dict:
+    out = await loyalty.redeem(session, user.id, body.points)
+    await session.commit()
+    return out
 
 
 class ReferralIn(BaseModel):

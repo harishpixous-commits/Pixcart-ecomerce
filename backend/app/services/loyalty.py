@@ -10,7 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import utcnow
-from app.models import LoyaltyEntry, SubOrder
+from app.core.errors import ApiError
+from app.models import Coupon, LoyaltyEntry, SubOrder
 from app.services import growth
 
 
@@ -38,7 +39,59 @@ async def earn_for_delivery(session: AsyncSession, sub: SubOrder, user_id: uuid.
     return points
 
 
+REDEEM_DAYS = 30
+CODE_PREFIX = "LP"
+
+
+async def redeem(session: AsyncSession, user_id: uuid.UUID, points: int) -> dict:
+    """Turns points into a single-use platform-funded coupon (flat amount), applied at checkout like any coupon so every
+    existing discount rule (per-line split, seller/platform funding, refunds, cancellations) stays the same.
+    The coupon needs a cart of at least discount / max_redeem_percent. Unused after 30 days: the points come back."""
+    import secrets
+    from datetime import timedelta
+
+    cfg = (await growth.get(session))["loyalty"]
+    if not cfg["enabled"]:
+        raise ApiError("Loyalty points are not available right now.", "loyalty_off", 400)
+    if points < cfg["min_redeem_points"]:
+        raise ApiError(f"Redeem at least {cfg['min_redeem_points']} points at a time.", "below_minimum", 400)
+    await restore_expired(session, user_id)
+    balance = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id))).scalar_one()
+    if points > int(balance):
+        raise ApiError("You do not have that many points.", "balance_too_low", 400)
+    discount = points * cfg["point_value_paise"]
+    min_order = -(-discount * 100 // cfg["max_redeem_percent"])
+    now = utcnow()
+    code = CODE_PREFIX + secrets.token_hex(4).upper()
+    session.add(Coupon(code=code, description="Loyalty points", kind="flat", value=discount, min_order_paise=min_order, ends_at=now + timedelta(days=REDEEM_DAYS),
+                       usage_limit=1, per_user_limit=1, funded_by="platform", is_active=True, show_on_checkout=False))
+    session.add(LoyaltyEntry(user_id=user_id, kind="redeem", points=-points, note=f"Redeemed for coupon {code}", created_at=now))
+    await session.flush()
+    return {"code": code, "discount_paise": discount, "min_order_paise": min_order, "valid_days": REDEEM_DAYS, "balance": int(balance) - points}
+
+
+async def restore_expired(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """Gives back the points of a redeemed coupon that ran out unused (once per coupon)."""
+    now = utcnow()
+    rows = (await session.execute(select(LoyaltyEntry).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.kind == "redeem"))).scalars().all()
+    back = 0
+    for r in rows:
+        code = r.note.rsplit(" ", 1)[-1]
+        if not code.startswith(CODE_PREFIX):
+            continue
+        done = (await session.execute(select(LoyaltyEntry.id).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.kind == "reverse", LoyaltyEntry.note == f"Coupon {code} expired unused"))).first()
+        cp = (await session.execute(select(Coupon).where(Coupon.code == code))).scalar_one_or_none()
+        if done or cp is None or cp.used_count > 0 or cp.ends_at is None or cp.ends_at > now:
+            continue
+        session.add(LoyaltyEntry(user_id=user_id, kind="reverse", points=-r.points, note=f"Coupon {code} expired unused", created_at=now))
+        back += -r.points
+    if back:
+        await session.flush()
+    return back
+
+
 async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
+    await restore_expired(session, user_id)
     cfg = (await growth.get(session))["loyalty"]
     balance = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id))).scalar_one()
     lifetime = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0))).scalar_one()

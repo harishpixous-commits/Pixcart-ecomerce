@@ -166,3 +166,44 @@ async def test_referral_rewards_both_sides_once_on_the_friends_first_delivery(cl
     await cy.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
     assert (await cy.post("/api/orders", {"address_id": await add_address(cy), "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).status_code == 201
     assert (await cy.post("/api/referral/apply", {"code": code})).json()["error"]["code"] == "not_new"
+
+
+async def test_points_become_a_single_use_coupon_and_come_back_if_unused(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+    from sqlalchemy import update
+    from app.db import SessionLocal, utcnow
+    from app.models import Coupon
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000021")
+    addr = await add_address(buyer)
+    assert (await buyer.post("/api/loyalty/redeem", {"points": 100})).json()["error"]["code"] == "loyalty_off"
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "min_redeem_points": 100, "max_redeem_percent": 50, "point_value_paise": 100}})).status_code == 200
+    assert (await admin.post("/api/admin/growth/loyalty/adjust", {"user_id": buyer.user["id"], "points": 300, "note": "Goodwill"})).status_code == 200
+    assert (await buyer.post("/api/loyalty/redeem", {"points": 50})).json()["error"]["code"] == "below_minimum"
+    assert (await buyer.post("/api/loyalty/redeem", {"points": 400})).json()["error"]["code"] == "balance_too_low"
+    r = (await buyer.post("/api/loyalty/redeem", {"points": 100})).json()
+    assert r["discount_paise"] == 10000 and r["balance"] == 200 and r["min_order_paise"] == 20000
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 200
+
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex, "coupon_code": r["code"]}))
+    assert o.status_code == 201, o.text
+    order = o.json()["order"]
+    assert order["discount_total"] == 10000
+    # single use
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    again = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex, "coupon_code": r["code"]})
+    assert again.status_code == 400
+
+    # a second redemption that is never used expires and the points come back, once
+    r2 = (await buyer.post("/api/loyalty/redeem", {"points": 100})).json()
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 100
+    async with SessionLocal() as s:
+        await s.execute(update(Coupon).where(Coupon.code == r2["code"]).values(ends_at=utcnow() - timedelta(days=1)))
+        await s.commit()
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 200
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 200
