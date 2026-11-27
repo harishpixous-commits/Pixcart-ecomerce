@@ -156,3 +156,23 @@ async def seller_scorecard(session: AsyncSession, cfg: dict[str, Any], seller_id
         s["level"] = "not_enough_orders" if not enough else ("critical" if "critical" in levels else "warning" if "warning" in levels else "ok")
         out.append(s)
     return sorted(out, key=lambda x: ({"critical": 0, "warning": 1, "ok": 2, "not_enough_orders": 3}[x["level"]], -x["orders"]))
+
+
+async def cod_block_reason(session: AsyncSession, user_id: uuid.UUID, pincode: str, grand_total: int) -> str | None:
+    """Why cash on delivery is refused for this order under the Admin -> Growth -> COD risk rules, or None.
+    (The existing marketplace limit cod_max_order_paise is checked separately.)"""
+    from app.models import Order
+
+    cfg = (await get(session))["cod_risk"]
+    if not cfg["enabled"]:
+        return None
+    if pincode in cfg["blocked_pincodes"]:
+        return "Cash on delivery is not available for this pincode. Please pay online."
+    if cfg["max_cod_paise"] and grand_total > cfg["max_cod_paise"]:
+        return "Cash on delivery is not available for this order value. Please pay online."
+    if cfg["new_account_max_cod_paise"]:
+        delivered = (await session.execute(
+            select(SubOrder.id).join(Order, Order.id == SubOrder.order_id).where(Order.user_id == user_id, SubOrder.status == "delivered").limit(1))).first()
+        if not delivered and grand_total > cfg["new_account_max_cod_paise"]:
+            return "Cash on delivery for a first order is limited. Please pay online or order a smaller amount."
+    return None

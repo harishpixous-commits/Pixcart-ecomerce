@@ -88,3 +88,35 @@ async def test_sitemap_lists_live_pages_and_can_be_switched_off(client, admin, c
     assert "/store/" in r.text and "/c/" not in r.text
     assert (await admin.put("/api/admin/growth/settings", {"seo": {"sitemap_enabled": False}})).status_code == 200
     assert (await client.get("/api/seo/sitemap.xml")).status_code == 404
+
+
+async def test_cod_risk_rules_refuse_cash_orders(client, admin, categories):
+    import uuid
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, _, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000003")
+    addr = await add_address(buyer)
+
+    async def cod():
+        await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+        return await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})
+
+    # off: allowed (this is the existing behaviour)
+    r = await cod()
+    assert r.status_code == 201, r.text
+    total = r.json()["order"]["grand_total"]
+    # first-order limit below the order value
+    assert (await admin.put("/api/admin/growth/settings", {"cod_risk": {"enabled": True, "new_account_max_cod_paise": max(total - 1, 0) or 1}})).status_code == 200
+    r = await cod()
+    assert r.status_code == 400 and r.json()["error"]["code"] == "cod_risk", r.text
+    # online payment is never blocked by these rules
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+    # value cap
+    assert (await admin.put("/api/admin/growth/settings", {"cod_risk": {"new_account_max_cod_paise": 0, "max_cod_paise": 1}})).status_code == 200
+    r = await cod()
+    assert r.status_code == 400 and r.json()["error"]["code"] == "cod_risk"
+    # switching the module off lifts it
+    assert (await admin.put("/api/admin/growth/settings", {"cod_risk": {"enabled": False}})).status_code == 200
+    assert (await cod()).status_code == 201

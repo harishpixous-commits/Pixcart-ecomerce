@@ -359,6 +359,11 @@ async def place_order(
             raise ApiError("Cash on delivery is not available", "cod_unavailable")
         if grand_total > cfg["cod_max_order_paise"]:
             raise ApiError("Cash on delivery is not available for this order value. Please pay online.", "cod_limit")
+        from app.services import growth as growth_svc  # Growth -> COD risk rules (off unless switched on)
+
+        reason = await growth_svc.cod_block_reason(session, user.id, address.pincode, grand_total)
+        if reason:
+            raise ApiError(reason, "cod_risk")
     elif not (await get_integrations(session)).online_payments:
         raise ApiError("Online payment is not available right now. Please choose cash on delivery.", "online_unavailable")
     if expected_total is not None and expected_total != grand_total:
