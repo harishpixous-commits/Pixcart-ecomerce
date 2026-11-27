@@ -87,10 +87,11 @@ const label = (k: string): string => {
           <div class="overflow-x-auto rounded-xl bg-white">
             <h3 class="p-3 font-semibold">Bought online</h3>
             <table class="w-full text-left text-sm" data-testid="gift-purchases">
-              <thead><tr class="border-b border-line"><th class="p-3">Buyer</th><th class="p-3">Amount</th><th class="p-3">Gateway</th><th class="p-3">Status</th><th class="p-3">Started</th><th class="p-3">Note</th></tr></thead>
+              <thead><tr class="border-b border-line"><th class="p-3">Buyer</th><th class="p-3">Amount</th><th class="p-3">Gateway</th><th class="p-3">Status</th><th class="p-3">Started</th><th class="p-3">Note</th><th class="p-3"></th></tr></thead>
               <tbody>
                 @for (p of purchases(); track p.id) {
-                  <tr class="border-b border-line/50"><td class="p-3">{{ p.user }} {{ p.phone }}</td><td class="p-3">{{ rupees(p.amount_paise) }}</td><td class="p-3">{{ p.gateway }}</td><td class="p-3">{{ p.status }}</td><td class="p-3">{{ date(p.created_at) }}</td><td class="p-3 text-ink-soft">{{ p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error }}</td></tr>
+                  <tr class="border-b border-line/50"><td class="p-3">{{ p.user }} {{ p.phone }}</td><td class="p-3">{{ rupees(p.amount_paise) }}</td><td class="p-3">{{ p.gateway }}</td><td class="p-3">{{ p.status }}</td><td class="p-3">{{ date(p.created_at) }}</td><td class="p-3 text-ink-soft">{{ p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error }}</td>
+                    <td class="p-3">@if (p.status === "created") {<button type="button" class="font-semibold text-peacock" (click)="checkPurchase(p)">Check payment</button>}</td></tr>
                 }
               </tbody>
             </table>
@@ -194,6 +195,16 @@ export class AdminGrowthPage {
   private loadCards(): void {
     api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => this.cards.set(x.items)).catch(quietly);
     api<{ items: Purchase[] }>("/api/admin/growth/gift-card-purchases").then((x) => this.purchases.set(x.items)).catch(quietly);
+  }
+
+  protected async checkPurchase(p: Purchase): Promise<void> {
+    try {
+      const r = await api<{ status: string }>(`/api/admin/growth/gift-card-purchases/${p.id}/check`, { method: "POST", body: {} });
+      this.toast.show(r.status === "issued" ? "Paid. The card was issued." : r.status === "failed" ? "The payment failed." : "Not paid yet.");
+      this.loadCards();
+    } catch (x) {
+      this.toast.show(x instanceof ApiError ? x.message : "Could not check");
+    }
   }
 
   protected async issue(e: Event): Promise<void> {

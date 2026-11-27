@@ -54,6 +54,14 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
     }
     [HttpGet("/api/admin/growth/gift-cards"), RouteGuard("perm:marketing")] public async Task<object> All() { await me.RequireAsync(); return new { items = await BAL.GiftCards.ListAsync(db) }; }
     [HttpGet("/api/admin/growth/gift-card-purchases"), RouteGuard("perm:marketing")] public async Task<object> Purchases() { await me.RequireAsync(); return new { items = await BAL.GiftCards.PurchasesAsync(db) }; }
+    [HttpPost("/api/admin/growth/gift-card-purchases/{id:guid}/check"), RouteGuard("perm:marketing")]
+    public async Task<object> StaffCheck(Guid id)
+    {
+        var admin = await me.RequireAsync();
+        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.CheckPurchaseAsync(tx, gateways, null, id);
+        await audit.AuditAsync(admin, "gift_card.purchase_check", "gift_card_purchase", id.ToString(), r["status"]!.GetValue<string>(), tx);
+        await tx.CommitAsync(); r.Remove("code"); return r; // the code goes to the buyer, staff see it in the cards list
+    }
     [HttpPost("/api/admin/growth/gift-cards/{id:guid}/void"), RouteGuard("perm:marketing")]
     public async Task<object> Void(Guid id)
     {

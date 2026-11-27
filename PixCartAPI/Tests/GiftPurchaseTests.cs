@@ -92,6 +92,14 @@ public class GiftPurchaseTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(2, listed.Count);
         Assert.NotNull(listed[0]!["gift_card_id"]);
         Assert.Equal(403, (await buyer.Get("/api/admin/growth/gift-card-purchases")).Status);
+        // staff can check a purchase the shopper never came back to: paid in full issues the card once, and no code is returned to staff
+        var pid3 = Guid.Parse((await Tx(t => GiftCards.StartPurchaseAsync(t, gw, integ, user, 20000)))["id"]!.GetValue<string>());
+        pay.Now = [new GatewayAttempt("a4", "captured", "upi", 20000, "")];
+        Assert.Equal(403, (await buyer.Post($"/api/admin/growth/gift-card-purchases/{pid3}/check", new { })).Status);
+        var staff = await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, null, pid3));
+        Assert.Equal("issued", staff["status"]!.GetValue<string>());
+        Assert.Equal("issued", (await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, null, pid3)))["status"]!.GetValue<string>());
+        Assert.Equal(2, await Cards());
     }
 
     [Fact]

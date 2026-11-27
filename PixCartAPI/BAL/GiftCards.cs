@@ -86,10 +86,10 @@ public static class GiftCards
         return view;
     }
 
-    public static async Task<JsonObject> CheckPurchaseAsync(IUnitOfWork uow, IPaymentGatewayBAL gateways, Guid userId, Guid purchaseId)
+    public static async Task<JsonObject> CheckPurchaseAsync(IUnitOfWork uow, IPaymentGatewayBAL gateways, Guid? userId, Guid purchaseId)
     {
         var p = await uow.QueryFirstOrDefaultAsync<Purchase>(PurchaseSql + "WHERE id = @purchaseId FOR UPDATE", new { purchaseId });
-        if (p is null || p.UserId != userId) throw new NotFoundException("Purchase");
+        if (p is null || (userId is not null && p.UserId != userId)) throw new NotFoundException("Purchase"); // staff pass null and may check anyone's
         if (p.Status == "issued") return PurchaseView(p, await uow.QueryFirstOrDefaultAsync<Card>(CardSql + "WHERE id = @id", new { id = p.CardId }));
         List<GatewayAttempt> attempts;
         try { attempts = await (await gateways.AdapterAsync(p.Gateway)).AttemptsAsync(p.Ref); }
