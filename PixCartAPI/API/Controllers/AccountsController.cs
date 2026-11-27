@@ -123,6 +123,13 @@ public class CustomerAccountController(
     [HttpPost("/api/support/tickets/{ticketId}/messages"), SignedIn]
     public async Task<object> Reply(Guid ticketId, [FromBody] TicketMessageIn body) => await support.ReplyAsync(await me.RequireAsync(), ticketId, body.Body!);
 
+    [HttpPost("/api/support/tickets/{ticketId}/rating"), RouteGuard("signed_in")]
+    public async Task<object> Rate(Guid ticketId, [FromBody] TicketRatingIn body)
+    {
+        if (body.Rating is < 1 or > 5 || (body.Comment ?? "").Length > 500) throw new AppException("Rating must be 1 to 5 and the comment at most 500 characters", "validation_error", 422);
+        return await support.RateAsync(await me.RequireAsync(), ticketId, body.Rating, body.Comment ?? "");
+    }
+
     [HttpPost("/api/support/tickets/{ticketId}/close"), SignedIn]
     public async Task<object> Close(Guid ticketId) => await support.CloseAsync(await me.RequireAsync(), ticketId);
 

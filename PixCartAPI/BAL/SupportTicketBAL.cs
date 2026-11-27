@@ -60,6 +60,7 @@ public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISu
             ["subject"] = t.Subject, ["status"] = t.Status, ["priority"] = t.Priority, ["is_grievance"] = t.IsGrievance,
             ["order_id"] = t.OrderId?.ToString(), ["created_at"] = DateTimeFunctions.Iso(t.CreatedAt), ["updated_at"] = DateTimeFunctions.Iso(t.UpdatedAt),
             ["acknowledged_at"] = DateTimeFunctions.Iso(t.AcknowledgedAt), ["resolved_at"] = DateTimeFunctions.Iso(t.ResolvedAt),
+            ["csat_rating"] = t.CsatRating, ["csat_comment"] = t.CsatComment ?? "", ["csat_at"] = DateTimeFunctions.Iso(t.CsatAt),
         };
         if (staff)
         {
@@ -107,6 +108,21 @@ public class SupportTicketBAL(SupportTicketDAL dal, IMySqlDapperHelper db) : ISu
             t.Status = "open";
             t.UpdatedAt = now;
             await dal.UpdateStatusAsync(t, uow.Transaction);
+            await uow.CommitAsync();
+        }
+        return await GetTicketAsync(user, id);
+    }
+
+    public async Task<Dictionary<string, object?>> RateAsync(UserModel user, Guid id, int rating, string comment)
+    {
+        await using (var uow = await db.BeginAsync())
+        {
+            var t = await dal.GetForUpdateAsync(id, uow.Transaction);
+            if (t is null || t.UserId != user.Id) throw new NotFoundException("Request");
+            if (t.Status is not ("resolved" or "closed")) throw new ConflictException("You can rate a request once it is resolved or closed.", "ticket_not_resolved");
+            if (t.CsatRating is not null) throw new ConflictException("You have already rated this request.", "already_rated");
+            await uow.ExecuteAsync("UPDATE support_tickets SET csat_rating = @rating, csat_comment = @comment, csat_at = @at WHERE id = @id",
+                new { rating, comment = string.Join(' ', comment.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)), at = DateTimeFunctions.UtcNow(), id });
             await uow.CommitAsync();
         }
         return await GetTicketAsync(user, id);

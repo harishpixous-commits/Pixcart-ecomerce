@@ -38,6 +38,8 @@ public class SupportDeskBAL(IAccessBAL access, ICatalogNotifyBAL notify, IAiBAL 
             ["ack_overdue"] = t.AcknowledgedAt is null && now > t.AckDueAt,
             ["resolve_overdue"] = t.Status is not ("resolved" or "closed") && now > t.ResolveDueAt,
             ["assigned_to"] = t.AssignedTo?.ToString(),
+            ["csat_rating"] = t.CsatRating, ["csat_comment"] = t.CsatComment ?? "",
+            ["csat_at"] = t.CsatAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00"),
         };
         if (msgs is not null)
             data["messages"] = new JsonArray(msgs.Select(m => (JsonNode)new JsonObject
@@ -46,6 +48,27 @@ public class SupportDeskBAL(IAccessBAL access, ICatalogNotifyBAL notify, IAiBAL 
                 ["internal"] = m.IsInternal, ["at"] = m.CreatedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00"),
             }).ToArray());
         return data;
+    }
+
+    /// <summary>How customers rated the handling of their requests: count, average, spread and the latest comments.</summary>
+    public async Task<JsonObject> SatisfactionAsync(UserModel admin)
+    {
+        await access.RequireAsync(admin, "support");
+        var agg = await db.QueryFirstOrDefaultAsync<(long N, decimal? Avg)>("SELECT COUNT(*) AS N, AVG(csat_rating) AS Avg FROM support_tickets WHERE csat_rating IS NOT NULL");
+        var spread = (await db.QueryAsync<(int R, long N)>("SELECT csat_rating AS R, COUNT(*) AS N FROM support_tickets WHERE csat_rating IS NOT NULL GROUP BY csat_rating")).ToDictionary(x => x.R, x => x.N);
+        var unrated = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM support_tickets WHERE status IN ('resolved','closed') AND csat_rating IS NULL");
+        var recent = (await db.QueryAsync<SupportTicketModel>("SELECT * FROM support_tickets WHERE csat_rating IS NOT NULL ORDER BY csat_at DESC LIMIT 10")).ToList();
+        var sp = new JsonObject();
+        for (var i = 1; i <= 5; i++) sp[i.ToString()] = spread.GetValueOrDefault(i);
+        return new JsonObject
+        {
+            ["rated"] = agg.N, ["unrated_closed"] = unrated, ["average"] = agg.Avg is null ? null : Math.Round((double)agg.Avg.Value, 2), ["spread"] = sp,
+            ["recent"] = new JsonArray(recent.Select(t => (JsonNode)new JsonObject
+            {
+                ["id"] = t.Id.ToString(), ["number"] = t.Number, ["subject"] = t.Subject, ["rating"] = t.CsatRating, ["comment"] = t.CsatComment,
+                ["at"] = t.CsatAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00"),
+            }).ToArray()),
+        };
     }
 
     /// <summary>Reference: GET /api/admin/tickets/{ticket_id}.</summary>

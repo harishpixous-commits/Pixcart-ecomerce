@@ -39,6 +39,7 @@ public interface ISupportTicketBAL
     Task<Dictionary<string, object?>> GetTicketAsync(UserModel user, Guid id);
     Task<Dictionary<string, object?>> ReplyAsync(UserModel user, Guid id, string body);
     Task<Dictionary<string, object?>> CloseAsync(UserModel user, Guid id);
+    Task<Dictionary<string, object?>> RateAsync(UserModel user, Guid id, int rating, string comment);
 }
 
 /// <summary>The wishlist (GET/PUT/DELETE /api/wishlist).</summary>

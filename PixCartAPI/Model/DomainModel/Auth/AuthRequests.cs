@@ -134,6 +134,13 @@ public record TicketMessageIn
     [Present, Len(1, 5000)] public string? Body { get; init; }
 }
 
+/// <summary>POST /api/support/tickets/{id}/rating.</summary>
+public record TicketRatingIn
+{
+    public int Rating { get; init; }
+    public string? Comment { get; init; }
+}
+
 /// <summary>PUT /api/admin/integrations/{key}.</summary>
 public record IntegrationSaveIn
 {

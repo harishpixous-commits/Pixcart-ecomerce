@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
+using API.Infrastructure;
 using BAL.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Utils;
@@ -13,6 +14,10 @@ public class AdminTicketsController(ISupportDeskBAL bal, ICurrentUser current) :
 {
     private static readonly HashSet<string> Statuses = ["open", "awaiting_customer", "resolved", "closed"];
     private static readonly HashSet<string> Priorities = ["low", "normal", "high", "urgent"];
+
+    /// <summary>Customer satisfaction ratings of resolved requests.</summary>
+    [HttpGet("satisfaction"), RouteGuard("perm:support")]
+    public async Task<JsonObject> Satisfaction() => await bal.SatisfactionAsync(await current.RequireAsync());
 
     /// <summary>Ticket with messages and customer (reference: GET /api/admin/tickets/{ticket_id}).</summary>
     [HttpGet("{ticket_id}")]

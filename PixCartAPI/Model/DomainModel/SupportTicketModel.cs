@@ -30,6 +30,12 @@ public class SupportTicketModel
     public DateTime? AcknowledgedAt { get; set; }
     /// <summary>support_tickets.resolved_at</summary>
     public DateTime? ResolvedAt { get; set; }
+    /// <summary>support_tickets.csat_rating</summary>
+    public int? CsatRating { get; set; }
+    /// <summary>support_tickets.csat_comment</summary>
+    public string CsatComment { get; set; } = "";
+    /// <summary>support_tickets.csat_at</summary>
+    public DateTime? CsatAt { get; set; }
     /// <summary>support_tickets.id</summary>
     public Guid Id { get; set; }
     /// <summary>support_tickets.created_at</summary>
