@@ -32,3 +32,5 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - Gift cards (.NET): V010__gift_cards.sql, BAL/GiftCards.cs, same endpoints and rules as Python. Test added; CheckoutRules, RouteGuard, Parity, Growth runs green. Not built: shoppers buying a card online, screens.
 
 - Flash sales: Growth flash_sales settings (max duration, max discount) now guard seller deal creation when enabled, on top of the existing Deals feature. show_countdown is a storefront flag, not yet wired.
+
+- Segments: GET /api/admin/growth/segments[?segment=new|never_ordered|repeat|vip|lapsed], off by default, counts and lists (200 max) with spend. Read-only; no campaign send, no admin screen yet.

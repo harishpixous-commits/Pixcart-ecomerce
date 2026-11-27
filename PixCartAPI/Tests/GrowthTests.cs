@@ -85,4 +85,16 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal("discount_too_large",BAL.DealsBAL.FlashGuard(on,TimeSpan.FromHours(3),100000,40000)!.Value.Code);
         Assert.Null(BAL.DealsBAL.FlashGuard(on,TimeSpan.FromHours(3),100000,50000));
     }
+    [Fact]public async Task Customer_segments_are_off_by_default_and_classify_customers()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9880000081","Fresh Face");
+        Assert.Equal("segments_off",(await admin.Get("/api/admin/growth/segments")).ErrorCode);
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{segments=new{enabled=true}})).Status);
+        var r=await admin.Get("/api/admin/growth/segments?segment=new");Assert.True(r.Status==200,r.ToString());
+        var counts=r.Json["segments"]!.AsArray().ToDictionary(x=>x!["key"]!.GetValue<string>(),x=>x!["count"]!.GetValue<int>());
+        Assert.True(counts["new"]>=1&&counts["never_ordered"]>=1);Assert.Equal(0,counts["vip"]);Assert.Equal(0,counts["lapsed"]);
+        Assert.Contains(r.Json["items"]!.AsArray(),x=>x!["name"]!.GetValue<string>()=="Fresh Face"&&x["orders"]!.GetValue<int>()==0);
+        Assert.Equal("invalid_segment",(await admin.Get("/api/admin/growth/segments?segment=nope")).ErrorCode);
+        Assert.Equal(403,(await buyer.Get("/api/admin/growth/segments")).Status);
+    }
 }

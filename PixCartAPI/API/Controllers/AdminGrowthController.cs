@@ -1,3 +1,4 @@
+using Utils.Interface;
 using System.Text.Json.Nodes;
 using API.Infrastructure;
 using BAL.Interface;
@@ -7,8 +8,9 @@ namespace API.Controllers;
 
 /// <summary>Admin → Growth settings and the seller scorecard. No reference route guard rows: guards are declared here.</summary>
 [ApiController, SignedIn, Route("/api/admin/growth")]
-public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me) : ControllerBase
+public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me, IMySqlDapperHelper db) : ControllerBase
 {
+    [HttpGet("segments"), RouteGuard("perm:marketing")] public async Task<object> Segments(string? segment) { await me.RequireAsync(); return await BAL.Segments.ListAsync(db, segment); }
     [HttpGet("settings"), RouteGuard("perm:marketing")] public async Task<object> Settings() => await bal.SettingsAsync(await me.RequireAsync());
     [HttpPut("settings"), RouteGuard("perm:marketing")] public async Task<object> Settings(JsonObject body) => await bal.UpdateAsync(await me.RequireAsync(), body);
     public record AdjustIn { [System.ComponentModel.DataAnnotations.Required] public Guid? UserId { get; init; } [System.ComponentModel.DataAnnotations.Range(-100000, 100000)] public int Points { get; init; } [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(200, MinimumLength = 3)] public string Note { get; init; } = ""; }
