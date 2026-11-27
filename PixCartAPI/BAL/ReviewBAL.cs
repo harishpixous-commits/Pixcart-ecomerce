@@ -204,6 +204,7 @@ public partial class ReviewBAL(
     {
         var p = await ProductBySlugAsync(slug);
         var r = await reviews.MineAsync(p.Id, user.Id) ?? throw new NotFoundException("Review");
+        await using (var tx = await db.BeginAsync()) { if (await LoyaltyPoints.TakeBackReviewAsync(tx, r.Id) > 0) await tx.CommitAsync(); }  // a deleted review keeps no bonus (once per package, so re-writing it does not pay again)
         await reviews.DeleteAsync(r.Id);
         await reviews.RefreshRatingsAsync(p.Id);
         return new JsonObject { ["ok"] = true };
