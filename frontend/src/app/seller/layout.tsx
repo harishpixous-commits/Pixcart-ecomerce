@@ -2,7 +2,7 @@
 
 import {
   BarChart3, Boxes, FileDown, Flag, IndianRupee, LayoutDashboard, Megaphone, MessageCircleQuestion, MessageSquareText, Package, Settings, ShoppingBag, Tag,
-  Undo2, Warehouse, Zap,
+  ShieldCheck, Undo2, Warehouse, Zap,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -49,6 +49,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
         { section: "Grow sales", href: "/seller/coupons", label: "Coupons", icon: Tag },
         { section: "Customers", href: "/seller/questions", label: "Questions", icon: MessageCircleQuestion, badge: badges?.questions },
         { section: "Customers", href: "/seller/reviews", label: "Reviews", icon: MessageSquareText },
+        { section: "Customers", href: "/seller/quality", label: "Quality", icon: ShieldCheck },
         { section: "Customers", href: "/seller/product-reports", label: "Customer reports", icon: Flag, badge: badges?.reports },
         { section: "Money and reports", href: "/seller/payouts", label: "Payouts", icon: IndianRupee },
         { section: "Money and reports", href: "/seller/analytics", label: "Analytics", icon: BarChart3 },

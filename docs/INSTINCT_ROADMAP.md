@@ -28,3 +28,4 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - 27 Nov 20:44 Python: sitemap from the API, GET /api/seo/sitemap.xml (honours Growth -> Search engines). Note: the Next.js frontend already had its own sitemap.ts and robots.ts, so my earlier "sitemap absent" gap was only true for the .NET/Angular version. Mirror: .NET pending.
 - 27 Nov 20:46 Python: COD risk rules at checkout (blocked pincodes, value cap, first-order cap) -> error code cod_risk, services/growth.cod_block_reason. NOT wired: block_after_refused (needs a refused-delivery record). .NET mirror pending.
 - 27 Nov 20:49 Python: seller's own scorecard GET /api/seller/scorecard. Seller portal screen NOT built yet.
+- 27 Nov 20:50 Next.js: Seller -> Quality page, type-checked with tsc, not run in a browser.
