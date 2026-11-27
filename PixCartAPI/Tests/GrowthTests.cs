@@ -190,6 +190,27 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal(200,(await admin.Delete("/api/admin/growth/campaigns/"+id2)).Status);
         Assert.Equal("cancelled",Row(id2)["status"]!.GetValue<string>());
     }
+    sealed class FailingNotify : ICatalogNotifyBAL
+    {
+        public Task NotifyUserAsync(Guid userId, string @event, IReadOnlyDictionary<string, string> variables, string link = "") => throw new InvalidOperationException("gateway down");
+        public Task NotifySellerAsync(Guid sellerId, string @event, IReadOnlyDictionary<string, string> variables, string link = "") => throw new InvalidOperationException("gateway down");
+    }
+    [Fact]public async Task Campaign_that_fails_mid_send_goes_back_to_scheduled_and_is_sent_on_the_next_run()
+    {
+        var admin=await Admin();
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{campaigns=new{enabled=true,max_per_day=5},segments=new{enabled=true}})).Status);
+        var fan=await LoginPhone("9610100003","Retry Fan");
+        await ApiFactory.DbExecAsync("UPDATE users SET marketing_opt_in=1 WHERE id=@id",new{id=fan.Id});
+        var r=await admin.Post("/api/admin/growth/campaigns",new{segment="never_ordered",title="Retry offer",message="Hi",link="/offers",dry_run=false,send_at=DateTime.UtcNow.AddHours(2)});
+        var cid=r.Json["id"]!.GetValue<string>();
+        await ApiFactory.DbExecAsync("UPDATE segment_campaigns SET send_at=@t WHERE id=@id",new{t=DateTime.UtcNow.AddMinutes(-1),id=cid});
+        using var scope=Factory.Services.CreateScope();
+        var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();var notify=scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>BAL.SegmentCampaigns.SendDueAsync(db,new FailingNotify()));
+        Assert.Equal("scheduled",await db.QueryFirstOrDefaultAsync<string>("SELECT status FROM segment_campaigns WHERE id=@id",new{id=cid}));
+        Assert.True(await BAL.SegmentCampaigns.SendDueAsync(db,notify)>=1);
+        Assert.Equal("sent",await db.QueryFirstOrDefaultAsync<string>("SELECT status FROM segment_campaigns WHERE id=@id",new{id=cid}));
+    }
     [Fact]public async Task Repeating_campaign_makes_the_next_one_after_each_send_and_cancel_ends_it()
     {
         var admin=await Admin();

@@ -208,3 +208,7 @@ The seller CSV upload now accepts an id or sku column. A row with a blank id is 
 
 ## Push 77: review reminder opens the review form
 The review reminder note now links to the first unreviewed product page (#reviews) instead of the order page. Both versions, assertion added to the existing reminder test on each side. Still in-app only (email/SMS channel not built).
+
+
+## Push 78: campaign that fails mid-send is retried (.NET)
+.NET: a scheduled campaign claimed as "sending" that throws mid-send (for example a notify failure) is put back to scheduled and the error is rethrown, so the next 5-minute run sends it. People already notified may get it twice (at-least-once). Not covered: a process killed mid-send still leaves the row in "sending" (no claimed-at column to time it out). Python needed no change: it marks the campaign sent in the same transaction as the sends, so a failure rolls everything back. New .NET test with a failing notifier; the 4 campaign tests pass.

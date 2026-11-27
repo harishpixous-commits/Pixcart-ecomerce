@@ -73,8 +73,18 @@ public static class SegmentCampaigns
             if (!Segments.Where.ContainsKey(r.Segment)) continue;
             // Claim it first so two workers never send the same campaign.
             if (await db.ExecuteAsync("UPDATE segment_campaigns SET status = 'sending' WHERE id = @id AND status = 'scheduled'", new { id = r.Id }) == 0) continue;
-            var ids = (await db.QueryAsync<Guid>(Segments.Base + $"SELECT id FROM c WHERE {Segments.Where[r.Segment]} AND marketing_opt_in = 1 ORDER BY spent DESC, created_at DESC LIMIT {cfg.Int("max_recipients")}", p)).ToList();
+            List<Guid> ids;
+            try
+            {
+            ids = (await db.QueryAsync<Guid>(Segments.Base + $"SELECT id FROM c WHERE {Segments.Where[r.Segment]} AND marketing_opt_in = 1 ORDER BY spent DESC, created_at DESC LIMIT {cfg.Int("max_recipients")}", p)).ToList();
             foreach (var uid in ids) await notify.NotifyUserAsync(uid, "marketing_message", new Dictionary<string, string> { ["title"] = r.Title, ["message"] = r.Message }, r.Link);
+            }
+            catch
+            {
+                // A failure mid-send must not leave the claim stuck: put it back so the next run tries again (people already notified may get it twice).
+                await db.ExecuteAsync("UPDATE segment_campaigns SET status = 'scheduled' WHERE id = @id AND status = 'sending'", new { id = r.Id });
+                throw;
+            }
             await db.ExecuteAsync("UPDATE segment_campaigns SET status = 'sent', recipients = @n WHERE id = @id", new { n = ids.Count, id = r.Id });
             if (r.RepeatDays > 0 && r.RepeatsLeft > 0) // the next one is its own row: cancelling it ends the series
             {
