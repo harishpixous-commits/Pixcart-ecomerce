@@ -299,3 +299,6 @@ Loyalty setting `first_order_points` in Admin → Growth (0 = off, default). The
 
 ## Push 99: Rewards page lists the ways to earn
 `GET /api/loyalty` also returns `review_points` and `first_order_points` (the first one only until the member has earned anything). The Rewards page shows a line for each that is set. Both versions; tested in the first-order test; screens type-checked only.
+
+## Push 100: admin Growth hint lists the Loyalty extras
+The Loyalty section hint on the Growth admin page (both frontends) now names the optional settings added in Pushes 62, 93, 95, 96 and 98 so staff can find them. Text only; type-checked, not browser-run.
