@@ -53,6 +53,7 @@ const DEFS: Def[] = [
   { section: "Sellers and catalogue", href: "/admin/questions", label: "Questions", icon: MessageCircleQuestion, count: "qa", p: "catalog" },
   { section: "Sellers and catalogue", href: "/admin/product-reports", label: "Product reports", icon: Flag, count: "pr", p: "catalog" },
   { section: "Sellers and catalogue", href: "/admin/growth", label: "Growth", icon: Rocket, p: "marketing" },
+  { section: "Money and reports", href: "/admin/payments", label: "Payments", icon: Wallet, p: "settings" },
   { section: "Money and reports", href: "/admin/payouts", label: "Payouts", icon: IndianRupee, p: "payouts" },
   { section: "Money and reports", href: "/admin/reports", label: "Reports", icon: BarChart3, p: "reports" },
   { section: "Money and reports", href: "/admin/exports", label: "Exports", icon: FileDown, p: "dashboard" },
