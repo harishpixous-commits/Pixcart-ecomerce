@@ -42,3 +42,5 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - Shopper Rewards page (/rewards) in Angular and Next.js: loyalty points to coupon, referral code and apply, gift card balance and redeem. Type-checked only, not run in a browser. Linked from Coupons.
 
 - Admin Growth page: new Gift cards tab (issue, list, void) and Segments tab (counts, member list) in Angular and Next.js. Type-checked only, not run in a browser.
+
+- Review slice seller-products-inventory: compared with Python. Python listing upload crashed on NaN, Infinity, huge prices (fixed on instinct/python-advanced). This .NET import already refuses them as row errors. Inventory allocate and warehouse code not re-read on the .NET side.
