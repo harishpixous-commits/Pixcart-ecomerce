@@ -1311,3 +1311,29 @@ async def test_review_bonus_points_once_per_delivered_package_only_for_a_real_re
         rid = str((await s.execute(select(Review.id).where(Review.sub_order_id.is_not(None)))).scalars().first())
     assert (await admin.post(f"/api/admin/reviews/{rid}/hide", {})).status_code == 200 and await balance() == 0  # hidden: bonus taken back
     assert (await admin.post(f"/api/admin/reviews/{rid}/publish", {})).status_code == 200 and await balance() == 0  # and not paid twice
+
+
+async def test_first_order_bonus_is_added_to_the_first_delivered_package_only(client, admin, categories):
+    import uuid
+
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+    from tests.test_phase2_money import ship_and_deliver
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000181")
+    addr = await add_address(buyer)
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "points_per_100": 2, "first_order_points": 50}})).status_code == 200
+
+    async def deliver():
+        await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+        o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).json()["order"]
+        await ship_and_deliver(seller, o["sub_orders"][0]["id"])
+        return (o["sub_orders"][0]["items_total"] // 10000) * 2
+
+    base1 = await deliver()
+    me = (await buyer.get("/api/loyalty")).json()
+    assert base1 > 0 and me["balance"] == base1 + 50 and "first order bonus" in me["history"][0]["note"]
+    base2 = await deliver()
+    me = (await buyer.get("/api/loyalty")).json()
+    assert me["balance"] == base1 + 50 + base2 and "first order bonus" not in me["history"][0]["note"]

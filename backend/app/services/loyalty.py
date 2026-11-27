@@ -43,6 +43,9 @@ async def earn_for_delivery(session: AsyncSession, sub: SubOrder, user_id: uuid.
     bonus = bonus_percent(cfg, tier_for(cfg, int(lifetime)))
     points = points * (100 + bonus) // 100
     note = f"Delivered package {sub.number}" + (f" (+{bonus}% tier bonus)" if bonus else "")
+    if cfg["first_order_points"] and not (await session.execute(select(LoyaltyEntry.id).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.kind == "earn"))).first():
+        points += cfg["first_order_points"]  # the member's first delivered package
+        note += f" (+{cfg['first_order_points']} first order bonus)"
     session.add(LoyaltyEntry(user_id=user_id, sub_order_id=sub.id, kind="earn", points=points, note=note, created_at=utcnow()))
     await session.flush()
     return points

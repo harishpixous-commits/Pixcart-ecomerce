@@ -293,3 +293,6 @@ Hiding a review (admin moderation) takes back its bonus once (never below a zero
 
 ## Push 97: full-suite re-run after Pushes 90 to 96
 Python: 288 passed (whole suite). .NET in groups on a fresh build: 102 + 85 + 82 + 114 passed, 0 failed. Not run: browser, Flutter, Windows publish, live gateways, deploy. Frontends are type-checked only.
+
+## Push 98: first order bonus points
+Loyalty setting `first_order_points` in Admin → Growth (0 = off, default). The first package a member has delivered earns that many extra points on top of the normal points, in the same ledger row, with a note on the history line. Later packages get no bonus. Both versions, tested. Only applies where the package already earns points (loyalty on, points per 100 above 0, goods worth at least 100 rupees).
