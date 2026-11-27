@@ -415,21 +415,22 @@ public class AssistantActionsBAL(
                 await uow.CommitAsync();
                 throw new AppException("This suggestion expired. Ask again to get a fresh one.", "action_expired", 409);
             }
+            await asstDal.SaveActionStatusAsync(a.Id, "running", uow); // claimed: a second confirm now gets 409
             await uow.CommitAsync();
         }
-        var perms = await access.PermissionsForAsync(user);
-        if (!Kinds.TryGetValue(a.Kind, out var def) || !perms.Contains(def.Permission))
-            throw new AppException($"Your role no longer allows this ({(Kinds.TryGetValue(a.Kind, out var d2) ? d2.Permission : a.Kind)})", "forbidden", 403);
         JsonObject outcome;
         try
         {
+            var perms = await access.PermissionsForAsync(user);
+            if (!Kinds.TryGetValue(a.Kind, out var def) || !perms.Contains(def.Permission))
+                throw new AppException($"Your role no longer allows this ({(Kinds.TryGetValue(a.Kind, out var d2) ? d2.Permission : a.Kind)})", "forbidden", 403);
             outcome = await ExecuteDispatchAsync(user, a);
         }
         catch (AppException exc)
         {
             await using var uow2 = await db.BeginAsync();
             var fresh = await asstDal.ActionForUpdateAsync(actionId, uow2) ?? throw new NotFoundException("Action");
-            if (fresh.Status == "pending" && exc.Code != "action_expired")
+            if ((fresh.Status == "pending" || fresh.Status == "running") && exc.Code != "action_expired")
             {
                 var result = JsonNode.Parse(fresh.Result) is JsonObject ro ? ro : new JsonObject();
                 result["error"] = exc.Message;

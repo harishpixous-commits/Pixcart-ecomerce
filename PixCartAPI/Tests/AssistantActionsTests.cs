@@ -102,6 +102,20 @@ public class AssistantActionsTests : ApiTest
     }
 
     [Fact]
+    public async Task A_running_action_cannot_be_confirmed_again()
+    {
+        var admin = await Admin();
+        using var rig = await NewRig(admin);
+        var act = await rig.Actions.PrepareAsync(rig.User.Id, Perms, rig.ConvId, "create_coupon",
+            new JsonObject { ["code"] = "RUN1", ["kind"] = "flat", ["value"] = 100 });
+        await rig.Db.ExecuteAsync("UPDATE assistant_actions SET status = 'running' WHERE id = @id", new { id = act.Id });
+        var ex = await Assert.ThrowsAsync<AppException>(() => rig.Actions.DecideAsync(rig.User, act.Id, "confirm"));
+        Assert.Equal("action_done", ex.Code);
+        var status = await rig.Db.QueryFirstOrDefaultAsync<string>("SELECT status FROM assistant_actions WHERE id = @id", new { id = act.Id });
+        Assert.Equal("running", status);
+    }
+
+    [Fact]
     public async Task Create_coupon_percent_out_of_range_also_fails_only_at_confirm()
     {
         // Reference prepare has NO percent range check either (95% passes prepare there too); the failure
