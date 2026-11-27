@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { dateTime, money, rupees } from "@/lib/format";
+import { payWithGateway } from "@/lib/gateway-pay";
 import { clearPaying, payingSince, payWithRazorpay } from "@/lib/razorpay";
 import { useRegional } from "@/lib/regional";
 import { useSite } from "@/lib/site";
@@ -95,6 +96,13 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
     setReason("");
     lastFail.current = "";
     try {
+      if (order.payment.provider !== "razorpay") {
+        await payWithGateway(order.payment, id);
+        setPhase("checking");
+        const status = await check(false);
+        if (status !== "paid") startPolling();
+        return;
+      }
       const done = await payWithRazorpay(order.payment, {
         orderId: id,
         returnMode: site.payment_return,
@@ -182,6 +190,27 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
     );
   }
 
+  // pay another way: a new attempt with another gateway (the server picks the next one when none is named)
+  const alternatives = order.payment?.alternatives ?? [];
+  const switchTo = async (provider: string) => {
+    setReason("");
+    try {
+      const r = await api<{ payment: NonNullable<OrderDetail["payment"]> }>(`/api/orders/${id}/payment/switch`, { method: "POST", body: { provider } });
+      onOrder({ ...order, payment: r.payment });
+      setPhase("idle");
+      if (r.payment.provider !== "razorpay") await payWithGateway(r.payment, id).catch((e: unknown) => { setReason(e instanceof Error ? e.message : "The payment could not be started"); setPhase("failed"); });
+    } catch (e) {
+      setReason(e instanceof ApiError ? e.message : "Could not switch the payment method");
+      setPhase("failed");
+    }
+  };
+  const another = alternatives.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="pay-another-way">
+      <span className="text-ink-soft">Pay another way:</span>
+      {alternatives.map((a) => <Button key={a.provider} variant="ghost" size="sm" onClick={() => void switchTo(a.provider)}>{a.name}</Button>)}
+    </div>
+  );
+
   // what the button pays: Razorpay's amount in the currency it charges (rupees unless the admin charges the shopper's)
   const total = order.payment ? money(order.payment.amount, order.payment.currency, digits(order.payment.currency)) : rupees(order.grand_total);
   const held = order.payment_expires_at ? ` Your items are held until ${dateTime(order.payment_expires_at)}.` : "";
@@ -206,6 +235,7 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
             <RefreshCw className="h-4 w-4" aria-hidden /> I have paid, check again
           </Button>
         </div>
+        {another}
       </div>
     );
   }
@@ -248,6 +278,7 @@ export function OrderPayment({ order, onOrder, arrival, placed }: {
         <Button variant="ghost" size="sm" onClick={() => startPolling()} loading={checkingNow}>Already paid? Check</Button>
         <Button variant="buy" onClick={pay}>Pay {total}</Button>
       </div>
+      {another}
     </div>
   );
 }

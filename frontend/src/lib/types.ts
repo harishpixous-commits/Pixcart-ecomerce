@@ -376,7 +376,17 @@ export interface SubOrderView {
 }
 
 export interface CheckoutPayload {
-  provider: "razorpay";
+  provider: "razorpay" | "cashfree" | "phonepe" | "payu" | "stripe";
+  /** how the browser starts it: Razorpay and Cashfree open a window, PhonePe and Stripe redirect, PayU posts a form */
+  mode?: "modal" | "redirect" | "form";
+  url?: string;
+  action?: string;
+  fields?: Record<string, string>;
+  sdk_url?: string;
+  env?: string;
+  payment_session_id?: string;
+  /** other gateways the shopper can switch to for this order */
+  alternatives?: { provider: string; name: string }[];
   key_id: string;
   checkout_url?: string;
   razorpay_order_id: string;
