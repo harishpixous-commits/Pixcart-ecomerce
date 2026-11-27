@@ -41,3 +41,19 @@ async def test_support_staff_are_told_about_new_requests_replies_and_low_ratings
     await admin.post(f"/api/admin/tickets/{tid2}/reply", {"body": "Great.", "status": "resolved"})
     await buyer.post(f"/api/support/tickets/{tid2}/rating", {"rating": 5})
     assert sum(t.startswith("Low rating") for t in await inbox()) == 1
+
+
+async def test_staff_are_told_when_a_seller_or_listing_is_waiting_for_review(client, admin, categories):
+    from tests.conftest import make_live_product, make_seller
+    from tests.test_catalog import SHIRT_VARIANTS
+
+    async def inbox() -> list[dict]:
+        return (await admin.get("/api/notifications")).json()["items"]
+
+    seller = await make_seller(client, admin, "9600000061", name="Review Alert Traders", pan="ABCDE1234F")
+    titles = [n["title"] for n in await inbox()]
+    assert "Seller waiting for review" in titles
+    assert not any(t == "Listing waiting for review" for t in titles)
+    await make_live_product(client, admin, seller, categories["shirts"], title="Alert Cotton Shirt", variants=SHIRT_VARIANTS)
+    listing = [n for n in await inbox() if n["title"] == "Listing waiting for review"]
+    assert len(listing) == 1 and "Alert Cotton Shirt" in listing[0]["body"]

@@ -373,6 +373,9 @@ async def submit(seller: SellerAccount, user: CurrentUser, session: SessionDep) 
     seller.submitted_at = utcnow()
     seller.rejection_reason = ""
     audit(session, user, "seller.submit", "seller", seller.id)
+    from app.services.notify import notify_staff
+
+    await notify_staff(session, "sellers", "staff_review", {"subject": "Seller waiting for review", "message": f"{seller.display_name} submitted their documents. Check them in Sellers."}, link=f"/admin/sellers/{seller.id}")
     await session.commit()
     return await seller_profile(session, seller)
 

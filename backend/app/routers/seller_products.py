@@ -560,6 +560,9 @@ async def submit_product(product_id: uuid.UUID, seller: SellerAccount, user: Cur
     p.submitted_at = utcnow()
     p.rejection_reason = ""
     audit(session, user, "product.submit", "product", p.id)
+    from app.services.notify import notify_staff
+
+    await notify_staff(session, "catalog", "staff_review", {"subject": "Listing waiting for review", "message": f"{seller.display_name} submitted \"{p.title[:80]}\"."}, link=f"/admin/products/{p.id}")
     await session.commit()
     return await product_detail(session, p)
 

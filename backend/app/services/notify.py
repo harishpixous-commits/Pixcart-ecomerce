@@ -188,6 +188,9 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "staff_delivery_unassigned": {
         "inapp": ("No delivery partner took {{order_number}}", "{{reason}} Assign it by hand in Delivery → Queue."),
     },
+    "staff_review": {
+        "inapp": ("{{subject}}", "{{message}}"),
+    },
     "staff_ticket": {
         "inapp": ("{{subject}}", "{{message}}"),
     },
