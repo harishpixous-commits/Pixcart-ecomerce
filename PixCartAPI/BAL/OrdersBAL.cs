@@ -81,6 +81,26 @@ public class OrdersBAL(
         string? couponCode = null, int tipPaise = 0, string buyerGstin = "", string buyerBusiness = "",
         string? instructions = null, bool noBag = false, string? currency = null)
     {
+        try
+        {
+            return await PlaceOrderOnceAsync(user, addressId, paymentMethod, idempotencyKey, expectedTotal, couponCode, tipPaise,
+                buyerGstin, buyerBusiness, instructions, noBag, currency);
+        }
+        catch (MySqlException exc) when (exc.Number == 1062)
+        {
+            // The same idempotency key submitted twice at the same moment (the unique key refuses the second order at its
+            // insert): answer with the order the first submit placed.
+            var winner = await orders.FindByIdempotencyAsync(user.Id, idempotencyKey);
+            if (winner is null) throw;
+            return (winner, await orders.LatestPaymentAsync(winner.Id));
+        }
+    }
+
+    private async Task<(OrderModel Order, PaymentModel? Payment)> PlaceOrderOnceAsync(
+        UserModel user, Guid addressId, string paymentMethod, string idempotencyKey, long? expectedTotal,
+        string? couponCode, int tipPaise, string buyerGstin, string buyerBusiness,
+        string? instructions, bool noBag, string? currency)
+    {
         var existing = await orders.FindByIdempotencyAsync(user.Id, idempotencyKey);
         if (existing is not null)
             return (existing, await orders.LatestPaymentAsync(existing.Id));
@@ -96,6 +116,11 @@ public class OrdersBAL(
 
         await using var uow = await db.BeginAsync();
         var lines = await cart.LoadCartAsync(user.Id, uow, forUpdate: true);
+        // A second submit of the same order waits here for the first one's locks: once they are released, answer with the
+        // order the first placed (its cart is empty by now).
+        var placed = await orders.FindByIdempotencyAsync(user.Id, idempotencyKey);
+        if (placed is not null)
+            return (placed, await orders.LatestPaymentAsync(placed.Id));
         if (lines.Count == 0) throw new AppException("Your cart is empty", "cart_empty");
         var bad = lines.FirstOrDefault(l => l.Problem.Length > 0);
         if (bad is not null)
@@ -1077,7 +1102,7 @@ public class OrdersBAL(
         var allowed = CustomerCancellableAt(await platform.GetAsync());
         var cancellable = targets.Where(s => allowed.Contains(s.Status) || s.Status == "pending_payment").ToList();
         if (cancellable.Count == 0)
-            throw new AppException("This order can no longer be cancelled. You can return it after delivery.", "not_cancellable", 409);
+            throw new AppException("This order can no longer be cancelled. You can return it after delivery.", "not_cancellable");
         var refundIds = new List<Guid>();
         foreach (var s in cancellable)
         {
@@ -1718,8 +1743,6 @@ public class OrdersBAL(
         foreach (var order in expired)
         {
             var paid = false;
-            PaymentModel? confirmPay = null;
-            string? confirmId = null;
             foreach (var pay in await orders.PaymentsForOrderAsync(order.Id))
             {
                 IReadOnlyList<System.Text.Json.Nodes.JsonObject>? attempts;
@@ -1732,25 +1755,23 @@ public class OrdersBAL(
                     attempts = null; // cannot verify right now: leave the order alone
                 }
                 if (attempts is null) { paid = true; break; }
+                // every successful attempt is recorded: a second one (a duplicate UPI payment) is refunded, not lost
                 foreach (var a in attempts)
                 {
-                    var st = a["status"]?.GetValue<string>();
-                    if (st is "captured" or "authorized") { confirmPay = pay; confirmId = a["id"]!.GetValue<string>(); break; }
-                }
-                if (confirmId is not null) break;
-            }
-            if (confirmPay is not null && confirmId is not null)
-            {
-                try
-                {
-                    await using var cuow = await db.BeginAsync();
-                    var r = await ConfirmWithGatewayAsync(confirmPay, confirmId, cuow);
-                    await cuow.CommitAsync();
-                    if (r is "paid" or "already") paid = true;
-                }
-                catch (Exception e) when (e is AppException or RazorpayBAL.GatewayException or HttpRequestException)
-                {
-                    paid = true; // gateway rejected the confirm: leave the order alone
+                    if (a["status"]?.GetValue<string>() is not ("captured" or "authorized")) continue;
+                    try
+                    {
+                        await using var cuow = await db.BeginAsync();
+                        // read again: an earlier attempt of this payment may have just been recorded
+                        var current = await orders.PaymentForUpdateAsync(pay.Id, cuow) ?? pay;
+                        var r = await ConfirmWithGatewayAsync(current, a["id"]!.GetValue<string>(), cuow);
+                        await cuow.CommitAsync();
+                        if (r is "paid" or "already") paid = true;
+                    }
+                    catch (Exception e) when (e is AppException or RazorpayBAL.GatewayException or HttpRequestException)
+                    {
+                        paid = true; // gateway rejected the confirm: leave the order alone
+                    }
                 }
             }
             if (paid) continue;

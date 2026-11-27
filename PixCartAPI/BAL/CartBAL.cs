@@ -222,14 +222,14 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     /// <summary>Moves a cart line to "Saved for later" (it keeps its place even when out of stock).</summary>
     public async Task<JsonObject> SaveForLaterAsync(Guid userId, Guid variantId)
     {
-        var item = await cart.GetItemAsync(userId, variantId) ?? throw new NotFoundException("Cart item");
-        await cart.DeleteItemAsync(userId, variantId);
+        _ = await cart.GetItemAsync(userId, variantId) ?? throw new NotFoundException("Cart item");
         if (await cart.GetSavedAsync(userId, variantId) is null)
         {
             if (await cart.CountSavedAsync(userId) >= MaxSaved)
-                throw new AppException($"You can save up to {MaxSaved} items for later", "saved_full");
+                throw new AppException($"You can save up to {MaxSaved} items for later", "saved_full");  // the cart line stays
             await cart.InsertSavedAsync(new SavedItemModel { UserId = userId, VariantId = variantId, CreatedAt = DateTime.UtcNow });
         }
+        await cart.DeleteItemAsync(userId, variantId);
         return new JsonObject { ["cart"] = await ViewAsync(userId), ["saved"] = await SavedViewAsync(userId) };
     }
 

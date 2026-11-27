@@ -30,7 +30,7 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
     {
         var user = await current.RequireAsync();
         var address = await addresses.GetAsync(body.AddressId);
-        if (address is null || address.UserId != user.Id) throw new NotFoundException("Address");
+        if (address is null || address.UserId != user.Id || address.IsDeleted) throw new NotFoundException("Address");
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
         var view = await cart.ViewAsync(user.Id);

@@ -21,8 +21,10 @@ public class CartDAL(IMySqlDapperHelper db)
             WHERE c.user_id = @userId
             ORDER BY v.id
             """;
-        // Locking the rows while an order is placed keeps a concurrent cart edit from slipping through.
-        var stmt = forUpdate ? sql + "\nFOR UPDATE" : sql;
+        // Locking the shopper's cart rows and the versions while an order is placed keeps a concurrent cart edit or a sale
+        // of the same stock from slipping through. Products and sellers are not locked: other shoppers buying from the
+        // same seller must not wait for this checkout.
+        var stmt = forUpdate ? sql + "\nFOR UPDATE OF c, v" : sql;
         var rows = uow is null
             ? await db.QueryAsync<CartItemModel, VariantModel, ProductModel, SellerModel, (CartItemModel, VariantModel, ProductModel, SellerModel)>(
                 stmt, (c, v, p, s) => (c, v, p, s), new { userId }, splitOn: "v_id,p_id,s_id")
