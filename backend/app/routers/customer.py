@@ -610,6 +610,7 @@ def ticket_out(t: SupportTicket, messages: list[TicketMessage] | None = None, *,
         "subject": t.subject, "status": t.status, "priority": t.priority, "is_grievance": t.is_grievance,
         "order_id": str(t.order_id) if t.order_id else None, "created_at": t.created_at.isoformat(), "updated_at": t.updated_at.isoformat(),
         "acknowledged_at": t.acknowledged_at.isoformat() if t.acknowledged_at else None, "resolved_at": t.resolved_at.isoformat() if t.resolved_at else None,
+        "csat_rating": t.csat_rating, "csat_comment": t.csat_comment or "", "csat_at": t.csat_at.isoformat() if t.csat_at else None,
     }
     if staff:
         data |= {
@@ -664,6 +665,28 @@ async def reply_ticket(ticket_id: uuid.UUID, body: MessageIn, user: CurrentUser,
     session.add(TicketMessage(ticket_id=t.id, author_id=user.id, author_role="customer", body=body.body.strip(), created_at=utcnow()))
     t.status = "open"
     t.updated_at = utcnow()
+    await session.commit()
+    return await get_ticket(ticket_id, user, session)
+
+
+class RatingIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default="", max_length=500)
+
+
+@router.post("/api/support/tickets/{ticket_id}/rating")
+async def rate_ticket(ticket_id: uuid.UUID, body: RatingIn, user: CurrentUser, session: SessionDep) -> dict:
+    """The customer rates how the request was handled. Only once the request is resolved or closed, and only once."""
+    t = (await session.execute(select(SupportTicket).where(SupportTicket.id == ticket_id).with_for_update())).scalar_one_or_none()
+    if t is None or t.user_id != user.id:
+        raise NotFound("Request")
+    if t.status not in ("resolved", "closed"):
+        raise Conflict("You can rate a request once it is resolved or closed.", "ticket_not_resolved")
+    if t.csat_rating is not None:
+        raise Conflict("You have already rated this request.", "already_rated")
+    t.csat_rating = body.rating
+    t.csat_comment = " ".join(body.comment.split())
+    t.csat_at = utcnow()
     await session.commit()
     return await get_ticket(ticket_id, user, session)
 

@@ -528,6 +528,22 @@ async def payout_cancel(payout_id: uuid.UUID, admin: Perm("payouts"), session: S
 # ----------------------------------------------------------------------------- support desk
 
 
+@router.get("/tickets/satisfaction")
+async def ticket_satisfaction(admin: Perm("support"), session: SessionDep) -> dict:
+    """How customers rated the handling of their requests: count, average, spread and the latest comments."""
+    from sqlalchemy import func
+    rated = SupportTicket.csat_rating.is_not(None)
+    total, avg = (await session.execute(select(func.count(), func.avg(SupportTicket.csat_rating)).where(rated))).one()
+    spread = dict((await session.execute(select(SupportTicket.csat_rating, func.count()).where(rated).group_by(SupportTicket.csat_rating))).all())
+    recent = (await session.execute(select(SupportTicket).where(rated).order_by(SupportTicket.csat_at.desc()).limit(10))).scalars().all()
+    unrated = (await session.execute(select(func.count()).where(SupportTicket.status.in_(("resolved", "closed")), SupportTicket.csat_rating.is_(None)))).scalar_one()
+    return {
+        "rated": int(total), "unrated_closed": int(unrated), "average": round(float(avg), 2) if avg is not None else None,
+        "spread": {str(i): int(spread.get(i, 0)) for i in range(1, 6)},
+        "recent": [{"id": str(t.id), "number": t.number, "subject": t.subject, "rating": t.csat_rating, "comment": t.csat_comment, "at": t.csat_at.isoformat()} for t in recent],
+    }
+
+
 @router.get("/tickets")
 async def tickets(admin: Perm("support"), session: SessionDep, status: str | None = "open", overdue: bool = False, grievance: bool = False,
                   page: int = Query(default=1, ge=1), q: str = Query(default="", max_length=60)) -> dict:

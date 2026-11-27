@@ -368,8 +368,12 @@ class SupportTicket(IdMixin, TimestampMixin, Base):
     resolve_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    csat_rating: Mapped[int | None] = mapped_column(Integer)
+    csat_comment: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    csat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
+        CheckConstraint("csat_rating IS NULL OR csat_rating BETWEEN 1 AND 5", name="csat"),
         CheckConstraint("status IN ('open','awaiting_customer','resolved','closed')", name="status"),
         CheckConstraint("priority IN ('low','normal','high','urgent')", name="priority"),
     )
