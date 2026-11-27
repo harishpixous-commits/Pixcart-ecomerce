@@ -141,7 +141,7 @@ public class OrdersBAL(
         }
 
         cfg = await ShippingZones.WithStateThresholdAsync(db, cfg, address.StateCode);
-        var groups = CartBAL.GroupBySeller(lines, cfg, await ShippingZones.SurchargeAsync(db, address.Pincode), await ShippingZones.SellerFreeBoundsAsync(db), await ShippingZones.StateFeeAsync(db, address.StateCode));
+        var groups = CartBAL.GroupBySeller(lines, cfg, await ShippingZones.SurchargeAsync(db, address.Pincode), await ShippingZones.SellerFreeBoundsAsync(db), await ShippingZones.StateFeeAsync(db, address.StateCode), await LoyaltyPoints.FreeDeliveryAsync(db, user.Id));
         var now = DateTime.UtcNow;
         var isOnline = paymentMethod == "online";
         var categories = new Dictionary<Guid, CategoryModel>();

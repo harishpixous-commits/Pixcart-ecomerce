@@ -866,6 +866,31 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Tier_free_delivery_waives_shipping_for_silver_and_gold_members()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000331", "tier-free-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000161", "Tier Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        async Task<(long Cart, long Quote)> Ship() => (
+            (await buyer.Get("/api/cart")).Json["summary"]!["shipping_total"]!.GetValue<long>(),
+            (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["summary"]!["shipping_total"]!.GetValue<long>());
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = true, min_paise = 0, max_paise = 5000000 } })).Status);
+        var owner = await LoginPhone("9400000331", "Tier Owner");
+        Assert.Equal(200, (await owner.Put("/api/seller/preferences", new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 5000000 })).Status); // the shirt must pay delivery
+        var baseline = await Ship();
+        Assert.True(baseline.Cart > 0 && baseline.Cart == baseline.Quote, baseline.ToString());
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, tier_silver_points = 500, tier_gold_points = 2000, silver_free_delivery = true } })).Status);
+        Assert.Equal(baseline, await Ship()); // still a plain member
+        await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (UUID(), @uid, 'earn', 600, 'test', UTC_TIMESTAMP(6))", new { uid = buyer.Id });
+        Assert.Equal((0L, 0L), await Ship()); // silver
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, silver_free_delivery = false, gold_free_delivery = true } })).Status);
+        Assert.Equal(baseline, await Ship()); // silver no longer has it, gold only
+    }
+
+    [Fact]
     public async Task Pincode_check_on_the_product_page_follows_the_same_delivery_rules_as_checkout()
     {
         var admin = await Admin();

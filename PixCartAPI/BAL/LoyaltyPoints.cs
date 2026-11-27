@@ -15,6 +15,17 @@ public static class LoyaltyPoints
     /// <summary>Extra points a tier earns on top of the normal rate. 0 for members and while unset.</summary>
     public static int BonusPercent(JsonObject cfg, string tier) => tier == "gold" ? cfg.Int("gold_bonus_percent") : tier == "silver" ? cfg.Int("silver_bonus_percent") : 0;
 
+    /// <summary>True when the member's tier carries free delivery (Admin → Growth → Loyalty). Off by default; gold keeps what silver gets.</summary>
+    public static async Task<bool> FreeDeliveryAsync(IMySqlDapperHelper db, Guid userId)
+    {
+        var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(BAL.GrowthBAL.Defaults(), saved)["loyalty"]!;
+        if (!cfg.Bool("enabled") || !(cfg.Bool("silver_free_delivery") || cfg.Bool("gold_free_delivery"))) return false;
+        var lifetime = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0", new { userId });
+        var tier = Tier(cfg, lifetime);
+        return (tier == "gold" && (cfg.Bool("gold_free_delivery") || cfg.Bool("silver_free_delivery"))) || (tier == "silver" && cfg.Bool("silver_free_delivery"));
+    }
+
     /// <summary>Credits the points for a delivered package inside the caller's transaction. Returns the points credited.</summary>
     public static async Task<int> EarnAsync(IUnitOfWork uow, Guid subId, string subNumber, long itemsTotal, Guid userId)
     {

@@ -269,3 +269,6 @@ Checkbox in the Orders filter bar, both frontends, sets the `late=1` filter from
 
 ## Push 92: "Bought together" row on the product page
 New growth setting `bought_together` (off by default; `max_items` 1 to 12, default 4) in Admin → Growth. When on, the product payload carries `bought_together`: public in-stock products that were in the same live orders (placed to delivered; cancelled and unpaid orders ignored), most often first. A "Bought together" row shows above "Customers also viewed" on both storefronts. No schema change; computed from order history on each view (no cache yet, fine for a small catalog). Tested on both sides (two products in one order, off then on); frontends type-checked only.
+
+## Push 93: loyalty tier perk, free delivery
+Two new Loyalty settings in Admin → Growth, both off: `silver_free_delivery` and `gold_free_delivery`. When loyalty is on and the member tier has the perk (gold keeps silver perks), shipping and the remote-area surcharge are waived on the cart, the checkout quote and the placed order (the same figure in all three, so the total check at checkout matches). COD fee and other fees are not waived. Both versions; tested for member, silver, then gold-only. The product-page pincode estimate does not know the member (it works without a login), so it can still show a fee.
