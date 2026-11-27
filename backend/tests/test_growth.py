@@ -1275,6 +1275,10 @@ async def test_tier_free_delivery_waives_shipping_for_silver_and_gold_members(cl
         await s.commit()
     assert await ship() == (0, 0)  # silver
     assert (await buyer.get("/api/loyalty")).json()["free_delivery"] is True  # the rewards page can say so
+    vid = cable["variants"][0]["id"]
+    est = (await buyer.get(f"/api/catalog/delivery-estimate?variant_id={vid}&pincode=641001")).json()
+    assert est["member_free_delivery"] is True and est["delivery_fee_paise"] == 0  # the product page agrees
+    assert (await client.get(f"/api/catalog/delivery-estimate?variant_id={vid}&pincode=641001")).json()["delivery_fee_paise"] > 0  # a visitor still sees the fee
     assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "silver_free_delivery": False, "gold_free_delivery": True}})).status_code == 200
     assert await ship() == base  # silver no longer has it, gold only
     assert (await buyer.get("/api/loyalty")).json()["free_delivery"] is False

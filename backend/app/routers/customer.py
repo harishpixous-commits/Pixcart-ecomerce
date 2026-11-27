@@ -680,7 +680,7 @@ async def close_ticket(ticket_id: uuid.UUID, user: CurrentUser, session: Session
 
 
 @router.get("/api/catalog/delivery-estimate")
-async def delivery_estimate(session: SessionDep, variant_id: uuid.UUID, pincode: str = Query(min_length=6, max_length=6)) -> dict:
+async def delivery_estimate(session: SessionDep, user: OptionalUser, variant_id: uuid.UUID, pincode: str = Query(min_length=6, max_length=6)) -> dict:
     try:
         pin = validate_pincode(pincode)
     except ValueError as exc:
@@ -706,12 +706,18 @@ async def delivery_estimate(session: SessionDep, variant_id: uuid.UUID, pincode:
     extra, waive = await growth_svc.remote_surcharge(session, pin)
     if extra and not (waive and fee == 0):
         fee += extra
+    from app.services import loyalty as loyalty_svc
+
+    member_free = user is not None and await loyalty_svc.free_delivery(session, user.id)  # a signed-in member whose tier carries free delivery
+    if member_free:
+        fee = 0
     return {
         "serviceable": True, **best,
         "cod_available": cfg["cod_enabled"] and v.price_paise <= cfg["cod_max_order_paise"],
         "order_within_min": best["order_within_min"] if cfg["pdp_delivery_countdown"] else None,
         # delivery is charged per seller package; free once that seller's items reach the threshold
         "delivery_fee_paise": fee,
+        "member_free_delivery": member_free,
         "free_delivery_from_paise": free_from,
         "state": STATES.get(state_for_pin(pin) or "", ""),
     }
