@@ -190,4 +190,32 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal(200,(await admin.Delete("/api/admin/growth/campaigns/"+id2)).Status);
         Assert.Equal("cancelled",Row(id2)["status"]!.GetValue<string>());
     }
+    [Fact]public async Task Repeating_campaign_makes_the_next_one_after_each_send_and_cancel_ends_it()
+    {
+        var admin=await Admin();
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{campaigns=new{enabled=true,max_per_day=5},segments=new{enabled=true}})).Status);
+        var fan=await LoginPhone("9610100002","Repeat Fan");
+        await ApiFactory.DbExecAsync("UPDATE users SET marketing_opt_in=1 WHERE id=@id",new{id=fan.Id});
+        object Body(int days,int times,bool withTime=true)=>withTime?new{segment="never_ordered",title="Weekly deal",message="New this week",dry_run=false,send_at=DateTime.UtcNow.AddHours(2),repeat_days=days,repeat_times=times}:new{segment="never_ordered",title="Weekly deal",message="New this week",dry_run=false,repeat_days=days,repeat_times=times};
+        Assert.Equal("invalid_repeat",(await admin.Post("/api/admin/growth/campaigns",Body(5,2))).ErrorCode);
+        Assert.Equal("invalid_repeat",(await admin.Post("/api/admin/growth/campaigns",Body(7,0))).ErrorCode);
+        Assert.Equal("invalid_repeat",(await admin.Post("/api/admin/growth/campaigns",Body(0,3))).ErrorCode);
+        Assert.Equal("invalid_repeat",(await admin.Post("/api/admin/growth/campaigns",Body(7,2,false))).ErrorCode);
+        var r=await admin.Post("/api/admin/growth/campaigns",Body(7,2));
+        Assert.True(r.Status==200&&r.Json["repeat_days"]!.GetValue<int>()==7&&r.Json["repeats_left"]!.GetValue<int>()==2,r.ToString());
+        using var scope=Factory.Services.CreateScope();
+        var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();var notify=scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        Task<int> Due()=>BAL.SegmentCampaigns.SendDueAsync(db,notify);
+        Task MakeDue()=>ApiFactory.DbExecAsync("UPDATE segment_campaigns SET send_at=@t WHERE title='Weekly deal' AND status='scheduled'",new{t=DateTime.UtcNow.AddMinutes(-1)});
+        async Task<List<(string Status,int Left,int Days)>> Rows()=>(await db.QueryAsync<(string Status,int Left,int Days)>("SELECT status AS Status, repeats_left AS `Left`, repeat_days AS Days FROM segment_campaigns WHERE title='Weekly deal' ORDER BY created_at, send_at")).ToList();
+        await MakeDue();Assert.Equal(1,await Due());
+        var got=await Rows();Assert.Equal(new[]{"sent","scheduled"},got.Select(x=>x.Status).ToArray());Assert.Equal((1,7),(got[1].Left,got[1].Days));
+        Assert.Equal(1,(await fan.Get("/api/notifications")).Json["items"]!.AsArray().Count(n=>n!["title"]!.GetValue<string>()=="Weekly deal"));
+        await MakeDue();Assert.Equal(1,await Due());
+        got=await Rows();Assert.Equal(new[]{"sent","sent","scheduled"},got.Select(x=>x.Status).ToArray());Assert.Equal(0,got[2].Left);
+        var last=await db.QueryFirstOrDefaultAsync<Guid>("SELECT id FROM segment_campaigns WHERE title='Weekly deal' AND status='scheduled'");
+        Assert.Equal(200,(await admin.Delete("/api/admin/growth/campaigns/"+last)).Status);
+        await MakeDue();Assert.Equal(0,await Due());
+        Assert.Equal(new[]{"sent","sent","cancelled"},(await Rows()).Select(x=>x.Status).ToArray());
+    }
 }

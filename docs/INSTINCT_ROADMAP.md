@@ -195,3 +195,8 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 ## Push 74: gift card code by email
 - When a bought gift card is issued (the gateway confirmed full payment), the buyer also gets an email with the code, amount and expiry (template gift_card_bought, editable under Admin notification templates). Sent only on the first issue, never when the buyer or staff re-check. Needs an email address on the account and SMTP set up; otherwise the buyer still sees the code on screen as before. Python and .NET (the .NET email goes out after the commit).
 - Tested: the existing purchase test now covers the email (once, with the code and amount) on both sides. Not done: refund or void of a bought card, guests buying, Cashfree and PayU for card purchases.
+
+
+## Push 75: repeating campaigns
+- A scheduled segment campaign can repeat every 7, 14 or 30 days, 1 to 12 more times (needs a first send time). After each send the next one is created as its own scheduled row, never earlier than an hour ahead; cancelling that row ends the series. The list is worked out again at each send, so people who opted out are left out. Python migration 0043, .NET V020. Campaigns form has a Repeat control in both frontends.
+- Tested: one new test each side (invalid combinations, two repeats, cancel ends it). Repeats are not counted against max_per_day when they run. Known gap unchanged: a .NET campaign claimed as "sending" that crashes mid-send is not retried.

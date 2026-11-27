@@ -135,6 +135,21 @@ const label = (k: string): string => {
           <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">Send later (optional, 2 minutes to 30 days ahead)</span>
             <input type="datetime-local" class="rounded-lg border px-3 py-2 text-sm" [value]="cSendAt()" (input)="cSendAt.set($any($event.target).value); cPreview.set(null)" data-testid="campaign-send-at" />
           </label>
+          @if (cSendAt()) {
+            <div class="flex flex-wrap items-center gap-2 text-sm">
+              <span class="font-semibold">Repeat</span>
+              <select class="rounded-lg border px-3 py-2" [value]="cRepeatDays()" (change)="cRepeatDays.set(+$any($event.target).value); cPreview.set(null)" aria-label="Repeat">
+                <option value="0">Do not repeat</option><option value="7">Every week</option><option value="14">Every 2 weeks</option><option value="30">Every 30 days</option>
+              </select>
+              @if (cRepeatDays() > 0) {
+                <span>for</span>
+                <select class="rounded-lg border px-3 py-2" [value]="cRepeatTimes()" (change)="cRepeatTimes.set(+$any($event.target).value); cPreview.set(null)" aria-label="More times">
+                  @for (n of repeatTimeOptions; track n) {<option [value]="n" [selected]="n === cRepeatTimes()">{{ n }} more {{ n === 1 ? "time" : "times" }}</option>}
+                </select>
+                <span class="text-ink-faint">Cancel the next scheduled one to stop it.</span>
+              }
+            </div>
+          }
           <pc-error-note [message]="error()" />
           <div class="flex items-center gap-2">
             <button pcButton (click)="campaign(true)" [loading]="busy() && !cPreview()" [disabled]="!cTitle().trim() || !cMessage().trim()">Preview</button>
@@ -222,6 +237,9 @@ export class AdminGrowthPage {
   protected readonly cMessage = signal("");
   protected readonly cLink = signal("");
   protected readonly cSendAt = signal("");
+  protected readonly cRepeatDays = signal(0);
+  protected readonly cRepeatTimes = signal(4);
+  protected readonly repeatTimeOptions = [1, 2, 4, 8, 12];
   protected readonly cPreview = signal<CampaignPreview | null>(null);
   protected readonly campaigns = signal<CampaignRow[]>([]);
   protected readonly segs = signal<Seg[]>([]);
@@ -262,7 +280,7 @@ export class AdminGrowthPage {
     this.busy.set(true);
     this.error.set(null);
     try {
-      const body = { segment: this.cSegment(), title: this.cTitle(), message: this.cMessage(), link: this.cLink(), dry_run: dry, send_at: this.cSendAt() ? new Date(this.cSendAt()).toISOString() : null };
+      const body = { segment: this.cSegment(), title: this.cTitle(), message: this.cMessage(), link: this.cLink(), dry_run: dry, send_at: this.cSendAt() ? new Date(this.cSendAt()).toISOString() : null, repeat_days: this.cSendAt() ? this.cRepeatDays() : 0, repeat_times: this.cSendAt() && this.cRepeatDays() ? this.cRepeatTimes() : 0 };
       const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body });
       if (dry) this.cPreview.set(r);
       else {
@@ -272,6 +290,7 @@ export class AdminGrowthPage {
         this.cLink.set("");
         const scheduled = this.cSendAt() !== "";
         this.cSendAt.set("");
+        this.cRepeatDays.set(0);
         this.toast.show(scheduled ? "Campaign scheduled" : `Sent to ${r.recipients} customers`);
         this.loadCampaigns();
       }
