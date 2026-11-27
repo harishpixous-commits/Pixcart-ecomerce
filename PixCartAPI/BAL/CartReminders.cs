@@ -50,4 +50,27 @@ public static class CartReminders
         }
         return sent;
     }
+
+    private sealed record LogRow(Guid Id, string Name, string? Phone, string? Email, int Stage, int CartPaise, DateTime SentAt, long Ordered);
+
+    /// <summary>What staff see: the latest reminders sent and whether the customer ordered after each one.</summary>
+    public static async Task<JsonObject> RecentAsync(IMySqlDapperHelper db)
+    {
+        var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(BAL.GrowthBAL.Defaults(), saved)["abandoned_cart"]!;
+        var sent30 = await db.QueryFirstOrDefaultAsync<long>("SELECT COUNT(*) FROM cart_reminders WHERE sent_at >= @since", new { since = DateTime.UtcNow.AddDays(-30) });
+        var rows = (await db.QueryAsync<LogRow>(
+            "SELECT r.id AS Id, u.name AS Name, u.phone AS Phone, u.email AS Email, r.stage AS Stage, r.cart_paise AS CartPaise, r.sent_at AS SentAt, " +
+            "EXISTS(SELECT 1 FROM orders o WHERE o.user_id = r.user_id AND o.created_at >= r.sent_at) AS Ordered " +
+            "FROM cart_reminders r JOIN users u ON u.id = r.user_id ORDER BY r.sent_at DESC LIMIT 100")).ToList();
+        return new JsonObject
+        {
+            ["enabled"] = cfg.Bool("enabled"), ["sent_30d"] = sent30, ["ordered_after"] = rows.Count(r => r.Ordered != 0),
+            ["items"] = new JsonArray(rows.Select(r => (JsonNode)new JsonObject
+            {
+                ["id"] = r.Id.ToString(), ["customer"] = r.Name, ["contact"] = r.Phone ?? r.Email, ["stage"] = r.Stage, ["cart_paise"] = r.CartPaise,
+                ["sent_at"] = r.SentAt.ToString("o"), ["ordered_after"] = r.Ordered != 0,
+            }).ToArray()),
+        };
+    }
 }

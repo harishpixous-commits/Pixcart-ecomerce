@@ -10,6 +10,7 @@ namespace API.Controllers;
 [ApiController, SignedIn, Route("/api/admin/growth")]
 public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me, IMySqlDapperHelper db) : ControllerBase
 {
+    [HttpGet("cart-reminders"), RouteGuard("perm:marketing")] public async Task<object> CartReminderLog() { await me.RequireAsync(); return await BAL.CartReminders.RecentAsync(db); }
     [HttpGet("segments"), RouteGuard("perm:marketing")] public async Task<object> Segments(string? segment) { await me.RequireAsync(); return await BAL.Segments.ListAsync(db, segment); }
     [HttpGet("settings"), RouteGuard("perm:marketing")] public async Task<object> Settings() => await bal.SettingsAsync(await me.RequireAsync());
     [HttpPut("settings"), RouteGuard("perm:marketing")] public async Task<object> Settings(JsonObject body) => await bal.UpdateAsync(await me.RequireAsync(), body);

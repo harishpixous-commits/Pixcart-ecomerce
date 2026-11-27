@@ -147,6 +147,10 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
         await Age(1);
         Assert.Equal(0, await Run());
+        var log = (await admin.Get("/api/admin/growth/cart-reminders")).Json;
+        Assert.True(log["enabled"]!.GetValue<bool>()); Assert.Equal(2, log["sent_30d"]!.GetValue<long>());
+        Assert.Equal(2, log["items"]![0]!["stage"]!.GetValue<int>()); Assert.Equal(1, log["items"]![1]!["stage"]!.GetValue<int>());
+        Assert.True(log["items"]![0]!["ordered_after"]!.GetValue<bool>()); Assert.Equal(2, log["ordered_after"]!.GetValue<int>());
     }
 
     [Fact]

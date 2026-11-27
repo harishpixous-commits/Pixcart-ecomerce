@@ -13,6 +13,7 @@ type Val = boolean | number | string | string[];
 type Section = Record<string, Val>;
 type Settings = Record<string, Section>;
 type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
+type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
 type Seg = { key: string; label: string; count: number };
 type Member = { id: string; name: string; phone: string | null; email: string | null; marketing_opt_in: boolean; orders: number; spent_paise: number; last_order_at: string | null };
 type Score = { seller_id: string; seller: string; orders: number; late: number; cancelled_by_seller: number; returned: number; late_percent: number; cancel_percent: number; return_percent: number; level: string };
@@ -82,6 +83,22 @@ const label = (k: string): string => {
           </table>
         </div>
       </div>
+    } @else if (tab() === "cart-reminders") {
+      <div class="flex flex-col gap-4">
+        @if (reminders(); as rl) {
+          <p class="rounded-lg bg-white p-4 text-sm" data-testid="reminder-summary">{{ rl.sent_30d }} reminders in the last 30 days. {{ rl.ordered_after }} of the latest {{ rl.items.length }} customers ordered afterwards.@if (!rl.enabled) { Reminders are switched off in Settings. }</p>
+          <div class="overflow-x-auto rounded-xl bg-white">
+            <table class="w-full text-left text-sm" data-testid="reminders">
+              <thead><tr class="border-b border-line"><th class="p-3">Customer</th><th class="p-3">Contact</th><th class="p-3">Reminder</th><th class="p-3">Cart</th><th class="p-3">Sent</th><th class="p-3">Ordered after</th></tr></thead>
+              <tbody>
+                @for (r of rl.items; track r.id) {
+                  <tr class="border-b border-line/50"><td class="p-3 font-semibold">{{ r.customer }}</td><td class="p-3">{{ r.contact }}</td><td class="p-3">#{{ r.stage }}</td><td class="p-3">{{ rupees(r.cart_paise) }}</td><td class="p-3">{{ date(r.sent_at) }}</td><td class="p-3">{{ r.ordered_after ? "Yes" : "No" }}</td></tr>
+                } @empty { <tr><td class="p-4 text-ink-soft" colspan="6">No reminders sent yet.</td></tr> }
+              </tbody>
+            </table>
+          </div>
+        } @else { <pc-page-loader /> }
+      </div>
     } @else if (tab() === "segments") {
       <div class="flex flex-col gap-4">
         @if (segError()) { <p class="rounded-lg bg-white p-4 text-sm text-ink-soft" data-testid="segments-off">{{ segError() }}</p> }
@@ -132,10 +149,11 @@ export class AdminGrowthPage {
   protected readonly titles = TITLES;
   protected readonly label = label;
   protected readonly tab = signal("settings");
-  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }];
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "cart-reminders", label: "Cart reminders" }];
   protected readonly rupees = rupees;
   protected readonly date = date;
   protected readonly cards = signal<Card[]>([]);
+  protected readonly reminders = signal<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] } | null>(null);
   protected readonly gAmount = signal("500");
   protected readonly gQty = signal("1");
   protected readonly gNote = signal("");
@@ -153,6 +171,7 @@ export class AdminGrowthPage {
   constructor() {
     api<{ settings: Settings }>("/api/admin/growth/settings").then((x) => this.s.set(x.settings)).catch(quietly);
     this.loadCards();
+    api<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] }>("/api/admin/growth/cart-reminders").then((x) => this.reminders.set(x)).catch(quietly);
     api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => this.segs.set(x.segments)).catch((e) => this.segError.set(e instanceof ApiError ? e.message : null));
     api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);
   }
