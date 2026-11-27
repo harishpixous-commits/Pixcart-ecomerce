@@ -86,6 +86,12 @@ public class GiftPurchaseTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(a["code"]!.GetValue<string>(), b["code"]!.GetValue<string>());
         Assert.Equal(1, await Cards());
         Assert.Equal(20000, (await buyer.Post("/api/gift-cards/balance", new { code = a["code"]!.GetValue<string>() })).Json["balance_paise"]!.GetValue<int>());
+        // staff see every purchase with its state; a shopper does not
+        var listed = (await admin.Get("/api/admin/growth/gift-card-purchases")).Json["items"]!.AsArray();
+        Assert.Equal(1, listed.Count(x => x!["status"]!.GetValue<string>() == "issued"));
+        Assert.Equal(2, listed.Count);
+        Assert.NotNull(listed[0]!["gift_card_id"]);
+        Assert.Equal(403, (await buyer.Get("/api/admin/growth/gift-card-purchases")).Status);
     }
 
     [Fact]

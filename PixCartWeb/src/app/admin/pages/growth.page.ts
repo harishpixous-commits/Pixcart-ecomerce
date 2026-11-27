@@ -12,6 +12,7 @@ import { Button, ErrorNote, Toast } from "../../shared/ui/ui";
 type Val = boolean | number | string | string[];
 type Section = Record<string, Val>;
 type Settings = Record<string, Section>;
+type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
 type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
 type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
 type Seg = { key: string; label: string; count: number };
@@ -82,6 +83,19 @@ const label = (k: string): string => {
             </tbody>
           </table>
         </div>
+        @if (purchases().length > 0) {
+          <div class="overflow-x-auto rounded-xl bg-white">
+            <h3 class="p-3 font-semibold">Bought online</h3>
+            <table class="w-full text-left text-sm" data-testid="gift-purchases">
+              <thead><tr class="border-b border-line"><th class="p-3">Buyer</th><th class="p-3">Amount</th><th class="p-3">Gateway</th><th class="p-3">Status</th><th class="p-3">Started</th><th class="p-3">Note</th></tr></thead>
+              <tbody>
+                @for (p of purchases(); track p.id) {
+                  <tr class="border-b border-line/50"><td class="p-3">{{ p.user }} {{ p.phone }}</td><td class="p-3">{{ rupees(p.amount_paise) }}</td><td class="p-3">{{ p.gateway }}</td><td class="p-3">{{ p.status }}</td><td class="p-3">{{ date(p.created_at) }}</td><td class="p-3 text-ink-soft">{{ p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       </div>
     } @else if (tab() === "cart-reminders") {
       <div class="flex flex-col gap-4">
@@ -153,6 +167,7 @@ export class AdminGrowthPage {
   protected readonly rupees = rupees;
   protected readonly date = date;
   protected readonly cards = signal<Card[]>([]);
+  protected readonly purchases = signal<Purchase[]>([]);
   protected readonly reminders = signal<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] } | null>(null);
   protected readonly gAmount = signal("500");
   protected readonly gQty = signal("1");
@@ -178,6 +193,7 @@ export class AdminGrowthPage {
 
   private loadCards(): void {
     api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => this.cards.set(x.items)).catch(quietly);
+    api<{ items: Purchase[] }>("/api/admin/growth/gift-card-purchases").then((x) => this.purchases.set(x.items)).catch(quietly);
   }
 
   protected async issue(e: Event): Promise<void> {

@@ -53,6 +53,7 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
         return new { items };
     }
     [HttpGet("/api/admin/growth/gift-cards"), RouteGuard("perm:marketing")] public async Task<object> All() { await me.RequireAsync(); return new { items = await BAL.GiftCards.ListAsync(db) }; }
+    [HttpGet("/api/admin/growth/gift-card-purchases"), RouteGuard("perm:marketing")] public async Task<object> Purchases() { await me.RequireAsync(); return new { items = await BAL.GiftCards.PurchasesAsync(db) }; }
     [HttpPost("/api/admin/growth/gift-cards/{id:guid}/void"), RouteGuard("perm:marketing")]
     public async Task<object> Void(Guid id)
     {

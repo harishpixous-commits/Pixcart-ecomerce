@@ -123,3 +123,6 @@ Closes the gap noted in Push 51. Claiming an action now also stamps decided_at; 
 
 ## Push 57: seller coupon update is now audited (Instinct)
 Held item from slice 9 fixed in both versions: a seller changing a coupon now writes a "coupon.update" audit row, like create already did. Python seller_extras.py plus an assertion in test_promotions; .NET SellerCouponsBAL plus the existing test, which had pinned the old count of 0 and now expects 1. Notifications read-all (slice 3) stays as is: it also marks email-channel rows read, which is harmless.
+
+## Push 58: staff list of gift cards bought online (Instinct)
+GET /api/admin/growth/gift-card-purchases (marketing permission) in both backends lists purchases with buyer, amount, gateway, status and note, and the Gift cards tab in Admin > Growth shows a "Bought online" table (Next.js and Angular). A purchase still "created" is waiting for payment or was paid and never checked; that is the one for support to look at. There is still no button to check or refund from here. Backend tests pass in both (Python gift tests, .NET GiftPurchase); screens type-checked only.

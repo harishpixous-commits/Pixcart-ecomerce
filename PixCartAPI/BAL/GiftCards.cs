@@ -120,6 +120,15 @@ public static class GiftCards
         return PurchaseView(p with { Status = "issued", CardId = card.Id }, card);
     }
 
+    public static async Task<List<JsonObject>> PurchasesAsync(IMySqlDapperHelper db) =>
+        (await db.QueryAsync<(Guid Id, string? Name, string? Phone, int Amount, string Gateway, string Status, string Error, Guid? CardId, DateTime At)>(
+            "SELECT p.id AS Id, u.name AS Name, u.phone AS Phone, p.amount_paise AS Amount, p.gateway AS Gateway, p.status AS Status, p.error AS Error, p.gift_card_id AS CardId, p.created_at AS At " +
+            "FROM gift_card_purchases p JOIN users u ON u.id = p.user_id ORDER BY p.created_at DESC LIMIT 200")).Select(r => new JsonObject
+        {
+            ["id"] = r.Id.ToString(), ["user"] = r.Name, ["phone"] = r.Phone, ["amount_paise"] = r.Amount, ["gateway"] = r.Gateway, ["status"] = r.Status, ["error"] = r.Error,
+            ["gift_card_id"] = r.CardId?.ToString(), ["created_at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o"),
+        }).ToList();
+
     public static async Task<List<JsonObject>> ListAsync(IMySqlDapperHelper db) =>
         (await db.QueryAsync<Card>(CardSql + "ORDER BY created_at DESC LIMIT 200")).Select(Item).ToList();
 
