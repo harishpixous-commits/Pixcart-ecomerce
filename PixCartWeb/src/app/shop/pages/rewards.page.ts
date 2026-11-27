@@ -8,7 +8,7 @@ import { date, rupees } from "../../core/format";
 import { Icon } from "../../shared/ui/icon";
 import { Toast } from "../../shared/ui/ui";
 
-type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
+type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; free_delivery?: boolean; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
 type Referral = { enabled: boolean; code: string; referrer_reward_paise: number; friend_reward_paise: number; min_order_paise: number; joined: number; rewarded: number; earned_paise: number; used_code: boolean };
 type Made = { code: string; discount_paise: number; min_order_paise: number; valid_days: number };
 type Options = { can_buy: boolean; min_paise: number; max_paise: number };
@@ -38,7 +38,7 @@ type CardInfo = { balance_paise: number; status: string; expires_at: string };
         @if (l.enabled) {
           <section class="rounded-xl bg-white p-4 sm:p-6">
             <h2 class="flex items-center gap-2 text-xl font-semibold"><svg [pcIcon]="Heart" class="h-5 w-5 text-vermilion" /> Loyalty points</h2>
-            <p class="mt-1">{{ l.balance }} points ({{ rupees(l.value_paise) }}) · {{ l.tier }} tier{{ l.bonus_percent ? " (+" + l.bonus_percent + "% points on every delivery)" : "" }}</p>
+            <p class="mt-1">{{ l.balance }} points ({{ rupees(l.value_paise) }}) · {{ l.tier }} tier{{ l.bonus_percent ? " (+" + l.bonus_percent + "% points on every delivery)" : "" }}{{ l.free_delivery ? " · free delivery on your orders" : "" }}</p>
             <div class="mt-3 flex gap-2">
               <input [value]="points()" (input)="points.set($any($event.target).value.replace(NON_DIGIT, ''))" inputmode="numeric" placeholder="Points to use" aria-label="Points to use" class="w-40 rounded-lg border border-line px-3 py-2" />
               <button type="button" [disabled]="busy() || !points()" (click)="redeemPoints()" class="rounded-full bg-peacock px-5 py-2 font-semibold text-white disabled:opacity-50">Get coupon</button>

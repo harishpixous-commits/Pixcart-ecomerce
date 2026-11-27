@@ -886,8 +886,10 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(baseline, await Ship()); // still a plain member
         await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (UUID(), @uid, 'earn', 600, 'test', UTC_TIMESTAMP(6))", new { uid = buyer.Id });
         Assert.Equal((0L, 0L), await Ship()); // silver
+        Assert.True((await buyer.Get("/api/loyalty")).Json["free_delivery"]!.GetValue<bool>()); // the rewards page can say so
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, silver_free_delivery = false, gold_free_delivery = true } })).Status);
         Assert.Equal(baseline, await Ship()); // silver no longer has it, gold only
+        Assert.False((await buyer.Get("/api/loyalty")).Json["free_delivery"]!.GetValue<bool>());
     }
 
     [Fact]

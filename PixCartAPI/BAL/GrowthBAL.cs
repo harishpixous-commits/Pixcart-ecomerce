@@ -220,6 +220,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         return new JsonObject
         {
             ["enabled"] = cfg.Bool("enabled"), ["balance"] = balance, ["lifetime"] = lifetime, ["tier"] = LoyaltyPoints.Tier(cfg, lifetime), ["bonus_percent"] = LoyaltyPoints.BonusPercent(cfg, LoyaltyPoints.Tier(cfg, lifetime)),
+            ["free_delivery"] = cfg.Bool("enabled") && LoyaltyPoints.TierFreeDelivery(cfg, LoyaltyPoints.Tier(cfg, lifetime)),
             ["value_paise"] = balance * cfg.Int("point_value_paise"),
             ["history"] = new JsonArray(rows.Select(r => (JsonNode)new JsonObject { ["kind"] = r.Kind, ["points"] = r.Points, ["note"] = r.Note, ["at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o") }).ToArray()),
         };
