@@ -23,6 +23,11 @@ def tier_for(cfg: dict, lifetime: int) -> str:
     return "member"
 
 
+def bonus_percent(cfg: dict, tier: str) -> int:
+    """Extra points a tier earns on top of the normal rate (Admin -> Growth -> Loyalty). 0 for members and while unset."""
+    return {"silver": cfg["silver_bonus_percent"], "gold": cfg["gold_bonus_percent"]}.get(tier, 0)
+
+
 async def earn_for_delivery(session: AsyncSession, sub: SubOrder, user_id: uuid.UUID) -> int:
     """Credits the points for a delivered package (once). Returns the points credited (0 when off or already done)."""
     cfg = (await growth.get(session))["loyalty"]
@@ -34,7 +39,11 @@ async def earn_for_delivery(session: AsyncSession, sub: SubOrder, user_id: uuid.
     done = (await session.execute(select(LoyaltyEntry.id).where(LoyaltyEntry.sub_order_id == sub.id, LoyaltyEntry.kind == "earn"))).first()
     if done:
         return 0
-    session.add(LoyaltyEntry(user_id=user_id, sub_order_id=sub.id, kind="earn", points=points, note=f"Delivered package {sub.number}", created_at=utcnow()))
+    lifetime = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0))).scalar_one()
+    bonus = bonus_percent(cfg, tier_for(cfg, int(lifetime)))
+    points = points * (100 + bonus) // 100
+    note = f"Delivered package {sub.number}" + (f" (+{bonus}% tier bonus)" if bonus else "")
+    session.add(LoyaltyEntry(user_id=user_id, sub_order_id=sub.id, kind="earn", points=points, note=note, created_at=utcnow()))
     await session.flush()
     return points
 
@@ -117,7 +126,7 @@ async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
     lifetime = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0))).scalar_one()
     rows = (await session.execute(select(LoyaltyEntry).where(LoyaltyEntry.user_id == user_id).order_by(LoyaltyEntry.created_at.desc()).limit(50))).scalars().all()
     return {
-        "enabled": cfg["enabled"], "balance": int(balance), "lifetime": int(lifetime), "tier": tier_for(cfg, int(lifetime)),
+        "enabled": cfg["enabled"], "balance": int(balance), "lifetime": int(lifetime), "tier": tier_for(cfg, int(lifetime)), "bonus_percent": bonus_percent(cfg, tier_for(cfg, int(lifetime))),
         "value_paise": int(balance) * cfg["point_value_paise"],
         "history": [{"kind": r.kind, "points": r.points, "note": r.note, "at": r.created_at.isoformat()} for r in rows],
     }

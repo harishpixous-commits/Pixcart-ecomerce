@@ -612,3 +612,33 @@ async def test_auto_suspend_stops_a_critical_seller_once_and_only_when_switched_
     assert await run() == 0  # already suspended
     assert (await admin.post(f"/api/admin/sellers/{sid}/approve", {})).status_code == 200  # staff reinstate
     assert await run() == 0 and await status() == "approved"  # not suspended again for the same old orders
+
+
+async def test_tier_bonus_adds_points_only_for_silver_and_up(client, admin, categories):
+    import uuid
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import ship_and_deliver
+    from tests.test_orders import marketplace
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000041")
+    addr = await add_address(buyer)
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "points_per_100": 2, "tier_silver_points": 15, "tier_gold_points": 0, "silver_bonus_percent": 50}})).status_code == 200
+
+    async def deliver():
+        await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+        o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).json()["order"]
+        await ship_and_deliver(seller, o["sub_orders"][0]["id"])
+        return (o["sub_orders"][0]["items_total"] // 10000) * 2
+
+    base = await deliver()  # a member: no bonus
+    me = (await buyer.get("/api/loyalty")).json()
+    assert base > 0 and me["balance"] == base and me["bonus_percent"] == 0
+    assert (await admin.post("/api/admin/growth/loyalty/adjust", {"user_id": buyer.user["id"], "points": 10, "note": "Reach silver"})).status_code == 200
+    me = (await buyer.get("/api/loyalty")).json()
+    assert me["tier"] == "silver" and me["bonus_percent"] == 50
+    await deliver()
+    me = (await buyer.get("/api/loyalty")).json()
+    assert me["balance"] == base + 10 + base * 150 // 100 and "50% tier bonus" in me["history"][0]["note"]
+    bad = await admin.put("/api/admin/growth/settings", {"loyalty": {"gold_bonus_percent": 900}})
+    assert bad.status_code == 400
