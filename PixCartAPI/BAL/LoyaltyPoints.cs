@@ -159,6 +159,24 @@ public static class LoyaltyPoints
                 new { id = Guid.NewGuid(), userId, points = -pts, marker, now });
             back += -pts;
         }
-        return back;
+        return back + await ExpireOldAsync(uow, userId);
+    }
+
+    /// <summary>Points not used within expiry_days lapse (Admin → Growth → Loyalty, 0 = never). Oldest points are spent first, so what lapses is
+    /// what was earned before the cut-off minus everything spent or lost since. One negative row; the next call finds nothing left. Returns the points that lapsed.</summary>
+    public static async Task<int> ExpireOldAsync(IUnitOfWork uow, Guid userId)
+    {
+        var cfg = await LoyaltyCfgAsync(uow);
+        var days = cfg.Int("expiry_days");
+        if (!cfg.Bool("enabled") || days <= 0) return 0;
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var old = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0 AND created_at <= @cutoff", new { userId, cutoff });
+        var spent = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(-points),0) FROM loyalty_ledger WHERE user_id = @userId AND points < 0", new { userId });
+        var balance = await uow.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId", new { userId });
+        var lapse = (int)Math.Min(balance, Math.Max(0, old - spent));
+        if (lapse <= 0) return 0;
+        await uow.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, NULL, 'reverse', @points, @note, @now)",
+            new { id = Guid.NewGuid(), userId, points = -lapse, note = $"Points expired (not used within {days} days)", now = DateTime.UtcNow });
+        return lapse;
     }
 }

@@ -1049,4 +1049,21 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.True(r.Status == 201, r.ToString());
         Assert.Equal(total, r.Json["order"]!["grand_total"]!.GetValue<long>());
     }
+
+    [Fact]
+    public async Task Unused_points_expire_after_expiry_days_oldest_first()
+    {
+        var admin = await Admin();
+        var buyer = await LoginPhone("9770000191", "Expiry Buyer");
+        var uid = Guid.Parse(buyer.Id);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, expiry_days = 30 } })).Status);
+        async Task Row(string kind, int points, string note, int daysAgo) => await ApiFactory.DbExecAsync(
+            "INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (@id, @uid, @kind, @points, @note, @at)",
+            new { id = Guid.NewGuid(), uid, kind, points, note, at = DateTime.UtcNow.AddDays(-daysAgo) });
+        await Row("earn", 100, "old", 60); await Row("redeem", -30, "spent", 50); await Row("earn", 40, "recent", 5);
+        var me = (await buyer.Get("/api/loyalty")).Json;
+        Assert.Equal(40, me["balance"]!.GetValue<long>()); // 100 - 30 spent = 70 lapse; the recent 40 stays
+        Assert.StartsWith("Points expired", me["history"]![0]!["note"]!.GetValue<string>());
+        Assert.Equal(40, (await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>()); // lapses once
+    }
 }
