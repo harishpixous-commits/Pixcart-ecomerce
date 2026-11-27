@@ -885,3 +885,56 @@ async def test_staff_notes_on_an_order_are_private_to_staff(client, admin, categ
         assert (await who.post(url, {"note": "sneaky"})).status_code in (401, 403)
     assert "Customer called" not in (await buyer.get(f"/api/orders/{o['id']}")).text
     assert len((await admin.get(url)).json()["items"]) == 2
+
+
+async def test_review_reminder_goes_once_per_delivered_package_that_is_not_reviewed(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import SubOrder
+    from app.services import review_reminders
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import key, setup, ship_and_deliver
+
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    a = await login_phone(client, "9770000101", name="Reminder A")
+    b = await login_phone(client, "9770000102", name="Reminder B")
+
+    async def order(who, product, seller):
+        addr = await add_address(who, state="33")
+        await who.post("/api/cart/items", {"variant_id": product["variants"][0]["id"], "qty": 1})
+        o = (await who.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+        sid = o["sub_orders"][0]["id"]
+        await ship_and_deliver(seller, sid)
+        return sid
+
+    async def age(sid, days):
+        async with SessionLocal() as s:
+            await s.execute(update(SubOrder).where(SubOrder.id == uuid.UUID(sid)).values(delivered_at=utcnow() - timedelta(days=days)))
+            await s.commit()
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await review_reminders.send_due(s)
+            await s.commit()
+            return n
+
+    async def notes(who):
+        return [n for n in (await who.get("/api/notifications")).json()["items"] if n["title"].startswith("How was")]
+
+    s1, s2, s3 = await order(a, shirt, tn), await order(a, phone, ka), await order(b, shirt, tn)
+    for sid, d in ((s1, 6), (s2, 6), (s3, 1)):
+        await age(sid, d)
+    assert await run() == 0 and await notes(a) == []  # switched off
+    assert (await admin.put("/api/admin/growth/settings", {"review_reminders": {"enabled": True, "after_days": 5, "max_age_days": 30}})).status_code == 200
+    r = await a.put(f"/api/catalog/products/{phone['slug']}/reviews", {"rating": 5, "title": "Good", "body": "Works well for calls"})
+    assert r.status_code in (200, 201), r.text
+    assert await run() == 1  # the shirt package only: the phone is reviewed, B's package is too recent
+    got = await notes(a)
+    assert len(got) == 1 and "Handloom Cotton Shirt Blue" in got[0]["title"] and await notes(b) == []
+    assert await run() == 0  # once only
+    await age(s3, 6)
+    assert await run() == 1 and len(await notes(b)) == 1

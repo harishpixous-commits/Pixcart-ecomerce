@@ -156,6 +156,7 @@ class SubOrder(IdMixin, TimestampMixin, Base):
     delivery_otp: Mapped[str] = mapped_column(String(6), default="", server_default="")
     delivery_zone_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("delivery_zones.id", ondelete="SET NULL"))
     fleet_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # staff told that nobody took it
+    review_reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # the shopper was asked to review this package
 
     __table_args__ = (
         CheckConstraint(
