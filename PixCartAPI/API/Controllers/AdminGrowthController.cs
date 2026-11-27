@@ -33,6 +33,47 @@ public class ReferralController(Utils.Interface.IMySqlDapperHelper db, ICurrentU
     [HttpGet("/api/admin/growth/referrals"), RouteGuard("perm:marketing")] public async Task<object> All() { await me.RequireAsync(); return new { items = await BAL.ReferralRewards.ListAsync(db) }; }
 }
 
+[ApiController, SignedIn]
+public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me, IRateLimitBAL limits, IAuditBAL audit) : ControllerBase
+{
+    public record IssueIn { [System.ComponentModel.DataAnnotations.Range(100, 100000000)] public int AmountPaise { get; init; } [System.ComponentModel.DataAnnotations.StringLength(200)] public string Note { get; init; } = ""; [System.ComponentModel.DataAnnotations.Range(1, 50)] public int Quantity { get; init; } = 1; public int? ValidityDays { get; init; } }
+    public record RedeemIn { [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(20, MinimumLength = 4)] public string Code { get; init; } = ""; public int? AmountPaise { get; init; } }
+
+    [HttpPost("/api/admin/growth/gift-cards"), RouteGuard("perm:marketing")]
+    public async Task<object> Issue(IssueIn b)
+    {
+        var admin = await me.RequireAsync();
+        await using var tx = await db.BeginAsync();
+        var items = await BAL.GiftCards.IssueAsync(tx, b.AmountPaise, b.Note, b.Quantity, b.ValidityDays);
+        await audit.AuditAsync(admin, "gift_card.issue", "settings", "gift_cards", $"{b.Quantity} x {b.AmountPaise}", tx);
+        await tx.CommitAsync();
+        return new { items };
+    }
+    [HttpGet("/api/admin/growth/gift-cards"), RouteGuard("perm:marketing")] public async Task<object> All() { await me.RequireAsync(); return new { items = await BAL.GiftCards.ListAsync(db) }; }
+    [HttpPost("/api/admin/growth/gift-cards/{id:guid}/void"), RouteGuard("perm:marketing")]
+    public async Task<object> Void(Guid id)
+    {
+        var admin = await me.RequireAsync();
+        await using var tx = await db.BeginAsync();
+        var r = await BAL.GiftCards.VoidAsync(tx, id);
+        await audit.AuditAsync(admin, "gift_card.void", "settings", id.ToString(), r["code"]!.GetValue<string>(), tx);
+        await tx.CommitAsync();
+        return r;
+    }
+    [HttpPost("/api/gift-cards/balance"), RouteGuard("signed_in")]
+    public async Task<object> Balance(RedeemIn b)
+    {
+        var u = await me.RequireAsync(); await limits.RateLimitAsync($"giftcard:{u.Id}", 20, 600);
+        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.BalanceAsync(tx, b.Code); await tx.CommitAsync(); return r;
+    }
+    [HttpPost("/api/gift-cards/redeem"), RouteGuard("signed_in")]
+    public async Task<object> Redeem(RedeemIn b)
+    {
+        var u = await me.RequireAsync(); await limits.RateLimitAsync($"giftcard:{u.Id}", 20, 600);
+        await using var tx = await db.BeginAsync(); var r = await BAL.GiftCards.RedeemAsync(tx, u.Id, b.Code, b.AmountPaise); await tx.CommitAsync(); return r;
+    }
+}
+
 [ApiController]
 public class SeoController(IGrowthBAL bal) : ControllerBase
 {

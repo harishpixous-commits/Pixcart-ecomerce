@@ -150,6 +150,41 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Gift_cards_are_issued_by_staff_and_redeemed_into_a_coupon()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000501", "gift-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000501", "Gift Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        Assert.Equal("gift_cards_off", (await admin.Post("/api/admin/growth/gift-cards", new { amount_paise = 20000 })).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { gift_cards = new { enabled = true, min_paise = 10000, max_paise = 100000 } })).Status);
+        Assert.Equal("invalid_amount", (await admin.Post("/api/admin/growth/gift-cards", new { amount_paise = 500000 })).ErrorCode);
+        Assert.Equal(403, (await buyer.Post("/api/admin/growth/gift-cards", new { amount_paise = 20000 })).Status);
+        var made = await admin.Post("/api/admin/growth/gift-cards", new { amount_paise = 20000, note = "Diwali" });
+        Assert.True(made.Status == 200, made.ToString());
+        var card = made.Json["items"]![0]!; var code = card["code"]!.GetValue<string>(); var id = card["id"]!.GetValue<string>();
+        Assert.Equal("invalid_code", (await buyer.Post("/api/gift-cards/balance", new { code = "GCNOPE" })).ErrorCode);
+        Assert.Equal(20000, (await buyer.Post("/api/gift-cards/balance", new { code = code.ToLowerInvariant() })).Json["balance_paise"]!.GetValue<int>());
+        Assert.Equal("balance_too_low", (await buyer.Post("/api/gift-cards/redeem", new { code, amount_paise = 30000 })).ErrorCode);
+        var r = await buyer.Post("/api/gift-cards/redeem", new { code, amount_paise = 12000 });
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Equal(8000, r.Json["card_balance_paise"]!.GetValue<int>());
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = r.Json["code"]!.GetValue<string>() });
+        Assert.True(o.Status == 201, o.ToString());
+        Assert.Equal(12000, o.Json["order"]!["discount_total"]!.GetValue<long>());
+        var r2 = await buyer.Post("/api/gift-cards/redeem", new { code });
+        Assert.Equal(8000, r2.Json["discount_paise"]!.GetValue<int>()); Assert.Equal(0, r2.Json["card_balance_paise"]!.GetValue<int>());
+        await ApiFactory.DbExecAsync("UPDATE coupons SET ends_at = @past WHERE code = @c", new { past = Now.AddDays(-1), c = r2.Json["code"]!.GetValue<string>() });
+        Assert.Equal(8000, (await buyer.Post("/api/gift-cards/balance", new { code })).Json["balance_paise"]!.GetValue<int>());
+        Assert.Equal(8000, (await buyer.Post("/api/gift-cards/balance", new { code })).Json["balance_paise"]!.GetValue<int>());   // only once
+        Assert.Equal("void", (await admin.Post($"/api/admin/growth/gift-cards/{id}/void", new { })).Json["status"]!.GetValue<string>());
+        Assert.Equal("card_unavailable", (await buyer.Post("/api/gift-cards/redeem", new { code })).ErrorCode);
+        Assert.Single((await admin.Get("/api/admin/growth/gift-cards")).Json["items"]!.AsArray());
+    }
+
+    [Fact]
     public async Task A_wrong_gstin_is_refused_with_its_reason_and_a_right_one_is_kept()
     {
         var admin = await Admin();
