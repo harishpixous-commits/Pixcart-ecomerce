@@ -18,6 +18,7 @@ import { PincodeService, isPincode, setPincode } from "../../core/pincode";
 import type { ProductCard, SearchResult } from "../../core/types";
 import { CompareToggle } from "../../shared/chrome/compare";
 import { GridFrame, ProductRail, ProductTileOutlet } from "../../shared/product/product";
+import { SaveSearchButton } from "../../shared/shop/save-search";
 import { closeOnOutside } from "../../shared/shop/shop-chrome";
 import { cx } from "../../shared/ui/cx";
 import { Icon } from "../../shared/ui/icon";
@@ -404,7 +405,7 @@ export class Chip {
 @Component({
   selector: "pc-search-view",
   imports: [
-    NgTemplateOutlet, Icon, PcLink, Filters, FilterBar, ResultGrid, Chip, ProductRail, ListingSkeleton, Button, EmptyState, Modal, Pagination, Select,
+    NgTemplateOutlet, Icon, PcLink, Filters, FilterBar, ResultGrid, Chip, ProductRail, ListingSkeleton, Button, EmptyState, Modal, Pagination, Select, SaveSearchButton,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
@@ -480,6 +481,7 @@ export class Chip {
         <p [class]="heading() ? 'text-sm text-ink-faint' : 'text-[15px]'" data-testid="results-count">
           {{ countText() }}@if (q()) { for <span class="font-semibold text-vermilion">&ldquo;{{ q() }}&rdquo;</span>}
         </p>
+        @if (q()) {<pc-save-search-button [query]="q()!" [maxPaise]="maxPaiseParam()" />}
       </div>
     </ng-template>
 
@@ -544,6 +546,7 @@ export class SearchView {
   protected readonly fetchKey = computed(() => `${this.key()}|${this.category() ?? ""}|${this.seller() ?? ""}|${this.pin()}`);
 
   protected readonly q = computed(() => this.params().get("q"));
+  protected readonly maxPaiseParam = computed(() => this.paise(this.params().get("max_price")));
   protected readonly sortValue = computed(() => this.params().get("sort") ?? "relevance");
   protected readonly heading = computed(() => this.data()?.category?.name ?? (this.seller() ? "Products from this store" : this.q() ? null : "All products"));
   protected readonly countText = computed(() => {

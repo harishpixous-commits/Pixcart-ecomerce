@@ -122,3 +122,12 @@ public class SellerScorecardController(IGrowthBAL bal, ICurrentUser me) : Contro
 {
     [HttpGet, RouteGuard("approved_seller")] public async Task<object> Mine() => await bal.MyScorecardAsync((await me.RequireSellerAsync(approved: true)).Id);
 }
+
+[ApiController, SignedIn, Route("/api/saved-searches")]
+public class SavedSearchesController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me) : ControllerBase
+{
+    public record FollowIn { [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120, MinimumLength = 1)] public string Query { get; init; } = ""; [System.ComponentModel.DataAnnotations.Range(0, 100000000)] public long? MaxPricePaise { get; init; } }
+    [HttpGet, RouteGuard("signed_in")] public async Task<object> Mine() => await BAL.SavedSearches.ListAsync(db, (await me.RequireAsync()).Id);
+    [HttpPost, RouteGuard("signed_in")] public async Task<IActionResult> Follow(FollowIn b) => StatusCode(201, await BAL.SavedSearches.AddAsync(db, (await me.RequireAsync()).Id, b.Query, b.MaxPricePaise));
+    [HttpDelete("{id:guid}"), RouteGuard("signed_in")] public async Task<object> Unfollow(Guid id) { await BAL.SavedSearches.RemoveAsync(db, (await me.RequireAsync()).Id, id); return new { ok = true }; }
+}

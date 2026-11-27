@@ -7,6 +7,7 @@ import { date } from "../../core/format";
 import { SessionService } from "../../core/session";
 import { SiteService } from "../../core/site";
 import { Icon } from "../../shared/ui/icon";
+import { SavedSearchesSection } from "../../shared/shop/save-search";
 import { PcLink } from "../../shared/ui/link";
 import { PageLoader } from "../../shared/ui/page-loader";
 import { EmptyState, ProductImage, Toast } from "../../shared/ui/ui";
@@ -15,7 +16,7 @@ type StockAlertRow = { variant_id: string; product: string; slug: string; varian
 
 @Component({
   selector: "pc-shop-alerts-page",
-  imports: [Icon, PcLink, PageLoader, EmptyState, ProductImage],
+  imports: [Icon, PcLink, PageLoader, EmptyState, ProductImage, SavedSearchesSection],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -53,6 +54,7 @@ type StockAlertRow = { variant_id: string; product: string; slug: string; varian
             </ul>
           }
         </section>
+        <pc-saved-searches-section />
         @if (site().features.price_alerts !== false) {
           <section class="flex items-start gap-3 rounded-xl bg-white p-4">
             <svg [pcIcon]="Heart" class="mt-0.5 h-5 w-5 shrink-0 text-vermilion" />

@@ -582,4 +582,38 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, (await admin.Post($"/api/admin/sellers/{sellerId}/approve", new { })).Status);
         Assert.Equal(0, await growth.AutoSuspendAsync(notify)); Assert.Equal("approved", await Status()); // not suspended again for the same old orders
     }
+
+    [Fact]
+    public async Task Saved_search_notes_a_shopper_about_new_matching_products()
+    {
+        var (_, productId, _) = await ShirtInStock("9400000302", "kurta-search");
+        var buyer = await LoginPhone("9770000051", "Search Buyer"); var other = await LoginPhone("9770000052", "Other");
+        var admin = await Admin(); var uid = Guid.Parse(buyer.Id);
+        Assert.Equal("saved_searches_off", (await buyer.Post("/api/saved-searches", new { query = "silk kurta" })).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { saved_searches = new { enabled = true, max_per_user = 2, min_hours_between_alerts = 1 } })).Status);
+        var ra = await buyer.Post("/api/saved-searches", new { query = "  Silk   Kurta ", max_price_paise = 150000 }); Assert.True(ra.Status == 201, ra.ToString()); var a = ra.Json;
+        Assert.Equal(a["id"]!.GetValue<string>(), (await buyer.Post("/api/saved-searches", new { query = "silk kurta", max_price_paise = 150000 })).Json["id"]!.GetValue<string>());
+        Assert.Equal("invalid_query", (await buyer.Post("/api/saved-searches", new { query = "!!" })).ErrorCode);
+        Assert.Equal(201, (await buyer.Post("/api/saved-searches", new { query = "denim jacket" })).Status);
+        Assert.Equal("too_many_searches", (await buyer.Post("/api/saved-searches", new { query = "third one" })).ErrorCode);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        var notify = scope.ServiceProvider.GetRequiredService<ICatalogNotifyBAL>();
+        Task<int> Run() => SavedSearches.SendMatchesAsync(db, notify);
+        async Task<long> Count() => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @uid AND event = 'saved_search_match'", new { uid });
+        Assert.Equal(0, await Run()); Assert.Equal(0, await Count());
+        await ApiFactory.DbExecAsync("UPDATE products SET title = 'Silk Kurta Premium', price_from = 199900, approved_at = UTC_TIMESTAMP(6) WHERE id = @productId", new { productId });
+        Assert.Equal(0, await Run());
+        await ApiFactory.DbExecAsync("UPDATE products SET title = 'Festive Silk Kurta Set', price_from = 129900, approved_at = UTC_TIMESTAMP(6) WHERE id = @productId", new { productId });
+        Assert.Equal(1, await Run()); Assert.Equal(1, await Count());
+        var note = (await buyer.Get("/api/notifications")).Json["items"]!.AsArray().First(n => n!["title"]!.GetValue<string>().StartsWith("New for your search"))!;
+        Assert.Contains("Festive Silk Kurta Set", note["body"]!.GetValue<string>());
+        Assert.Equal(0, await Run());
+        var mine = (await buyer.Get("/api/saved-searches")).Json;
+        Assert.Equal(2, mine["items"]!.AsArray().Count);
+        Assert.Equal(200, (await buyer.Delete("/api/saved-searches/" + a["id"]!.GetValue<string>())).Status);
+        var left = (await buyer.Get("/api/saved-searches")).Json["items"]!.AsArray(); Assert.Single(left);
+        Assert.Equal(200, (await other.Delete("/api/saved-searches/" + left[0]!["id"]!.GetValue<string>())).Status);
+        Assert.Single((await buyer.Get("/api/saved-searches")).Json["items"]!.AsArray());
+    }
 }

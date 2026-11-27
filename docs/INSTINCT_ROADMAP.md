@@ -144,3 +144,7 @@ Design: staff send one in-app message to a customer segment. Admin > Growth > Ca
 
 ## Full-suite run after Push 63, 27 Nov 11:33 to 11:56 PM (Instinct)
 Python (instinct/python-advanced, all 48 files in tests/, run in four chunks against Postgres 14): 270 passed, 0 failed. .NET (instinct/continue, whole Tests project, one run against MySQL 8.4): 341 passed, 0 failed, 0 skipped, 17 min 29 s. Both run on the commit with Push 63. Still not run by me: the browser suite, Flutter, Windows publish, pixel compare, and anything against live gateways, email or SMS. The Angular and Next.js screens were type-checked only.
+
+
+## Push 64: saved searches with alerts
+Admin > Growth > Saved searches (off by default): enabled, max_per_user 10, min_hours_between_alerts 24. A signed-in shopper follows a search (words, optional price limit) from the search page; every 30 minutes a job notes them in the app when a product approved since the last check matches every word in title or brand and is within the limit. One note per search per quiet window, with the match count. API: GET/POST /api/saved-searches, DELETE /api/saved-searches/{id}. Python migration 0038, .NET V015. UI: button on search page, list on the alerts page, both frontends. Tested: one test per stack passes; type-checks clean. Not wired: email delivery, matching by category or description.
