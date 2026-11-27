@@ -26,6 +26,7 @@ import { SellerProductsPage } from "./pages/products.page";
 import { SellerQuestionsPage } from "./pages/questions.page";
 import { SellerReturnsPage } from "./pages/returns.page";
 import { SellerReviewsPage } from "./pages/reviews.page";
+import { SellerQualityPage } from "./pages/quality.page";
 import { SellerSettingsPage } from "./pages/settings.page";
 import { SellerWarehousesPage } from "./pages/warehouses.page";
 
@@ -51,6 +52,7 @@ export const SELLER_ROUTES: Routes = [
   { path: "questions", component: SellerQuestionsPage },
   { path: "returns", component: SellerReturnsPage },
   { path: "reviews", component: SellerReviewsPage },
+  { path: "quality", component: SellerQualityPage },
   { path: "settings", component: SellerSettingsPage },
   { path: "warehouses", component: SellerWarehousesPage },
   { path: "**", component: SellerNotFound, title: "Page not found" },
