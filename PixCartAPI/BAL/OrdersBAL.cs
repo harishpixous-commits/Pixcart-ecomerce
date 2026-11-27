@@ -140,7 +140,7 @@ public class OrdersBAL(
                 throw new AppException("This coupon has been fully used", "coupon_exhausted");
         }
 
-        var groups = CartBAL.GroupBySeller(lines, cfg);
+        var groups = CartBAL.GroupBySeller(lines, cfg, await ShippingZones.SurchargeAsync(db, address.Pincode));
         var now = DateTime.UtcNow;
         var isOnline = paymentMethod == "online";
         var categories = new Dictionary<Guid, CategoryModel>();

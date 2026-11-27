@@ -616,4 +616,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, (await other.Delete("/api/saved-searches/" + left[0]!["id"]!.GetValue<string>())).Status);
         Assert.Single((await buyer.Get("/api/saved-searches")).Json["items"]!.AsArray());
     }
+
+    [Fact]
+    public async Task Remote_area_surcharge_is_added_per_seller_package_and_waived_when_free()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000303", "remote-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000061", "Remote Buyer");
+        var near = await AddAddress(buyer, state: "33");
+        var far = await AddAddress(buyer, state: "33", pincode: "744101");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        async Task<(long Total, long Ship)> Quote(string addr)
+        {
+            var q = (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json;
+            return (q["summary"]!["grand_total"]!.GetValue<long>(), q["groups"]![0]!["shipping_fee"]!.GetValue<long>());
+        }
+        var (baseTotal, baseShip) = await Quote(far);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { enabled = true, remote_prefixes = "744, 19", remote_surcharge_paise = 6000 } })).Status);
+        Assert.Equal(baseTotal, (await Quote(near)).Total);
+        Assert.Equal(baseShip == 0 ? baseTotal : baseTotal + 6000, (await Quote(far)).Total);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { waive_when_free = false } })).Status);
+        var (quoted, _) = await Quote(far);
+        Assert.Equal(baseTotal + 6000, quoted);
+        var r = await buyer.Post("/api/orders", new { address_id = far, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), expected_total = quoted });
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal(quoted, r.Json["order"]!["grand_total"]!.GetValue<long>());
+        Assert.Equal(400, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { remote_surcharge_paise = 9999999 } })).Status);
+    }
 }

@@ -11,7 +11,7 @@ namespace BAL;
 /// The cart and "Saved for later" (reference: routers/cart.py plus the cart parts of services/orders.py). Same
 /// limits, notes, problem texts and payload shape, so the live e2e suite and the Angular port see the same API.
 /// </summary>
-public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL platform, IFeesBAL fees, IDealsBAL deals, IRazorpayBAL razorpay) : ICartBAL
+public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL platform, IFeesBAL fees, IDealsBAL deals, IRazorpayBAL razorpay, IMySqlDapperHelper db) : ICartBAL
 {
     public const int MaxLines = 50;
     public const int MaxSaved = 100;
@@ -65,7 +65,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     }
 
     /// <summary>Lines grouped by seller with the delivery fee of each package (reference: group_by_seller).</summary>
-    public static List<SellerGroup> GroupBySeller(IEnumerable<CartLine> lines, JsonObject cfg)
+    public static List<SellerGroup> GroupBySeller(IEnumerable<CartLine> lines, JsonObject cfg, (long Amount, bool Waive) remote = default)
     {
         var groups = new Dictionary<Guid, SellerGroup>();
         foreach (var line in lines)
@@ -77,6 +77,8 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         {
             var hasItems = g.ItemsTotal > 0;
             g.ShippingFee = !hasItems || g.ItemsTotal >= cfg.Int("free_shipping_threshold_paise") ? 0 : cfg.Int("shipping_fee_paise");
+            // Remote-area surcharge (Admin → Growth → Shipping zones): once per seller package.
+            if (hasItems && remote.Amount > 0 && !(remote.Waive && g.ShippingFee == 0)) g.ShippingFee += remote.Amount;
         }
         return groups.Values.ToList();
     }
@@ -95,7 +97,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
             ["seller"] = new JsonObject { ["id"] = g.Seller.Id.ToString(), ["name"] = g.Seller.DisplayName, ["slug"] = g.Seller.Slug },
             ["items_total"] = g.ItemsTotal,
             ["shipping_fee"] = g.ShippingFee,
-            ["free_shipping_gap"] = g.ShippingFee > 0 ? Math.Max(0, cfg.Int("free_shipping_threshold_paise") - g.ItemsTotal) : 0,
+            ["free_shipping_gap"] = g.ItemsTotal > 0 && g.ItemsTotal < cfg.Int("free_shipping_threshold_paise") ? Math.Max(0, cfg.Int("free_shipping_threshold_paise") - g.ItemsTotal) : 0,
             ["lines"] = new JsonArray(g.Lines.Select(line => (JsonNode?)new JsonObject
             {
                 ["id"] = line.Item.Id.ToString(),
@@ -143,11 +145,11 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     }
 
     /// <summary>The full cart view (reference: routers/cart.py _view).</summary>
-    public async Task<JsonObject> ViewAsync(Guid userId)
+    public async Task<JsonObject> ViewAsync(Guid userId, string? pincode = null)
     {
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
-        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg), cfg, await razorpay.OnlinePaymentsAsync(), ck);
+        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode)), cfg, await razorpay.OnlinePaymentsAsync(), ck);
     }
 
     /// <summary>
