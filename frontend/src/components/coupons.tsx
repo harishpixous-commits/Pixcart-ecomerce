@@ -28,6 +28,8 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   const [now] = useState(() => Date.now());
   const [rows, setRows] = useState<CouponRow[] | null>(null);
   const [edit, setEdit] = useState<CouponRow | "new" | null>(null);
+  const [batch, setBatch] = useState({ count: "10", prefix: "", single: true });
+  const [batchCodes, setBatchCodes] = useState("");
   const [cats, setCats] = useState<{ id: string; path?: string; name?: string }[]>([]);
   const [f, setF] = useState({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_active: true });
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,17 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
       category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_active: c.is_active,
     });
+  }
+
+  async function makeCopies(id: string) {
+    try {
+      const r = await api<{ count: number; codes: string[] }>(`${base}/${id}/generate`, { method: "POST", body: { count: Number(batch.count), prefix: batch.prefix, single_use: batch.single } });
+      setBatchCodes(r.codes.join("\n"));
+      toast(`${r.count} codes made`);
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Could not make the codes", "error");
+    }
   }
 
   async function save(e: React.FormEvent) {
@@ -133,6 +146,19 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
             )}
             <label className="flex items-center gap-2 sm:col-span-2"><input type="checkbox" className="accent-peacock" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> Coupon is on</label>
             <Button type="submit" className="self-start">Save coupon</Button>
+            {admin && edit && edit !== "new" && (
+              <div className="rounded-lg border border-line p-3 sm:col-span-2" data-testid="coupon-batch">
+                <p className="font-semibold">Make copies with their own codes</p>
+                <p className="mb-2 text-sm text-ink-soft">Each copy has the same offer and a random code. Single-use copies work once in total and stay off the offers list. Save any changes above first.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <TextField label="How many (1 to 200)" inputMode="numeric" value={batch.count} onChange={(e) => setBatch({ ...batch, count: e.target.value.replace(/\D/g, "") })} />
+                  <TextField label="Code starts with" value={batch.prefix} onChange={(e) => setBatch({ ...batch, prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} minLength={2} maxLength={10} />
+                  <label className="flex items-center gap-2 sm:col-span-2"><input type="checkbox" className="accent-peacock" checked={batch.single} onChange={(e) => setBatch({ ...batch, single: e.target.checked })} /> Single use each</label>
+                </div>
+                <Button type="button" className="mt-2" onClick={() => makeCopies(edit.id)}>Make codes</Button>
+                {batchCodes && <textarea readOnly rows={6} className="mt-2 w-full rounded-lg border border-line p-2 font-mono text-sm" value={batchCodes} aria-label="New codes" />}
+              </div>
+            )}
           </form>
         )}
       </Modal>
