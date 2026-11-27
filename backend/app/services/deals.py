@@ -184,7 +184,8 @@ async def active_for_products(session, product_ids: list[uuid.UUID]) -> dict[uui
     rows = (await session.execute(select(Deal).where(Deal.product_id.in_(product_ids), Deal.status == "active").order_by(Deal.deal_price_paise))).scalars()
     for d in rows:
         out.setdefault(d.product_id, d)
-    return {k: public(v) for k, v in out.items()}
+    show = (await growth.get(session))["flash_sales"]["show_countdown"]  # Admin -> Growth -> Flash sales: the pages hide the ticking clock when off
+    return {k: {**public(v), "show_countdown": bool(show)} for k, v in out.items()}
 
 
 async def deal_rows(session, stmt) -> list[dict]:

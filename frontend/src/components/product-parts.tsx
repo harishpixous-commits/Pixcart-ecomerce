@@ -40,7 +40,7 @@ export function DealCountdown({ endsAt, prefix = "Ends in", doneText = "Deal end
 }
 
 export function DealBadge({ deal, discount, size = "sm" }: { deal: DealInfo; discount: number; size?: "sm" | "md" }) {
-  const timed = deal.kind !== "limited";
+  const timed = deal.kind !== "limited" && deal.show_countdown !== false;
   return (
     <div className={clsx("flex flex-col gap-1", size === "md" && "gap-1.5")} data-testid="deal-badge">
       <div className="flex flex-wrap items-center gap-1.5">

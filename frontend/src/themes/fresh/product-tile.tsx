@@ -102,7 +102,7 @@ export function FreshProductTile({ p, rank }: ProductTileProps) {
               <span className="text-ink-soft" aria-hidden>({p.rating_count.toLocaleString("en-IN")})</span>
             </p>
           )}
-          {p.deal && p.deal.kind !== "limited" && <DealCountdown endsAt={p.deal.ends_at} className="mt-1 text-[11px] font-semibold text-vermilion" />}
+          {p.deal && p.deal.kind !== "limited" && p.deal.show_countdown !== false && <DealCountdown endsAt={p.deal.ends_at} className="mt-1 text-[11px] font-semibold text-vermilion" />}
           {p.starts_at && <p className="mt-1 text-[11px] font-semibold text-peacock">Starts {startFmt.format(new Date(p.starts_at))}</p>}
         </div>
       </TileLink>

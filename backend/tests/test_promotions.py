@@ -53,6 +53,10 @@ async def test_lightning_deal_price_switch_and_quantity_limit(client, admin, cat
     assert (await tn.get("/api/seller/badges")).json()["deals_running"] == 1
     page = (await client.get(f"/api/catalog/products/{slug}")).json()
     assert page["variants"][0]["price"] == 80000 and page["deal"]["kind"] == "lightning" and page["deal"]["claimed_pct"] == 0
+    assert page["deal"]["show_countdown"] is True  # the clock shows unless admin switches it off (Growth > Flash sales)
+    assert (await admin.put("/api/admin/growth/settings", {"flash_sales": {"show_countdown": False}})).status_code == 200
+    assert (await client.get(f"/api/catalog/products/{slug}")).json()["deal"]["show_countdown"] is False
+    assert (await admin.put("/api/admin/growth/settings", {"flash_sales": {"show_countdown": True}})).status_code == 200
     live = (await client.get("/api/catalog/deals")).json()
     assert live["items"][0]["slug"] == slug and live["items"][0]["deal"]["label"] == "Lightning deal" and live["facets"]["kinds"]["lightning"] == 1
     assert (await client.get("/api/catalog/products", params={"deal": True})).json()["total"] == 1

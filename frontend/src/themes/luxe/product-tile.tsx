@@ -92,7 +92,7 @@ function StarLine({ p }: { p: ProductCard }) {
 
 /** The deal in small capitals with its countdown and, when the seller shows it, a fine "claimed" line. */
 function DealLine({ deal }: { deal: NonNullable<ProductCard["deal"]> }) {
-  const timed = deal.kind !== "limited";
+  const timed = deal.kind !== "limited" && deal.show_countdown !== false;
   return (
     <div className="mt-1.5" data-testid="deal-badge">
       <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] font-medium uppercase leading-4 tracking-[0.14em] text-vermilion">

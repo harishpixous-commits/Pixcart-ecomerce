@@ -57,6 +57,8 @@ export interface ProductCard {
 
 export interface DealInfo {
   kind: "lightning" | "deal_of_day" | "limited";
+  /** False when admin switched the ticking clock off (Growth > Flash sales). */
+  show_countdown?: boolean;
   label: string;
   ends_at: string;
   deal_price: Paise;
