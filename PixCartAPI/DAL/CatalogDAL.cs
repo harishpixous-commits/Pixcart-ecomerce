@@ -140,6 +140,14 @@ public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
             $"SELECT p.* FROM products p WHERE {PublicFilter} AND p.category_id = @cat AND p.id <> @id AND p.in_stock = 1 " +
             "ORDER BY p.sold_count DESC, p.rating_avg DESC LIMIT @limit", new { cat = p.CategoryId, id = p.Id, limit });
 
+    /// <summary>Public in-stock products that appeared in the same live orders as this one, most often first.</summary>
+    public Task<IEnumerable<ProductModel>> BoughtTogetherAsync(ProductModel p, int limit) =>
+        db.QueryAsync<ProductModel>(
+            $"SELECT p.* FROM products p JOIN order_items oi ON oi.product_id = p.id JOIN sub_orders so ON so.id = oi.sub_order_id " +
+            $"WHERE {PublicFilter} AND p.id <> @id AND p.in_stock = 1 AND so.status IN @live AND so.order_id IN " +
+            "(SELECT so2.order_id FROM sub_orders so2 JOIN order_items oi2 ON oi2.sub_order_id = so2.id WHERE oi2.product_id = @id AND so2.status IN @live) " +
+            "GROUP BY p.id ORDER BY COUNT(DISTINCT so.order_id) DESC, p.sold_count DESC LIMIT @limit", new { id = p.Id, live = LivePackage, limit });
+
     public async Task<long> PublicCountForSellerAsync(Guid sellerId) =>
         await db.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM products p WHERE {PublicFilter} AND p.seller_id = @sellerId", new { sellerId });
 

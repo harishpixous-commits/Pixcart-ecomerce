@@ -21,7 +21,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     private static DateTime Now => DateTimeFunctions.UtcNow();
 
     /// <summary>An approved Tamil Nadu seller with a warehouse and one live shirt in stock.</summary>
-    private static async Task<(Guid VariantId, Guid ProductId, Guid SellerId)> ShirtInStock(string ownerPhone, string slug)
+    private static async Task<(Guid VariantId, Guid ProductId, Guid SellerId)> ShirtInStock(string ownerPhone, string slug, string gstinBase = "33KOVAI1234K1Z")
     {
         var category = Guid.NewGuid();
         await ApiFactory.DbExecAsync(
@@ -39,7 +39,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
             "grievance_phone, rejection_reason, submitted_at, approved_at, razorpay_account_id, dispatch_days, dispatch_cutoff, holiday_mode, created_at, updated_at) " +
             "VALUES (@sellerId, @ownerId, 'approved', 'Kovai Weaves', @slug, 'Quality goods', 'Kovai Weaves Traders', 'proprietorship', @gstin, '234K', 'kovai@example.com', " +
             "@ownerPhone, '12 Market Road', '', 'Coimbatore', '33', '641001', 'Kovai Weaves Traders', '9012', 'HDFC0001234', 'Ravi Kumar', 'grievance@example.com', " +
-            "@ownerPhone, '', @now, @now, '', 2, '', 0, @now, @now)", new { sellerId, ownerId, ownerPhone, slug = "seller-" + slug, gstin = Gstin("33KOVAI1234K1Z"), now = Now });
+            "@ownerPhone, '', @now, @now, '', 2, '', 0, @now, @now)", new { sellerId, ownerId, ownerPhone, slug = "seller-" + slug, gstin = Gstin(gstinBase), now = Now });
         var warehouseId = Guid.NewGuid();
         await ApiFactory.DbExecAsync(
             "INSERT INTO warehouses (id, seller_id, code, name, line1, line2, city, state_code, pincode, contact_name, contact_phone, gstin, is_default, is_active, " +
@@ -842,6 +842,27 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(0, await Run());
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET confirmed_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 25 HOUR) WHERE id = @s2", new { s2 });
         Assert.Equal(1, await Run()); Assert.Equal(2, await Count());
+    }
+
+    [Fact]
+    public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
+    {
+        var admin = await Admin();
+        var (v1, p1, _) = await ShirtInStock("9400000321", "together-shirt-a");
+        var (v2, p2, _) = await ShirtInStock("9400000322", "together-shirt-b", "33KOVAI1235K1Z");
+        await Refresh(p1); await Refresh(p2);
+        var buyer = await LoginPhone("9770000151", "Together Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = v1, qty = 1 });
+        await buyer.Post("/api/cart/items", new { variant_id = v2, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        async Task<List<string>> Together(string slug) =>
+            (await buyer.Get($"/api/catalog/products/{slug}")).Json["bought_together"]!.AsArray().Select(c => c!["slug"]!.GetValue<string>()).ToList();
+        Assert.Empty(await Together("together-shirt-a")); // switched off
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { bought_together = new { enabled = true, max_items = 4 } })).Status);
+        Assert.Equal(["together-shirt-b"], await Together("together-shirt-a"));
+        Assert.Equal(["together-shirt-a"], await Together("together-shirt-b"));
     }
 
     [Fact]

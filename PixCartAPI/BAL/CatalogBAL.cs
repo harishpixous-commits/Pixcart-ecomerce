@@ -509,6 +509,9 @@ public class CatalogBAL(
         var similar = cfg.Bool("pdp_similar") && cfg.Int("similar_products") > 0
             ? (await catalog.SimilarAsync(p, Math.Max(1, cfg.Int("similar_products")))).ToList()
             : [];
+        var boughtTogether = new List<ProductModel>();
+        var btCfg = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), JsonHelper.Object(await sellerDb.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'")))["bought_together"]!;
+        if (btCfg.Bool("enabled")) boughtTogether = (await catalog.BoughtTogetherAsync(p, btCfg.Int("max_items"))).ToList();
         var specs = JsonHelper.Node(p.Specs) as JsonObject ?? [];
         var keySpecs = new JsonArray();
         if (cfg.Bool("pdp_key_specs"))
@@ -588,6 +591,8 @@ public class CatalogBAL(
                 ["free_shipping_threshold_paise"] = CartBAL.FreeThreshold(seller, cfg, await ShippingZones.SellerFreeBoundsAsync(sellerDb)),
             },
             ["similar"] = Arr(await ProductCardsAsync(similar)),
+            // "Bought together": other products from the same orders (Admin → Growth; empty while it is off)
+            ["bought_together"] = Arr(await ProductCardsAsync(boughtTogether)),
         };
     }
 

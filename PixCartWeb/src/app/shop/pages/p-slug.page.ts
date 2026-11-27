@@ -96,6 +96,7 @@ import { ProductReviews } from "../browse/reviews";
           <pc-bought-together [slug]="p.slug" />
           <pc-product-reviews [slug]="p.slug" />
           <pc-product-questions [slug]="p.slug" [title]="p.title" />
+          @if (p.bought_together?.length) {<pc-product-rail title="Bought together" [items]="p.bought_together!" />}
           @if (p.similar.length > 0) {<pc-product-rail title="Customers also viewed" [items]="p.similar" />}
           <pc-sponsored-rail [slug]="p.slug" />
           <pc-browsing-history [currentId]="p.id" />
