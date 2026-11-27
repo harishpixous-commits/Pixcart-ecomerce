@@ -330,3 +330,7 @@ Admin → Growth → Flash sales → show_countdown (on by default) now decides 
 ## Push 107: Rewards page warns about points that expire soon
 
 `GET /api/loyalty` now returns `expiring_soon` (points that lapse within `expiring_days`, fixed at 30) and the Rewards page shows "N points expire within 30 days. Use them at checkout." Computed from the same oldest-first rule as the expiry itself; 0 when expiry is off. Both versions (React and Angular type-check clean); a test on each side. Not wired: no email or push reminder before expiry. Not run: browser.
+
+## Push 108: home "Today's deals" rail honours show_countdown
+
+Completes Push 106: the home deals rail hides its ticking clock too when Admin → Growth → Flash sales → show_countdown is off. Web apps only (React and Angular type-check clean); the data was already served. Not run: browser.

@@ -250,7 +250,7 @@ export function CardRow({ cards }: { cards: CardCfg[] }) {
 /* ---------------------------------------------------------------- deals, sponsored, personal rails */
 
 export function DealsRail({ title, items }: { title: string; items: ProductCard[] }) {
-  const soonest = items.map((p) => p.deal?.ends_at).filter((x): x is string => Boolean(x)).sort()[0];
+  const soonest = items.filter((p) => p.deal?.show_countdown !== false).map((p) => p.deal?.ends_at).filter((x): x is string => Boolean(x)).sort()[0];
   return (
     <ProductRail title={title || "Today's deals"} items={items} href="/deals" linkText="See all deals"
       extra={soonest ? <span className="rounded-full bg-vermilion-light px-2.5 py-0.5 text-sm font-semibold text-vermilion"><DealCountdown endsAt={soonest} /></span> : undefined} />
