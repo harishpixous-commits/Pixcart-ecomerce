@@ -179,3 +179,19 @@ async def test_gift_card_and_referral_exports(client, admin, categories):
     assert len(refs) == 2 and r["Status"] == "rewarded" and r["Reward"] == "25.00"
     only = rows(await admin.get("/api/admin/exports/referrals.csv?status=joined"))
     assert len(only) == 1
+
+
+async def test_loyalty_and_coupon_use_exports(client, admin, categories):
+    from app.db import SessionLocal, utcnow
+    from app.models import LoyaltyEntry
+    buyer = await login_phone(client, "9800000031")
+    me = uuid.UUID((await buyer.get("/api/auth/me")).json()["id"])
+    async with SessionLocal() as s:
+        s.add(LoyaltyEntry(user_id=me, kind="earn", points=40, note="Order", created_at=utcnow()))
+        s.add(LoyaltyEntry(user_id=me, kind="expire", points=-10, note="Points expired", created_at=utcnow()))
+        await s.commit()
+    out = rows(await admin.get("/api/admin/exports/loyalty.csv"))
+    assert out[0][:2] == ["Date (IST)", "Customer"] and len(out) == 3
+    assert {(r[3], r[4]) for r in out[1:]} == {("earn", "40"), ("expire", "-10")}
+    assert len(rows(await admin.get("/api/admin/exports/loyalty.csv?status=expire"))) == 2
+    assert rows(await admin.get("/api/admin/exports/coupon-use.csv"))[0][1] == "Coupon"

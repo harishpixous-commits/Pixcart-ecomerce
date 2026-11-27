@@ -32,9 +32,12 @@ from app.db import SessionLocal
 from app.models import (
     AiRun,
     Category,
+    Coupon,
+    CouponRedemption,
     GiftCard,
     InventoryLevel,
     LedgerEntry,
+    LoyaltyEntry,
     Order,
     OrderItem,
     Payout,
@@ -510,6 +513,37 @@ def _referral_row(r) -> list[Any]:
     return [referrer or "", friend or "", ist(f.created_at), f.status, money(f.reward_paise), ist(f.rewarded_at)]
 
 
+def _loyalty_q(ctx: Context) -> Select:
+    stmt = select(LoyaltyEntry, User.name, User.phone).join(User, User.id == LoyaltyEntry.user_id)
+    if ctx.status:
+        stmt = stmt.where(LoyaltyEntry.kind == ctx.status)
+    return _range(stmt, LoyaltyEntry.created_at, ctx).order_by(LoyaltyEntry.created_at, LoyaltyEntry.id)
+
+
+LOYALTY_HEADERS = ["Date (IST)", "Customer", "Phone", "Type", "Points", "Note"]
+
+
+def _loyalty_row(r) -> list[Any]:
+    e, name, phone = r
+    return [ist(e.created_at), name or "", phone or "", e.kind, e.points, e.note]
+
+
+def _coupon_use_q(ctx: Context) -> Select:
+    stmt = (select(CouponRedemption, Coupon.code, User.name, Order.number)
+            .join(Coupon, Coupon.id == CouponRedemption.coupon_id).join(User, User.id == CouponRedemption.user_id).join(Order, Order.id == CouponRedemption.order_id))
+    if ctx.status:
+        stmt = stmt.where(CouponRedemption.released == (ctx.status == "released"))
+    return _range(stmt, CouponRedemption.created_at, ctx).order_by(CouponRedemption.created_at, CouponRedemption.id)
+
+
+COUPON_USE_HEADERS = ["Date (IST)", "Coupon", "Customer", "Order", "Discount", "Released"]
+
+
+def _coupon_use_row(r) -> list[Any]:
+    c, code, name, number = r
+    return [ist(c.created_at), code, name or "", number, money(c.discount_paise), c.released]
+
+
 _ALL: list[ExportSpec] = [
         # ---------------- admin
         ExportSpec("orders", "Orders (one row per package)", "Every package with payment, tax, commission, TCS/TDS, payout and shipping details.", "admin", "orders",
@@ -545,6 +579,12 @@ _ALL: list[ExportSpec] = [
         ExportSpec("referrals", "Referrals", "Friends who joined with a referral code, with the reward status. Contains personal data: share only as the privacy notice allows.", "admin", "marketing",
                    REFERRAL_HEADERS, _referrals_q, _referral_row, "date the friend joined", [("joined", "Joined"), ("rewarded", "Rewarded"), ("capped", "Over the cap")],
                    contains_personal_data=True, date_optional=True),
+        ExportSpec("loyalty", "Loyalty points", "Every points entry: earned, redeemed, expired, adjusted and taken back. Contains personal data: share only as the privacy notice allows.", "admin", "marketing",
+                   LOYALTY_HEADERS, _loyalty_q, _loyalty_row, "date of the entry", [("earn", "Earned"), ("redeem", "Redeemed"), ("expire", "Expired"), ("adjust", "Adjusted"), ("reverse", "Taken back")],
+                   contains_personal_data=True),
+        ExportSpec("coupon-use", "Coupon use", "Every order that used a coupon, with the discount given and whether it was released by a cancellation.", "admin", "marketing",
+                   COUPON_USE_HEADERS, _coupon_use_q, _coupon_use_row, "date the coupon was used", [("used", "In use"), ("released", "Released")],
+                   contains_personal_data=True),
         # ---------------- seller (always limited to the signed-in seller)
         ExportSpec("orders", "Orders", "Your packages with totals, deductions, payout and shipping details.", "seller", "",
                    PACKAGE_HEADERS, _packages_q, _package_row, "date the order was placed", SUB_STATUSES, filters=("payment_method", "q"), pdf_columns=_ORD_PDF),
