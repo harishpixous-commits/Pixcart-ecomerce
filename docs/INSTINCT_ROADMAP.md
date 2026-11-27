@@ -341,3 +341,6 @@ New `GET /api/admin/growth/loyalty` (marketing permission) and a "Loyalty" tab o
 ## Push 112: staff can see and adjust a customer's loyalty points from the customer page
 
 The admin adjust-points API existed in both versions but no screen used it. New `GET /api/admin/growth/loyalty/{user_id}` (marketing permission) and a "Loyalty points" card on Admin → Customers → a customer: balance, rupee value, tier, latest history, and a form to add points or take them back (minus number) with a reason the customer sees. The balance never goes below zero (existing rule). Both versions (React and Angular type-check clean); backend test on each side. Not run: browser.
+
+## Push 113: full-suite re-run
+Python 293 passed. .NET 395 passed, 0 failed (5 groups, after clean rebuild). An earlier Python run stalled on leftover DB state from an aborted run; a clean rerun finished in under 6 minutes. Not run: browser, Flutter, live gateways.
