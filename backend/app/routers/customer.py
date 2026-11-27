@@ -48,7 +48,7 @@ from app.services.catalog import public_product_filter
 from app.services.coupons import list_for_checkout
 from app.services.delivery import estimate, state_for_pin
 from app.services.invoices import credit_note_pdf, invoice_pdf
-from app.services.platform_settings import DEFECT_REASONS, PRODUCT_REPORT_REASONS, RETURN_REASONS, get_settings
+from app.services.platform_settings import DEFECT_REASONS, PRODUCT_REPORT_REASONS, get_settings
 from app.services.stats import bump
 
 router = APIRouter(tags=["customer"])
@@ -470,9 +470,11 @@ class ReturnIn(BaseModel):
 
 
 @router.get("/api/returns/reasons")
-async def return_reasons() -> dict:
+async def return_reasons(session: SessionDep) -> dict:
+    from app.services import growth as growth_svc
+
     # `defect`: also allowed for items that can be returned only when they arrived damaged, faulty, wrong or incomplete
-    return {"reasons": [{"code": k, "label": v, "defect": k in DEFECT_REASONS} for k, v in RETURN_REASONS.items()]}
+    return {"reasons": [{"code": k, "label": v, "defect": k in DEFECT_REASONS} for k, v in (await growth_svc.return_reasons(session)).items()]}
 
 
 @router.get("/api/orders/{order_id}/returnable")

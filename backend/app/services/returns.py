@@ -29,7 +29,7 @@ from app.services import inventory
 from app.services.invoices import next_number
 from app.services.ledger import post_return
 from app.services.notify import notify, notify_seller
-from app.services.platform_settings import DEFECT_REASONS, RETURN_REASONS, get_settings
+from app.services.platform_settings import DEFECT_REASONS, get_settings
 
 OPEN = ("requested", "approved", "picked_up")
 UPI = re.compile(r"^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$")
@@ -99,7 +99,9 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
     order = await session.get(Order, sub.order_id) if sub else None
     if sub is None or order.user_id != user.id:
         raise NotFound("Order")
-    if reason not in RETURN_REASONS:
+    from app.services import growth as growth_svc
+
+    if reason not in await growth_svc.return_reasons(session):
         raise ApiError("Choose a reason for the return", "invalid_reason")
     eligible = {r["order_item_id"]: r for r in await returnable_items(session, sub)}
     if not items:
@@ -136,7 +138,7 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
         total += amount
         session.add(ReturnItem(return_id=ret.id, order_item_id=it.id, qty=qty, amount=amount))
     ret.refund_amount = total
-    await notify_seller(session, sub.seller_id, "seller_return_requested", {"order_number": sub.number, "reason": RETURN_REASONS[reason]}, link="/seller/returns")
+    await notify_seller(session, sub.seller_id, "seller_return_requested", {"order_number": sub.number, "reason": (await growth_svc.return_reasons(session))[reason]}, link="/seller/returns")
     if cfg["auto_approve_returns"]:
         await set_status(session, ret, "approved", note="Approved automatically")
     else:
@@ -253,9 +255,12 @@ async def return_out(session: AsyncSession, ret: ReturnRequest, *, with_upi: boo
 
     rows = (await session.execute(select(ReturnItem, OrderItem).join(OrderItem, OrderItem.id == ReturnItem.order_item_id).where(ReturnItem.return_id == ret.id))).all()
     sub = await session.get(SubOrder, ret.sub_order_id)
+    from app.services import growth as growth_svc
+
+    reason_labels = await growth_svc.return_reasons(session, only_on=False)
     return {
         "fleet_pickup": await fleet.pickup_tracking(session, ret, viewer=viewer),
-        "id": str(ret.id), "number": ret.number, "status": ret.status, "reason": ret.reason, "reason_label": RETURN_REASONS.get(ret.reason, ret.reason),
+        "id": str(ret.id), "number": ret.number, "status": ret.status, "reason": ret.reason, "reason_label": reason_labels.get(ret.reason, ret.reason),
         "comment": ret.comment, "seller_note": ret.seller_note, "refund_amount": ret.refund_amount,
         "refund_upi": ret.refund_upi if with_upi else (ret.refund_upi[:2] + "…@" + ret.refund_upi.split("@")[-1] if ret.refund_upi else ""),
         "pickup_courier": ret.pickup_courier, "pickup_tracking": ret.pickup_tracking, "credit_note_number": ret.credit_note_number,

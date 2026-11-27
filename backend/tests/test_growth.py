@@ -754,3 +754,28 @@ async def test_remote_area_surcharge_is_added_per_seller_package_and_waived_when
     assert r.status_code == 201, r.text
     assert r.json()["order"]["grand_total"] == quoted
     assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"remote_surcharge_paise": 9999999}})).status_code == 400
+
+
+async def test_staff_can_rename_and_switch_off_return_reasons(client, admin, categories):
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import key, setup, ship_and_deliver
+
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9600000981", name="Reasons Buyer")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+    sub_id = o["sub_orders"][0]["id"]
+    await ship_and_deliver(tn, sub_id)
+    item = (await buyer.get(f"/api/orders/{o['id']}/returnable")).json()["items"][sub_id][0]["order_item_id"]
+    codes = lambda r: [x["code"] for x in r.json()["reasons"]]  # noqa: E731
+    labels = lambda r: {x["code"]: x["label"] for x in r.json()["reasons"]}  # noqa: E731
+    assert "size_fit" in codes(await buyer.get("/api/returns/reasons"))
+    assert (await admin.put("/api/admin/growth/settings", {"return_reasons": {"label_size_fit": "Does not fit me", "off_quality": True}})).status_code == 200
+    r = await buyer.get("/api/returns/reasons")
+    assert labels(r)["size_fit"] == "Does not fit me" and "quality" not in codes(r) and len(codes(r)) == 6
+    body = {"sub_order_id": sub_id, "items": [{"order_item_id": item, "qty": 1}], "refund_upi": "ret@okaxis"}
+    assert (await buyer.post("/api/returns", {**body, "reason": "quality"})).json()["error"]["code"] == "invalid_reason"
+    made = await buyer.post("/api/returns", {**body, "reason": "size_fit"})
+    assert made.status_code in (200, 201), made.text
+    assert made.json()["reason_label"] == "Does not fit me"

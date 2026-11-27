@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CmsPage, ShopKbArticle
 from app.services.cms import get_site
-from app.services.platform_settings import RETURN_REASONS, get_settings
+from app.services import growth as growth_svc
+from app.services.platform_settings import get_settings
 
 STOP = set("""a an the i me my we our you your is are am was were be to of in on for at by with and or but if so do does did can could
 would should will shall please pls plz hi hello hey want need know tell about how what when where which who why this that it its
@@ -79,7 +80,7 @@ async def public_facts(session: AsyncSession) -> dict[str, Any]:
         "returns_enabled": bool(cfg["feature_returns"]),
         "support_enabled": bool(cfg["feature_support"]),
         "coupons_enabled": bool(cfg["feature_coupons"]),
-        "return_reasons": list(RETURN_REASONS.values()),
+        "return_reasons": list((await growth_svc.return_reasons(session)).values()),
         "grievance_text": grievance,
     }
 

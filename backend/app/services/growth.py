@@ -53,6 +53,15 @@ class GrowthError(ValueError):
     pass
 
 
+# Admin -> Growth -> Return reasons: rename a reason or switch it off. Codes never change. An empty label keeps the built-in text.
+from app.services.platform_settings import RETURN_REASONS  # noqa: E402
+
+SCHEMA["return_reasons"] = {}
+for _code in RETURN_REASONS:
+    SCHEMA["return_reasons"][f"label_{_code}"] = ("", "label", 0, 60)
+    SCHEMA["return_reasons"][f"off_{_code}"] = (False, "bool", 0, 0)
+
+
 def defaults() -> dict[str, dict[str, Any]]:
     return {sec: {k: v[0] for k, v in fields.items()} for sec, fields in SCHEMA.items()}
 
@@ -78,6 +87,10 @@ def _clean(sec: str, k: str, v: Any) -> Any:
         if not isinstance(v, str) or len(v.strip()) > hi:
             raise GrowthError(f"{sec}.{k} is too long")
         v = v.strip().upper()
+    elif kind == "label":  # free text kept as typed (the code kinds above are upper-cased)
+        if not isinstance(v, str) or len(v.strip()) > hi:
+            raise GrowthError(f"{sec}.{k} is too long")
+        v = " ".join(v.split())
     else:
         if not isinstance(v, list) or len(v) > hi:
             raise GrowthError(f"{sec}.{k} has too many entries")
@@ -236,3 +249,13 @@ async def remote_surcharge(session: AsyncSession, pincode: str) -> tuple[int, bo
     if any((pincode or "").startswith(p) for p in prefixes):
         return int(cfg["remote_surcharge_paise"]), bool(cfg["waive_when_free"])
     return 0, True
+
+
+async def return_reasons(session: AsyncSession, *, only_on: bool = True) -> dict[str, str]:
+    """Reason code -> label as staff set them. With only_on, switched-off reasons are left out (all stay if staff switched every one off)."""
+    cfg = (await get(session))["return_reasons"]
+    labels = {c: (cfg[f"label_{c}"].strip() or built_in) for c, built_in in RETURN_REASONS.items()}
+    if not only_on:
+        return labels
+    on = {c: lab for c, lab in labels.items() if not cfg[f"off_{c}"]}
+    return on or labels
