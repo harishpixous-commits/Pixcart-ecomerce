@@ -6,14 +6,16 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.core.deps import CurrentUser, SessionDep, audit
-from app.core.errors import ApiError
+from app.core.errors import ApiError, NotFound
 from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
-from app.services import growth, loyalty
+from app.config import settings
+from app.services import growth, loyalty, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -66,3 +68,12 @@ me_router = APIRouter(prefix="/api", tags=["loyalty"])
 @me_router.get("/loyalty")
 async def my_points(user: CurrentUser, session: SessionDep) -> dict:
     return await loyalty.summary(session, user.id)
+
+
+@me_router.get("/seo/sitemap.xml")
+async def sitemap(session: SessionDep) -> Response:
+    base = getattr(settings, "public_web_url", "") or settings.cors_origin_list[0]
+    xml = await seo.sitemap_xml(session, base)
+    if xml is None:
+        raise NotFound("Sitemap")
+    return Response(xml, media_type="application/xml")

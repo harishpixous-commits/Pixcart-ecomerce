@@ -74,3 +74,17 @@ async def test_points_are_earned_once_when_a_package_is_delivered(client, admin,
     assert r.status_code == 200 and r.json()["balance"] == expect + 10
     r = await admin.post("/api/admin/growth/loyalty/adjust", {"user_id": buyer.user["id"], "points": -(expect + 11), "note": "Too much"})
     assert r.status_code == 400 and r.json()["error"]["code"] == "balance_too_low"
+
+
+async def test_sitemap_lists_live_pages_and_can_be_switched_off(client, admin, categories):
+    from tests.test_orders import marketplace
+
+    _, _, shirt, cable = await marketplace(client, admin, categories)
+    r = await client.get("/api/seo/sitemap.xml")
+    assert r.status_code == 200 and "xml" in r.headers["content-type"]
+    assert f"/p/{shirt['slug']}" in r.text and f"/p/{cable['slug']}" in r.text and "/c/" in r.text and "/store/" not in r.text
+    assert (await admin.put("/api/admin/growth/settings", {"seo": {"sitemap_include_sellers": True, "sitemap_include_categories": False}})).status_code == 200
+    r = await client.get("/api/seo/sitemap.xml")
+    assert "/store/" in r.text and "/c/" not in r.text
+    assert (await admin.put("/api/admin/growth/settings", {"seo": {"sitemap_enabled": False}})).status_code == 200
+    assert (await client.get("/api/seo/sitemap.xml")).status_code == 404
