@@ -209,6 +209,14 @@ async def test_discovery_pages_and_storefront_blocks(client, admin, categories):
 
     await admin.post("/api/admin/coupons", {"code": "WELCOME10", "kind": "percent", "value": 1000, "max_discount_paise": 15000, "per_user_limit": 1})
     await tn.post("/api/seller/coupons", {"code": "KOVAI100", "kind": "flat", "value": 10000, "min_order_paise": 50000})
+    mine = (await tn.get("/api/seller/coupons")).json()[0]
+    assert (await tn.put(f"/api/seller/coupons/{mine['id']}", {"code": "KOVAI100", "kind": "flat", "value": 10000, "min_order_paise": 50000})).status_code == 200
+    from sqlalchemy import select
+    from app.db import SessionLocal
+    from app.models import AuditLog
+    async with SessionLocal() as s:
+        rows = (await s.execute(select(AuditLog.action).where(AuditLog.entity_id == "KOVAI100"))).scalars().all()
+    assert "coupon.create" in rows and "coupon.update" in rows  # a seller's change to a coupon is logged
     coupons = (await client.get("/api/catalog/coupons")).json()["items"]
     assert [x["code"] for x in coupons] == ["WELCOME10", "KOVAI100"] and coupons[1]["shop_link"] == "/search?seller=kovai-textiles"
 

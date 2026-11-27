@@ -460,13 +460,14 @@ async def seller_coupon_create(body: SellerCouponIn, seller: ApprovedSeller, use
 
 
 @router.put("/coupons/{coupon_id}")
-async def seller_coupon_update(coupon_id: uuid.UUID, body: SellerCouponIn, seller: ApprovedSeller, session: SessionDep) -> dict:
+async def seller_coupon_update(coupon_id: uuid.UUID, body: SellerCouponIn, seller: ApprovedSeller, user: CurrentUser, session: SessionDep) -> dict:
     c = await session.get(Coupon, coupon_id)
     if c is None or c.seller_id != seller.id:
         raise NotFound("Coupon")
     _check_coupon_values(body.kind, body.value)
     for k, v in body.model_dump(exclude={"code"}).items():
         setattr(c, k, v)
+    audit(session, user, "coupon.update", "coupon", c.code)
     await session.commit()
     return coupon_admin_out(c)
 
