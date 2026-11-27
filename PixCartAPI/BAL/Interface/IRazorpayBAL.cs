@@ -21,6 +21,12 @@ public interface IRazorpayBAL
     /// <summary>A payment's real state from Razorpay (reference: fetch_payment).</summary>
     Task<JsonObject> FetchPaymentAsync(string paymentId);
 
+    /// <summary>One refund as Razorpay reports it (its status: pending, processed or failed).</summary>
+    Task<JsonObject> FetchRefundAsync(string refundId) => throw new NotSupportedException();
+
+    /// <summary>The latest orders (a harmless call that proves the keys work).</summary>
+    Task<JsonObject> ListOrdersAsync(int count) => throw new NotSupportedException();
+
     /// <summary>Every payment attempt on a Razorpay order (reference: order_payments).</summary>
     Task<IReadOnlyList<JsonObject>> OrderPaymentsAsync(string orderId);
 

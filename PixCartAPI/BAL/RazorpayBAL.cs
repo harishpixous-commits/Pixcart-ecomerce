@@ -45,6 +45,10 @@ public class RazorpayBAL(AppSettings app, IIntegrationBAL integrations, IHttpCli
         return CallAsync(HttpMethod.Post, "/customers", body);
     }
 
+    public Task<JsonObject> FetchRefundAsync(string refundId) => CallAsync(HttpMethod.Get, $"/refunds/{refundId}", null);
+
+    public Task<JsonObject> ListOrdersAsync(int count) => CallAsync(HttpMethod.Get, $"/orders?count={count}", null);
+
     public Task<JsonObject> FetchPaymentAsync(string paymentId) =>
         CallAsync(HttpMethod.Get, $"/payments/{paymentId}", null);
 

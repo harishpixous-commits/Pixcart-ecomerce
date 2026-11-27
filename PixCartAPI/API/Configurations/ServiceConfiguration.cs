@@ -54,6 +54,15 @@ public static class ServiceConfiguration
         // Webhooks: RazorpayX payout events move payouts, courier tracking moves packages.
         services.AddScoped<BAL.IPayoutWebhookTarget, BAL.PayoutWebhookTarget>();
         services.AddScoped<BAL.IShipmentWebhookTarget, BAL.ShipmentWebhookTarget>();
+        // Payment gateways (docs/PAYMENT_GATEWAYS.md): one adapter each, in the standard order, behind one registry.
+        services.AddHttpClient("payments").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddSingleton<BAL.Payments.PaymentHttp>();
+        services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.RazorpayGateway>();
+        services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.CashfreeGateway>();
+        services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.PhonePeGateway>();
+        services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.PayUGateway>();
+        services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.StripeGateway>();
+        services.AddScoped<BAL.Payments.PaymentGateways>();
         // Sponsored products in the storefront search, from the advertising module.
         services.AddScoped<BAL.Interface.ISponsoredProducts, BAL.SponsoredProducts>();
         // AI for the storefront and translations: whether a model is connected for a route, and the translation engine.
