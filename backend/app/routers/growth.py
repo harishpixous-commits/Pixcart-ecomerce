@@ -70,12 +70,14 @@ class CampaignIn(BaseModel):
     link: str = Field(default="", max_length=200)
     dry_run: bool = True
     send_at: datetime | None = None  # hold it until then (2 minutes to 30 days ahead)
+    repeat_days: int = Field(default=0, ge=0, le=30)  # with send_at: send again every 7, 14 or 30 days ...
+    repeat_times: int = Field(default=0, ge=0, le=12)  # ... this many more times
 
 
 @router.post("/campaigns")
 async def send_campaign(body: CampaignIn, admin: Perm("marketing"), session: SessionDep) -> dict:
     """In-app message to a customer segment. dry_run=true (default) only counts who would get it."""
-    res = await campaigns.send(session, admin, body.segment, body.title, body.message, body.link, body.dry_run, body.send_at)
+    res = await campaigns.send(session, admin, body.segment, body.title, body.message, body.link, body.dry_run, body.send_at, body.repeat_days, body.repeat_times)
     if not body.dry_run:
         audit(session, admin, "campaign.schedule" if res.get("scheduled") else "campaign.send", "segment", body.segment, f"{body.title[:60]} x{res['recipients']}")
     await session.commit()

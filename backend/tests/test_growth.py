@@ -1023,3 +1023,59 @@ async def test_delivery_fee_can_differ_by_destination_state(client, admin, categ
     assert (await admin.put("/api/admin/growth/settings", {"shipping_zones": {"enabled": False}})).status_code == 200
     await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
     assert (await quote(other))["summary"]["shipping_total"] == 4000  # switched off: the marketplace fee again
+
+
+async def test_a_repeating_campaign_makes_the_next_one_after_each_send_and_cancel_ends_it(client, admin):
+    import uuid
+    from datetime import timedelta
+
+    from sqlalchemy import select, update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import SegmentCampaign, User
+    from app.services import campaigns
+    from tests.conftest import login_phone
+
+    assert (await admin.put("/api/admin/growth/settings", {"campaigns": {"enabled": True, "max_per_day": 5}, "segments": {"enabled": True}})).status_code == 200
+    fan = await login_phone(client, "9610100002", name="Repeat Fan")
+    async with SessionLocal() as s:
+        await s.execute(update(User).where(User.phone == "9610100002").values(marketing_opt_in=True))
+        await s.commit()
+    body = {"segment": "never_ordered", "title": "Weekly deal", "message": "New this week", "dry_run": False, "send_at": (utcnow() + timedelta(hours=2)).isoformat()}
+    for bad in ({"repeat_days": 5, "repeat_times": 2}, {"repeat_days": 7, "repeat_times": 0}, {"repeat_days": 0, "repeat_times": 3}):
+        assert (await admin.post("/api/admin/growth/campaigns", {**body, **bad})).json()["error"]["code"] == "invalid_repeat"
+    no_time = {k: v for k, v in body.items() if k != "send_at"}
+    assert (await admin.post("/api/admin/growth/campaigns", {**no_time, "repeat_days": 7, "repeat_times": 2})).json()["error"]["code"] == "invalid_repeat"
+    r = await admin.post("/api/admin/growth/campaigns", {**body, "repeat_days": 7, "repeat_times": 2})
+    assert r.status_code == 200 and r.json()["repeat_days"] == 7 and r.json()["repeats_left"] == 2, r.text
+    cid = uuid.UUID(r.json()["id"])
+
+    async def due() -> int:
+        async with SessionLocal() as s:
+            n = await campaigns.send_due(s)
+            await s.commit()
+            return n
+
+    async def rows():
+        async with SessionLocal() as s:
+            return (await s.execute(select(SegmentCampaign).where(SegmentCampaign.title == "Weekly deal").order_by(SegmentCampaign.created_at))).scalars().all()
+
+    async def make_due():
+        async with SessionLocal() as s:
+            await s.execute(update(SegmentCampaign).where(SegmentCampaign.title == "Weekly deal", SegmentCampaign.status == "scheduled").values(send_at=utcnow() - timedelta(minutes=1)))
+            await s.commit()
+
+    await make_due()
+    assert await due() == 1
+    got = await rows()
+    assert [r.status for r in got] == ["sent", "scheduled"] and got[1].repeats_left == 1 and got[1].repeat_days == 7
+    assert got[1].send_at > utcnow() + timedelta(hours=0.9)
+    assert len([n for n in (await fan.get("/api/notifications")).json()["items"] if n["title"] == "Weekly deal"]) == 1
+    await make_due()
+    assert await due() == 1
+    got = await rows()
+    assert [r.status for r in got] == ["sent", "sent", "scheduled"] and got[2].repeats_left == 0
+    assert (await admin.delete(f"/api/admin/growth/campaigns/{got[2].id}")).status_code == 200  # cancel ends the series
+    await make_due()
+    assert await due() == 0 and [r.status for r in await rows()] == ["sent", "sent", "cancelled"]
+    assert cid == got[0].id

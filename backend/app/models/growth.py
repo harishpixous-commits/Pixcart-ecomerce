@@ -116,6 +116,8 @@ class SegmentCampaign(IdMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(10), default="sent", server_default="sent")  # sent | scheduled | cancelled
     send_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    repeat_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # 0 = once; else sent again this many days after each send
+    repeats_left: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # further sends after this one
 
 
 class SavedSearch(IdMixin, Base):

@@ -190,6 +190,8 @@ function CampaignsTab() {
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("");
   const [sendAt, setSendAt] = useState("");
+  const [repeatDays, setRepeatDays] = useState(0);
+  const [repeatTimes, setRepeatTimes] = useState(4);
   const [preview, setPreview] = useState<CampaignPreview | null>(null);
   const [log, setLog] = useState<CampaignRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -200,9 +202,9 @@ function CampaignsTab() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body: { segment, title, message, link, dry_run: dry, send_at: sendAt ? new Date(sendAt).toISOString() : null } });
+      const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body: { segment, title, message, link, dry_run: dry, send_at: sendAt ? new Date(sendAt).toISOString() : null, repeat_days: sendAt ? repeatDays : 0, repeat_times: sendAt && repeatDays ? repeatTimes : 0 } });
       if (dry) setPreview(r);
-      else { setPreview(null); setTitle(""); setMessage(""); setLink(""); setSendAt(""); toast(sendAt ? "Campaign scheduled" : `Sent to ${r.recipients} customers`); void loadLog(); }
+      else { setPreview(null); setTitle(""); setMessage(""); setLink(""); setSendAt(""); setRepeatDays(0); toast(sendAt ? "Campaign scheduled" : `Sent to ${r.recipients} customers`); void loadLog(); }
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not send");
     } finally {
@@ -232,6 +234,17 @@ function CampaignsTab() {
         <label className="flex flex-col gap-1 text-sm"><span className="font-semibold">Send later (optional, 2 minutes to 30 days ahead)</span>
           <input type="datetime-local" className="rounded-lg border px-3 py-2 text-sm" value={sendAt} onChange={(e) => edit(setSendAt)(e.target.value)} data-testid="campaign-send-at" />
         </label>
+        {sendAt && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold">Repeat</span>
+            <select className="rounded-lg border px-3 py-2" value={repeatDays} onChange={(e) => edit(setRepeatDays)(Number(e.target.value))} aria-label="Repeat">
+              <option value={0}>Do not repeat</option><option value={7}>Every week</option><option value={14}>Every 2 weeks</option><option value={30}>Every 30 days</option>
+            </select>
+            {repeatDays > 0 && <><span>for</span><select className="rounded-lg border px-3 py-2" value={repeatTimes} onChange={(e) => edit(setRepeatTimes)(Number(e.target.value))} aria-label="More times">
+              {[1, 2, 4, 8, 12].map((n) => <option key={n} value={n}>{n} more {n === 1 ? "time" : "times"}</option>)}
+            </select><span className="text-ink-faint">Cancel the next scheduled one to stop it.</span></>}
+          </div>
+        )}
         <ErrorNote message={err} />
         <div className="flex items-center gap-2">
           <Button onClick={() => go(true)} loading={busy && !preview} disabled={!title.trim() || !message.trim()}>Preview</Button>
