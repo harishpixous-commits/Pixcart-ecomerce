@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui";
 import { ApiError, api, quietly } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
 
-type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; free_delivery?: boolean; review_points?: number; first_order_points?: number; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
+type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; bonus_percent?: number; free_delivery?: boolean; review_points?: number; first_order_points?: number; expiring_soon?: number; expiring_days?: number; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
 type Referral = { enabled: boolean; code: string; referrer_reward_paise: number; friend_reward_paise: number; min_order_paise: number; joined: number; rewarded: number; earned_paise: number; used_code: boolean };
 type Made = { code: string; discount_paise: number; min_order_paise: number; valid_days: number };
 
@@ -90,6 +90,9 @@ export default function RewardsPage() {
         <section className="rounded-xl bg-white p-4 sm:p-6">
           <h2 className="flex items-center gap-2 text-xl font-semibold"><Heart className="h-5 w-5 text-vermilion" /> Loyalty points</h2>
           <p className="mt-1">{loyalty.balance} points ({rupees(loyalty.value_paise)}) · {loyalty.tier} tier{loyalty.bonus_percent ? ` (+${loyalty.bonus_percent}% points on every delivery)` : ""}{loyalty.free_delivery ? " · free delivery on your orders" : ""}</p>
+          {!!loyalty.expiring_soon && (
+            <p className="mt-1 text-sm font-medium text-vermilion">{loyalty.expiring_soon} points expire within {loyalty.expiring_days ?? 30} days. Use them at checkout.</p>
+          )}
           {!!(loyalty.review_points || loyalty.first_order_points) && (
             <p className="mt-1 text-sm text-ink-soft">
               {loyalty.first_order_points ? `+${loyalty.first_order_points} bonus points on your first delivered order. ` : ""}

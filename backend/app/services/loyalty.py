@@ -123,6 +123,26 @@ async def restore_expired(session: AsyncSession, user_id: uuid.UUID) -> int:
     return back
 
 
+EXPIRY_WARN_DAYS = 30
+
+
+async def _lapsing(session: AsyncSession, user_id: uuid.UUID, cutoff) -> int:
+    """Points earned on or before the cut-off that the member has not spent (oldest points are spent first), never more than the balance."""
+    old = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0, LoyaltyEntry.created_at <= cutoff))).scalar_one()
+    spent = (await session.execute(select(func.coalesce(func.sum(-LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points < 0))).scalar_one()
+    balance = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id))).scalar_one()
+    return max(0, min(int(balance), int(old) - int(spent)))
+
+
+async def expiring_soon(session: AsyncSession, user_id: uuid.UUID, cfg: dict) -> int:
+    """Points that lapse within the next EXPIRY_WARN_DAYS days (0 when expiry is off), so the Rewards page can warn the member."""
+    from datetime import timedelta
+
+    if not cfg["enabled"] or not cfg["expiry_days"]:
+        return 0
+    return await _lapsing(session, user_id, utcnow() - timedelta(days=cfg["expiry_days"]) + timedelta(days=EXPIRY_WARN_DAYS))
+
+
 async def expire_old(session: AsyncSession, user_id: uuid.UUID) -> int:
     """Points not used within expiry_days lapse (Admin -> Growth -> Loyalty, 0 = never). Oldest points are spent first, so what
     lapses is what was earned before the cut-off minus everything the member has spent or lost since. One negative row; the
@@ -207,5 +227,6 @@ async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
         "review_points": cfg["review_points"], "first_order_points": cfg["first_order_points"] if int(lifetime) == 0 else 0,  # ways to earn the member can still use
         "free_delivery": bool(cfg["enabled"]) and tier_free_delivery(cfg, tier_for(cfg, int(lifetime))),
         "value_paise": int(balance) * cfg["point_value_paise"],
+        "expiring_soon": await expiring_soon(session, user_id, cfg), "expiring_days": EXPIRY_WARN_DAYS,  # points that lapse within that many days
         "history": [{"kind": r.kind, "points": r.points, "note": r.note, "at": r.created_at.isoformat()} for r in rows],
     }

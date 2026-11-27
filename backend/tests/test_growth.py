@@ -1367,7 +1367,14 @@ async def test_unused_points_expire_after_expiry_days_oldest_first(client, admin
         await s.commit()
     me = (await buyer.get("/api/loyalty")).json()
     assert me["balance"] == 40 and me["history"][0]["note"].startswith("Points expired")  # 100 - 30 spent = 70 lapse; the recent 40 stays
-    assert (await buyer.get("/api/loyalty")).json()["balance"] == 40  # lapses once
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"expiry_days": 90}})).status_code == 200
+    assert (await buyer.get("/api/loyalty")).json()["expiring_soon"] == 0  # the 40 are five days old: nothing lapses within the 30 day warning window
+    async with SessionLocal() as s:
+        s.add(LoyaltyEntry(user_id=uuid.UUID(uid), kind="earn", points=15, note="aging", created_at=utcnow() - timedelta(days=70)))
+        await s.commit()
+    me = (await buyer.get("/api/loyalty")).json()
+    assert me["expiring_soon"] == 15 and me["expiring_days"] == 30 and me["balance"] == 55  # 70 days old of 90: lapses in 20 days, inside the window
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 55  # lapses once
     assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"expiry_days": 0}})).status_code == 200
 
 
