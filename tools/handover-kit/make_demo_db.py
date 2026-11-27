@@ -112,8 +112,6 @@ def main():
     if SANITIZE:
         q("SET FOREIGN_KEY_CHECKS=0; " + " ".join(f"TRUNCATE TABLE `{t}`;" for t in EMPTY) + " SET FOREIGN_KEY_CHECKS=1;")
         q("UPDATE platform_settings SET value='{}' WHERE `key`='auth'")  # sign-in settings: product defaults
-        # nobody is on duty in a fresh install: partners go online from their app (no partner shown as free since days)
-        q("UPDATE delivery_boys SET is_online=0, online_since=NULL")
 
     # 3. accounts: one documented demo admin, no other password hashes, no two-step secrets or provider ids
     import bcrypt
