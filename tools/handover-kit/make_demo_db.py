@@ -31,7 +31,10 @@ OUT = REPO / "db"
 MYSQL = r"C:\Users\haris\pixcart-tools\mysql\bin\mysql.exe"
 MYSQLDUMP = r"C:\Users\haris\pixcart-tools\mysql\bin\mysqldump.exe"
 CONN = ["--host=127.0.0.1", "--port=3307", "--user=root", "--password=pixcart", "--default-character-set=utf8mb4"]
-SRC_DB, BUILD_DB, TARGET_DB = "pixcart_parity", "pixcart_demo_build", "pixcart_demo"
+BUILD_DB, TARGET_DB = "pixcart_demo_build", "pixcart_demo"
+# --source <database>: build from another local copy, e.g. the current package imported with
+#   mysql ... < db/pixcart_demo_db.sql   (creates pixcart_demo)   then   make_demo_db.py --sanitize --source pixcart_demo
+SRC_DB = next((sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--source"), "pixcart_parity")
 REF_VAR = pathlib.Path(r"C:\Users\haris\Downloads\pixcart-marketplace 1\pixcart-marketplace\backend\var")
 # the demo API serves var/media-demo; the older copies are fall-backs
 MEDIA_SRCS = [REF_VAR / "media-demo", REF_VAR / "media", pathlib.Path(r"C:\Users\haris\pixcart-tools\parity-media")]
@@ -39,7 +42,7 @@ PRIVATE_SRCS = [REF_VAR / "private", pathlib.Path(r"C:\Users\haris\pixcart-tools
 REF_ENV = pathlib.Path(r"C:\Users\haris\Downloads\pixcart-marketplace 1\pixcart-marketplace\backend\.env")
 DEV_KEY = "62P9O54u1vWja43dxBhdx7DlDaxYQVgo27zjo_K_4fU="  # AppSettings.DevFieldEncryptionKey (development only)
 
-ADMIN_EMAIL = "admin@example.com"
+ADMIN_EMAIL = "admin@pixcart.in"  # as db/README.md documents it
 ADMIN_PASSWORD = "PixCart@Demo2026"
 # default: the data exactly as it is (only the admin password is set to the documented one and encrypted values are
 # moved onto the development key); --sanitize also empties logs and sessions and anonymises test accounts
@@ -211,12 +214,17 @@ def main():
     # 7. files the data refers to, at the same paths
     media_refs = sorted(set(re.findall(r"/media/([A-Za-z0-9_\-./]+\.[A-Za-z0-9]{2,5})", sql)))
     private_refs = sorted(set(re.findall(r"['\"]((?:delivery-kyc|delivery-proof|kyc|seller-docs)/[A-Za-z0-9_\-./]+\.[A-Za-z0-9]{2,5})", sql)))
+    import tempfile
+    previous = pathlib.Path(tempfile.mkdtemp(prefix="pixcart-demo-media-"))  # the last package's files: a fall-back source
+    if (OUT / "media").exists():
+        shutil.copytree(OUT / "media", previous / "media")
+    media_srcs = MEDIA_SRCS + [previous / "media"]
     for sub in ("media", "private"):
         if (OUT / sub).exists():
             shutil.rmtree(OUT / sub)  # rebuilt from scratch on every run
     missing = []
     for rel in media_refs:
-        src = next((s / rel for s in MEDIA_SRCS if (s / rel).exists()), MEDIA_SRCS[0] / rel)
+        src = next((s / rel for s in media_srcs if (s / rel).exists()), MEDIA_SRCS[0] / rel)
         if not src.exists():
             missing.append("media/" + rel)
             continue
@@ -247,7 +255,7 @@ def main():
     bad_tokens = [t[:12] for t in tokens if not _opens(new, t)]
     hashes = re.findall(r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}", sql)
     emails = sorted(set(re.findall(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", sql)))
-    real_emails = [e for e in emails if not re.search(r"(@example\.com|\.example|@deleted\.invalid|@upi)$", e)]
+    real_emails = [e for e in emails if e != ADMIN_EMAIL and not re.search(r"(@example\.com|\.example|@deleted\.invalid|@upi)$", e)]
     secrets = re.findall(r"rzp_live_\w+|sk-[A-Za-z0-9]{20,}|sk_live_\w+|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY", sql)
     report = {"sql_bytes": len(sql.encode()), "tables": len(re.findall(r"^CREATE TABLE", sql, re.M)),
               "media_files": len(media_refs) - len([m for m in missing if m.startswith("media/")]),
