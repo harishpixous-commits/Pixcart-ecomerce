@@ -104,4 +104,12 @@ public class ExportRowsTests(ApiFactory f):ApiTest(f)
         var voided=ExportDefinitions.Parse(Spec("gift-cards"),status:"void");Assert.Empty(await Read("gift-cards",voided));
         var refs=await Read("referrals",ExportDefinitions.Parse(Spec("referrals")));Assert.Single(refs);Assert.Equal("Synthetic Referrer",refs[0][0]);Assert.Equal("Synthetic Friend",refs[0][1]);Assert.Equal("rewarded",refs[0][3]);Assert.Equal("25.00",refs[0][4]);
     }
+    [Fact]
+    public async Task Loyalty_export_lists_entries_with_customer_and_type_filter()
+    {
+        await Admin();var u=await LoginPhone("9876100093","Synthetic Member");
+        await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger(id,user_id,kind,points,note,created_at)VALUES(UUID(),@u,'earn',40,'Order',UTC_TIMESTAMP(6)),(UUID(),@u,'expire',-10,'Points expired',UTC_TIMESTAMP(6))",new{u=u.Id});
+        var all=await Read("loyalty",ExportDefinitions.Parse(Spec("loyalty"),from:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),to:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1))));Assert.Equal(2,all.Count(r=>Equals(r[1],"Synthetic Member")));
+        var expired=await Read("loyalty",ExportDefinitions.Parse(Spec("loyalty"),status:"expire",from:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),to:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1))));Assert.Single(expired);Assert.Equal(-10,Convert.ToInt32(expired[0][4]));
+    }
 }

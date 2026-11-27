@@ -19,7 +19,7 @@ public class ExportRoutesTests(ApiFactory f):ApiTest(f)
     public async Task Lists_permissions_lookups_and_all_formats_execute_for_each_spec()
     {
         var admin=await Admin();var support=await Staff(admin,"export-support@example.test");var user=await LoginPhone("9876100087");var seller=Guid.Parse((await user.Post("/api/seller/register",new{display_name="Synthetic Export Routes"})).Json["id"]!.GetValue<string>());
-        Assert.Equal(14,(await admin.Get("/api/admin/exports")).Json["items"]!.AsArray().Count);Assert.Equal(7,(await user.Get("/api/seller/exports")).Json["items"]!.AsArray().Count);Assert.Equal(403,(await user.Get("/api/admin/exports")).Status);Assert.Equal(403,(await admin.Get("/api/seller/exports")).Status);
+        Assert.Equal(16,(await admin.Get("/api/admin/exports")).Json["items"]!.AsArray().Count);Assert.Equal(7,(await user.Get("/api/seller/exports")).Json["items"]!.AsArray().Count);Assert.Equal(403,(await user.Get("/api/admin/exports")).Status);Assert.Equal(403,(await admin.Get("/api/seller/exports")).Status);
         Assert.DoesNotContain((await support.Get("/api/admin/exports")).Json["items"]!.AsArray(),i=>i!["name"]!.GetValue<string>()=="payouts");Assert.Equal(403,(await support.Get("/api/admin/exports/payouts.csv")).Status);Assert.Equal(200,(await support.Get("/api/admin/exports/lookup/category")).Status);
         Assert.Equal(404,(await admin.Get("/api/admin/exports/missing.csv")).Status);Assert.Equal(404,(await admin.Get("/api/admin/exports/orders.exe")).Status);Assert.Equal(400,(await admin.Get("/api/admin/exports/orders.csv?status=pending_payment")).Status);Assert.Equal(400,(await admin.Get("/api/admin/exports/products.csv?payment_method=cod")).Status);Assert.Equal(422,(await admin.Get("/api/admin/exports/products.csv?low_stock=-1")).Status);
         Assert.Single((await admin.Get("/api/admin/exports/lookup/seller?q=Synthetic")).Json["items"]!.AsArray());Assert.Equal(404,(await admin.Get("/api/admin/exports/lookup/unknown")).Status);Assert.Equal(200,(await user.Get("/api/seller/exports/lookup/category")).Status);
@@ -33,7 +33,7 @@ public class ExportRoutesTests(ApiFactory f):ApiTest(f)
             var xlsx=await Download(actor,root+".xlsx"+dates,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","synthetic-"+spec.Name+"-"+period+".xlsx");using var book=new XLWorkbook(new MemoryStream(xlsx));Assert.Equal(spec.Headers[0],book.Worksheet(1).Cell(1,1).GetString());Assert.Contains(book.Worksheets,w=>w.Name=="About");
             var pdf=await Download(actor,root+".pdf"+dates,"application/pdf","synthetic-"+spec.Name+"-"+period+".pdf");Assert.Equal("%PDF",Encoding.ASCII.GetString(pdf,0,4));
         }
-        Assert.Equal(63,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'export.%'"));
+        Assert.Equal(69,await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'export.%'"));
     }
     [Fact]
     public async Task Selected_columns_keep_source_order_audit_and_rate_limit_are_atomic()

@@ -694,6 +694,72 @@
       "date_optional": true
     },
     {
+      "name": "loyalty",
+      "label": "Loyalty points",
+      "description": "Every points entry: earned, redeemed, expired, adjusted and taken back. Contains personal data: share only as the privacy notice allows.",
+      "scope": "admin",
+      "permission": "marketing",
+      "headers": [
+        "Date (IST)",
+        "Customer",
+        "Phone",
+        "Type",
+        "Points",
+        "Note"
+      ],
+      "date_label": "date of the entry",
+      "statuses": [
+        [
+          "earn",
+          "Earned"
+        ],
+        [
+          "redeem",
+          "Redeemed"
+        ],
+        [
+          "expire",
+          "Expired"
+        ],
+        [
+          "adjust",
+          "Adjusted"
+        ],
+        [
+          "reverse",
+          "Taken back"
+        ]
+      ],
+      "contains_personal_data": true
+    },
+    {
+      "name": "coupon-use",
+      "label": "Coupon use",
+      "description": "Every order that used a coupon, with the discount given and whether it was released by a cancellation.",
+      "scope": "admin",
+      "permission": "marketing",
+      "headers": [
+        "Date (IST)",
+        "Coupon",
+        "Customer",
+        "Order",
+        "Discount",
+        "Released"
+      ],
+      "date_label": "date the coupon was used",
+      "statuses": [
+        [
+          "used",
+          "In use"
+        ],
+        [
+          "released",
+          "Released"
+        ]
+      ],
+      "contains_personal_data": true
+    },
+    {
       "name": "orders",
       "label": "Orders",
       "description": "Your packages with totals, deductions, payout and shipping details.",

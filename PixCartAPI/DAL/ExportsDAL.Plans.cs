@@ -30,6 +30,12 @@ public sealed partial class ExportsDAL
         "referrals" => new("referrals f JOIN users a ON a.id=f.referrer_id JOIN users b ON b.id=f.referee_id",
             [new("COALESCE(a.name,'')"),new("COALESCE(b.name,'')"),new("f.created_at","ist"),new("f.status"),new("f.reward_paise","money"),new("f.rewarded_at","ist")],
             "f.created_at,f.id",Date:"f.created_at",Status:"f.status"),
+        "loyalty" => new("loyalty_ledger e JOIN users u ON u.id=e.user_id",
+            [new("e.created_at","ist"),new("COALESCE(u.name,'')"),new("COALESCE(u.phone,'')"),new("e.kind"),new("e.points"),new("e.note")],
+            "e.created_at,e.id",Date:"e.created_at",Status:"e.kind"),
+        "coupon-use" => new("coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id JOIN users u ON u.id=r.user_id JOIN orders o ON o.id=r.order_id",
+            [new("r.created_at","ist"),new("c.code"),new("COALESCE(u.name,'')"),new("o.number"),new("r.discount_paise","money"),new("r.released","bool")],
+            "r.created_at,r.id",Date:"r.created_at",Status:"IF(r.released,'released','used')"),
         _ => throw new NotSupportedException("Export data plan has not been implemented: " + name),
     };
 }

@@ -350,3 +350,6 @@ Both web apps now show the referrals list (referrer, friend, status, reward, joi
 
 ## Push 115: gift card and referral exports
 Two new admin exports (CSV, Excel, PDF) in both versions, needing the marketing permission: Gift cards (code shown as last 4 only, value, balance, used, expiry, status) and Referrals (referrer, friend, joined, status, reward). The Exports page lists them from the API, so no screen change. Hunt result: every admin GET with no literal caller was a false positive; no dead growth settings remain. Tests: Python exports 8 passed; .NET export tests 17 passed (count pins updated deliberately). Not run: browser.
+
+## Push 116: loyalty and coupon-use exports
+Two more admin exports (CSV, Excel, PDF), marketing permission, both versions: Loyalty points (every ledger entry with customer, type filter) and Coupon use (coupon, customer, order, discount, released). Tests: Python exports 9 passed; .NET export tests 18 passed (count pins updated deliberately). Coupon-use rows are only checked for headers and that the query runs, not with sample data. Not run: browser.
