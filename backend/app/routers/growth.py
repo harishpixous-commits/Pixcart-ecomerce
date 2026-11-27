@@ -151,6 +151,17 @@ async def list_gift_cards(admin: Perm("marketing"), session: SessionDep) -> dict
     return {"items": [{"id": str(c.id), "code": c.code, "note": c.note, **gift_cards.view(c)} for c in rows]}
 
 
+@router.get("/gift-card-purchases")
+async def list_gift_card_purchases(admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Cards bought online, newest first. A purchase still 'created' after the shopper paid is the one to look at."""
+    from sqlalchemy import select
+    from app.models import GiftCardPurchase, User
+    rows = (await session.execute(select(GiftCardPurchase, User).join(User, User.id == GiftCardPurchase.user_id)
+                                  .order_by(GiftCardPurchase.created_at.desc()).limit(200))).all()
+    return {"items": [{"id": str(p.id), "user": u.name, "phone": u.phone, "amount_paise": p.amount_paise, "gateway": p.gateway, "status": p.status,
+                       "error": p.error, "gift_card_id": str(p.gift_card_id) if p.gift_card_id else None, "created_at": p.created_at.isoformat()} for p, u in rows]}
+
+
 @router.post("/gift-cards/{card_id}/void")
 async def void_gift_card(card_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
     c = await gift_cards.void(session, card_id)

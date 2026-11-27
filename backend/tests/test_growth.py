@@ -489,6 +489,10 @@ async def test_buying_a_gift_card_issues_it_once_and_only_after_the_gateway_says
     assert a["status"] == "issued" and a["code"].startswith("GC") and b["code"] == a["code"]
     assert await cards() == 1
     assert (await buyer.post("/api/gift-cards/balance", {"code": a["code"]})).json()["balance_paise"] == 20000
+    # staff see every purchase with its state; a shopper does not
+    listed = (await admin.get("/api/admin/growth/gift-card-purchases")).json()["items"]
+    assert [x["status"] for x in listed].count("issued") == 1 and {x["status"] for x in listed} == {"issued", "failed"} and listed[0]["gift_card_id"]
+    assert (await buyer.get("/api/admin/growth/gift-card-purchases")).status_code == 403
 
 
 async def test_a_gift_card_coupon_works_only_for_the_person_who_made_it(client, admin):

@@ -36,6 +36,8 @@ type Card = { id: string; code: string; note: string; balance_paise: number; ini
 type Seg = { key: string; label: string; count: number };
 type Member = { id: string; name: string; phone: string | null; email: string | null; marketing_opt_in: boolean; orders: number; spent_paise: number; last_order_at: string | null };
 
+type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
+
 function GiftCardsTab() {
   const toast = useToast();
   const [cards, setCards] = useState<Card[]>([]);
@@ -44,7 +46,11 @@ function GiftCardsTab() {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = () => { api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => setCards(x.items)).catch(quietly); };
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const load = () => {
+    api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => setCards(x.items)).catch(quietly);
+    api<{ items: Purchase[] }>("/api/admin/growth/gift-card-purchases").then((x) => setPurchases(x.items)).catch(quietly);
+  };
   useEffect(load, []);
   async function issue(e: React.FormEvent) {
     e.preventDefault();
@@ -86,6 +92,19 @@ function GiftCardsTab() {
           </tbody>
         </table>
       </div>
+      {purchases.length > 0 && (
+        <div className="overflow-x-auto rounded-xl bg-white">
+          <h3 className="p-3 font-semibold">Bought online</h3>
+          <table className="w-full text-left text-sm" data-testid="gift-purchases">
+            <thead><tr className="border-b border-line"><th className="p-3">Buyer</th><th className="p-3">Amount</th><th className="p-3">Gateway</th><th className="p-3">Status</th><th className="p-3">Started</th><th className="p-3">Note</th></tr></thead>
+            <tbody>
+              {purchases.map((p) => (
+                <tr key={p.id} className="border-b border-line/50"><td className="p-3">{p.user} {p.phone}</td><td className="p-3">{rupees(p.amount_paise)}</td><td className="p-3">{p.gateway}</td><td className="p-3">{p.status}</td><td className="p-3">{date(p.created_at)}</td><td className="p-3 text-ink-soft">{p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
