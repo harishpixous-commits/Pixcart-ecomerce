@@ -171,4 +171,34 @@ public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessB
             ["items"] = new JsonArray(items.OrderBy(x => x.Rank).ThenByDescending(x => x.Orders).Select(x => (JsonNode)x.Item).ToArray()),
         };
     }
+
+    public async Task<JsonObject> LoyaltyAsync(Guid userId)
+    {
+        var cfg = (JsonObject)(await GetAsync())["loyalty"]!;
+        var balance = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId", new { userId });
+        var lifetime = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId AND points > 0", new { userId });
+        var rows = await db.QueryAsync<(string Kind, int Points, string Note, DateTime At)>(
+            "SELECT kind AS Kind, points AS Points, note AS Note, created_at AS At FROM loyalty_ledger WHERE user_id = @userId ORDER BY created_at DESC, id LIMIT 50", new { userId });
+        return new JsonObject
+        {
+            ["enabled"] = cfg.Bool("enabled"), ["balance"] = balance, ["lifetime"] = lifetime, ["tier"] = LoyaltyPoints.Tier(cfg, lifetime),
+            ["value_paise"] = balance * cfg.Int("point_value_paise"),
+            ["history"] = new JsonArray(rows.Select(r => (JsonNode)new JsonObject { ["kind"] = r.Kind, ["points"] = r.Points, ["note"] = r.Note, ["at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o") }).ToArray()),
+        };
+    }
+
+    public async Task<JsonObject> AdjustPointsAsync(UserModel admin, Guid userId, int points, string note)
+    {
+        await access.RequireAsync(admin, "marketing");
+        if (points == 0) throw new AppException("Enter a number of points other than zero", "invalid_points");
+        note = note.Trim();
+        await using var tx = await db.BeginAsync();
+        var cur = await tx.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points),0) FROM loyalty_ledger WHERE user_id = @userId FOR UPDATE", new { userId });
+        if (cur + points < 0) throw new AppException("That would take the balance below zero", "balance_too_low");
+        await tx.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @userId, NULL, 'adjust', @points, @note, @now)",
+            new { id = Guid.NewGuid(), userId, points, note, now = DateTime.UtcNow });
+        await audit.AuditAsync(admin, "loyalty.adjust", "user", userId, $"{points:+#;-#} points", tx);
+        await tx.CommitAsync();
+        return await LoyaltyAsync(userId);
+    }
 }

@@ -1484,6 +1484,7 @@ public class OrdersBAL(
                 ? await CollectAmountAsync(sub, deliveredOrder, uow) : 0;
             await PostDeliveryAsync(sub, held, uow);
             await IssueFeeInvoiceAsync(deliveredOrder, uow);
+            await LoyaltyPoints.EarnAsync(uow, sub.Id, sub.Number, sub.ItemsTotal, deliveredOrder.UserId); // points for the package (off unless staff switch loyalty on)
             await notify.NotifyUserAsync(deliveredOrder.UserId, "order_delivered",
                 new Dictionary<string, string>
                 {

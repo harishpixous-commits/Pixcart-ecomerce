@@ -11,4 +11,6 @@ public interface IGrowthBAL
     Task<JsonObject> SettingsAsync(UserModel admin);
     Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body);
     Task<JsonObject> ScorecardAsync(UserModel admin);
+    Task<JsonObject> LoyaltyAsync(Guid userId);
+    Task<JsonObject> AdjustPointsAsync(UserModel admin, Guid userId, int points, string note);
 }

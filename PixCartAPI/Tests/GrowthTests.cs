@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Utils.Interface;
 namespace Tests;
 public class GrowthTests(ApiFactory f):ApiTest(f)
 {
@@ -13,5 +15,18 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal("invalid_setting",(await admin.Put("/api/admin/growth/settings",new{scorecard=new{late_warn_percent=50,late_critical_percent=10}})).ErrorCode);
         Assert.Equal(403,(await buyer.Get("/api/admin/growth/scorecard")).Status);Assert.Equal(403,(await buyer.Get("/api/admin/growth/settings")).Status);
         r=await admin.Get("/api/admin/growth/scorecard");Assert.True(r.Status==200,r.ToString());Assert.NotNull(r.Json["items"]);
+    }
+    [Fact]public async Task Loyalty_points_are_earned_once_per_package_only_when_on_and_staff_can_adjust()
+    {
+        var admin=await Admin();var buyer=await LoginPhone("9880000072");var uid=Guid.Parse(buyer.Id);var sub=Guid.NewGuid();
+        using var scope=Factory.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<IMySqlDapperHelper>();
+        async Task<int> Earn(){await using var tx=await db.BeginAsync();await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=0");var n=await BAL.LoyaltyPoints.EarnAsync(tx,sub,"SYNTH-LOY-1",250000,uid);await tx.ExecuteAsync("SET FOREIGN_KEY_CHECKS=1");await tx.CommitAsync();return n;}
+        Assert.Equal(0,await Earn());Assert.Equal(0,(await buyer.Get("/api/loyalty")).Json["balance"]!.GetValue<long>());
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{loyalty=new{enabled=true,points_per_100=2}})).Status);
+        Assert.Equal(50,await Earn());Assert.Equal(0,await Earn());
+        var me=(await buyer.Get("/api/loyalty")).Json;Assert.Equal(50,me["balance"]!.GetValue<long>());Assert.Equal("member",me["tier"]!.GetValue<string>());Assert.Equal("earn",me["history"]![0]!["kind"]!.GetValue<string>());
+        var r=await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=10,note="Goodwill"});Assert.True(r.Status==200,r.ToString());Assert.Equal(60,r.Json["balance"]!.GetValue<long>());
+        Assert.Equal("balance_too_low",(await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=-61,note="Too much"})).ErrorCode);
+        Assert.Equal(403,(await buyer.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=5,note="Nope"})).Status);
     }
 }
