@@ -46,6 +46,8 @@ async def evaluate(session: AsyncSession, code: str, user_id: uuid.UUID, lines: 
     now = utcnow()
     if c is None or not c.is_active:
         raise ApiError("This coupon code is not valid", "coupon_invalid")
+    if c.only_user_id is not None and c.only_user_id != user_id:
+        raise ApiError("This coupon code is not valid", "coupon_invalid")  # made for someone else: same answer as an unknown code
     if c.starts_at and c.starts_at > now:
         raise ApiError("This coupon is not active yet", "coupon_not_started")
     if c.ends_at and c.ends_at < now:

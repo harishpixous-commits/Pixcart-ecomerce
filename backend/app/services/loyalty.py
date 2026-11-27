@@ -84,7 +84,7 @@ async def redeem(session: AsyncSession, user_id: uuid.UUID, points: int) -> dict
     now = utcnow()
     code = CODE_PREFIX + secrets.token_hex(4).upper()
     session.add(Coupon(code=code, description="Loyalty points", kind="flat", value=discount, min_order_paise=min_order, ends_at=now + timedelta(days=REDEEM_DAYS),
-                       usage_limit=1, per_user_limit=1, funded_by="platform", is_active=True, show_on_checkout=False))
+                       usage_limit=1, per_user_limit=1, funded_by="platform", is_active=True, show_on_checkout=False, only_user_id=user_id))
     session.add(LoyaltyEntry(user_id=user_id, kind="redeem", points=-points, note=f"Redeemed for coupon {code}", created_at=now))
     await session.flush()
     return {"code": code, "discount_paise": discount, "min_order_paise": min_order, "valid_days": REDEEM_DAYS, "balance": int(balance) - points}

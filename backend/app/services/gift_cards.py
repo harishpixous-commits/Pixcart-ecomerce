@@ -103,7 +103,7 @@ async def redeem(session: AsyncSession, user_id: uuid.UUID, code: str, amount_pa
         raise ApiError("That is more than the balance on this card.", "balance_too_low", 400)
     ccode = "GV" + secrets.token_hex(4).upper()
     session.add(Coupon(code=ccode, description="Gift card", kind="flat", value=amount, min_order_paise=amount, ends_at=now + timedelta(days=COUPON_DAYS),
-                       usage_limit=1, per_user_limit=1, funded_by="platform", is_active=True, show_on_checkout=False))
+                       usage_limit=1, per_user_limit=1, funded_by="platform", is_active=True, show_on_checkout=False, only_user_id=user_id))
     card.balance_paise -= amount
     session.add(GiftCardUse(gift_card_id=card.id, user_id=user_id, coupon_code=ccode, amount_paise=amount, created_at=now))
     await session.flush()

@@ -235,6 +235,7 @@ class Coupon(IdMixin, TimestampMixin, Base):
     seller_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"))
     category_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"))
     first_order_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    only_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))  # a code made for one person (loyalty, gift card)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     show_on_checkout: Mapped[bool] = mapped_column(Boolean, default=True)
 

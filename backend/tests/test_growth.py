@@ -1,6 +1,8 @@
 """Admin -> Growth settings and the seller scorecard."""
 from __future__ import annotations
 
+import pytest
+
 from tests.test_orders import marketplace
 
 
@@ -487,3 +489,31 @@ async def test_buying_a_gift_card_issues_it_once_and_only_after_the_gateway_says
     assert a["status"] == "issued" and a["code"].startswith("GC") and b["code"] == a["code"]
     assert await cards() == 1
     assert (await buyer.post("/api/gift-cards/balance", {"code": a["code"]})).json()["balance_paise"] == 20000
+
+
+async def test_a_gift_card_coupon_works_only_for_the_person_who_made_it(client, admin):
+    from sqlalchemy import select
+    from app.core.errors import ApiError
+    from app.db import SessionLocal
+    from app.models import Coupon, User
+    from app.services import coupons
+    from tests.conftest import login_phone
+
+    await admin.put("/api/admin/growth/settings", {"gift_cards": {"enabled": True, "min_paise": 10000, "max_paise": 100000}})
+    card = (await admin.post("/api/admin/growth/gift-cards", {"amount_paise": 20000})).json()["items"][0]
+    owner = await login_phone(client, "9876511111")
+    other = await login_phone(client, "9876522222")
+    made = (await owner.post("/api/gift-cards/redeem", {"code": card["code"]})).json()
+    async with SessionLocal() as s:
+        c = (await s.execute(select(Coupon).where(Coupon.code == made["code"]))).scalar_one()
+        assert str(c.only_user_id) == owner.user["id"]
+        other_id = (await s.execute(select(User.id).where(User.phone == "9876522222"))).scalar_one()
+        owner_id = c.only_user_id
+        with pytest.raises(ApiError) as e:
+            await coupons.evaluate(s, made["code"], other_id, [])
+        assert e.value.code == "coupon_invalid"
+        # the owner gets past the ownership check (an empty cart then fails on something else)
+        try:
+            await coupons.evaluate(s, made["code"], owner_id, [])
+        except ApiError as exc:
+            assert exc.code != "coupon_invalid"
