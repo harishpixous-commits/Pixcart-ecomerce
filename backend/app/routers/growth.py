@@ -162,6 +162,15 @@ async def list_gift_card_purchases(admin: Perm("marketing"), session: SessionDep
                        "error": p.error, "gift_card_id": str(p.gift_card_id) if p.gift_card_id else None, "created_at": p.created_at.isoformat()} for p, u in rows]}
 
 
+@router.post("/gift-card-purchases/{purchase_id}/check")
+async def staff_check_gift_card_purchase(purchase_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Asks the gateway about a purchase the shopper never came back to check. Issues the card once if it was paid in full."""
+    out = await gift_cards.check_purchase(session, None, purchase_id)
+    audit(session, admin, "gift_card.purchase_check", "gift_card_purchase", purchase_id, out["status"])
+    await session.commit()
+    return {k: v for k, v in out.items() if k != "code"}  # the code goes to the buyer, staff see it in the cards list
+
+
 @router.post("/gift-cards/{card_id}/void")
 async def void_gift_card(card_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
     c = await gift_cards.void(session, card_id)

@@ -47,6 +47,10 @@ function GiftCardsTab() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const checkPurchase = async (p: Purchase) => {
+    try { const r = await api<{ status: string }>(`/api/admin/growth/gift-card-purchases/${p.id}/check`, { method: "POST", body: {} }); toast(r.status === "issued" ? "Paid. The card was issued." : r.status === "failed" ? "The payment failed." : "Not paid yet."); load(); }
+    catch (x) { setError(x instanceof ApiError ? x.message : "Could not check"); }
+  };
   const load = () => {
     api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => setCards(x.items)).catch(quietly);
     api<{ items: Purchase[] }>("/api/admin/growth/gift-card-purchases").then((x) => setPurchases(x.items)).catch(quietly);
@@ -96,10 +100,11 @@ function GiftCardsTab() {
         <div className="overflow-x-auto rounded-xl bg-white">
           <h3 className="p-3 font-semibold">Bought online</h3>
           <table className="w-full text-left text-sm" data-testid="gift-purchases">
-            <thead><tr className="border-b border-line"><th className="p-3">Buyer</th><th className="p-3">Amount</th><th className="p-3">Gateway</th><th className="p-3">Status</th><th className="p-3">Started</th><th className="p-3">Note</th></tr></thead>
+            <thead><tr className="border-b border-line"><th className="p-3">Buyer</th><th className="p-3">Amount</th><th className="p-3">Gateway</th><th className="p-3">Status</th><th className="p-3">Started</th><th className="p-3">Note</th><th className="p-3" /></tr></thead>
             <tbody>
               {purchases.map((p) => (
-                <tr key={p.id} className="border-b border-line/50"><td className="p-3">{p.user} {p.phone}</td><td className="p-3">{rupees(p.amount_paise)}</td><td className="p-3">{p.gateway}</td><td className="p-3">{p.status}</td><td className="p-3">{date(p.created_at)}</td><td className="p-3 text-ink-soft">{p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error}</td></tr>
+                <tr key={p.id} className="border-b border-line/50"><td className="p-3">{p.user} {p.phone}</td><td className="p-3">{rupees(p.amount_paise)}</td><td className="p-3">{p.gateway}</td><td className="p-3">{p.status}</td><td className="p-3">{date(p.created_at)}</td><td className="p-3 text-ink-soft">{p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error}</td>
+                  <td className="p-3">{p.status === "created" && <button type="button" className="font-semibold text-peacock" onClick={() => checkPurchase(p)}>Check payment</button>}</td></tr>
               ))}
             </tbody>
           </table>

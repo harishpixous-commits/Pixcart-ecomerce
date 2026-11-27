@@ -493,6 +493,15 @@ async def test_buying_a_gift_card_issues_it_once_and_only_after_the_gateway_says
     listed = (await admin.get("/api/admin/growth/gift-card-purchases")).json()["items"]
     assert [x["status"] for x in listed].count("issued") == 1 and {x["status"] for x in listed} == {"issued", "failed"} and listed[0]["gift_card_id"]
     assert (await buyer.get("/api/admin/growth/gift-card-purchases")).status_code == 403
+    # staff can check a purchase the shopper never came back to: paid in full issues the card once, and no code is returned to staff
+    pid3 = (await buyer.post("/api/gift-cards/purchase", {"amount_paise": 20000})).json()["id"]
+    fake.attempts_now = [{"id": "a4", "status": "captured", "method": "upi", "error": "", "amount": 20000}]
+    assert (await buyer.post(f"/api/admin/growth/gift-card-purchases/{pid3}/check", {})).status_code == 403
+    r = (await admin.post(f"/api/admin/growth/gift-card-purchases/{pid3}/check", {})).json()
+    assert r["status"] == "issued" and "code" not in r
+    assert (await admin.post(f"/api/admin/growth/gift-card-purchases/{pid3}/check", {})).json()["status"] == "issued"
+    assert await cards() == 2
+    assert "gift_card.purchase_check" in (await admin.get("/api/admin/audit")).text
 
 
 async def test_a_gift_card_coupon_works_only_for_the_person_who_made_it(client, admin):

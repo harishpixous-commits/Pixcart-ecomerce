@@ -159,13 +159,13 @@ async def start_purchase(session: AsyncSession, user, amount_paise: int) -> dict
     return {**purchase_view(p), "payment": p.client_data}
 
 
-async def check_purchase(session: AsyncSession, user_id: uuid.UUID, purchase_id: uuid.UUID) -> dict:
+async def check_purchase(session: AsyncSession, user_id: uuid.UUID | None, purchase_id: uuid.UUID) -> dict:
     """Asks the gateway whether the money arrived. Issues the card once, only for a capture of the full amount."""
     from app.integrations import get as get_integrations
     from app.services import gateways, payment_gateways
 
     p = (await session.execute(select(GiftCardPurchase).where(GiftCardPurchase.id == purchase_id).with_for_update())).scalar_one_or_none()
-    if p is None or p.user_id != user_id:
+    if p is None or (user_id is not None and p.user_id != user_id):  # staff pass None and may check anyone's
         raise NotFound("Purchase")
     if p.status == "issued":
         return purchase_view(p, await session.get(GiftCard, p.gift_card_id))
