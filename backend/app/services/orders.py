@@ -167,15 +167,15 @@ def free_threshold(seller: Seller, cfg: dict, bounds: tuple[int, int] | None) ->
     return min(max(int(own), bounds[0]), bounds[1])
 
 
-def group_by_seller(lines: list[CartLine], cfg: dict, remote: tuple[int, bool] = (0, True), bounds: tuple[int, int] | None = None, state_fee: int | None = None) -> list[SellerGroup]:
+def group_by_seller(lines: list[CartLine], cfg: dict, remote: tuple[int, bool] = (0, True), bounds: tuple[int, int] | None = None, state_fee: int | None = None, member_free: bool = False) -> list[SellerGroup]:
     groups: dict[uuid.UUID, SellerGroup] = {}
     for line in lines:
         groups.setdefault(line.seller.id, SellerGroup(line.seller)).lines.append(line)
     for g in groups.values():
         has_items = g.items_total > 0
-        g.shipping_fee = 0 if (not has_items or g.items_total >= free_threshold(g.seller, cfg, bounds)) else (cfg["shipping_fee_paise"] if state_fee is None else state_fee)
+        g.shipping_fee = 0 if (not has_items or member_free or g.items_total >= free_threshold(g.seller, cfg, bounds)) else (cfg["shipping_fee_paise"] if state_fee is None else state_fee)
         # Remote-area surcharge (Admin -> Growth -> Shipping zones): once per seller package, not charged on an empty group.
-        if has_items and remote[0] and not (remote[1] and g.shipping_fee == 0):
+        if has_items and remote[0] and not member_free and not (remote[1] and g.shipping_fee == 0):
             g.shipping_fee += remote[0]
     return list(groups.values())
 
@@ -310,7 +310,9 @@ async def place_order(
     from app.services import growth as growth_svc
 
     cfg = await growth_svc.with_state_threshold(session, cfg, address.state_code)
-    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode), await growth_svc.seller_free_bounds(session), await growth_svc.state_fee(session, address.state_code))
+    from app.services import loyalty as loyalty_svc
+
+    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode), await growth_svc.seller_free_bounds(session), await growth_svc.state_fee(session, address.state_code), await loyalty_svc.free_delivery(session, user.id))
     now = utcnow()
     is_online = payment_method == "online"
     categories = {c.id: c for c in (await session.execute(select(Category))).scalars()}

@@ -119,6 +119,17 @@ async def restore_expired(session: AsyncSession, user_id: uuid.UUID) -> int:
     return back
 
 
+async def free_delivery(session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """True when the member's tier carries free delivery (Admin -> Growth -> Loyalty: silver/gold free delivery). Off by default."""
+    cfg = (await growth.get(session))["loyalty"]
+    if not cfg["enabled"] or not (cfg["silver_free_delivery"] or cfg["gold_free_delivery"]):
+        return False
+    lifetime = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0))).scalar_one()
+    tier = tier_for(cfg, int(lifetime))
+    # gold keeps what silver gets
+    return (tier == "gold" and bool(cfg["gold_free_delivery"] or cfg["silver_free_delivery"])) or (tier == "silver" and bool(cfg["silver_free_delivery"]))
+
+
 async def summary(session: AsyncSession, user_id: uuid.UUID) -> dict:
     await restore_expired(session, user_id)
     cfg = (await growth.get(session))["loyalty"]

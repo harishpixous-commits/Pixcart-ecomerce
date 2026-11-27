@@ -35,6 +35,7 @@ from app.routers.addresses import get_owned_address
 from app.services import payment_gateways
 from app.services import fees as fees_svc
 from app.services import growth as growth_svc
+from app.services import loyalty as loyalty_svc
 from app.services import fleet, razorpay, regional
 from app.services.cms import get_site
 from app.services.coupons import evaluate
@@ -247,7 +248,7 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     ck = await fees_svc.get(session)
     bounds = await growth_svc.seller_free_bounds(session)
     cfg = await growth_svc.with_state_threshold(session, cfg, address.state_code)
-    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode), bounds, await growth_svc.state_fee(session, address.state_code)), cfg, (await get_integrations(session)).online_payments, ck, bounds)
+    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode), bounds, await growth_svc.state_fee(session, address.state_code), await loyalty_svc.free_delivery(session, user.id)), cfg, (await get_integrations(session)).online_payments, ck, bounds)
     cod_fee = cfg["cod_fee_paise"] if body.payment_method == "cod" else 0
     view["summary"]["cod_fee"] = cod_fee
     view["summary"]["grand_total"] += cod_fee

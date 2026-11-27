@@ -33,9 +33,10 @@ async def _view(session, user) -> dict:
     cfg = await get_settings(session)
     ck = await fees_svc.get(session)
     from app.services import growth as growth_svc
+    from app.services import loyalty as loyalty_svc
 
     bounds = await growth_svc.seller_free_bounds(session)
-    return cart_payload(group_by_seller(await load_cart(session, user.id), cfg, bounds=bounds), cfg, (await get_integrations(session)).online_payments, ck, bounds)
+    return cart_payload(group_by_seller(await load_cart(session, user.id), cfg, bounds=bounds, member_free=await loyalty_svc.free_delivery(session, user.id)), cfg, (await get_integrations(session)).online_payments, ck, bounds)
 
 
 async def _purchasable(session, variant_id: uuid.UUID) -> Variant:

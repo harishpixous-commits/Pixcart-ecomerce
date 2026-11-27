@@ -1245,3 +1245,34 @@ async def test_bought_together_lists_products_from_the_same_orders_and_is_off_by
     assert await together(shirt) == [cable["slug"]] and await together(cable) == [shirt["slug"]]
     assert (await admin.put("/api/admin/growth/settings", {"bought_together": {"enabled": True, "max_items": 1}})).status_code == 200
     assert len(await together(shirt)) == 1
+
+
+async def test_tier_free_delivery_waives_shipping_for_silver_and_gold_members(client, admin, categories):
+    from sqlalchemy import insert, select
+
+    from app.db import SessionLocal, utcnow
+    from app.models import LoyaltyEntry, User
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    tn, ka, shirt, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000161", name="Tier Buyer")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})  # 299 rupees: pays delivery
+
+    async def ship():
+        cart = (await buyer.get("/api/cart")).json()
+        q = (await buyer.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})).json()
+        return cart["summary"]["shipping_total"], q["summary"]["shipping_total"]
+
+    base = await ship()
+    assert base[0] > 0 and base[0] == base[1]
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "tier_silver_points": 500, "tier_gold_points": 2000, "silver_free_delivery": True}})).status_code == 200
+    assert await ship() == base  # still a plain member
+    async with SessionLocal() as s:
+        uid = (await s.execute(select(User.id).where(User.phone == "9770000161"))).scalar_one()
+        await s.execute(insert(LoyaltyEntry).values(user_id=uid, kind="earn", points=600, note="test", created_at=utcnow()))
+        await s.commit()
+    assert await ship() == (0, 0)  # silver
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "silver_free_delivery": False, "gold_free_delivery": True}})).status_code == 200
+    assert await ship() == base  # silver no longer has it, gold only
