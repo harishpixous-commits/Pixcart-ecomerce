@@ -176,3 +176,46 @@ async def cod_block_reason(session: AsyncSession, user_id: uuid.UUID, pincode: s
         if not delivered and grand_total > cfg["new_account_max_cod_paise"]:
             return "Cash on delivery for a first order is limited. Please pay online or order a smaller amount."
     return None
+
+
+AUTO_SUSPEND_MAX_PER_RUN = 5
+
+
+def _why(s: dict, cfg: dict[str, Any]) -> str:
+    parts = []
+    for key, label in (("late", "late shipments"), ("cancel", "seller cancellations"), ("return", "returns")):
+        if cfg[f"{key}_critical_percent"] and s[f"{key}_percent"] >= cfg[f"{key}_critical_percent"]:
+            parts.append(f"{label} {s[f'{key}_percent']}% (limit {cfg[f'{key}_critical_percent']}%)")
+    return "; ".join(parts)
+
+
+async def auto_suspend_sellers(session: AsyncSession) -> int:
+    """Admin -> Growth -> Seller scorecard -> auto_suspend. Suspends approved sellers who are at the critical level with enough orders in the
+    window (at most 5 per run). A seller who is approved again after an automatic suspension is left alone for one full window, so a reinstated seller is not
+    suspended again for the same old orders. Staff reinstate from the seller page as for any suspension."""
+    from app.core.deps import audit
+    from app.models import AuditLog
+    from app.services.notify import notify_seller
+
+    cfg = (await get(session))["scorecard"]
+    if not (cfg["enabled"] and cfg["auto_suspend"]):
+        return 0
+    since = utcnow() - timedelta(days=cfg["window_days"])
+    done = 0
+    for s in await seller_scorecard(session, cfg):
+        if s["level"] != "critical" or done >= AUTO_SUSPEND_MAX_PER_RUN:
+            continue
+        seller = await session.get(Seller, uuid.UUID(s["seller_id"]), with_for_update=True)
+        if seller is None or seller.status != "approved":
+            continue
+        recent = (await session.execute(select(AuditLog.id).where(
+            AuditLog.entity_type == "seller", AuditLog.entity_id == str(seller.id), AuditLog.action == "seller.auto_suspend", AuditLog.created_at >= since).limit(1))).first()
+        if recent:
+            continue
+        reason = "Automatic: " + _why(s, cfg)
+        seller.status = "suspended"
+        seller.rejection_reason = reason[:500]
+        audit(session, None, "seller.auto_suspend", "seller", seller.id, reason)
+        await notify_seller(session, seller.id, "seller_kyc_update", {"status": "suspended", "message": f"Your store is suspended: {reason}. Contact seller support."}, link="/seller/onboarding")
+        done += 1
+    return done

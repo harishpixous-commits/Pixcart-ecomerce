@@ -566,3 +566,49 @@ async def test_seller_bulk_edit_csv_round_trip(client, admin, categories):
     assert (await send("sku,price\nX,1\n"))["error"]["code"] == "invalid_file"
     r = await send(f"id,active\n{vid},no\n", dry=False)
     assert r["changed"] == 1 and r["rows"][0]["changes"]["active"]["after"] is False
+
+
+async def test_auto_suspend_stops_a_critical_seller_once_and_only_when_switched_on(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+
+    from sqlalchemy import select, update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import AuditLog, Seller, SubOrder
+    from app.services import growth
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, _, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000031")
+    addr = await add_address(buyer)
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+    assert (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})).status_code == 201
+    assert (await admin.put("/api/admin/growth/settings", {"scorecard": {"enabled": True, "min_orders": 1, "ship_within_hours": 1}})).status_code == 200
+    async with SessionLocal() as s:
+        await s.execute(update(SubOrder).values(created_at=utcnow() - timedelta(hours=5)))
+        await s.commit()
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await growth.auto_suspend_sellers(s)
+            await s.commit()
+            return n
+
+    async with SessionLocal() as s:
+        sid = (await s.execute(select(SubOrder.seller_id))).scalars().first()
+
+    async def status():
+        async with SessionLocal() as s:
+            return (await s.execute(select(Seller.status).where(Seller.id == sid))).scalar_one()
+
+    assert await run() == 0 and await status() == "approved"  # auto_suspend is off
+    assert (await admin.put("/api/admin/growth/settings", {"scorecard": {"auto_suspend": True}})).status_code == 200
+    assert await run() == 1 and await status() == "suspended"
+    async with SessionLocal() as s:
+        row = (await s.execute(select(AuditLog).where(AuditLog.action == "seller.auto_suspend"))).scalar_one()
+        assert row.actor_user_id is None and "late shipments" in row.detail
+    assert await run() == 0  # already suspended
+    assert (await admin.post(f"/api/admin/sellers/{sid}/approve", {})).status_code == 200  # staff reinstate
+    assert await run() == 0 and await status() == "approved"  # not suspended again for the same old orders
