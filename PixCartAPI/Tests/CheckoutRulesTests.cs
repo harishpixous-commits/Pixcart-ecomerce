@@ -749,4 +749,46 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET delivered_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 6 DAY) WHERE id = @sb", new { sb });
         Assert.Equal(1, await Run()); Assert.Equal(1, await Count(b.Id));
     }
+
+    [Fact]
+    public async Task Seller_can_set_own_free_delivery_amount_within_admin_bounds()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000307", "own-free-shirt");
+        await Refresh(productId);
+        var seller = await LoginPhone("9400000307", "Kovai Owner");
+        var buyer = await LoginPhone("9770000111", "Own Free Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        async Task<(long Ship, long Gap)> Quote()
+        {
+            var g = (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["groups"]![0]!;
+            return (g["shipping_fee"]!.GetValue<long>(), g["free_shipping_gap"]!.GetValue<long>());
+        }
+        Task<Res> Prefs(object value) => seller.Put("/api/seller/preferences", value);
+        var (baseShip, baseGap) = await Quote();
+        Assert.Equal("seller_shipping_off", (await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 20000 })).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = true, min_paise = 0, max_paise = 5000000 } })).Status);
+        Assert.Equal("threshold_out_of_range", (await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 6000000 })).ErrorCode);
+        Assert.Equal(5000000, (await seller.Get("/api/seller/preferences")).Json["free_shipping_bounds"]!["max_paise"]!.GetValue<long>());
+        var big = await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 5000000 });
+        Assert.True(big.Status == 200, big.ToString());
+        Assert.Equal(5000000, big.Json["free_shipping_threshold_paise"]!.GetValue<long>());
+        var (s1, g1) = await Quote(); Assert.True(s1 > 0 && g1 > 0, $"ship {s1} gap {g1}");
+        var zero = await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 0 });
+        Assert.Equal(200, zero.Status);
+        var (s2, g2) = await Quote(); Assert.Equal(0, s2); Assert.Equal(0, g2);
+        var keep = await Prefs(new { dispatch_days = 2, holiday_mode = false });
+        Assert.Equal(0, keep.Json["free_shipping_threshold_paise"]!.GetValue<long>());
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { min_paise = 4000000 } })).Status);
+        Assert.True((await Quote()).Ship > 0);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = false } })).Status);
+        Assert.Equal((baseShip, baseGap), await Quote());
+        Assert.Equal(200, (await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = 0 })).Status); // the stored value sent back while off is fine
+        Assert.Null((await seller.Get("/api/seller/preferences")).Json["free_shipping_bounds"]);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { seller_shipping = new { enabled = true, min_paise = 0 } })).Status);
+        var cleared = await Prefs(new { dispatch_days = 2, holiday_mode = false, free_shipping_threshold_paise = (long?)null });
+        Assert.Equal(200, cleared.Status); Assert.Null(cleared.Json["free_shipping_threshold_paise"]);
+        Assert.Equal((baseShip, baseGap), await Quote());
+    }
 }

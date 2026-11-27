@@ -65,7 +65,10 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     }
 
     /// <summary>Lines grouped by seller with the delivery fee of each package (reference: group_by_seller).</summary>
-    public static List<SellerGroup> GroupBySeller(IEnumerable<CartLine> lines, JsonObject cfg, (long Amount, bool Waive) remote = default)
+    public static long FreeThreshold(SellerModel seller, JsonObject cfg, (long Min, long Max)? bounds) =>
+        bounds is null || seller.FreeShippingThresholdPaise is null ? cfg.Int("free_shipping_threshold_paise") : Math.Min(Math.Max(seller.FreeShippingThresholdPaise.Value, bounds.Value.Min), bounds.Value.Max);
+
+    public static List<SellerGroup> GroupBySeller(IEnumerable<CartLine> lines, JsonObject cfg, (long Amount, bool Waive) remote = default, (long Min, long Max)? bounds = null)
     {
         var groups = new Dictionary<Guid, SellerGroup>();
         foreach (var line in lines)
@@ -76,7 +79,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         foreach (var g in groups.Values)
         {
             var hasItems = g.ItemsTotal > 0;
-            g.ShippingFee = !hasItems || g.ItemsTotal >= cfg.Int("free_shipping_threshold_paise") ? 0 : cfg.Int("shipping_fee_paise");
+            g.ShippingFee = !hasItems || g.ItemsTotal >= FreeThreshold(g.Seller, cfg, bounds) ? 0 : cfg.Int("shipping_fee_paise");
             // Remote-area surcharge (Admin → Growth → Shipping zones): once per seller package.
             if (hasItems && remote.Amount > 0 && !(remote.Waive && g.ShippingFee == 0)) g.ShippingFee += remote.Amount;
         }
@@ -85,7 +88,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
 
     /// <summary>The cart and its bill; with the checkout settings the marketplace's fees and the nudges are included
     /// (reference: cart_payload — identical keys and maths).</summary>
-    public static JsonObject CartPayload(List<SellerGroup> groups, JsonObject cfg, bool onlineAvailable, JsonObject? ck)
+    public static JsonObject CartPayload(List<SellerGroup> groups, JsonObject cfg, bool onlineAvailable, JsonObject? ck, (long Min, long Max)? bounds = null)
     {
         var itemsTotal = groups.Sum(g => g.ItemsTotal);
         var shipping = groups.Sum(g => g.ShippingFee);
@@ -97,7 +100,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
             ["seller"] = new JsonObject { ["id"] = g.Seller.Id.ToString(), ["name"] = g.Seller.DisplayName, ["slug"] = g.Seller.Slug },
             ["items_total"] = g.ItemsTotal,
             ["shipping_fee"] = g.ShippingFee,
-            ["free_shipping_gap"] = g.ItemsTotal > 0 && g.ItemsTotal < cfg.Int("free_shipping_threshold_paise") ? Math.Max(0, cfg.Int("free_shipping_threshold_paise") - g.ItemsTotal) : 0,
+            ["free_shipping_gap"] = g.ItemsTotal > 0 && g.ItemsTotal < FreeThreshold(g.Seller, cfg, bounds) ? Math.Max(0, FreeThreshold(g.Seller, cfg, bounds) - g.ItemsTotal) : 0,
             ["lines"] = new JsonArray(g.Lines.Select(line => (JsonNode?)new JsonObject
             {
                 ["id"] = line.Item.Id.ToString(),
@@ -149,7 +152,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     {
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
-        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode)), cfg, await razorpay.OnlinePaymentsAsync(), ck);
+        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode), await ShippingZones.SellerFreeBoundsAsync(db)), cfg, await razorpay.OnlinePaymentsAsync(), ck, await ShippingZones.SellerFreeBoundsAsync(db));
     }
 
     /// <summary>

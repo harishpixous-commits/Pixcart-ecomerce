@@ -64,6 +64,9 @@ public class SellerModel
     public string RazorpayAccountId { get; set; } = "";
     /// <summary>sellers.dispatch_days</summary>
     public int DispatchDays { get; set; }
+    /// <summary>sellers.free_shipping_threshold_paise: own free-delivery amount; null = the marketplace one.</summary>
+    public long? FreeShippingThresholdPaise { get; set; }
+
     /// <summary>sellers.dispatch_cutoff</summary>
     public string DispatchCutoff { get; set; } = "";
     /// <summary>sellers.holiday_mode</summary>

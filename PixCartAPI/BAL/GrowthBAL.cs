@@ -38,6 +38,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         ["return_reasons"] = PlatformSettingsBAL.ReturnReasons.Keys.SelectMany(c => new[] { new F("label_" + c, "", K.Label, 0, 60), new F("off_" + c, false, K.Bool) }).ToArray(),
         ["shipping_zones"] = [new("enabled", false, K.Bool), new("remote_prefixes", "", K.Text, 0, 300), new("remote_surcharge_paise", 6000, K.Int, 0, 100000), new("waive_when_free", true, K.Bool)],
         ["review_reminders"] = [new("enabled", false, K.Bool), new("after_days", 5, K.Int, 1, 60), new("max_age_days", 30, K.Int, 1, 180)],
+        ["seller_shipping"] = [new("enabled", false, K.Bool), new("min_paise", 0, K.Int, 0, 10000000), new("max_paise", 500000, K.Int, 0, 10000000)],
         ["saved_searches"] = [new("enabled", false, K.Bool), new("max_per_user", 10, K.Int, 1, 50), new("min_hours_between_alerts", 24, K.Int, 1, 720)],
         ["segments"] = [new("enabled", false, K.Bool), new("vip_spend_paise", 2500000, K.Int, 0, 1000000000), new("lapsed_days", 90, K.Int, 7, 1000), new("new_days", 30, K.Int, 1, 365)],
     };

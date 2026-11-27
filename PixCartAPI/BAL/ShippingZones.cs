@@ -9,6 +9,16 @@ namespace BAL;
 /// per seller package for pincodes that start with a listed prefix. Returns (amount in paise, waive when the package already ships free).</summary>
 public static class ShippingZones
 {
+    /// <summary>Admin → Growth → Seller shipping: bounds (paise) for a seller's own free-delivery amount; null while switched off.</summary>
+    public static async Task<(long Min, long Max)?> SellerFreeBoundsAsync(IMySqlDapperHelper db)
+    {
+        var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var cfg = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["seller_shipping"]!;
+        if (!cfg.Bool("enabled")) return null;
+        var min = (long)cfg.Int("min_paise");
+        return (min, Math.Max(min, (long)cfg.Int("max_paise")));
+    }
+
     public static async Task<(long Amount, bool Waive)> SurchargeAsync(IMySqlDapperHelper db, string? pincode)
     {
         var saved = JsonHelper.Object(await db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));

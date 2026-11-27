@@ -10,19 +10,32 @@ namespace BAL;
 public partial interface ISellerHubBAL
 {
     JsonObject Preferences(SellerModel seller);
-    Task<JsonObject> PreferencesAsync(UserModel user,SellerModel seller,int days,bool holiday,string prefix,string? cutoff);
+    Task<JsonObject> PreferencesOfAsync(SellerModel seller);
+    Task<JsonObject> PreferencesAsync(UserModel user,SellerModel seller,int days,bool holiday,string prefix,string? cutoff,bool freeSet=false,long? free=null);
     Task<JsonArray> WarehousesAsync(SellerModel seller);
     Task<JsonArray> WarehouseAsync(UserModel user,SellerModel seller,Guid? id,JsonObject body);
 }
 public partial class SellerHubBAL(IMySqlDapperHelper db,IInventoryBAL stock,InventoryDAL inventory,CatalogDAL catalog,IAuditBAL audit,IPlatformSettingsBAL platform,OrdersDAL orders,BAL.Interface.IPayoutsBAL payouts):ISellerHubBAL
 {
-    public JsonObject Preferences(SellerModel s)=>new(){["dispatch_days"]=s.DispatchDays,["holiday_mode"]=s.HolidayMode,["invoice_prefix"]=s.InvoicePrefix,["dispatch_cutoff"]=s.DispatchCutoff,["rating_avg"]=s.RatingAvg,["rating_count"]=s.RatingCount};
-    public async Task<JsonObject> PreferencesAsync(UserModel user,SellerModel s,int days,bool holiday,string prefix,string? cutoff)
+    public JsonObject Preferences(SellerModel s)=>Preferences(s,null);
+    public JsonObject Preferences(SellerModel s,(long Min,long Max)? bounds)=>new(){["free_shipping_bounds"]=bounds is null?null:new JsonObject{["min_paise"]=bounds.Value.Min,["max_paise"]=bounds.Value.Max},["dispatch_days"]=s.DispatchDays,["holiday_mode"]=s.HolidayMode,["invoice_prefix"]=s.InvoicePrefix,["dispatch_cutoff"]=s.DispatchCutoff,["free_shipping_threshold_paise"]=s.FreeShippingThresholdPaise,["rating_avg"]=s.RatingAvg,["rating_count"]=s.RatingCount};
+    public async Task<JsonObject> PreferencesOfAsync(SellerModel s)=>Preferences(s,await BAL.ShippingZones.SellerFreeBoundsAsync(db));
+    public async Task<JsonObject> PreferencesAsync(UserModel user,SellerModel s,int days,bool holiday,string prefix,string? cutoff,bool freeSet=false,long? free=null)
     {
         if(days is <0 or >10||prefix is null||!Regex.IsMatch(prefix,"^[A-Z0-9]{0,4}$")||cutoff is not null&&!Regex.IsMatch(cutoff,@"^((?:[01]\d|2[0-3]):[0-5]\d)?$"))throw new AppException("Invalid preferences","validation",422);
+        if(freeSet)
+        {
+            if(free is not null&&free!=s.FreeShippingThresholdPaise)
+            {
+                var bounds=await BAL.ShippingZones.SellerFreeBoundsAsync(db);
+                if(bounds is null)throw new AppException("Own free-delivery amounts are not switched on","seller_shipping_off",400);
+                if(free<bounds.Value.Min||free>bounds.Value.Max)throw new AppException($"Choose an amount between {bounds.Value.Min/100} and {bounds.Value.Max/100} rupees","threshold_out_of_range",400);
+            }
+            s.FreeShippingThresholdPaise=free;
+        }
         s.DispatchDays=days;s.HolidayMode=holiday;s.InvoicePrefix=prefix;if(cutoff is not null)s.DispatchCutoff=cutoff;
-        await using var tx=await db.BeginAsync();await tx.ExecuteAsync("UPDATE sellers SET dispatch_days=@DispatchDays,holiday_mode=@HolidayMode,invoice_prefix=@InvoicePrefix,dispatch_cutoff=@DispatchCutoff,updated_at=UTC_TIMESTAMP(6) WHERE id=@Id",s);
-        await audit.AuditAsync(user,"seller.preferences","seller",s.Id,"holiday="+(holiday?"True":"False"),tx);await tx.CommitAsync();return Preferences(s);
+        await using var tx=await db.BeginAsync();await tx.ExecuteAsync("UPDATE sellers SET dispatch_days=@DispatchDays,holiday_mode=@HolidayMode,invoice_prefix=@InvoicePrefix,dispatch_cutoff=@DispatchCutoff,free_shipping_threshold_paise=@FreeShippingThresholdPaise,updated_at=UTC_TIMESTAMP(6) WHERE id=@Id",s);
+        await audit.AuditAsync(user,"seller.preferences","seller",s.Id,"holiday="+(holiday?"True":"False"),tx);await tx.CommitAsync();return Preferences(s,await BAL.ShippingZones.SellerFreeBoundsAsync(db));
     }
     private async Task<JsonArray> SummaryAsync(Guid sid)
     {

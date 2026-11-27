@@ -34,6 +34,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   return_reasons: { title: "Return reasons", hint: "Rename a reason shown to customers (label_...) or switch it off (off_...). Leave a label empty to keep the built-in text. Damaged, faulty, wrong or incomplete items keep their special rule." },
   shipping_zones: { title: "Shipping zones", hint: "Add a delivery fee per seller package for remote pincodes. List pincode prefixes separated by commas (for example 744, 19). By default the fee is not added to a package that already ships free." },
   review_reminders: { title: "Review reminders", hint: "Sends one in-app note after a package is delivered if the shopper has not reviewed anything in it. Once per package, after the days set here. Packages older than the max age are skipped." },
+  seller_shipping: { title: "Seller free delivery", hint: "Sellers can set their own free-delivery amount (in their Settings) between the minimum and maximum here. Off: every seller uses the marketplace amount. Amounts are in paise (100 paise = 1 rupee)." },
   saved_searches: { title: "Saved searches", hint: "Shoppers follow a search and get an in-app note when new matching products are approved. At most one note per search in the hours set here." },
   campaigns: { title: "Segment campaigns", hint: "Send an in-app message to a customer segment. Only customers who opted in to marketing get it. Needs Segments switched on." },
   segments: { title: "Customer segments", hint: "VIP, new and lapsed customers for targeted offers." },

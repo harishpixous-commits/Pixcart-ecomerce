@@ -8,7 +8,7 @@ import { PageHeader } from "../../shared/portal-shell";
 import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, ErrorNote, Field, TextField, Textarea, Toast } from "../../shared/ui/ui";
 
-type Prefs = { dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string };
+type Prefs = { dispatch_days: number; holiday_mode: boolean; invoice_prefix: string; dispatch_cutoff: string; free_shipping_threshold_paise: number | null; free_shipping_bounds: { min_paise: number; max_paise: number } | null };
 type Store = { display_name: string; description: string; contact_email: string; contact_phone: string };
 type Grievance = { name: string; email: string; phone: string };
 
@@ -47,6 +47,10 @@ type Grievance = { name: string; email: string; phone: string };
                 </div>
                 <p class="text-xs text-ink-faint">Orders before this time count from today; later ones from the next working day. Shoppers see &ldquo;Order within 2 hrs 10 mins&rdquo; on your product pages.</p>
               </div>
+              @if (pr.free_shipping_bounds; as fb) {
+                <pc-text-field label="Free delivery from (rupees)" inputmode="numeric" [value]="pr.free_shipping_threshold_paise == null ? '' : '' + round(pr.free_shipping_threshold_paise / 100)" [filter]="digits" (valueChange)="setFree($event)"
+                  [hint]="'Orders from you above this amount ship free. Between ' + round(fb.min_paise / 100) + ' and ' + round(fb.max_paise / 100) + '. Leave empty to use the marketplace amount.'" />
+              }
               <pc-text-field label="Invoice prefix" [value]="pr.invoice_prefix" maxlength="4" [filter]="prefixFilter" (valueChange)="setPrefs({ invoice_prefix: $event })" hint="Up to 4 letters, e.g. KOV gives KOV/26-27/000001" />
               <label class="flex items-start gap-3 rounded-lg bg-marigold-light p-3 sm:col-span-2">
                 <input type="checkbox" class="mt-1 h-4 w-4 accent-peacock" [checked]="pr.holiday_mode" (change)="setPrefs({ holiday_mode: $any($event.target).checked })" />
@@ -107,6 +111,12 @@ export class SellerSettingsPage {
 
   protected setG(k: keyof Grievance, v: string): void {
     this.g.update((s) => ({ ...s, [k]: v }));
+  }
+
+  protected readonly digits = (v: string) => v.replace(/\D/g, "");
+  protected readonly round = Math.round;
+  protected setFree(v: string): void {
+    this.setPrefs({ free_shipping_threshold_paise: v === "" ? null : Number(v) * 100 });
   }
 
   protected setPrefs(patch: Partial<Prefs>): void {

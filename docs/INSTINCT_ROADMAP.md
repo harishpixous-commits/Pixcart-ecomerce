@@ -179,3 +179,9 @@ Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahe
 ## Push 71: review reminders
 - Admin Growth "Review reminders" (off by default): one in-app note per delivered package, after_days (5) after delivery, if the shopper reviewed nothing in it. max_age_days (30) stops old orders being messaged when it is switched on. Hourly job. Once per package (sub_orders.review_reminded_at). Python migration 0041, .NET V018.
 - Tested: one new test each side. In-app only; no email or SMS reminder, and the note links to the order page, not the review form.
+
+
+## Push 72: seller free-delivery amount
+- Admin Growth "Seller free delivery" (off by default) with min_paise and max_paise. When on, a seller sets their own free-delivery amount in Settings (empty = the marketplace amount). It is kept inside the bounds when used, so tightening the bounds later takes effect at once. The cart gap hint, checkout quote and order placement all use it. Python migration 0042, .NET V019.
+- Saving the form with an unchanged stored value is accepted even when the module is off; a changed value is checked against the bounds.
+- Tested: one new test each side; Python orders, money, growth and seller test files pass (57). Screens type-checked only. The cart and product pages still show the marketplace amount in any static text.
