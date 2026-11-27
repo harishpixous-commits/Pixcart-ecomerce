@@ -128,6 +128,10 @@ async def dashboard(admin: Perm("dashboard"), session: SessionDep) -> dict:
         "gmv_30d": int(gmv[0]),
         "orders_30d": gmv[1],
         "commission_30d": int(commission),
+        # open packages older than their seller's own dispatch time (at least a day)
+        "orders_late_to_ship": (await session.execute(select(func.count()).select_from(SubOrder).join(Seller, Seller.id == SubOrder.seller_id).where(
+            SubOrder.status.in_(("placed", "confirmed", "packed")),
+            SubOrder.created_at < now - func.make_interval(0, 0, 0, func.greatest(Seller.dispatch_days, 1))))).scalar_one(),
         "refunds_needing_attention": (await session.execute(select(func.count()).where(Refund.status == "failed"))).scalar_one(),
         "reviews_needing_attention": (await session.execute(select(func.count()).select_from(Review).where(
             (Review.status == "pending") | (Review.report_count > 0)

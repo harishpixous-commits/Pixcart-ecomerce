@@ -13,7 +13,7 @@ import { api, ApiError, quietly } from "@/lib/api";
 import type { DeliveryOverview } from "@/lib/delivery-types";
 import { hoursLabel, rupees } from "@/lib/format";
 
-type D = { sellers_pending_review: number; products_pending_review: number; orders_today: number; gmv_30d: number; orders_30d: number; commission_30d: number; refunds_needing_attention: number; active_sellers: number; customers: number; live_products: number };
+type D = { orders_late_to_ship?: number; sellers_pending_review: number; products_pending_review: number; orders_today: number; gmv_30d: number; orders_30d: number; commission_30d: number; refunds_needing_attention: number; active_sellers: number; customers: number; live_products: number };
 type K = {
   gmv: number; gmv_prev: number; orders: number; orders_prev: number; aov: number; units: number; commission: number; discounts: number;
   cancellation_rate: number; return_rate: number; returned_value: number; avg_hours_to_ship: number | null; views: number; add_to_cart: number;
@@ -148,6 +148,7 @@ export default function AdminHome() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat label="Sellers waiting for verification" value={d.sellers_pending_review} href="/admin/sellers?status=submitted" />
           <Stat label="Listings waiting for review" value={d.products_pending_review} href="/admin/products" />
+          {!!d.orders_late_to_ship && <Stat label="Orders late to ship" value={d.orders_late_to_ship} href="/admin/orders" />}
           <Stat label="Refunds that failed" value={d.refunds_needing_attention} href="/admin/refunds?status=failed" />
           {k?.tickets_ack_overdue !== undefined ? <Stat label="Tickets past the 48-hour reply limit" value={k.tickets_ack_overdue} href="/admin/support?overdue=1" /> : <Stat label="Orders today" value={d.orders_today} href="/admin/orders" />}
         </div>
