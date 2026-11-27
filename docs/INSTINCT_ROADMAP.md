@@ -293,3 +293,7 @@ Loyalty setting `first_order_points` in Admin → Growth (0 = off, default). The
 
 ## Push 100: admin Growth hint lists the Loyalty extras
 The Loyalty section hint on the Growth admin page (both frontends) now names the optional settings added in Pushes 62, 93, 95, 96 and 98 so staff can find them. Text only; type-checked, not browser-run.
+
+## Push 101: product-page delivery estimate knows the member tier
+
+The pincode delivery-estimate on the product page now shows free delivery (fee 0, `member_free_delivery: true`) to a signed-in Silver/Gold member whose tier carries free delivery, matching the cart and checkout. Visitors still see the fee. Both versions; tests extended on each side. Not run: browser.

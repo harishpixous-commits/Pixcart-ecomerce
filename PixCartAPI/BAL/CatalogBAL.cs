@@ -241,7 +241,7 @@ public class CatalogBAL(
         return outp;
     }
 
-    public async Task<JsonObject> DeliveryEstimateAsync(Guid variantId, string pincode)
+    public async Task<JsonObject> DeliveryEstimateAsync(Guid variantId, string pincode, Guid? userId = null)
     {
         string pin;
         try
@@ -269,12 +269,15 @@ public class CatalogBAL(
         var fee = v.PricePaise >= freeFrom ? 0 : await ShippingZones.StateFeeAsync(sellerDb, stateCode) ?? cfg.Long("shipping_fee_paise");
         var (extra, waive) = await ShippingZones.SurchargeAsync(sellerDb, pin);
         if (extra > 0 && !(waive && fee == 0)) fee += extra;
+        var memberFree = userId is not null && await LoyaltyPoints.FreeDeliveryAsync(sellerDb, userId.Value); // a signed-in member whose tier carries free delivery
+        if (memberFree) fee = 0;
         var outp = new JsonObject { ["serviceable"] = true };
         foreach (var (k, val) in best!) outp[k] = val?.DeepClone();
         outp["cod_available"] = cfg.Bool("cod_enabled") && v.PricePaise <= cfg.Long("cod_max_order_paise");
         outp["order_within_min"] = cfg.Bool("pdp_delivery_countdown") ? best["order_within_min"]?.DeepClone() : null;
         // delivery is charged per seller package; free once that seller's items reach the threshold
         outp["delivery_fee_paise"] = fee;
+        outp["member_free_delivery"] = memberFree;
         outp["free_delivery_from_paise"] = freeFrom;
         outp["state"] = IndianStates.Name(DeliveryEstimate.StateForPin(pin) ?? "");
         return outp;

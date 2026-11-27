@@ -12,7 +12,7 @@ namespace API.Controllers;
 
 /// <summary>Public storefront catalogue: categories, home rails, search with facets, suggestions, product pages, stores, delivery estimates.</summary>
 [ApiController]
-public partial class CatalogController(ICatalogBAL catalog, AppSettings settings) : ControllerBase
+public partial class CatalogController(ICatalogBAL catalog, AppSettings settings, ICurrentUser me) : ControllerBase
 {
     /// <summary>First-party visitor id for sponsored products: random, HttpOnly, sent only to /api.</summary>
     public const string VisitorCookie = "pc_vid";
@@ -80,8 +80,8 @@ public partial class CatalogController(ICatalogBAL catalog, AppSettings settings
     public Task<JsonObject> Platform() => catalog.PlatformAsync();
 
     [HttpGet("/api/catalog/delivery-estimate")]
-    public Task<JsonObject> DeliveryEstimate(
+    public async Task<JsonObject> DeliveryEstimate(
         [FromQuery(Name = "variant_id"), Required(ErrorMessage = "is required")] Guid? variantId,
         [FromQuery, Required(ErrorMessage = "is required"), Len(6, 6)] string pincode) =>
-        catalog.DeliveryEstimateAsync(variantId!.Value, pincode);
+        await catalog.DeliveryEstimateAsync(variantId!.Value, pincode, (await me.GetAsync())?.Id);
 }

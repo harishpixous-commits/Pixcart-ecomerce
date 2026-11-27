@@ -69,7 +69,7 @@ public interface ICatalogBAL
     Task<JsonObject> PlatformAsync();
 
     /// <summary>GET /api/catalog/delivery-estimate for a version and a PIN code.</summary>
-    Task<JsonObject> DeliveryEstimateAsync(Guid variantId, string pincode);
+    Task<JsonObject> DeliveryEstimateAsync(Guid variantId, string pincode, Guid? userId = null);
 
     /// <summary>Fastest delivery estimate per seller to a PIN code: seller id → {"days", "date"}.</summary>
     Task<Dictionary<Guid, (int Days, string Date)>> SellerDeliveryAsync(IReadOnlyCollection<Guid> sellerIds, string pin);

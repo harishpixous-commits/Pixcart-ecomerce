@@ -887,6 +887,10 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (UUID(), @uid, 'earn', 600, 'test', UTC_TIMESTAMP(6))", new { uid = buyer.Id });
         Assert.Equal((0L, 0L), await Ship()); // silver
         Assert.True((await buyer.Get("/api/loyalty")).Json["free_delivery"]!.GetValue<bool>()); // the rewards page can say so
+        var est = (await buyer.Get($"/api/catalog/delivery-estimate?variant_id={variantId}&pincode=641001")).Json;
+        Assert.True(est["member_free_delivery"]!.GetValue<bool>()); Assert.Equal(0, est["delivery_fee_paise"]!.GetValue<long>()); // the product page agrees
+        var visitor = (await Factory.CreateClient().GetFromJsonAsync<JsonObject>($"/api/catalog/delivery-estimate?variant_id={variantId}&pincode=641001"))!;
+        Assert.True(visitor["delivery_fee_paise"]!.GetValue<long>() > 0); // a visitor still sees the fee
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { enabled = true, silver_free_delivery = false, gold_free_delivery = true } })).Status);
         Assert.Equal(baseline, await Ship()); // silver no longer has it, gold only
         Assert.False((await buyer.Get("/api/loyalty")).Json["free_delivery"]!.GetValue<bool>());
