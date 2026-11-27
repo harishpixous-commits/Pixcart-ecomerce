@@ -10,7 +10,7 @@ from app.models.delivery import (
     PushToken,
 )
 from app.models.engagement import AnswerReport, AnswerVote, ProductAnswer, ProductQuestion, QuestionReport, StockAlert
-from app.models.growth import CartReminder, GiftCard, GiftCardPurchase, GiftCardUse, LoyaltyEntry, Referral, SavedSearch, SegmentCampaign
+from app.models.growth import CartReminder, GiftCard, GiftCardPurchase, GiftCardUse, LoyaltyEntry, OrderNote, Referral, SavedSearch, SegmentCampaign
 from app.models.extended import (
     AdminRole,
     AiRun,

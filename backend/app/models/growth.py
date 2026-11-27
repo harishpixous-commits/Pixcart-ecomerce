@@ -129,3 +129,15 @@ class SavedSearch(IdMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OrderNote(IdMixin, Base):
+    """A private note staff leave on an order. Customers and sellers never see it. Notes are not edited or deleted, so they stay a record."""
+
+    __tablename__ = "order_notes"
+
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    author_name: Mapped[str] = mapped_column(String(120), default="")
+    note: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

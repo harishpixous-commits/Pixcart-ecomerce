@@ -859,3 +859,29 @@ def uuid_of(s: str):
     import uuid
 
     return uuid.UUID(s)
+
+
+async def test_staff_notes_on_an_order_are_private_to_staff(client, admin, categories):
+    from tests.conftest import add_address, login_phone
+    from tests.test_phase2_money import key, setup
+
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9600000991", name="Note Buyer")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
+    o = (await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})).json()["order"]
+    url = f"/api/admin/orders/{o['id']}/notes"
+    assert (await admin.get(url)).json()["items"] == []
+    r = await admin.post(url, {"note": "  Customer called,   wants the   parcel before Friday "})
+    assert r.status_code == 201 and r.json()["note"] == "Customer called, wants the parcel before Friday", r.text
+    await admin.post(url, {"note": "Told the seller"})
+    items = (await admin.get(url)).json()["items"]
+    assert [i["note"] for i in items] == ["Customer called, wants the parcel before Friday", "Told the seller"] and items[0]["author"]
+    assert (await admin.post(url, {"note": "   "})).json()["error"]["code"] == "invalid_note"
+    assert (await admin.post(url, {"note": "x" * 1001})).status_code == 422
+    assert (await admin.post("/api/admin/orders/00000000-0000-0000-0000-000000000000/notes", {"note": "hi"})).status_code == 404
+    for who in (buyer, tn):
+        assert (await who.get(url)).status_code in (401, 403)
+        assert (await who.post(url, {"note": "sneaky"})).status_code in (401, 403)
+    assert "Customer called" not in (await buyer.get(f"/api/orders/{o['id']}")).text
+    assert len((await admin.get(url)).json()["items"]) == 2

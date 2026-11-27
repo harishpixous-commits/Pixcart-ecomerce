@@ -12,6 +12,7 @@ import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
 import type { FleetTracking, OrderDetail, ReturnableItem } from "@/lib/types";
 import { CustomerMessage } from "./message";
+import { StaffNotes } from "./notes";
 import { PaymentCheck } from "./payment-check";
 import { RiskBrief } from "@/components/ai";
 import { openPdf } from "@/components/order-returns";
@@ -58,6 +59,7 @@ export default function AdminOrderDetail() {
       <div className="grid gap-4 lg:grid-cols-2">
         <RiskBrief path={`/api/admin/ai/briefs/order/${o.id}`} title="Order risk" />
         <CustomerMessage orderId={o.id} />
+        <StaffNotes orderId={o.id} />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Customer</h2><p>{o.customer?.name}</p><p className="text-ink-soft">{o.customer?.phone} {o.customer?.email}</p></section>

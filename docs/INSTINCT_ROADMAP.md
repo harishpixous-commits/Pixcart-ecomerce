@@ -177,3 +177,9 @@ Admin > Coupons: open a platform coupon and use "Make copies with their own code
 
 ## Push 69: scheduled campaigns
 Admin > Growth > Campaigns: optional "Send later" time (2 minutes to 30 days ahead). The campaign is logged as scheduled and counts toward the daily cap; a job every 5 minutes sends due ones, working out the opted-in list again at send time (so people who opted out meanwhile are left out). Cancel works on scheduled ones only. Held, not lost, while campaigns or segments are switched off. Python migration 0039 (status, send_at), .NET V016; campaigns.send_due/cancel and SegmentCampaigns.SendDueAsync/CancelAsync. Tests: one per stack pass (with the existing campaign test). Known gap: a .NET campaign claimed as sending that crashes mid-send stays in "sending" and is not retried. Not built: recurring campaigns, per-send email.
+
+
+## Push 70: staff notes on orders
+- Private staff notes on an order: GET/POST /api/admin/orders/{id}/notes (Orders permission, up to 1000 chars each, 100 per order, audit "order.note"). Never shown to customers or sellers. Python migration 0040, .NET V017.
+- "Staff notes" section on the admin order page in both frontends.
+- Tested: one new Python test and one new .NET test pass. Screens type-checked only. Notes cannot be edited or deleted.

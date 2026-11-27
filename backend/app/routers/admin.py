@@ -28,6 +28,7 @@ from app.models import (
     DeliveryBoy,
     DeliveryComplaint,
     Order,
+    OrderNote,
     Payment,
     Product,
     ProductAnswer,
@@ -628,6 +629,40 @@ async def get_order(order_id: uuid.UUID, admin: Perm("orders"), session: Session
         for r in refunds
     ]
     return data
+
+
+class OrderNoteIn(BaseModel):
+    note: str = Field(min_length=1, max_length=1000)
+
+
+def _note_out(n: OrderNote) -> dict:
+    return {"id": str(n.id), "note": n.note, "author": n.author_name or "Staff", "at": n.created_at.isoformat()}
+
+
+@router.get("/orders/{order_id}/notes")
+async def order_notes(order_id: uuid.UUID, admin: Perm("orders"), session: SessionDep) -> dict:
+    """Private staff notes on an order, oldest first. Customers and sellers never see them."""
+    if await session.get(Order, order_id) is None:
+        raise NotFound("Order")
+    rows = (await session.execute(select(OrderNote).where(OrderNote.order_id == order_id).order_by(OrderNote.created_at))).scalars().all()
+    return {"items": [_note_out(n) for n in rows]}
+
+
+@router.post("/orders/{order_id}/notes", status_code=201)
+async def add_order_note(order_id: uuid.UUID, body: OrderNoteIn, admin: Perm("orders"), session: SessionDep) -> dict:
+    if await session.get(Order, order_id) is None:
+        raise NotFound("Order")
+    text = " ".join(body.note.split())
+    if not text:
+        raise ApiError("Write a note", "invalid_note")
+    count = (await session.execute(select(func.count()).select_from(OrderNote).where(OrderNote.order_id == order_id))).scalar_one()
+    if count >= 100:
+        raise ApiError("This order already has 100 notes", "too_many_notes")
+    n = OrderNote(order_id=order_id, author_id=admin.id, author_name=(admin.name or admin.phone or "")[:120], note=text, created_at=utcnow())
+    session.add(n)
+    audit(session, admin, "order.note", "order", str(order_id), text[:60])
+    await session.commit()
+    return _note_out(n)
 
 
 @router.get("/orders/{order_id}/fee-invoice.pdf")
