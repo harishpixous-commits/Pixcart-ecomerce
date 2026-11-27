@@ -310,3 +310,7 @@ The pincode delivery-estimate on the product page now shows free delivery (fee 0
 ## Push 102: deleting a review takes its bonus points back
 
 When a customer deletes their own review, the review bonus points are taken back (once, never below a zero balance), same as when staff hide it. Re-writing the review does not pay again. Both versions; the review-bonus test extended on each side. Not run: browser.
+
+## Push 103: loyalty points now expire (expiry_days was a dead setting)
+
+The Growth loyalty setting `expiry_days` (365 by default, 0 = never) was stored but never used. Now, while loyalty is on, points earned before the cut-off and not spent lapse (oldest spent first): one negative "Points expired" row, applied lazily when the member opens Rewards or redeems, and it lapses once. Both versions; a test on each side. Not wired: no advance warning message to members. Not run: browser.

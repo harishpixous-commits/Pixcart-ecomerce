@@ -1345,3 +1345,27 @@ async def test_first_order_bonus_is_added_to_the_first_delivered_package_only(cl
     base2 = await deliver()
     me = (await buyer.get("/api/loyalty")).json()
     assert me["balance"] == base1 + 50 + base2 and "first order bonus" not in me["history"][0]["note"]
+
+
+async def test_unused_points_expire_after_expiry_days_oldest_first(client, admin, categories):
+    from datetime import timedelta
+
+    from app.db import SessionLocal
+    from app.models import LoyaltyEntry
+    from app.db import utcnow
+    from tests.conftest import login_phone
+
+    buyer = await login_phone(client, "9770000191")
+    uid = (await buyer.get("/api/auth/me")).json()["id"]
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"enabled": True, "expiry_days": 30}})).status_code == 200
+    import uuid
+
+    async with SessionLocal() as s:
+        s.add(LoyaltyEntry(user_id=uuid.UUID(uid), kind="earn", points=100, note="old", created_at=utcnow() - timedelta(days=60)))
+        s.add(LoyaltyEntry(user_id=uuid.UUID(uid), kind="redeem", points=-30, note="spent", created_at=utcnow() - timedelta(days=50)))
+        s.add(LoyaltyEntry(user_id=uuid.UUID(uid), kind="earn", points=40, note="recent", created_at=utcnow() - timedelta(days=5)))
+        await s.commit()
+    me = (await buyer.get("/api/loyalty")).json()
+    assert me["balance"] == 40 and me["history"][0]["note"].startswith("Points expired")  # 100 - 30 spent = 70 lapse; the recent 40 stays
+    assert (await buyer.get("/api/loyalty")).json()["balance"] == 40  # lapses once
+    assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"expiry_days": 0}})).status_code == 200

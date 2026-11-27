@@ -117,9 +117,30 @@ async def restore_expired(session: AsyncSession, user_id: uuid.UUID) -> int:
             continue
         session.add(LoyaltyEntry(user_id=user_id, kind="reverse", points=-r.points, note=f"Coupon {code} expired unused", created_at=now))
         back += -r.points
+    back += await expire_old(session, user_id)
     if back:
         await session.flush()
     return back
+
+
+async def expire_old(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """Points not used within expiry_days lapse (Admin -> Growth -> Loyalty, 0 = never). Oldest points are spent first, so what
+    lapses is what was earned before the cut-off minus everything the member has spent or lost since. One negative row; the
+    next call finds nothing left to lapse. Returns the points that lapsed."""
+    from datetime import timedelta
+
+    cfg = (await growth.get(session))["loyalty"]
+    if not cfg["enabled"] or not cfg["expiry_days"]:
+        return 0
+    cutoff = utcnow() - timedelta(days=cfg["expiry_days"])
+    old = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points > 0, LoyaltyEntry.created_at <= cutoff))).scalar_one()
+    spent = (await session.execute(select(func.coalesce(func.sum(-LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id, LoyaltyEntry.points < 0))).scalar_one()
+    balance = (await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user_id))).scalar_one()
+    lapse = min(int(balance), max(0, int(old) - int(spent)))
+    if lapse <= 0:
+        return 0
+    session.add(LoyaltyEntry(user_id=user_id, kind="reverse", points=-lapse, note=f"Points expired (not used within {cfg['expiry_days']} days)", created_at=utcnow()))
+    return lapse
 
 
 async def award_review(session: AsyncSession, review) -> int:
