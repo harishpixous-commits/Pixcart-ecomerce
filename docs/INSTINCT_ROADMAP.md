@@ -53,3 +53,5 @@ Backend review slices continue first (next: customer-misc), then items 1 to 7. S
 - Admin Growth page: new Gift cards tab (issue, list, void) and Segments tab (counts, member list) in Angular and Next.js. Type-checked only, not run in a browser.
 
 - Review slice seller-products-inventory (inventory.py read in full, product_import.py read, seller_products.py patch/bulk paths read): Python listing upload crashed (500) on prices written as NaN, Infinity or 1e999999. Fixed with row errors, test added. .NET import already handles these. Rest of seller_products.py (create/update form, lifecycle) not read line by line.
+
+- Loyalty reversal on return: when a seller receives a return, the matching share of the package earned points is taken back (kind reverse), once per share, never below zero (spent points stay spent). Referral reward is not clawed back (held decision). Python has an end-to-end test; .NET tests the rule directly, the return path is wired but not run end to end with loyalty on.
