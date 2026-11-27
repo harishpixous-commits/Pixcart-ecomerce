@@ -688,4 +688,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         var nobody = await LoginPhone("9770000081", "Nobody");
         Assert.Equal(403, (await nobody.Post($"/api/admin/coupons/{cid}/generate", new { count = 1, prefix = "mail" })).Status);
     }
+
+    [Fact]
+    public async Task Staff_notes_on_an_order_are_private_to_staff()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000305", "notes-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000091", "Note Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        var oid = o.Json["order"]!["id"]!.GetValue<string>();
+        var url = $"/api/admin/orders/{oid}/notes";
+        Assert.Empty((await admin.Get(url)).Json["items"]!.AsArray());
+        var r = await admin.Post(url, new { note = "  Customer called,   wants the   parcel before Friday " });
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal("Customer called, wants the parcel before Friday", r.Json["note"]!.GetValue<string>());
+        await admin.Post(url, new { note = "Told the seller" });
+        var items = (await admin.Get(url)).Json["items"]!.AsArray();
+        Assert.Equal(2, items.Count); Assert.Equal("Told the seller", items[1]!["note"]!.GetValue<string>()); Assert.NotEmpty(items[0]!["author"]!.GetValue<string>());
+        Assert.Equal("invalid_note", (await admin.Post(url, new { note = "   " })).ErrorCode);
+        Assert.Equal(422, (await admin.Post(url, new { note = new string('x', 1001) })).Status);
+        Assert.Equal(404, (await admin.Post($"/api/admin/orders/{Guid.Empty}/notes", new { note = "hi" })).Status);
+        Assert.Equal(403, (await buyer.Get(url)).Status); Assert.Equal(403, (await buyer.Post(url, new { note = "sneaky" })).Status);
+        Assert.DoesNotContain("Customer called", (await buyer.Get($"/api/orders/{oid}")).ToString());
+        Assert.Equal(2, (await admin.Get(url)).Json["items"]!.AsArray().Count);
+    }
 }

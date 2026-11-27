@@ -140,3 +140,11 @@ public class CouponBatchController(Utils.Interface.IMySqlDapperHelper db, ICurre
     [HttpPost("/api/admin/coupons/{id:guid}/generate"), RouteGuard("perm:marketing")]
     public async Task<IActionResult> Generate(Guid id, BatchIn b) => StatusCode(201, await BAL.CouponBatch.GenerateAsync(db, await me.RequireAsync(), id, b.Count, b.Prefix, b.SingleUse));
 }
+
+[ApiController, SignedIn]
+public class OrderNotesController(Utils.Interface.IMySqlDapperHelper db, ICurrentUser me) : ControllerBase
+{
+    public record NoteIn { public string Note { get; init; } = ""; }
+    [HttpGet("/api/admin/orders/{id:guid}/notes"), RouteGuard("perm:orders")] public async Task<object> List(Guid id) { await me.RequireAsync(); return await BAL.OrderNotes.ListAsync(db, id); }
+    [HttpPost("/api/admin/orders/{id:guid}/notes"), RouteGuard("perm:orders")] public async Task<IActionResult> Add(Guid id, NoteIn b) => StatusCode(201, await BAL.OrderNotes.AddAsync(db, await me.RequireAsync(), id, b.Note));
+}

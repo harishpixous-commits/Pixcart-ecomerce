@@ -98,6 +98,75 @@ export class CustomerMessage {
   }
 }
 
+/* ---------------------------------------------------------------- notes */
+
+type StaffNote = { id: string; note: string; author: string; at: string };
+
+/** Private staff notes on this order. The customer and the seller never see them. */
+@Component({
+  selector: "pc-staff-notes",
+  imports: [Button, ErrorNote, Textarea],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: "contents" },
+  template: `
+    @if (allowed()) {
+      <section class="rounded-xl bg-white p-4">
+        <h2 class="mb-1 font-semibold">Staff notes</h2>
+        <p class="mb-2 text-sm text-ink-soft">Only staff see these. They are never shown to the customer or the seller.</p>
+        <ul class="mb-2 flex flex-col gap-1 text-sm">
+          @for (n of items(); track n.id) {
+            <li><span class="text-ink-faint">{{ when(n.at) }} · {{ n.author }}</span> {{ n.note }}</li>
+          } @empty {
+            <li class="text-ink-faint">No notes yet.</li>
+          }
+        </ul>
+        <textarea pcTextarea rows="3" maxlength="1000" [value]="text()" (input)="text.set($any($event.target).value)" placeholder="Add a note" aria-label="Staff note"></textarea>
+        <pc-error-note [message]="error()" />
+        <button pcButton class="mt-2" (click)="add()" [loading]="busy()" [disabled]="text().trim().length === 0">Add note</button>
+      </section>
+    }
+  `,
+})
+export class StaffNotes {
+  readonly orderId = input.required<string>();
+  private readonly admin = inject(AdminContext);
+  protected readonly allowed = computed(() => !!this.admin.me()?.permissions.includes("orders"));
+  protected readonly items = signal<StaffNote[]>([]);
+  protected readonly text = signal("");
+  protected readonly error = signal<string | null>(null);
+  protected readonly busy = signal(false);
+  protected readonly when = dateTime;
+
+  constructor() {
+    effect(() => {
+      const id = this.orderId();
+      if (this.allowed()) untracked(() => void this.load(id));
+    });
+  }
+
+  private async load(id: string): Promise<void> {
+    try {
+      this.items.set((await api<{ items: StaffNote[] }>(`/api/admin/orders/${id}/notes`)).items);
+    } catch {
+      /* the list stays as it was */
+    }
+  }
+
+  protected async add(): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      await api(`/api/admin/orders/${this.orderId()}/notes`, { method: "POST", body: { note: this.text() } });
+      this.text.set("");
+      await this.load(this.orderId());
+    } catch (e) {
+      this.error.set(e instanceof ApiError ? e.message : "Could not save the note");
+    } finally {
+      this.busy.set(false);
+    }
+  }
+}
+
 /* ---------------------------------------------------------------- payment-check.tsx */
 
 type Attempt = { id: string; status: string; method: string; error: string };
@@ -222,7 +291,7 @@ export class FleetLine {
 
 @Component({
   selector: "pc-admin-orders-id-page",
-  imports: [PageHeader, PageLoader, Button, ErrorNote, Modal, StatusPill, Textarea, RiskBrief, ReturnRequestModal, CustomerMessage, PaymentCheck, FleetLine],
+  imports: [PageHeader, PageLoader, Button, ErrorNote, Modal, StatusPill, Textarea, RiskBrief, ReturnRequestModal, CustomerMessage, StaffNotes, PaymentCheck, FleetLine],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -235,6 +304,7 @@ export class FleetLine {
         <div class="grid gap-4 lg:grid-cols-2">
           <pc-risk-brief [path]="'/api/admin/ai/briefs/order/' + o()!.id" title="Order risk" />
           <pc-customer-message [orderId]="o()!.id" />
+          <pc-staff-notes [orderId]="o()!.id" />
         </div>
         <div class="grid gap-4 lg:grid-cols-3">
           <section class="rounded-xl bg-white p-4"><h2 class="mb-1 font-semibold">Customer</h2><p>{{ o()!.customer?.name }}</p><p class="text-ink-soft">{{ o()!.customer?.phone }} {{ o()!.customer?.email }}</p></section>
