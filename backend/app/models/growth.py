@@ -41,3 +41,14 @@ class Referral(IdMixin, Base):
     rewarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (CheckConstraint("status IN ('joined','rewarded','capped')", name="status"),)
+
+
+class CartReminder(IdMixin, Base):
+    """One abandoned-cart reminder sent to a customer (stage 1, 2, ...). The stages of a cart restart when its items change."""
+
+    __tablename__ = "cart_reminders"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    stage: Mapped[int] = mapped_column(Integer)
+    cart_paise: Mapped[int] = mapped_column(Integer, default=0)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

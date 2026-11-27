@@ -41,6 +41,10 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("Delivered", "{{item}} was delivered. Tell others what you think by writing a review."),
         "email": ("Delivered: {{item}}", "Hi {{name}},\n\nYour package was delivered. If something is wrong, you can request a return until {{return_by}}.\n\n{{link}}"),
     },
+    "abandoned_cart": {
+        "inapp": ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
+        "email": ("{{item}} is still in your {{brand}} cart", "Hi {{name}},\n\n{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}\n\nFinish your order: {{link}}"),
+    },
     "order_cancelled": {
         "inapp": ("Order cancelled", "{{item}} was cancelled: {{reason}}."),
         "email": ("Cancelled: part of order {{order_number}}", "Hi {{name}},\n\n{{item}} was cancelled ({{reason}}). {{refund_text}}\n\n{{link}}"),

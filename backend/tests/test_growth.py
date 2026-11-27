@@ -207,3 +207,66 @@ async def test_points_become_a_single_use_coupon_and_come_back_if_unused(client,
         await s.commit()
     assert (await buyer.get("/api/loyalty")).json()["balance"] == 200
     assert (await buyer.get("/api/loyalty")).json()["balance"] == 200
+
+
+async def test_abandoned_cart_reminders_follow_the_settings_and_stop_after_an_order(client, admin, categories):
+    import uuid
+    from datetime import timedelta
+    from sqlalchemy import select, update
+    from app.db import SessionLocal, utcnow
+    from app.models import CartItem, Notification
+    from app.services import cart_reminders
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, seller, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000031")
+    addr = await add_address(buyer)
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 2})
+    uid = uuid.UUID(buyer.user["id"])
+
+    async def age(hours):
+        async with SessionLocal() as s:
+            await s.execute(update(CartItem).where(CartItem.user_id == uid).values(updated_at=utcnow() - timedelta(hours=hours)))
+            await s.commit()
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await cart_reminders.send_due(s)
+            await s.commit()
+            return n
+
+    async def mails():
+        async with SessionLocal() as s:
+            return len((await s.execute(select(Notification).where(Notification.user_id == uid, Notification.event == "abandoned_cart"))).scalars().all())
+
+    await age(30)
+    assert await run() == 0  # off by default
+    assert (await admin.put("/api/admin/growth/settings", {"abandoned_cart": {"enabled": True, "min_cart_paise": 100, "offer_coupon": "COMEBACK"}})).status_code == 200
+    assert await run() == 0  # not opted in to marketing messages
+    async with SessionLocal() as s:
+        from app.models import User
+        await s.execute(update(User).where(User.id == uid).values(marketing_opt_in=True))
+        await s.commit()
+    await age(1)
+    assert await run() == 0  # too fresh
+    await age(5)
+    assert await run() == 1 and await run() == 0  # stage 1 once
+    assert await mails() >= 1
+    async with SessionLocal() as s:
+        row = (await s.execute(select(Notification).where(Notification.user_id == uid, Notification.event == "abandoned_cart"))).scalars().first()
+    assert "COMEBACK" in row.body and row.link == "/cart"
+    await age(30)
+    assert await run() == 1 and await run() == 0  # stage 2 after 24 hours, and no third (max_reminders 2)
+    # an order after the last change ends it
+    await age(60)
+    async with SessionLocal() as s:
+        await s.execute(update(CartItem).where(CartItem.user_id == uid).values(updated_at=utcnow() - timedelta(hours=40)))
+        await s.commit()
+    o = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": uuid.uuid4().hex})
+    assert o.status_code == 201
+    await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+    async with SessionLocal() as s:
+        await s.execute(update(CartItem).where(CartItem.user_id == uid).values(updated_at=utcnow() - timedelta(hours=1)))
+        await s.commit()
+    assert await run() == 0
