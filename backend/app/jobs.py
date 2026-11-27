@@ -39,6 +39,7 @@ _LOCK_DELIVERY_ALERTS = 7_201_013
 _LOCK_DELIVERY_PAYOUTS = 7_201_014
 _LOCK_CART_REMINDERS = 7_201_015
 _LOCK_SELLER_AUTO_SUSPEND = 7_201_016
+_LOCK_SAVED_SEARCHES = 7_201_017
 
 
 async def _with_lock(lock_id: int, fn) -> None:
@@ -92,6 +93,18 @@ async def seller_auto_suspend_job() -> None:
             log.info("auto-suspended %d seller(s) on the scorecard", n)
 
     await _with_lock(_LOCK_SELLER_AUTO_SUSPEND, run)
+
+
+async def saved_searches_job() -> None:
+    async def run(session):
+        from app.services import saved_searches
+
+        n = await saved_searches.send_matches(session)
+        await session.commit()
+        if n:
+            log.info("sent %d saved-search note(s)", n)
+
+    await _with_lock(_LOCK_SAVED_SEARCHES, run)
 
 
 async def refunds_job() -> None:
@@ -274,6 +287,7 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(delivery_payouts_job, "cron", day_of_week="mon", hour=4, minute=45, id="delivery_payouts", max_instances=1, coalesce=True)  # 10:15 IST
     scheduler.add_job(expire_job, "interval", minutes=2, id="expire_unpaid", max_instances=1, coalesce=True)
     scheduler.add_job(seller_auto_suspend_job, "interval", hours=1, id="seller_auto_suspend", max_instances=1, coalesce=True)
+    scheduler.add_job(saved_searches_job, "interval", minutes=30, id="saved_searches", max_instances=1, coalesce=True)
     scheduler.add_job(cart_reminders_job, "interval", minutes=30, id="cart_reminders", max_instances=1, coalesce=True)
     scheduler.add_job(refunds_job, "interval", minutes=5, id="retry_refunds", max_instances=1, coalesce=True)
     scheduler.add_job(cleanup_job, "interval", hours=6, id="cleanup", max_instances=1, coalesce=True)

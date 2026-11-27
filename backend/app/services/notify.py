@@ -45,6 +45,9 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
         "email": ("{{item}} is still in your {{brand}} cart", "Hi {{name}},\n\n{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}\n\nFinish your order: {{link}}"),
     },
+    "saved_search_match": {
+        "inapp": ("New for your search: {{query}}", "{{item}}{{more}} just arrived."),
+    },
     "marketing_message": {
         "inapp": ("{{title}}", "{{message}}"),
     },

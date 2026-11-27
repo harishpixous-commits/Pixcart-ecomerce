@@ -15,6 +15,7 @@ type Score = { seller_id: string; seller: string; orders: number; late: number; 
 const TITLES: Record<string, { title: string; hint: string }> = {
   loyalty: { title: "Loyalty points", hint: "Customers earn points on delivered orders and spend them at checkout." },
   referral: { title: "Referral rewards", hint: "A customer shares a code; both sides get store credit after the friend's first order." },
+  saved_searches: { title: "Saved searches", hint: "Shoppers follow a search and get an in-app note when new matching products are approved. At most one note per search in the hours set here." },
   campaigns: { title: "Segment campaigns", hint: "Send an in-app message to a customer segment. Only customers who opted in to marketing get it. Needs Segments switched on." },
   abandoned_cart: { title: "Abandoned cart reminders", hint: "Remind shoppers who left items in the cart. Optional coupon in the reminder." },
   flash_sales: { title: "Flash sales", hint: "Time-limited discounts. Sellers pick a window within these limits." },

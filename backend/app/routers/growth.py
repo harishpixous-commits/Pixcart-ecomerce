@@ -15,7 +15,7 @@ from app.core.permissions import Perm
 from app.db import utcnow
 from app.models import LoyaltyEntry
 from app.config import settings
-from app.services import campaigns, cart_reminders, gift_cards, growth, loyalty, referral, segments, seo
+from app.services import campaigns, cart_reminders, gift_cards, growth, loyalty, referral, saved_searches, segments, seo
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -265,3 +265,27 @@ async def my_scorecard(seller: ApprovedSeller, session: SessionDep) -> dict:
     mine = rows[0] if rows else {"orders": 0, "late": 0, "cancelled_by_seller": 0, "returned": 0, "late_percent": 0, "cancel_percent": 0, "return_percent": 0, "level": "not_enough_orders"}
     return {"enabled": True, "window_days": cfg["window_days"], "ship_within_hours": cfg["ship_within_hours"], "min_orders": cfg["min_orders"],
             "limits": {k: cfg[k] for k in cfg if k.endswith("_percent")}, "you": mine}
+
+
+class SavedSearchIn(BaseModel):
+    query: str = Field(min_length=1, max_length=120)
+    max_price_paise: int | None = Field(default=None, ge=0, le=100_000_000)
+
+
+@me_router.get("/saved-searches")
+async def my_saved_searches(user: CurrentUser, session: SessionDep) -> dict:
+    return await saved_searches.list_for(session, user.id)
+
+
+@me_router.post("/saved-searches", status_code=201)
+async def follow_search(body: SavedSearchIn, user: CurrentUser, session: SessionDep) -> dict:
+    out = await saved_searches.add(session, user.id, body.query, body.max_price_paise)
+    await session.commit()
+    return out
+
+
+@me_router.delete("/saved-searches/{search_id}")
+async def unfollow_search(search_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict:
+    await saved_searches.remove(session, user.id, search_id)
+    await session.commit()
+    return {"ok": True}

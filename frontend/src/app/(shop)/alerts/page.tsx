@@ -3,6 +3,7 @@
 import { Bell, BellOff, Heart } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { SavedSearchesSection } from "@/components/save-search";
 import { EmptyState, PageLoader, ProductImage, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { date } from "@/lib/format";
@@ -60,6 +61,7 @@ export default function AlertsPage() {
           </ul>
         )}
       </section>
+      <SavedSearchesSection />
       {site.features.price_alerts !== false && (
         <section className="flex items-start gap-3 rounded-xl bg-white p-4">
           <Heart className="mt-0.5 h-5 w-5 shrink-0 text-vermilion" />

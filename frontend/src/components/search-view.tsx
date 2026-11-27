@@ -13,6 +13,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CompareToggle } from "@/components/compare";
 import { GridFrame, ProductRail, ProductTile } from "@/components/product";
+import { SaveSearchButton } from "@/components/save-search";
 import { ListingSkeleton } from "@/components/skeletons";
 import { Button, EmptyState, Modal, Pagination, Select } from "@/components/ui";
 import { api, latestOnly } from "@/lib/api";
@@ -353,6 +354,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
         {data.total ? `${from}-${to} of ${data.total.toLocaleString("en-IN")} results` : "No results"}
         {q && <> for <span className="font-semibold text-vermilion">&ldquo;{q}&rdquo;</span></>}
       </p>
+      {q && <SaveSearchButton query={q} maxPaise={paise(sp.get("max_price"))} />}
     </div>
   );
   const departments = !category && (data.categories?.length ?? 0) > 1 && !topbar && (

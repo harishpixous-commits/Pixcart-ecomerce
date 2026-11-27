@@ -678,3 +678,50 @@ async def test_segment_campaign_goes_only_to_opted_in_customers_within_the_caps(
     assert (await admin.post("/api/admin/growth/campaigns", body | {"link": "https://evil.example"})).json()["error"]["code"] == "invalid_link"
     assert (await admin.post("/api/admin/growth/campaigns", body | {"segment": "nope"})).json()["error"]["code"] == "invalid_segment"
     assert (await people[0].post("/api/admin/growth/campaigns", body)).status_code == 403
+
+
+async def test_saved_search_notes_a_shopper_once_about_new_matching_products(client, admin, categories):
+    import uuid
+
+    from app.db import SessionLocal
+    from app.services import saved_searches
+    from tests.conftest import login_phone, make_live_product
+    from tests.test_orders import marketplace
+
+    tn, _, _, _ = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000051")
+    assert (await buyer.post("/api/saved-searches", {"query": "silk kurta"})).json()["error"]["code"] == "saved_searches_off"
+    assert (await admin.put("/api/admin/growth/settings", {"saved_searches": {"enabled": True, "max_per_user": 2, "min_hours_between_alerts": 1}})).status_code == 200
+    a = (await buyer.post("/api/saved-searches", {"query": "  Silk   Kurta ", "max_price_paise": 150000})).json()
+    assert (await buyer.post("/api/saved-searches", {"query": "silk kurta", "max_price_paise": 150000})).json()["id"] == a["id"]  # same search twice is one
+    assert (await buyer.post("/api/saved-searches", {"query": "!!"})).json()["error"]["code"] == "invalid_query"
+    assert (await buyer.post("/api/saved-searches", {"query": "denim jacket"})).status_code == 201
+    assert (await buyer.post("/api/saved-searches", {"query": "third one"})).json()["error"]["code"] == "too_many_searches"
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await saved_searches.send_matches(s)
+            await s.commit()
+            return n
+
+    async def notes():
+        return [n for n in (await buyer.get("/api/notifications")).json()["items"] if n["title"].startswith("New for your search")]
+
+    assert await run() == 0 and await notes() == []  # nothing new yet
+    v = [{"sku": "K-1", "options": {"Size": "M"}, "mrp_paise": 299900, "price_paise": 199900, "stock": 5}]
+    await make_live_product(client, admin, tn, categories["shirts"], title="Silk Kurta Premium", variants=v)  # too dear for the limit
+    assert await run() == 0 and await notes() == []
+    v2 = [{"sku": "K-2", "options": {"Size": "M"}, "mrp_paise": 199900, "price_paise": 129900, "stock": 5}]
+    await make_live_product(client, admin, tn, categories["shirts"], title="Festive Silk Kurta Set", variants=v2)
+    assert await run() == 1
+    got = await notes()
+    assert len(got) == 1 and "silk kurta" in got[0]["title"].lower() and "Festive Silk Kurta Set" in got[0]["body"]
+    assert await run() == 0  # already told, and no new product
+    me = (await buyer.get("/api/saved-searches")).json()
+    assert me["enabled"] and len(me["items"]) == 2 and me["items"][-1]["last_notified_at"] is not None or me["items"][0]["last_notified_at"] is not None
+    assert (await buyer.delete(f"/api/saved-searches/{a['id']}")).status_code == 200
+    assert len((await buyer.get("/api/saved-searches")).json()["items"]) == 1
+    other = await login_phone(client, "9770000052")
+    b = (await buyer.get("/api/saved-searches")).json()["items"][0]["id"]
+    assert (await other.delete(f"/api/saved-searches/{b}")).status_code == 200
+    assert len((await buyer.get("/api/saved-searches")).json()["items"]) == 1  # not someone else's to remove
