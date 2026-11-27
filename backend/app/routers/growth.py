@@ -104,6 +104,14 @@ async def loyalty_overview(admin: Perm("marketing"), session: SessionDep) -> dic
     return await loyalty.overview(session)
 
 
+@router.get("/loyalty/{user_id}")
+async def member_loyalty(user_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
+    """One member's points, tier and the latest history rows (Admin -> Customers -> a customer)."""
+    out = await loyalty.summary(session, user_id)
+    await session.commit()  # summary lapses expired points and gives back unused redemptions
+    return out
+
+
 class AdjustIn(BaseModel):
     user_id: uuid.UUID
     points: int = Field(ge=-100000, le=100000)

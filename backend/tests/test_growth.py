@@ -1461,4 +1461,7 @@ async def test_admin_loyalty_overview_shows_points_held_and_the_last_30_days(cli
     assert me["points_held"] - base["points_held"] == 100 and me["members_with_points"] - base["members_with_points"] == 1  # 100 - 30 + 50 - 20
     assert me["value_held_paise"] - base["value_held_paise"] == 10000
     assert (me["earned_30d"] - base["earned_30d"], me["redeemed_30d"] - base["redeemed_30d"], me["expired_30d"] - base["expired_30d"]) == (100, 30, 20)
+    mine = (await admin.get(f"/api/admin/growth/loyalty/{uid}")).json()
+    assert mine["balance"] == 100 and mine["history"][0]["points"] in (-30, 100, -20)  # one member's view for the customer page
+    assert (await buyer.get(f"/api/admin/growth/loyalty/{uid}")).status_code == 403
     assert (await buyer.get("/api/admin/growth/loyalty")).status_code == 403  # staff only

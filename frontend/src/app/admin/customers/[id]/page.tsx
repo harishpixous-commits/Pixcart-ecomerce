@@ -10,6 +10,8 @@ import { useCan } from "@/lib/admin";
 import { api, ApiError, quietly } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
 
+type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
+
 type Detail = {
   id: string; name: string; phone: string | null; email: string | null; is_active: boolean; is_admin: boolean; marketing_opt_in: boolean;
   created_at: string; last_login_at: string | null; terms_accepted_at: string | null;
@@ -42,6 +44,27 @@ export default function CustomerDetail() {
   const toast = useToast();
   const canOrders = useCan("orders");
   const canSupport = useCan("support");
+  const canMarketing = useCan("marketing");
+  const [loy, setLoy] = useState<Loyalty | null>(null);
+  const [pts, setPts] = useState("");
+  const [ptsNote, setPtsNote] = useState("");
+  const loadLoyalty = useCallback(() => { if (canMarketing) api<Loyalty>(`/api/admin/growth/loyalty/${id}`).then(setLoy).catch(quietly); }, [id, canMarketing]);
+  useEffect(() => { loadLoyalty(); }, [loadLoyalty]);
+  async function adjust(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      setLoy(await api<Loyalty>("/api/admin/growth/loyalty/adjust", { method: "POST", body: { user_id: id, points: Number(pts), note: ptsNote.trim() } }));
+      setPts("");
+      setPtsNote("");
+      toast("Points updated");
+    } catch (x) {
+      setError(x instanceof ApiError ? x.message : "Could not update points");
+    } finally {
+      setBusy(false);
+    }
+  }
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -198,6 +221,22 @@ export default function CustomerDetail() {
           ) : <p className="text-sm text-ink-faint">No support requests.</p>}
         </Card>
       </div>
+
+      {canMarketing && loy && (
+        <Card title="Loyalty points">
+          <p className="text-sm" data-testid="loyalty-balance">{loy.balance} points ({rupees(loy.value_paise)}) · {loy.tier} tier · {loy.lifetime} earned in all{!loy.enabled && " · points are switched off in Growth settings"}</p>
+          <form onSubmit={adjust} className="mt-3 flex flex-wrap items-end gap-2" data-testid="loyalty-adjust">
+            <label className="flex flex-col gap-1 text-sm"><span className="font-semibold">Points (minus to take back)</span><input className="w-40 rounded-lg border border-line px-3 py-2" inputMode="numeric" value={pts} onChange={(e) => setPts(e.target.value)} /></label>
+            <label className="flex flex-1 flex-col gap-1 text-sm"><span className="font-semibold">Reason (the customer sees it)</span><input className="min-w-48 rounded-lg border border-line px-3 py-2" value={ptsNote} onChange={(e) => setPtsNote(e.target.value)} /></label>
+            <Button type="submit" loading={busy} disabled={!/^-?\d+$/.test(pts) || Number(pts) === 0 || ptsNote.trim().length < 3}>Apply</Button>
+          </form>
+          {loy.history.length > 0 && (
+            <ul className="mt-3 divide-y divide-line text-sm">{loy.history.slice(0, 6).map((h, i) => (
+              <li key={i} className="flex justify-between gap-3 py-1.5"><span>{h.note}</span><span className={h.points < 0 ? "text-vermilion" : "text-peacock"}>{h.points > 0 ? "+" : ""}{h.points} · {date(h.at)}</span></li>
+            ))}</ul>
+          )}
+        </Card>
+      )}
 
       <Card title="History">
         {d.history.length ? (
