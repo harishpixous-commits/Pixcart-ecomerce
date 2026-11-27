@@ -43,6 +43,7 @@ from app.models import (
     Payout,
     Product,
     Referral,
+    Review,
     ReturnItem,
     ReturnRequest,
     Seller,
@@ -544,6 +545,30 @@ def _coupon_use_row(r) -> list[Any]:
     return [ist(c.created_at), code, name or "", number, money(c.discount_paise), c.released]
 
 
+def _reviews_q(ctx: Context) -> Select:
+    stmt = select(Review, Product.title, Seller.display_name).join(Product, Product.id == Review.product_id).join(Seller, Seller.id == Product.seller_id)
+    if ctx.seller_id:
+        stmt = stmt.where(Product.seller_id == ctx.seller_id)
+    if ctx.status:
+        stmt = stmt.where(Review.status == ctx.status)
+    if ctx.extra.get("seller"):
+        stmt = stmt.where(Product.seller_id == ctx.extra["seller"])
+    if ctx.extra.get("q"):
+        q = _like(ctx.extra["q"])
+        stmt = stmt.where(or_(Product.title.ilike(q), Review.title.ilike(q), Review.body.ilike(q)))
+    return _range(stmt, Review.created_at, ctx).order_by(Review.created_at, Review.id)
+
+
+REVIEW_HEADERS = ["Date (IST)", "Product", "Seller", "Rating", "Title", "Review", "Verified purchase", "Status", "Seller reply", "Helpful votes", "Open reports"]
+
+
+def _review_row(r) -> list[Any]:
+    v, product, seller = r
+    return [ist(v.created_at), product, seller, v.rating, v.title, v.body, v.verified, v.status, v.seller_reply, v.helpful_count, v.report_count]
+
+
+_REVIEW_STATUSES = [("published", "Published"), ("pending", "Waiting for review"), ("hidden", "Hidden")]
+
 _ALL: list[ExportSpec] = [
         # ---------------- admin
         ExportSpec("orders", "Orders (one row per package)", "Every package with payment, tax, commission, TCS/TDS, payout and shipping details.", "admin", "orders",
@@ -585,6 +610,8 @@ _ALL: list[ExportSpec] = [
         ExportSpec("coupon-use", "Coupon use", "Every order that used a coupon, with the discount given and whether it was released by a cancellation.", "admin", "marketing",
                    COUPON_USE_HEADERS, _coupon_use_q, _coupon_use_row, "date the coupon was used", [("used", "In use"), ("released", "Released")],
                    contains_personal_data=True),
+        ExportSpec("reviews", "Reviews", "Every review with rating, text, seller reply and open reports. No customer names.", "admin", "catalog",
+                   REVIEW_HEADERS, _reviews_q, _review_row, "date of the review", _REVIEW_STATUSES, date_optional=True, filters=("seller", "q")),
         # ---------------- seller (always limited to the signed-in seller)
         ExportSpec("orders", "Orders", "Your packages with totals, deductions, payout and shipping details.", "seller", "",
                    PACKAGE_HEADERS, _packages_q, _package_row, "date the order was placed", SUB_STATUSES, filters=("payment_method", "q"), pdf_columns=_ORD_PDF),
@@ -600,6 +627,8 @@ _ALL: list[ExportSpec] = [
                    STOCK_HEADERS, _stock_q, _stock_row, filters=("category", "q", "low_stock")),
         ExportSpec("products", "Products", "Your product options with prices, stock and tax details.", "seller", "",
                    PRODUCT_HEADERS, _products_q, _product_row, "", _PROD_STATUSES, filters=("category", "q", "low_stock"), pdf_columns=_PROD_PDF),
+        ExportSpec("reviews", "Reviews", "Reviews of your products with rating, text and your reply. No customer names.", "seller", "",
+                   REVIEW_HEADERS, _reviews_q, _review_row, "date of the review", _REVIEW_STATUSES, date_optional=True, filters=("q",)),
 ]
 
 # The two scopes share export names, so they are looked up separately.

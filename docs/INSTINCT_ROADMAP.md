@@ -362,3 +362,6 @@ Two new admin exports (CSV, Excel, PDF) in both versions, needing the marketing 
 
 ## Push 116: loyalty and coupon-use exports
 Two more admin exports (CSV, Excel, PDF), marketing permission, both versions: Loyalty points (every ledger entry with customer, type filter) and Coupon use (coupon, customer, order, discount, released). Tests: Python exports 9 passed; .NET export tests 18 passed (count pins updated deliberately). Coupon-use rows are only checked for headers and that the query runs, not with sample data. Not run: browser.
+
+## Push 117: review exports (admin and seller)
+Seller hunt: every seller API has a caller; GET /api/seller/earnings is intentionally replaced by Payouts. Added a Reviews export in both scopes and both versions (date, product, seller, rating, text, verified, status, seller reply, helpful votes, open reports; no customer names). Seller scope shows only their own products. Admin needs the catalog permission and can filter by seller and search text. Tests: Python exports 10 passed; .NET export tests 19 passed (count pins updated deliberately). Not run: browser.

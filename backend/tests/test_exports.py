@@ -195,3 +195,26 @@ async def test_loyalty_and_coupon_use_exports(client, admin, categories):
     assert {(r[3], r[4]) for r in out[1:]} == {("earn", "40"), ("expire", "-10")}
     assert len(rows(await admin.get("/api/admin/exports/loyalty.csv?status=expire"))) == 2
     assert rows(await admin.get("/api/admin/exports/coupon-use.csv"))[0][1] == "Coupon"
+
+
+async def test_review_exports_are_scoped_to_the_seller(client, admin, categories):
+    from sqlalchemy import select
+
+    from app.db import utcnow
+    from app.models import Review, Seller
+    tn, ka, buyer, o = await _two_orders(client, admin, categories)
+    me = uuid.UUID((await buyer.get("/api/auth/me")).json()["id"])
+    async with SessionLocal() as s:
+        for seller in (await s.execute(select(Seller))).scalars().all():
+            rating, body = (5, "Soft, lovely") if seller.display_name == "Kovai Textiles" else (2, "Late delivery")
+            prod = (await s.execute(select(Product).where(Product.seller_id == seller.id).limit(1))).scalars().first()
+            s.add(Review(product_id=prod.id, user_id=me, verified=False, rating=rating, title="T", body=body, status="published",
+                         seller_reply="Thanks" if rating == 5 else "", helpful_count=3, created_at=utcnow()))
+        await s.commit()
+    mine = rows(await tn.get("/api/seller/exports/reviews.csv"))
+    head = mine[0]
+    assert head[:3] == ["Date (IST)", "Product", "Seller"] and len(mine) == 2
+    row = dict(zip(head, mine[1], strict=True))
+    assert row["Rating"] == "5" and row["Review"] == "Soft, lovely" and row["Seller reply"] == "Thanks" and row["Helpful votes"] == "3"
+    assert len(rows(await admin.get("/api/admin/exports/reviews.csv"))) == 3
+    assert len(rows(await admin.get("/api/admin/exports/reviews.csv?q=late"))) == 2
