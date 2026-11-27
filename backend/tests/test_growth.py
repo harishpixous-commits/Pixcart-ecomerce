@@ -530,3 +530,39 @@ async def test_a_gift_card_coupon_works_only_for_the_person_who_made_it(client, 
             await coupons.evaluate(s, made["code"], owner_id, [])
         except ApiError as exc:
             assert exc.code != "coupon_invalid"
+
+
+async def test_seller_bulk_edit_csv_round_trip(client, admin, categories):
+    import csv
+    import io
+
+    from tests.test_promotions import setup
+
+    tn, ka, shirt, _ = await setup(client, admin, categories)  # price ₹1,000, MRP ₹2,000, 10 in stock
+    vid, slug = shirt["variants"][0]["id"], shirt["slug"]
+    dl = await tn.get("/api/seller/variants/bulk-edit.csv")
+    assert dl.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(dl.text)))
+    mine = [r for r in rows if r["id"] == vid][0]
+    assert mine["price"] == "1000.00" and mine["stock"] == "10" and mine["active"] == "yes"
+
+    async def send(data, dry=True, who=tn):
+        r = await who.c.post(f"/api/seller/variants/bulk-edit.csv?dry_run={'true' if dry else 'false'}", headers=who.h(), files={"file": ("v.csv", data, "text/csv")})
+        return r.json()
+
+    async def price():
+        return (await client.get(f"/api/catalog/products/{slug}")).json()["variants"][0]["price"]
+
+    good = f"id,price,stock,active\n{vid},1100,15,yes\n"
+    r = await send(good)
+    assert r["dry_run"] and r["changed"] == 1 and r["rows"][0]["changes"]["price"]["after"] == 110000 and await price() == 100000
+    r = await send(good, dry=False)
+    assert r["changed"] == 1 and await price() == 110000
+    r = await send(f"id,price\n{vid},5000\n{vid},1200\nnot-an-id,1\n", dry=False)  # above MRP, repeat of the same id, bad id
+    assert [x["reason"] for x in r["rows"]] == ["price_out_of_range", "duplicate_row", "bad_id"] and r["changed"] == 0
+    r = await send(f"id,price\n{vid},900\n", dry=False, who=ka)  # someone else's version
+    assert r["rows"][0]["reason"] == "not_yours" and await price() == 110000
+    assert (await send(f"id,price\n{vid},abc\n"))["rows"][0]["reason"] == "bad_number"
+    assert (await send("sku,price\nX,1\n"))["error"]["code"] == "invalid_file"
+    r = await send(f"id,active\n{vid},no\n", dry=False)
+    assert r["changed"] == 1 and r["rows"][0]["changes"]["active"]["after"] is False

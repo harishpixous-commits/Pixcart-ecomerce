@@ -513,6 +513,27 @@ async def bulk_edit_variants(body: BulkEditIn, seller: SellerAccount, user: Curr
     return res
 
 
+@router.get("/variants/bulk-edit.csv")
+async def bulk_edit_csv_download(seller: SellerAccount, session: SessionDep) -> Response:
+    """Your versions as a CSV (id, sku, product, price in rupees, stock, active) to edit in a spreadsheet."""
+    return Response(await bulk_edit.export_csv(session, seller), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="my-versions.csv"'})
+
+
+@router.post("/variants/bulk-edit.csv")
+async def bulk_edit_csv_upload(seller: SellerAccount, user: CurrentUser, session: SessionDep, file: UploadFile = File(...), dry_run: bool = Query(default=True)) -> dict:
+    """Upload the edited CSV. dry_run=true (default) only previews; false applies the rows that are fine."""
+    from app.core.deps import rate_limit
+
+    if seller.status == "suspended":
+        raise Conflict("Your seller account is suspended", "seller_suspended")
+    await rate_limit(session, f"bulk-edit-csv:{seller.id}", limit=60, window_seconds=3600)
+    res = await bulk_edit.apply_csv(session, seller, await file.read(bulk_edit.CSV_MAX_BYTES + 1), dry_run)
+    if not dry_run and res["changed"]:
+        audit(session, user, "variant.bulk_edit_csv", "seller", seller.id, f"x{res['changed']} from {file.filename}"[:200])
+    await session.commit()
+    return res
+
+
 @router.post("/products/{product_id}/submit")
 async def submit_product(product_id: uuid.UUID, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
     p = await _owned(session, seller.id, product_id, lock=True)
