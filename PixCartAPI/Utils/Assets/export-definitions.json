@@ -760,6 +760,46 @@
       "contains_personal_data": true
     },
     {
+      "name": "reviews",
+      "label": "Reviews",
+      "description": "Every review with rating, text, seller reply and open reports. No customer names.",
+      "scope": "admin",
+      "permission": "catalog",
+      "headers": [
+        "Date (IST)",
+        "Product",
+        "Seller",
+        "Rating",
+        "Title",
+        "Review",
+        "Verified purchase",
+        "Status",
+        "Seller reply",
+        "Helpful votes",
+        "Open reports"
+      ],
+      "date_label": "date of the review",
+      "statuses": [
+        [
+          "published",
+          "Published"
+        ],
+        [
+          "pending",
+          "Waiting for review"
+        ],
+        [
+          "hidden",
+          "Hidden"
+        ]
+      ],
+      "date_optional": true,
+      "filters": [
+        "seller",
+        "q"
+      ]
+    },
+    {
       "name": "orders",
       "label": "Orders",
       "description": "Your packages with totals, deductions, payout and shipping details.",
@@ -1126,6 +1166,45 @@
         "Price",
         "Stock",
         "Sold"
+      ]
+    },
+    {
+      "name": "reviews",
+      "label": "Reviews",
+      "description": "Reviews of your products with rating, text and your reply. No customer names.",
+      "scope": "seller",
+      "permission": "",
+      "headers": [
+        "Date (IST)",
+        "Product",
+        "Seller",
+        "Rating",
+        "Title",
+        "Review",
+        "Verified purchase",
+        "Status",
+        "Seller reply",
+        "Helpful votes",
+        "Open reports"
+      ],
+      "date_label": "date of the review",
+      "statuses": [
+        [
+          "published",
+          "Published"
+        ],
+        [
+          "pending",
+          "Waiting for review"
+        ],
+        [
+          "hidden",
+          "Hidden"
+        ]
+      ],
+      "date_optional": true,
+      "filters": [
+        "q"
       ]
     }
   ]

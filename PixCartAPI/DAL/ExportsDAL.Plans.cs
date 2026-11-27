@@ -36,6 +36,9 @@ public sealed partial class ExportsDAL
         "coupon-use" => new("coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id JOIN users u ON u.id=r.user_id JOIN orders o ON o.id=r.order_id",
             [new("r.created_at","ist"),new("c.code"),new("COALESCE(u.name,'')"),new("o.number"),new("r.discount_paise","money"),new("r.released","bool")],
             "r.created_at,r.id",Date:"r.created_at",Status:"IF(r.released,'released','used')"),
+        "reviews" => new("reviews v JOIN products p ON p.id=v.product_id JOIN sellers s ON s.id=p.seller_id",
+            [new("v.created_at","ist"),new("p.title"),new("s.display_name"),new("v.rating"),new("v.title"),new("v.body"),new("v.verified","bool"),new("v.status"),new("v.seller_reply"),new("v.helpful_count"),new("v.report_count")],
+            "v.created_at,v.id",Date:"v.created_at",Seller:"p.seller_id",Status:"v.status",Search:["p.title","v.title","v.body"]),
         _ => throw new NotSupportedException("Export data plan has not been implemented: " + name),
     };
 }

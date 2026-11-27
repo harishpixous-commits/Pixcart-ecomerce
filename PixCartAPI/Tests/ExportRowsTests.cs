@@ -112,4 +112,14 @@ public class ExportRowsTests(ApiFactory f):ApiTest(f)
         var all=await Read("loyalty",ExportDefinitions.Parse(Spec("loyalty"),from:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),to:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1))));Assert.Equal(2,all.Count(r=>Equals(r[1],"Synthetic Member")));
         var expired=await Read("loyalty",ExportDefinitions.Parse(Spec("loyalty"),status:"expire",from:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),to:DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1))));Assert.Single(expired);Assert.Equal(-10,Convert.ToInt32(expired[0][4]));
     }
+    [Fact]
+    public async Task Review_export_is_scoped_to_the_seller_and_searchable()
+    {
+        await Admin();var a=await Seller("9876100094","EXPORT-G");var b=await Seller("9876100095","EXPORT-H");var u=await LoginPhone("9876100096","Synthetic Reviewer");
+        await ApiFactory.DbExecAsync("INSERT INTO reviews(id,product_id,user_id,verified,rating,title,body,status,seller_reply,helpful_count,created_at)VALUES(UUID(),@p,@u,0,5,'T','Soft and lovely','published','Thanks',3,UTC_TIMESTAMP(6))",new{p=a.Product,u=u.Id});
+        await ApiFactory.DbExecAsync("INSERT INTO reviews(id,product_id,user_id,verified,rating,title,body,status,seller_reply,helpful_count,created_at)VALUES(UUID(),@p,@u,0,2,'T','Late delivery','published','',0,UTC_TIMESTAMP(6))",new{p=b.Product,u=u.Id});
+        var mine=await Read("reviews",ExportDefinitions.Parse(Spec("reviews","seller"),sellerId:a.Seller),"seller");Assert.Single(mine);Assert.Equal(5,Convert.ToInt32(mine[0][3]));Assert.Equal("Thanks",mine[0][8]);Assert.Equal(3,Convert.ToInt32(mine[0][9]));
+        Assert.Equal(2,(await Read("reviews",ExportDefinitions.Parse(Spec("reviews")))).Count);
+        var late=ExportDefinitions.Parse(Spec("reviews"),extra:new Dictionary<string,string?>{["q"]="late"});Assert.Single(await Read("reviews",late));
+    }
 }
