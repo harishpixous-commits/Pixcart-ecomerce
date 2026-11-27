@@ -1149,6 +1149,9 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         long D(string k) => me[k]!.GetValue<long>() - b[k]!.GetValue<long>();
         Assert.Equal(100, D("points_held")); Assert.Equal(1, D("members_with_points")); Assert.Equal(10000, D("value_held_paise")); // 100 - 30 + 50 - 20
         Assert.Equal(100, D("earned_30d")); Assert.Equal(30, D("redeemed_30d")); Assert.Equal(20, D("expired_30d"));
+        var mine = (await admin.Get($"/api/admin/growth/loyalty/{uid}")).Json;
+        Assert.Equal(100, mine["balance"]!.GetValue<long>()); // one member's view for the customer page
+        Assert.Equal(403, (await buyer.Get($"/api/admin/growth/loyalty/{uid}")).Status);
         Assert.Equal(403, (await buyer.Get("/api/admin/growth/loyalty")).Status); // staff only
     }
 }

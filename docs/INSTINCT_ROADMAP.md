@@ -337,3 +337,7 @@ Hint text on Admin → Growth → Loyalty now explains expiry_days, expiry_remin
 ## Push 111: admin Loyalty overview tab
 
 New `GET /api/admin/growth/loyalty` (marketing permission) and a "Loyalty" tab on Admin → Growth: members holding points, points held and their rupee value (what the shop owes in rewards), and points earned, redeemed and expired in the last 30 days. Both versions (React and Angular type-check clean); a test on each side. Not wired: no per-member list or export. Not run: browser.
+
+## Push 112: staff can see and adjust a customer's loyalty points from the customer page
+
+The admin adjust-points API existed in both versions but no screen used it. New `GET /api/admin/growth/loyalty/{user_id}` (marketing permission) and a "Loyalty points" card on Admin → Customers → a customer: balance, rupee value, tier, latest history, and a form to add points or take them back (minus number) with a reason the customer sees. The balance never goes below zero (existing rule). Both versions (React and Angular type-check clean); backend test on each side. Not run: browser.

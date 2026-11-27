@@ -24,6 +24,8 @@ type Detail = {
   history: { action: string; detail: string; by: string; at: string }[];
 };
 
+type LoyaltyView = { enabled: boolean; balance: number; lifetime: number; tier: string; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
+
 const ACTIONS: Record<string, string> = {
   "user.create": "Account created", "user.edit": "Details changed", "user.block": "Blocked", "user.unblock": "Unblocked",
   "user.sign_out": "Signed out everywhere", "staff.create": "Made staff", "staff.update": "Staff access changed",
@@ -146,6 +148,24 @@ export class CustomerCard {
           </section>
         </div>
 
+        @if (canMarketing() && loy(); as l) {
+          <section pcCustomerCard title="Loyalty points">
+            <p class="text-sm" data-testid="loyalty-balance">{{ l.balance }} points ({{ rupees(l.value_paise) }}) · {{ l.tier }} tier · {{ l.lifetime }} earned in all@if (!l.enabled) { · points are switched off in Growth settings}</p>
+            <form class="mt-3 flex flex-wrap items-end gap-2" data-testid="loyalty-adjust" (submit)="adjust($event)">
+              <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">Points (minus to take back)</span><input class="w-40 rounded-lg border border-line px-3 py-2" inputmode="numeric" [value]="pts()" (input)="pts.set($any($event.target).value)" /></label>
+              <label class="flex flex-1 flex-col gap-1 text-sm"><span class="font-semibold">Reason (the customer sees it)</span><input class="min-w-48 rounded-lg border border-line px-3 py-2" [value]="ptsNote()" (input)="ptsNote.set($any($event.target).value)" /></label>
+              <button pcButton type="submit" [loading]="busy()" [disabled]="!ptsValid()">Apply</button>
+            </form>
+            @if (l.history.length) {
+              <ul class="mt-3 divide-y divide-line text-sm">
+                @for (h of l.history.slice(0, 6); track $index) {
+                  <li class="flex justify-between gap-3 py-1.5"><span>{{ h.note }}</span><span [class]="h.points < 0 ? 'text-vermilion' : 'text-peacock'">{{ h.points > 0 ? "+" : "" }}{{ h.points }} · {{ date(h.at) }}</span></li>
+                }
+              </ul>
+            }
+          </section>
+        }
+
         <section pcCustomerCard title="History">
           @if (d()!.history.length) {
             <ul class="divide-y divide-line text-sm">@for (h of d()!.history; track $index) {
@@ -183,6 +203,11 @@ export class AdminCustomersIdPage {
   private readonly admin = inject(AdminContext);
   protected readonly canOrders = computed(() => this.admin.can("orders"));
   protected readonly canSupport = computed(() => this.admin.can("support"));
+  protected readonly canMarketing = computed(() => this.admin.can("marketing"));
+  protected readonly loy = signal<LoyaltyView | null>(null);
+  protected readonly pts = signal("");
+  protected readonly ptsNote = signal("");
+  protected readonly ptsValid = computed(() => /^-?\d+$/.test(this.pts()) && Number(this.pts()) !== 0 && this.ptsNote().trim().length >= 3);
   protected readonly ArrowLeft = ArrowLeft;
   protected readonly LogOut = LogOut;
   protected readonly Pencil = Pencil;
@@ -208,7 +233,28 @@ export class AdminCustomersIdPage {
     });
   }
 
+  private loadLoyalty(): void {
+    if (this.canMarketing()) api<LoyaltyView>(`/api/admin/growth/loyalty/${this.id()}`).then((x) => this.loy.set(x)).catch(quietly);
+  }
+
+  protected async adjust(e: Event): Promise<void> {
+    e.preventDefault();
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      this.loy.set(await api<LoyaltyView>("/api/admin/growth/loyalty/adjust", { method: "POST", body: { user_id: this.id(), points: Number(this.pts()), note: this.ptsNote().trim() } }));
+      this.pts.set("");
+      this.ptsNote.set("");
+      this.toast.show("Points updated");
+    } catch (err) {
+      this.error.set(err instanceof ApiError ? err.message : "Could not update points");
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   private load(): void {
+    this.loadLoyalty();
     api<Detail>(`/api/admin/customers/${this.id()}`).then((d) => this.d.set(d)).catch((e) => this.error.set(e instanceof ApiError ? e.message : "Could not load"));
   }
 
