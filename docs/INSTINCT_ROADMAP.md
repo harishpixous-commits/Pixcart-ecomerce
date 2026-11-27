@@ -290,3 +290,6 @@ Two Loyalty settings in Admin → Growth: `review_points` (0 = off, default) and
 
 ## Push 96: review bonus is taken back when staff hide the review
 Hiding a review (admin moderation) takes back its bonus once (never below a zero balance). Publishing it again does not pay twice. Both versions, tested. Not covered: a review the customer deletes keeps its bonus (rewriting does not pay again, so there is nothing to gain).
+
+## Push 97: full-suite re-run after Pushes 90 to 96
+Python: 288 passed (whole suite). .NET in groups on a fresh build: 102 + 85 + 82 + 114 passed, 0 failed. Not run: browser, Flutter, Windows publish, live gateways, deploy. Frontends are type-checked only.
