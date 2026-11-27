@@ -36,6 +36,7 @@ public static class NotificationEvents
             ["seller_ship_reminder"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("Order {{order_number}} is waiting to ship", "You confirmed it {{hours}} hours ago. Ship it and add the tracking number so the customer is not left waiting."),
+                ["email"] = ("Order {{order_number}} is waiting to ship", "Hi {{name}},\n\nYou confirmed order {{order_number}} {{hours}} hours ago and it has not shipped yet. Ship it and add the tracking number so the customer is not left waiting.\n\n{{link}}"),
             },
             ["review_reminder"] = new Dictionary<string, (string Subject, string Body)>
             {

@@ -254,3 +254,6 @@ Staff dashboard gets `orders_late_to_ship`: open packages (placed/confirmed/pack
 
 ## Push 87: review reminders also by email
 New email template for `review_reminder` (editable in admin templates) and Python now sends it on the email channel as well as in-app (.NET already sent on every channel with a template). Email only leaves when the email integration is set up and the shopper has an email. Tested on both sides. Ship reminders stay in-app (seller side).
+
+## Push 88: ship reminders also by email to the seller
+New email template for `seller_ship_reminder` (editable in admin templates), both versions. Goes only when the email integration is set up and the seller account has an email. Tested on both sides.

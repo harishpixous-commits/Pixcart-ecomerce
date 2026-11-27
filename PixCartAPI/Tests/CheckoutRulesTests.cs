@@ -833,7 +833,12 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         async Task<long> Count() => await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_ship_reminder'", new { });
         Assert.Equal(0, await Run()); Assert.Equal(0, await Count());
         Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { ship_reminders = new { enabled = true, after_hours = 24, max_age_days = 14 } })).Status);
+        var owner = await LoginPhone("9400000311", "Ship Owner");
+        Assert.Equal(200, (await owner.Patch("/api/auth/me", new { email = "shipowner@example.in" })).Status);
+        Assert.Equal(200, (await admin.Put("/api/admin/integrations/email", new { values = new { host = "smtp.example.in", from_address = "orders@example.in" }, enabled = true, password = AdminPassword })).Status);
         Assert.Equal(1, await Run()); Assert.Equal(1, await Count()); // only the confirmed package from 30 hours ago
+        var mail = await db.QueryAsync<string>("SELECT body FROM notifications WHERE event = 'seller_ship_reminder' AND channel = 'email'", new { });
+        Assert.Single(mail); Assert.Contains("/seller/orders/", mail.Single()); // the seller gets an email too
         Assert.Equal(0, await Run());
         await ApiFactory.DbExecAsync("UPDATE sub_orders SET confirmed_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 25 HOUR) WHERE id = @s2", new { s2 });
         Assert.Equal(1, await Run()); Assert.Equal(2, await Count());
