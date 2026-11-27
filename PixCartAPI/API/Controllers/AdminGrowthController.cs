@@ -21,3 +21,12 @@ public class LoyaltyController(IGrowthBAL bal, ICurrentUser me) : ControllerBase
 {
     [HttpGet, RouteGuard("signed_in")] public async Task<object> Mine() => await bal.LoyaltyAsync((await me.RequireAsync()).Id);
 }
+
+[ApiController]
+public class SeoController(IGrowthBAL bal) : ControllerBase
+{
+    private async Task<IActionResult> Map() => await bal.SitemapAsync() is { } xml ? Content(xml, "application/xml") : NotFound(new { error = new { code = "not_found", message = "Sitemap not found", fields = new { } } });
+    [HttpGet("/api/seo/sitemap.xml"), RouteGuard("public")] public Task<IActionResult> Api() => Map();
+    [HttpGet("/sitemap.xml"), RouteGuard("public")] public Task<IActionResult> Root() => Map();
+    [HttpGet("/robots.txt"), RouteGuard("public")] public IActionResult Robots() => Content(bal.RobotsTxt(), "text/plain");
+}

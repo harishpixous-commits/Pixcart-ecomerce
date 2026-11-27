@@ -29,4 +29,11 @@ public class GrowthTests(ApiFactory f):ApiTest(f)
         Assert.Equal("balance_too_low",(await admin.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=-61,note="Too much"})).ErrorCode);
         Assert.Equal(403,(await buyer.Post("/api/admin/growth/loyalty/adjust",new{user_id=uid,points=5,note="Nope"})).Status);
     }
+    [Fact]public async Task Sitemap_and_robots_follow_the_search_engine_settings()
+    {
+        var admin=await Admin();var c=Factory.CreateClient();
+        var r=await c.GetAsync("/api/seo/sitemap.xml");Assert.Equal(200,(int)r.StatusCode);Assert.Contains("xml",r.Content.Headers.ContentType!.ToString());var xml=await r.Content.ReadAsStringAsync();Assert.Contains("<urlset",xml);Assert.DoesNotContain("/store/",xml);
+        Assert.Equal(200,(int)(await c.GetAsync("/sitemap.xml")).StatusCode);var robots=await (await c.GetAsync("/robots.txt")).Content.ReadAsStringAsync();Assert.Contains("Disallow: /admin",robots);Assert.Contains("/sitemap.xml",robots);
+        Assert.Equal(200,(await admin.Put("/api/admin/growth/settings",new{seo=new{sitemap_enabled=false}})).Status);Assert.Equal(404,(int)(await c.GetAsync("/api/seo/sitemap.xml")).StatusCode);
+    }
 }

@@ -7,7 +7,7 @@ using Utils;
 using Utils.Interface;
 namespace BAL;
 
-public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db) : IGrowthBAL
+public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db, AppSettings app) : IGrowthBAL
 {
     public const string Key = "growth";
     private enum K { Bool, Int, Text, List }
@@ -201,4 +201,20 @@ public class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessB
         await tx.CommitAsync();
         return await LoyaltyAsync(userId);
     }
+
+    public async Task<string?> SitemapAsync()
+    {
+        var cfg = (JsonObject)(await GetAsync())["seo"]!;
+        if (!cfg.Bool("sitemap_enabled")) return null;
+        var b = app.PublicWebUrl.TrimEnd('/');
+        var urls = new List<string> { b + "/" };
+        if (cfg.Bool("sitemap_include_categories")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM categories WHERE is_active = 1 ORDER BY slug")).Select(x => $"{b}/c/{x}"));
+        urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM products WHERE status = 'approved' ORDER BY slug LIMIT 50000")).Select(x => $"{b}/p/{x}"));
+        if (cfg.Bool("sitemap_include_sellers")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM sellers WHERE status = 'approved' ORDER BY slug")).Select(x => $"{b}/store/{x}"));
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +
+               string.Concat(urls.Select(u => "<url><loc>" + System.Security.SecurityElement.Escape(u) + "</loc></url>")) + "</urlset>";
+    }
+
+    public string RobotsTxt() =>
+        "User-agent: *\nAllow: /\nDisallow: /seller\nDisallow: /admin\nDisallow: /checkout\nDisallow: /cart\nDisallow: /orders\nDisallow: /account\nDisallow: /api\n\nSitemap: " + app.PublicWebUrl.TrimEnd('/') + "/sitemap.xml\n";
 }
