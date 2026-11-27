@@ -38,7 +38,7 @@ async def send_due(session: AsyncSession, batch: int = 200) -> int:
         user = await session.get(User, user_id)
         if user is None:
             continue
-        await notify(session, "review_reminder", user, {"item": first[0]}, link=f"/p/{first[1]}#reviews", channels=("inapp",))
+        await notify(session, "review_reminder", user, {"item": first[0]}, link=f"/p/{first[1]}#reviews", channels=("inapp", "email"))
         sent += 1
     await session.flush()
     return sent

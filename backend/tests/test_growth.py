@@ -956,8 +956,21 @@ async def test_review_reminder_goes_once_per_delivered_package_that_is_not_revie
     assert len(got) == 1 and "Handloom Cotton Shirt Blue" in got[0]["title"] and await notes(b) == []
     assert got[0]["link"] == f"/p/{shirt['slug']}#reviews"
     assert await run() == 0  # once only
-    await age(s3, 6)
-    assert await run() == 1 and len(await notes(b)) == 1
+    await b.patch("/api/auth/me", {"email": "reviewer@example.in"})
+    from sqlalchemy import select
+
+    from app.config import settings as app_settings
+    from app.models import Notification
+
+    old_smtp, app_settings.smtp_host = app_settings.smtp_host, "smtp.test"
+    try:
+        await age(s3, 6)
+        assert await run() == 1 and len(await notes(b)) == 1
+    finally:
+        app_settings.smtp_host = old_smtp
+    async with SessionLocal() as s:
+        mails = (await s.execute(select(Notification).where(Notification.event == "review_reminder", Notification.channel == "email"))).scalars().all()
+    assert len(mails) == 1 and mails[0].recipient == "reviewer@example.in" and f"/p/{shirt['slug']}#reviews" in mails[0].body  # email goes too, with the review link
 
 
 async def test_seller_can_set_own_free_delivery_amount_within_admin_bounds(client, admin, categories):
