@@ -1369,3 +1369,35 @@ async def test_unused_points_expire_after_expiry_days_oldest_first(client, admin
     assert me["balance"] == 40 and me["history"][0]["note"].startswith("Points expired")  # 100 - 30 spent = 70 lapse; the recent 40 stays
     assert (await buyer.get("/api/loyalty")).json()["balance"] == 40  # lapses once
     assert (await admin.put("/api/admin/growth/settings", {"loyalty": {"expiry_days": 0}})).status_code == 200
+
+
+async def test_cod_is_blocked_after_repeated_undelivered_cash_packages(client, admin, categories):
+    import uuid
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models import SubOrder
+    from tests.conftest import add_address, login_phone
+    from tests.test_orders import marketplace
+
+    _, _, _, cable = await marketplace(client, admin, categories)
+    buyer = await login_phone(client, "9770000201")
+    addr = await add_address(buyer)
+    assert (await admin.put("/api/admin/growth/settings", {"cod_risk": {"enabled": True, "max_cod_paise": 0, "new_account_max_cod_paise": 0, "block_after_refused": 2}})).status_code == 200
+
+    async def cod(method="cod"):
+        await buyer.post("/api/cart/items", {"variant_id": cable["variants"][0]["id"], "qty": 1})
+        return await buyer.post("/api/orders", {"address_id": addr, "payment_method": method, "idempotency_key": uuid.uuid4().hex})
+
+    for _ in range(2):
+        r = await cod()
+        assert r.status_code == 201, r.text
+        sid = r.json()["order"]["sub_orders"][0]["id"]
+        async with SessionLocal() as s:
+            await s.execute(update(SubOrder).where(SubOrder.id == uuid.UUID(sid)).values(status="cancelled", cancel_reason="Returned to the seller by the courier (RTO)"))
+            await s.commit()
+    r = await cod()
+    assert r.status_code == 400 and r.json()["error"]["code"] == "cod_risk", r.text
+    r = await cod("online")
+    assert r.status_code != 400 or r.json()["error"]["code"] != "cod_risk"  # paying online is never blocked by this rule

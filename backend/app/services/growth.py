@@ -185,6 +185,8 @@ async def seller_scorecard(session: AsyncSession, cfg: dict[str, Any], seller_id
 async def cod_block_reason(session: AsyncSession, user_id: uuid.UUID, pincode: str, grand_total: int) -> str | None:
     """Why cash on delivery is refused for this order under the Admin -> Growth -> COD risk rules, or None.
     (The existing marketplace limit cod_max_order_paise is checked separately.)"""
+    from sqlalchemy import func
+
     from app.models import Order
 
     cfg = (await get(session))["cod_risk"]
@@ -192,6 +194,12 @@ async def cod_block_reason(session: AsyncSession, user_id: uuid.UUID, pincode: s
         return None
     if pincode in cfg["blocked_pincodes"]:
         return "Cash on delivery is not available for this pincode. Please pay online."
+    if cfg["block_after_refused"]:
+        # cash packages that came back undelivered (refused, nobody home, address not found); every return-to-seller path writes this reason
+        refused = (await session.execute(select(func.count(SubOrder.id)).join(Order, Order.id == SubOrder.order_id).where(
+            Order.user_id == user_id, Order.payment_method == "cod", SubOrder.status == "cancelled", SubOrder.cancel_reason.like("Returned to the seller%")))).scalar_one()
+        if refused >= cfg["block_after_refused"]:
+            return "Cash on delivery is no longer available on this account because earlier cash packages came back undelivered. Please pay online."
     if cfg["max_cod_paise"] and grand_total > cfg["max_cod_paise"]:
         return "Cash on delivery is not available for this order value. Please pay online."
     if cfg["new_account_max_cod_paise"]:
