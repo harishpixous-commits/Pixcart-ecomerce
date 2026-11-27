@@ -318,3 +318,7 @@ The Growth loyalty setting `expiry_days` (365 by default, 0 = never) was stored 
 ## Push 104: COD risk `block_after_refused` now works (was a dead setting)
 
 With the COD risk module on, a customer whose cash packages came back undelivered (every return-to-seller path: seller RTO, courier webhook, delivery partner) that many times (default 2) can no longer choose cash on delivery; online payment stays open. Checked at order placement. Both versions; a test on each side. Note: with the module on, the default of 2 is now live. Not run: browser.
+
+## Push 105: full-suite re-run after Pushes 98 to 104
+
+Python: whole suite ran to the end, no failures (run with -x, all dots). .NET: 391 tests across five groups, 0 failed (Growth+Seller 54, Admin/Cms/Account/Auth 54, Checkout/Assistant/Llm/Sms 87, Payment/Gateway/Delivery/Export/Report/Workbook/Fleet 82, everything else 114). No code changes in this push. Not run: browser, Flutter, Windows publish, live gateways.
