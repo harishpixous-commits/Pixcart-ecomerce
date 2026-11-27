@@ -114,6 +114,8 @@ class SegmentCampaign(IdMixin, Base):
     recipients: Mapped[int] = mapped_column(Integer, default=0)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(10), default="sent", server_default="sent")  # sent | scheduled | cancelled
+    send_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SavedSearch(IdMixin, Base):

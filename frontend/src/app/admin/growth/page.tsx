@@ -178,7 +178,7 @@ function SegmentsTab() {
 }
 
 type CampaignPreview = { dry_run: boolean; opted_in: number; recipients: number; capped: boolean };
-type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string };
+type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string; status?: string; send_at?: string | null };
 
 function CampaignsTab() {
   const toast = useToast();
@@ -187,6 +187,7 @@ function CampaignsTab() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("");
+  const [sendAt, setSendAt] = useState("");
   const [preview, setPreview] = useState<CampaignPreview | null>(null);
   const [log, setLog] = useState<CampaignRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -197,13 +198,22 @@ function CampaignsTab() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body: { segment, title, message, link, dry_run: dry } });
+      const r = await api<CampaignPreview>("/api/admin/growth/campaigns", { method: "POST", body: { segment, title, message, link, dry_run: dry, send_at: sendAt ? new Date(sendAt).toISOString() : null } });
       if (dry) setPreview(r);
-      else { setPreview(null); setTitle(""); setMessage(""); setLink(""); toast(`Sent to ${r.recipients} customers`); void loadLog(); }
+      else { setPreview(null); setTitle(""); setMessage(""); setLink(""); setSendAt(""); toast(sendAt ? "Campaign scheduled" : `Sent to ${r.recipients} customers`); void loadLog(); }
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not send");
     } finally {
       setBusy(false);
+    }
+  }
+  async function cancelScheduled(id: string) {
+    try {
+      await api(`/api/admin/growth/campaigns/${id}`, { method: "DELETE" });
+      toast("Campaign cancelled");
+      void loadLog();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Could not cancel", "error");
     }
   }
   const edit = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPreview(null); };
@@ -217,18 +227,21 @@ function CampaignsTab() {
         <input className="rounded-lg border px-3 py-2 text-sm" maxLength={80} placeholder="Title" value={title} onChange={(e) => edit(setTitle)(e.target.value)} />
         <textarea className="rounded-lg border px-3 py-2 text-sm" maxLength={300} rows={3} placeholder="Message" value={message} onChange={(e) => edit(setMessage)(e.target.value)} />
         <input className="rounded-lg border px-3 py-2 text-sm" maxLength={200} placeholder="Page to open, like /offers (optional)" value={link} onChange={(e) => edit(setLink)(e.target.value)} />
+        <label className="flex flex-col gap-1 text-sm"><span className="font-semibold">Send later (optional, 2 minutes to 30 days ahead)</span>
+          <input type="datetime-local" className="rounded-lg border px-3 py-2 text-sm" value={sendAt} onChange={(e) => edit(setSendAt)(e.target.value)} data-testid="campaign-send-at" />
+        </label>
         <ErrorNote message={err} />
         <div className="flex items-center gap-2">
           <Button onClick={() => go(true)} loading={busy && !preview} disabled={!title.trim() || !message.trim()}>Preview</Button>
-          {preview && preview.recipients > 0 && <Button variant="buy" onClick={() => go(false)} loading={busy}>Send to {preview.recipients}</Button>}
+          {preview && preview.recipients > 0 && <Button variant="buy" onClick={() => go(false)} loading={busy}>{sendAt ? "Schedule for" : "Send to"} {sendAt ? `${preview.recipients} people` : preview.recipients}</Button>}
           {preview && <span className="text-sm text-ink-soft" data-testid="campaign-preview">{preview.opted_in} opted in{preview.capped ? `, capped at ${preview.recipients}` : ""}</span>}
         </div>
       </section>
       {log.length > 0 && (
         <div className="overflow-x-auto rounded-xl bg-white">
           <table className="w-full text-left text-sm" data-testid="campaigns">
-            <thead><tr className="border-b border-line"><th className="p-3">Sent</th><th className="p-3">Segment</th><th className="p-3">Title</th><th className="p-3">People</th></tr></thead>
-            <tbody>{log.map((c) => <tr key={c.id} className="border-b border-line/50"><td className="p-3">{date(c.at)}</td><td className="p-3">{c.segment.replaceAll("_", " ")}</td><td className="p-3 font-semibold">{c.title}</td><td className="p-3">{c.recipients}</td></tr>)}</tbody>
+            <thead><tr className="border-b border-line"><th className="p-3">When</th><th className="p-3">Segment</th><th className="p-3">Title</th><th className="p-3">People</th><th className="p-3">Status</th></tr></thead>
+            <tbody>{log.map((c) => <tr key={c.id} className="border-b border-line/50"><td className="p-3">{date(c.status === "scheduled" && c.send_at ? c.send_at : c.at)}</td><td className="p-3">{c.segment.replaceAll("_", " ")}</td><td className="p-3 font-semibold">{c.title}</td><td className="p-3">{c.status === "scheduled" ? "-" : c.recipients}</td><td className="p-3 capitalize">{c.status ?? "sent"}{c.status === "scheduled" && <button type="button" className="ml-2 font-semibold text-vermilion" onClick={() => cancelScheduled(c.id)}>Cancel</button>}</td></tr>)}</tbody>
           </table>
         </div>
       )}

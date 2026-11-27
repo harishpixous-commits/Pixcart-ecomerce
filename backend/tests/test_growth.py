@@ -805,3 +805,57 @@ async def test_staff_can_make_a_batch_of_single_use_codes_from_a_coupon(client, 
 
 def uuid_zero() -> str:
     return "00000000-0000-0000-0000-000000000000"
+
+
+async def test_a_scheduled_campaign_is_held_until_its_time_and_can_be_cancelled(client, admin):
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import SegmentCampaign, User
+    from app.services import campaigns
+    from tests.conftest import login_phone
+
+    assert (await admin.put("/api/admin/growth/settings", {"campaigns": {"enabled": True, "max_per_day": 5}, "segments": {"enabled": True}})).status_code == 200
+    fan = await login_phone(client, "9610100001", name="Sched Fan")
+    async with SessionLocal() as s:
+        await s.execute(update(User).where(User.phone == "9610100001").values(marketing_opt_in=True))
+        await s.commit()
+    soon = (utcnow() + timedelta(hours=2)).isoformat()
+    body = {"segment": "never_ordered", "title": "Later offer", "message": "See you soon", "link": "/offers", "dry_run": False}
+    assert (await admin.post("/api/admin/growth/campaigns", {**body, "send_at": (utcnow() + timedelta(seconds=30)).isoformat()})).json()["error"]["code"] == "invalid_send_at"
+    assert (await admin.post("/api/admin/growth/campaigns", {**body, "send_at": (utcnow() + timedelta(days=40)).isoformat()})).json()["error"]["code"] == "invalid_send_at"
+    r = await admin.post("/api/admin/growth/campaigns", {**body, "send_at": soon})
+    assert r.status_code == 200 and r.json()["scheduled"] is True, r.text
+    cid = r.json()["id"]
+
+    async def has() -> bool:
+        return any(n["title"] == "Later offer" for n in (await fan.get("/api/notifications")).json()["items"])
+
+    async def due() -> int:
+        async with SessionLocal() as s:
+            n = await campaigns.send_due(s)
+            await s.commit()
+            return n
+
+    assert await due() == 0 and not await has()  # not yet
+    row = [i for i in (await admin.get("/api/admin/growth/campaigns")).json()["items"] if i["id"] == cid][0]
+    assert row["status"] == "scheduled" and row["send_at"]
+    async with SessionLocal() as s:
+        await s.execute(update(SegmentCampaign).where(SegmentCampaign.id == uuid_of(cid)).values(send_at=utcnow() - timedelta(minutes=1)))
+        await s.commit()
+    assert await due() == 1 and await has()
+    assert await due() == 0  # once only
+    row = [i for i in (await admin.get("/api/admin/growth/campaigns")).json()["items"] if i["id"] == cid][0]
+    assert row["status"] == "sent" and row["recipients"] >= 1
+    assert (await admin.delete(f"/api/admin/growth/campaigns/{cid}")).json()["error"]["code"] == "not_scheduled"
+    r2 = await admin.post("/api/admin/growth/campaigns", {**body, "title": "Never goes", "send_at": soon})
+    assert (await admin.delete(f"/api/admin/growth/campaigns/{r2.json()['id']}")).status_code == 200
+    assert [i["status"] for i in (await admin.get("/api/admin/growth/campaigns")).json()["items"] if i["id"] == r2.json()["id"]] == ["cancelled"]
+
+
+def uuid_of(s: str):
+    import uuid
+
+    return uuid.UUID(s)

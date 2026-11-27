@@ -3,6 +3,7 @@ COD risk, SEO, bulk edit and segments; plus the seller scorecard itself."""
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter
@@ -68,16 +69,26 @@ class CampaignIn(BaseModel):
     message: str = Field(max_length=300)
     link: str = Field(default="", max_length=200)
     dry_run: bool = True
+    send_at: datetime | None = None  # hold it until then (2 minutes to 30 days ahead)
 
 
 @router.post("/campaigns")
 async def send_campaign(body: CampaignIn, admin: Perm("marketing"), session: SessionDep) -> dict:
     """In-app message to a customer segment. dry_run=true (default) only counts who would get it."""
-    res = await campaigns.send(session, admin, body.segment, body.title, body.message, body.link, body.dry_run)
+    res = await campaigns.send(session, admin, body.segment, body.title, body.message, body.link, body.dry_run, body.send_at)
     if not body.dry_run:
-        audit(session, admin, "campaign.send", "segment", body.segment, f"{body.title[:60]} x{res['recipients']}")
+        audit(session, admin, "campaign.schedule" if res.get("scheduled") else "campaign.send", "segment", body.segment, f"{body.title[:60]} x{res['recipients']}")
     await session.commit()
     return res
+
+
+@router.delete("/campaigns/{campaign_id}")
+async def cancel_campaign(campaign_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
+    if not await campaigns.cancel(session, campaign_id):
+        raise ApiError("Only a scheduled campaign can be cancelled", "not_scheduled")
+    audit(session, admin, "campaign.cancel", "segment", str(campaign_id))
+    await session.commit()
+    return {"ok": True}
 
 
 @router.get("/campaigns")
