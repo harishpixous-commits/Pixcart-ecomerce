@@ -63,6 +63,8 @@ public static class ServiceConfiguration
         services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.PayUGateway>();
         services.AddScoped<BAL.Payments.IPaymentGateway, BAL.Payments.StripeGateway>();
         services.AddScoped<BAL.Payments.PaymentGateways>();
+        services.AddScoped<BAL.Payments.PaymentHealth>();
+        services.AddScoped<BAL.Payments.PaymentRouting>();
         // Sponsored products in the storefront search, from the advertising module.
         services.AddScoped<BAL.Interface.ISponsoredProducts, BAL.SponsoredProducts>();
         // AI for the storefront and translations: whether a model is connected for a route, and the translation engine.
