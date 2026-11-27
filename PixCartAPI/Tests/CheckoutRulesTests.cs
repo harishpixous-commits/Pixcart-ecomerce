@@ -644,4 +644,27 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(quoted, r.Json["order"]!["grand_total"]!.GetValue<long>());
         Assert.Equal(400, (await admin.Put("/api/admin/growth/settings", new { shipping_zones = new { remote_surcharge_paise = 9999999 } })).Status);
     }
+
+    [Fact]
+    public async Task Staff_can_rename_and_switch_off_return_reasons()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000304", "reasons-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000071", "Reasons Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        var subId = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+        static string[] Codes(Res r) => r.Json["reasons"]!.AsArray().Select(x => x!["code"]!.GetValue<string>()).ToArray();
+        Assert.Contains("quality", Codes(await buyer.Get("/api/returns/reasons")));
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { return_reasons = new { label_size_fit = "Does not fit me", off_quality = true } })).Status);
+        var r = await buyer.Get("/api/returns/reasons");
+        Assert.DoesNotContain("quality", Codes(r)); Assert.Equal(6, Codes(r).Length);
+        Assert.Equal("Does not fit me", r.Json["reasons"]!.AsArray().First(x => x!["code"]!.GetValue<string>() == "size_fit")!["label"]!.GetValue<string>());
+        var body = new { sub_order_id = subId, items = new[] { new { order_item_id = Guid.NewGuid(), qty = 1 } }, reason = "quality", refund_upi = "r@okaxis" };
+        Assert.Equal("invalid_reason", (await buyer.Post("/api/returns", body)).ErrorCode);
+        Assert.NotEqual("invalid_reason", (await buyer.Post("/api/returns", new { body.sub_order_id, body.items, reason = "size_fit", body.refund_upi })).ErrorCode);
+    }
 }

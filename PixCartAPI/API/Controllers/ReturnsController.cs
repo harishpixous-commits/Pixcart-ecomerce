@@ -14,14 +14,14 @@ namespace API.Controllers;
 /// Seller and staff decisions are in the seller and admin returns controllers.
 /// </summary>
 [ApiController]
-public class ReturnsController(IReturnsBAL returns, ICurrentUser current) : ControllerBase
+public class ReturnsController(IReturnsBAL returns, ICurrentUser current, Utils.Interface.IMySqlDapperHelper db) : ControllerBase
 {
     /// <summary>Why a customer can return an item; defect reasons stay allowed past the normal window
     /// (reference: GET /api/returns/reasons).</summary>
     [HttpGet("/api/returns/reasons")]
-    public JsonObject Reasons() => new()
+    public async Task<JsonObject> Reasons() => new()
     {
-        ["reasons"] = new JsonArray(PlatformSettingsBAL.ReturnReasons.Select(kv => (JsonNode?)new JsonObject
+        ["reasons"] = new JsonArray((await ReturnReasonsConfig.Async(db)).Select(kv => (JsonNode?)new JsonObject
         {
             ["code"] = kv.Key, ["label"] = kv.Value,
             ["defect"] = PlatformSettingsBAL.DefectReasons.Contains(kv.Key),

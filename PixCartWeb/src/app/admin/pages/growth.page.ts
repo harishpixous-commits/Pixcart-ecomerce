@@ -31,6 +31,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
+  return_reasons: { title: "Return reasons", hint: "Rename a reason shown to customers (label_...) or switch it off (off_...). Leave a label empty to keep the built-in text. Damaged, faulty, wrong or incomplete items keep their special rule." },
   shipping_zones: { title: "Shipping zones", hint: "Add a delivery fee per seller package for remote pincodes. List pincode prefixes separated by commas (for example 744, 19). By default the fee is not added to a package that already ships free." },
   saved_searches: { title: "Saved searches", hint: "Shoppers follow a search and get an in-app note when new matching products are approved. At most one note per search in the hours set here." },
   campaigns: { title: "Segment campaigns", hint: "Send an in-app message to a customer segment. Only customers who opted in to marketing get it. Needs Segments switched on." },

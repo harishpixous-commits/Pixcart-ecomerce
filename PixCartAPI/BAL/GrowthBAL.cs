@@ -10,7 +10,7 @@ namespace BAL;
 public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db, AppSettings app) : IGrowthBAL
 {
     public const string Key = "growth";
-    private enum K { Bool, Int, Text, List }
+    private enum K { Bool, Int, Text, Label, List }
     private sealed record F(string Name, object Default, K Kind, long Lo = 0, long Hi = 0);
 
     private static readonly Dictionary<string, F[]> Schema = new()
@@ -35,6 +35,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         ["seo"] = [new("sitemap_enabled", true, K.Bool), new("sitemap_include_categories", true, K.Bool), new("sitemap_include_sellers", false, K.Bool)],
         ["bulk_edit"] = [new("enabled", true, K.Bool), new("max_rows", 500, K.Int, 1, 5000)],
         ["campaigns"] = [new("enabled", false, K.Bool), new("max_recipients", 500, K.Int, 1, 5000), new("max_per_day", 3, K.Int, 1, 20)],
+        ["return_reasons"] = PlatformSettingsBAL.ReturnReasons.Keys.SelectMany(c => new[] { new F("label_" + c, "", K.Label, 0, 60), new F("off_" + c, false, K.Bool) }).ToArray(),
         ["shipping_zones"] = [new("enabled", false, K.Bool), new("remote_prefixes", "", K.Text, 0, 300), new("remote_surcharge_paise", 6000, K.Int, 0, 100000), new("waive_when_free", true, K.Bool)],
         ["saved_searches"] = [new("enabled", false, K.Bool), new("max_per_user", 10, K.Int, 1, 50), new("min_hours_between_alerts", 24, K.Int, 1, 720)],
         ["segments"] = [new("enabled", false, K.Bool), new("vip_spend_paise", 2500000, K.Int, 0, 1000000000), new("lapsed_days", 90, K.Int, 7, 1000), new("new_days", 30, K.Int, 1, 365)],
@@ -76,6 +77,9 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
             case K.Text:
                 if (v?.GetValueKind() != JsonValueKind.String || v.GetValue<string>().Trim().Length > f.Hi) throw new AppException(bad("is too long"), "invalid_setting");
                 return v.GetValue<string>().Trim().ToUpperInvariant();
+            case K.Label:
+                if (v?.GetValueKind() != JsonValueKind.String || v.GetValue<string>().Trim().Length > f.Hi) throw new AppException(bad("is too long"), "invalid_setting");
+                return string.Join(' ', v.GetValue<string>().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             default:
                 if (v is not JsonArray a || a.Count > f.Hi) throw new AppException(bad("has too many entries"), "invalid_setting");
                 var items = a.Select(x => SettingsJson.Text(x).Trim()).Where(x => x.Length == 6 && x.All(char.IsAsciiDigit)).Distinct();

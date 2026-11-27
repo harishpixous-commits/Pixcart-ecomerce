@@ -116,7 +116,8 @@ public partial class ReturnsBAL(
         var order = sub is null ? null : await orders.GetOrderAsync(sub.OrderId);
         if (sub is null || order is null || order.UserId != user.Id)
             throw new NotFoundException("Order");
-        if (!PlatformSettingsBAL.ReturnReasons.ContainsKey(reason))
+        var reasonLabels = await ReturnReasonsConfig.Async(db);
+        if (!reasonLabels.ContainsKey(reason))
             throw new AppException("Choose a reason for the return", "invalid_reason");
         var eligible = (await ReturnableItemsAsync(sub, uow)).ToDictionary(e => e["order_item_id"]!.GetValue<string>());
         if (lines.Count == 0)
@@ -172,7 +173,7 @@ public partial class ReturnsBAL(
         await notify.NotifySellerAsync(sub.SellerId, "seller_return_requested",
             new Dictionary<string, string>
             {
-                ["order_number"] = sub.Number, ["reason"] = PlatformSettingsBAL.ReturnReasons[reason],
+                ["order_number"] = sub.Number, ["reason"] = reasonLabels[reason],
             }, "/seller/returns");
         List<Guid> refundIds = [];
         if (cfg.Bool("auto_approve_returns"))
@@ -555,7 +556,7 @@ public partial class ReturnsBAL(
                 ["fleet_pickup"] = await fleetBal.PickupTrackingAsync(ret, viewer, uow) is { } t ? (JsonNode)t : null,
                 ["id"] = ret.Id.ToString(), ["number"] = ret.Number, ["status"] = ret.Status,
                 ["reason"] = ret.Reason,
-                ["reason_label"] = PlatformSettingsBAL.ReturnReasons.GetValueOrDefault(ret.Reason, ret.Reason),
+                ["reason_label"] = (await ReturnReasonsConfig.Async(db, false)).GetValueOrDefault(ret.Reason, ret.Reason),
                 ["comment"] = ret.Comment, ["seller_note"] = ret.SellerNote, ["refund_amount"] = ret.RefundAmount,
                 ["refund_upi"] = withUpi ? ret.RefundUpi : MaskUpi(ret.RefundUpi),
                 ["pickup_courier"] = ret.PickupCourier, ["pickup_tracking"] = ret.PickupTracking,
