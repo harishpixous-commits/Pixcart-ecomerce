@@ -21,6 +21,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     public sealed record CartLine(CartItemModel Item, VariantModel Variant, ProductModel Product, SellerModel Seller, string Image)
     {
         public string Problem { get; set; } = ""; // why this line cannot be bought right now
+        public int MinQty { get; set; } = 1;      // the seller's minimum order quantity for this item
         public int MaxQty { get; set; }           // the most this line can hold now
         public long LineTotal => Variant.PricePaise * Item.Qty;
     }
@@ -47,6 +48,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
             var line = new CartLine(item, variant, product, seller, imgs.GetValueOrDefault(product.Id)?.FirstOrDefault() ?? "");
             var dealLeft = atDeal.GetValueOrDefault(variant.Id);
             line.MaxQty = Math.Max(0, Math.Min(Math.Min(variant.Stock, perItem), dealLeft > 0 ? dealLeft : perItem));
+            line.MinQty = Math.Max(1, Math.Min(ProductInfo.DetailsOf(product.Details).MinQty, perItem));
             if (product.Status != "approved" || seller.Status != "approved" || !variant.IsActive)
                 line.Problem = "This item is no longer available";
             else if (seller.HolidayMode)
@@ -55,6 +57,8 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
                 line.Problem = "Out of stock";
             else if (variant.Stock < item.Qty)
                 line.Problem = $"Only {variant.Stock} left in stock";
+            else if (item.Qty < line.MinQty)
+                line.Problem = $"The minimum order for this item is {line.MinQty}";
             else if (item.Qty > perItem)
                 line.Problem = $"You can buy at most {perItem} of this item in one order";
             else if (dealLeft > 0 && item.Qty > dealLeft)
@@ -116,6 +120,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
                 ["line_total"] = line.LineTotal,
                 ["stock_left"] = line.Variant.Stock,
                 ["max_qty"] = line.MaxQty,
+                ["min_qty"] = line.MinQty,
                 ["problem"] = line.Problem,
             }).ToArray()),
         }).ToArray());
@@ -183,6 +188,13 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         })
         {
             if (cap > 0 && cap < newQty) { newQty = (int)cap; note = why; }
+        }
+        var prod = await catalog.GetProductAsync(variant.ProductId);
+        var minQty = Math.Max(1, Math.Min(prod is null ? 1 : ProductInfo.DetailsOf(prod.Details).MinQty, cfg.Int("max_qty_per_item")));
+        if (newQty < minQty)
+        {
+            if (minQty > variant.Stock) throw new AppException($"The minimum order for this item is {minQty}, but only {variant.Stock} are in stock", "below_minimum");
+            newQty = minQty; note = $"The minimum order for this item is {minQty}";
         }
         if (note.Length > 0) note = $"{note}, so your cart has {newQty}.";
         if (item is null)

@@ -51,6 +51,8 @@ public static partial class ProductInfo
     public sealed class Details
     {
         public string NetUnit { get; init; } = "";
+        /// <summary>The fewest units one order may hold (0 or 1 means no minimum).</summary>
+        public int MinQty { get; init; }
         public string GenericName { get; init; } = "";
         public string ModelNumber { get; init; } = "";
         public string Manufacturer { get; init; } = "";
@@ -119,6 +121,11 @@ public static partial class ProductInfo
             }
             var unit = Text("net_unit", 10, strip: false);
             if (unit.Length > 0 && !NetUnits.ContainsKey(unit)) throw new Invalid();
+            int minQty = 0;
+            if (o.TryGetPropertyValue("min_qty", out var mq) && mq is not null)
+            {
+                if (mq.GetValueKind() != JsonValueKind.Number || !int.TryParse(mq.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out minQty) || minQty is < 0 or > 100) throw new Invalid();
+            }
             var fssai = Regex.Replace(Text("fssai_license", 14, strip: false), @"\s+", "");
             if (fssai.Length > 0 && !FssaiRx().IsMatch(fssai))
             {
@@ -128,7 +135,7 @@ public static partial class ProductInfo
             }
             return new Details
             {
-                NetUnit = unit,
+                NetUnit = unit, MinQty = minQty,
                 GenericName = Text("generic_name", 120), ModelNumber = Text("model_number", 60), Manufacturer = Text("manufacturer", 400),
                 Packer = Text("packer", 400), Importer = Text("importer", 400), CustomerCare = Text("customer_care", 300), FssaiLicense = fssai,
                 Ingredients = Text("ingredients", 2000), Directions = Text("directions", 2000), SafetyInfo = Text("safety_info", 2000),

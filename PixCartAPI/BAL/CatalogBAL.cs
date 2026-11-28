@@ -599,6 +599,7 @@ public class CatalogBAL(
             ["offers"] = cfg.Bool("pdp_offers") && cfg.Bool("feature_coupons") ? await OffersForAsync(p, seller, cfg.Int("pdp_offers_max")) : new JsonArray(),
             ["seller_snapshot"] = cfg.Bool("pdp_seller_snapshot") ? await SellerSnapshotAsync(seller, cfg) : null,
             ["returnable"] = p.ReturnWindowDays > 0,
+            ["min_qty"] = Math.Max(1, ProductInfo.DetailsOf(p.Details).MinQty),
             ["deal"] = deal,
             // Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.
             ["seller"] = new JsonObject

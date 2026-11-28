@@ -112,6 +112,25 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task A_minimum_order_quantity_lifts_the_cart_and_checkout_accepts_it()
+    {
+        var (variantId, productId, _) = await ShirtInStock("9400000411", "moq-shirt");
+        await ApiFactory.DbExecAsync("UPDATE products SET details = CAST('{\"min_qty\": 3}' AS JSON) WHERE id = @productId", new { productId });
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000411", "Moq Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        var r = await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Contains("minimum order for this item is 3", r.Json["notice"]!.GetValue<string>());
+        var line = r.Json["groups"]![0]!["lines"]![0]!;
+        Assert.Equal(3, line["qty"]!.GetValue<int>()); Assert.Equal(3, line["min_qty"]!.GetValue<int>());
+        line = (await buyer.Put("/api/cart/items", new { variant_id = variantId, qty = 2 })).Json["groups"]![0]!["lines"]![0]!;
+        Assert.Equal(3, line["qty"]!.GetValue<int>());
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+    }
+
+    [Fact]
     public async Task Abandoned_cart_reminders_follow_the_settings_and_stop_after_an_order()
     {
         var admin = await Admin();
