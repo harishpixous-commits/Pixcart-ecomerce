@@ -628,7 +628,7 @@ async def credit_note(return_id: uuid.UUID, user: CurrentUser, session: SessionD
 
 
 @router.get("/api/notifications")
-async def my_notifications(user: CurrentUser, session: SessionDep, page: int = Query(default=1, ge=1)) -> dict:
+async def my_notifications(user: CurrentUser, session: SessionDep, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     rows = list(
         (
             await session.execute(

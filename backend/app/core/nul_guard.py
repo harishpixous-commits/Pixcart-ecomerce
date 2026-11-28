@@ -1,4 +1,4 @@
-"""Refuses a JSON body that carries a NUL character: the database cannot store it and it would end as a server error."""
+"""Refuses a JSON body or a query string that carries a NUL character: the database cannot store it and it would end as a server error."""
 from __future__ import annotations
 
 import json
@@ -11,6 +11,8 @@ class NulGuardMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and b"%00" in scope.get("query_string", b"").lower():
+            return await self._refuse(send)
         if scope["type"] != "http" or scope["method"] not in ("POST", "PUT", "PATCH"):
             return await self.app(scope, receive, send)
         ctype = dict(scope["headers"]).get(b"content-type", b"")
@@ -36,8 +38,11 @@ class NulGuardMiddleware:
                 return await receive()
 
         if total <= _MAX and (b"\x00" in body or b"\\u0000" in body.lower()):
-            out = json.dumps({"error": {"code": "invalid_text", "message": "The text contains a character that is not allowed", "fields": {}}}).encode()
-            await send({"type": "http.response.start", "status": 400, "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(out)).encode())]})
-            await send({"type": "http.response.body", "body": out})
-            return
+            return await self._refuse(send)
         await self.app(scope, receive_again, send)
+
+    @staticmethod
+    async def _refuse(send):
+        out = json.dumps({"error": {"code": "invalid_text", "message": "The text contains a character that is not allowed", "fields": {}}}).encode()
+        await send({"type": "http.response.start", "status": 400, "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(out)).encode())]})
+        await send({"type": "http.response.body", "body": out})

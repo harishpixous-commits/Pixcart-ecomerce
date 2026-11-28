@@ -441,7 +441,7 @@ async def my_earnings(b: Partner, session: SessionDep) -> dict:
 
 @router.get("/history")
 async def history(b: Partner, session: SessionDep, start: date | None = Query(default=None, alias="from"), end: date | None = Query(default=None, alias="to"),
-                  status: Literal["", "delivered", "failed", "rejected", "expired", "cancelled"] = "", page: int = Query(default=1, ge=1)) -> dict:
+                  status: Literal["", "delivered", "failed", "rejected", "expired", "cancelled"] = "", page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = select(DeliveryAssignment).where(DeliveryAssignment.delivery_boy_id == b.id, DeliveryAssignment.status.not_in(ACTIVE))
     if status:
         stmt = stmt.where(DeliveryAssignment.status == status)

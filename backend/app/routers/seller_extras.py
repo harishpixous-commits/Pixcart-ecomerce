@@ -199,7 +199,7 @@ async def inventory_grid(
     session: SessionDep,
     q: str = Query(default="", max_length=100),
     low_stock: bool = False,
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
 ) -> dict:
     whs = list((await session.execute(select(Warehouse).where(Warehouse.seller_id == seller.id).order_by(Warehouse.is_default.desc(), Warehouse.code))).scalars())
     stmt = select(Variant, Product.title, Product.id).join(Product, Product.id == Variant.product_id).where(Variant.seller_id == seller.id, Product.status != "archived")
@@ -355,7 +355,7 @@ class ReturnAction(BaseModel):
 
 
 @router.get("/returns")
-async def seller_returns(seller: SellerAccount, session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1)) -> dict:
+async def seller_returns(seller: SellerAccount, session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = select(ReturnRequest).where(ReturnRequest.seller_id == seller.id)
     if status:
         stmt = stmt.where(ReturnRequest.status == status)
@@ -393,7 +393,7 @@ async def seller_payouts(seller: SellerAccount, session: SessionDep) -> dict:
 
 
 @router.get("/ledger")
-async def seller_ledger(seller: SellerAccount, session: SessionDep, page: int = Query(default=1, ge=1)) -> dict:
+async def seller_ledger(seller: SellerAccount, session: SessionDep, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     rows = (
         await session.execute(
             select(LedgerEntry, SubOrder.number, Payout.number)
@@ -501,7 +501,7 @@ class ReplyIn(BaseModel):
 
 
 @router.get("/reviews")
-async def seller_reviews(seller: SellerAccount, session: SessionDep, page: int = Query(default=1, ge=1),
+async def seller_reviews(seller: SellerAccount, session: SessionDep, page: int = Query(default=1, ge=1, le=1_000_000),
                          rating: int | None = Query(default=None, ge=1, le=5), unanswered: bool = False, media: bool = False,
                          q: str = Query(default="", max_length=80)) -> dict:
     stmt = select(Review, Product.title, Product.slug).join(Product, Product.id == Review.product_id).where(Product.seller_id == seller.id)
@@ -553,7 +553,7 @@ async def seller_report_review(review_id: uuid.UUID, body: dict, seller: Approve
 
 @router.get("/product-reports")
 async def seller_product_reports(seller: SellerAccount, session: SessionDep, status: Literal["open", "resolved", "dismissed"] | None = None,
-                                 page: int = Query(default=1, ge=1)) -> dict:
+                                 page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     """Reports customers made about this seller's listings, without the customer's identity."""
     stmt = select(ProductReport, Product.title, Product.slug).join(Product, Product.id == ProductReport.product_id).where(ProductReport.seller_id == seller.id)
     if status:

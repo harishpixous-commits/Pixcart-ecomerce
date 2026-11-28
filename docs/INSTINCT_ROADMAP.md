@@ -565,3 +565,4 @@ Grepped both repos: neither exists. Written designs only, nothing built, for Har
 - Push 191: Python indexes on 15 foreign keys used by cart, order, refund, ledger, review and audit lookups (Alembic 0067). The .NET MySQL database already indexes every foreign key automatically, so no change there.
 - Push 192: screen-reader names on the notification title/message/link fields and the app-file pickers (admin).
 - Push 193: odd request bodies (NUL characters, huge text, wrong types, file routes sent JSON) never end as a server error; sweep tests over every staff and customer write route in both stacks.
+- Push 194: odd query strings never cause a server error. Python: page numbers capped at 1,000,000 on 31 list routes (a huge page crashed the database), NUL in the query refused with 400. .NET was already clean. Sweep tests in both.

@@ -220,7 +220,7 @@ async def update_coupon(coupon_id: uuid.UUID, body: AdminCouponIn, admin: Perm("
 
 @router.get("/reviews")
 async def reviews(admin: Perm("catalog"), session: SessionDep, status: Literal["published", "pending", "hidden"] | None = None,
-                  rating: int | None = None, page: int = Query(default=1, ge=1), q: str = Query(default="", max_length=80),
+                  rating: int | None = None, page: int = Query(default=1, ge=1, le=1_000_000), q: str = Query(default="", max_length=80),
                   reported: bool = False, media: bool = False, media_pending: bool = False, seller_id: uuid.UUID | None = None) -> dict:
     stmt = select(Review, Product.title, Product.slug, User.name, User.phone).join(Product, Product.id == Review.product_id).join(User, User.id == Review.user_id)
     if q.strip():
@@ -332,7 +332,7 @@ async def put_review_settings(body: dict[str, Any], admin: Perm("catalog"), sess
 @router.get("/product-reports")
 async def product_reports(admin: Perm("catalog"), session: SessionDep, status: Literal["open", "resolved", "dismissed"] | None = "open",
                           reason: str | None = None, q: str = Query(default="", max_length=80), seller_id: uuid.UUID | None = None,
-                          page: int = Query(default=1, ge=1)) -> dict:
+                          page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = (select(ProductReport, Product.title, Product.slug, Product.status, Seller.display_name, User.name, User.phone)
             .join(Product, Product.id == ProductReport.product_id).join(Seller, Seller.id == ProductReport.seller_id)
             .outerjoin(User, User.id == ProductReport.user_id))
@@ -399,7 +399,7 @@ async def resolve_product_report(report_id: uuid.UUID, body: ProductReportAction
 
 
 @router.get("/returns")
-async def admin_returns(admin: Perm("orders"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1),
+async def admin_returns(admin: Perm("orders"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1, le=1_000_000),
                         q: str = Query(default="", max_length=60), seller_id: uuid.UUID | None = None) -> dict:
     stmt = select(ReturnRequest)
     if status:
@@ -470,7 +470,7 @@ async def admin_return_action(return_id: uuid.UUID, body: AdminReturnAction, adm
 
 
 @router.get("/payouts")
-async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1),
+async def payouts(admin: Perm("payouts"), session: SessionDep, status: str | None = None, page: int = Query(default=1, ge=1, le=1_000_000),
                   seller_id: uuid.UUID | None = None) -> dict:
     stmt = select(Payout, Seller).join(Seller, Seller.id == Payout.seller_id)
     if status:
@@ -594,7 +594,7 @@ async def ticket_satisfaction(admin: Perm("support"), session: SessionDep) -> di
 
 @router.get("/tickets")
 async def tickets(admin: Perm("support"), session: SessionDep, status: str | None = "open", overdue: bool = False, grievance: bool = False,
-                  page: int = Query(default=1, ge=1), q: str = Query(default="", max_length=60)) -> dict:
+                  page: int = Query(default=1, ge=1, le=1_000_000), q: str = Query(default="", max_length=60)) -> dict:
     stmt = select(SupportTicket, User.name, User.phone).join(User, User.id == SupportTicket.user_id)
     if q.strip():
         like = f"%{q.strip()}%"

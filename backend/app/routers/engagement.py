@@ -348,7 +348,7 @@ async def product_bundles(slug: str, session: SessionDep) -> dict:
 
 
 @router.get("/api/seller/questions")
-async def seller_questions(seller: SellerAccount, session: SessionDep, unanswered: bool = False, page: int = Query(default=1, ge=1)) -> dict:
+async def seller_questions(seller: SellerAccount, session: SessionDep, unanswered: bool = False, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = (select(ProductQuestion, Product.title, Product.slug).join(Product, Product.id == ProductQuestion.product_id)
             .where(Product.seller_id == seller.id, ProductQuestion.status == "published"))
     if unanswered:
@@ -397,7 +397,7 @@ async def seller_answer(question_id: uuid.UUID, body: AnswerIn, seller: SellerAc
 
 @router.get("/api/admin/questions")
 async def admin_questions(admin: Perm("catalog"), session: SessionDep, status: Literal["pending", "published", "hidden"] = "pending",
-                          q: str = Query(default="", max_length=80), page: int = Query(default=1, ge=1)) -> dict:
+                          q: str = Query(default="", max_length=80), page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     """Questions and answers in one queue: each row is a post (question or answer) with its context."""
     like = f"%{q.strip()}%" if q.strip() else None
     qs = select(ProductQuestion, Product.title, Product.slug, User.name).join(Product, Product.id == ProductQuestion.product_id).outerjoin(

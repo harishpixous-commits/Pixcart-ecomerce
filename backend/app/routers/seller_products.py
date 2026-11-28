@@ -359,7 +359,7 @@ async def list_products(
     status: Literal["draft", "pending", "approved", "rejected", "archived"] | None = None,
     q: str = Query(default="", max_length=100),
     low_stock: bool = False,
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict:
     stmt = select(Product).where(Product.seller_id == seller.id)

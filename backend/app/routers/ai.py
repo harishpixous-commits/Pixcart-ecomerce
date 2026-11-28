@@ -98,7 +98,7 @@ async def studio_save(body: dict[str, Any], admin: Perm("settings"), session: Se
 
 
 @router.get("/api/admin/ai/runs")
-async def runs(admin: Perm("settings"), session: SessionDep, task: str | None = None, status: str | None = None, page: int = Query(default=1, ge=1)) -> dict:
+async def runs(admin: Perm("settings"), session: SessionDep, task: str | None = None, status: str | None = None, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     cfg = await get_ai_settings(session)
     stmt = select(AiRun, User.name).outerjoin(User, User.id == AiRun.created_by)
     if task:

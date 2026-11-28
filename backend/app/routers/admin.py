@@ -171,7 +171,7 @@ async def list_sellers(
     session: SessionDep,
     status: Literal["draft", "submitted", "approved", "rejected", "suspended"] | None = None,
     q: str = Query(default="", max_length=80),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     stmt = select(Seller)
@@ -301,7 +301,7 @@ async def list_products(
     status: Literal["draft", "pending", "approved", "rejected", "archived"] | None = "pending",
     q: str = Query(default="", max_length=100),
     seller_id: uuid.UUID | None = None,
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     stmt = select(Product, Seller.display_name).join(Seller, Seller.id == Product.seller_id)
@@ -594,7 +594,7 @@ async def list_orders(
     date_to: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     late: bool = False,
     tag: str = Query(default="", max_length=30),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     stmt = select(Order, User.name, User.phone).join(User, User.id == Order.user_id)
@@ -812,7 +812,7 @@ async def list_refunds(
     admin: Perm("refunds"),
     session: SessionDep,
     status: Literal["pending", "processed", "failed"] | None = None,
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     q: str = Query(default="", max_length=40),
 ) -> dict:
     stmt = select(Refund, Order.number).join(Order, Order.id == Refund.order_id)
@@ -887,7 +887,7 @@ async def list_customers(
     admin: Perm("customers"),
     session: SessionDep,
     q: str = Query(default="", max_length=80),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=25, ge=1, le=100),
     kind: Literal["all", "customers", "sellers", "staff", "blocked"] = "all",
     tag: str = Query(default="", max_length=30),
@@ -1005,7 +1005,7 @@ async def audit_log(
     admin: Perm("audit"),
     session: SessionDep,
     entity_id: str | None = Query(default=None, max_length=64),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
 ) -> dict:
     stmt = select(AuditLog, User.name, User.phone).outerjoin(User, User.id == AuditLog.actor_user_id)
     if entity_id:

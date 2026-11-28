@@ -119,7 +119,7 @@ class ReasonIn(BaseModel):
 
 @router.get("/api/admin/deals")
 async def admin_deals(admin: Perm("catalog"), session: SessionDep, status: str | None = "pending", q: str = Query(default="", max_length=80),
-                      page: int = Query(default=1, ge=1)) -> dict:
+                      page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     if await deals_svc.sync(session):
         await session.commit()
     stmt = select(Deal)
@@ -548,7 +548,7 @@ async def seller_campaign_report(campaign_id: uuid.UUID, seller: SellerAccount, 
 
 @router.get("/api/admin/ads")
 async def admin_ads(admin: Perm("marketing"), session: SessionDep, status: str | None = None, q: str = Query(default="", max_length=80),
-                    page: int = Query(default=1, ge=1)) -> dict:
+                    page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = select(AdCampaign)
     if status and status != "all":
         stmt = stmt.where(AdCampaign.status == status)

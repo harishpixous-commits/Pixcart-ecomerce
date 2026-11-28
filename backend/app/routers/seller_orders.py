@@ -124,7 +124,7 @@ async def list_orders(
     session: SessionDep,
     status: STATUS | None = None,
     q: str = Query(default="", max_length=40),
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict:
     stmt = select(SubOrder, Order).join(Order, Order.id == SubOrder.order_id).where(SubOrder.seller_id == seller.id, SubOrder.status != "pending_payment")
@@ -382,7 +382,7 @@ async def dashboard(seller: SellerAccount, session: SessionDep) -> dict:
 async def earnings(
     seller: SellerAccount,
     session: SessionDep,
-    page: int = Query(default=1, ge=1),
+    page: int = Query(default=1, ge=1, le=1_000_000),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     now = utcnow()

@@ -415,7 +415,7 @@ async def live(admin: Staff, session: SessionDep) -> dict:
 
 @router.get("/trips")
 async def trips(admin: Staff, session: SessionDep, status: str = Query(default="", max_length=12), q: str = Query(default="", max_length=60),
-                partner_id: uuid.UUID | None = None, page: int = Query(default=1, ge=1)) -> dict:
+                partner_id: uuid.UUID | None = None, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = select(DeliveryAssignment).join(SubOrder, SubOrder.id == DeliveryAssignment.sub_order_id).join(DeliveryBoy, DeliveryBoy.id == DeliveryAssignment.delivery_boy_id)
     if status == "active":
         stmt = stmt.where(DeliveryAssignment.status.in_(ACTIVE))
@@ -491,7 +491,7 @@ async def add_deposit(partner_id: uuid.UUID, body: DepositIn, admin: Staff, sess
 
 
 @router.get("/payouts")
-async def payouts(admin: Staff, session: SessionDep, status: Literal["", "pending", "paid"] = "", page: int = Query(default=1, ge=1)) -> dict:
+async def payouts(admin: Staff, session: SessionDep, status: Literal["", "pending", "paid"] = "", page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = select(DeliveryPayout, DeliveryBoy).join(DeliveryBoy, DeliveryBoy.id == DeliveryPayout.delivery_boy_id)
     if status:
         stmt = stmt.where(DeliveryPayout.status == status)
@@ -581,7 +581,7 @@ async def reports(admin: Staff, session: SessionDep, days: int = Query(default=3
 
 @router.get("/feedback")
 async def feedback(admin: Staff, session: SessionDep, kind: Literal["ratings", "complaints"] = "complaints", status: Literal["", "open", "resolved"] = "open",
-                   page: int = Query(default=1, ge=1)) -> dict:
+                   page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     if kind == "ratings":
         stmt = select(DeliveryAssignment, DeliveryBoy.name, SubOrder.number).join(DeliveryBoy, DeliveryBoy.id == DeliveryAssignment.delivery_boy_id).join(
             SubOrder, SubOrder.id == DeliveryAssignment.sub_order_id).where(DeliveryAssignment.rating.is_not(None))
@@ -621,7 +621,7 @@ async def resolve_complaint(complaint_id: uuid.UUID, body: ResolveComplaintIn, a
 
 @router.get("/partners")
 async def partners(admin: Staff, session: SessionDep, status: str = Query(default="", max_length=12), q: str = Query(default="", max_length=80),
-                   zone_id: uuid.UUID | None = None, online: bool | None = None, page: int = Query(default=1, ge=1)) -> dict:
+                   zone_id: uuid.UUID | None = None, online: bool | None = None, page: int = Query(default=1, ge=1, le=1_000_000)) -> dict:
     stmt = select(DeliveryBoy)
     if status == "inactive":
         stmt = stmt.where(DeliveryBoy.is_active.is_(False))
