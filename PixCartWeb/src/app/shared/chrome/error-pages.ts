@@ -93,6 +93,12 @@ export class NotFoundView {
     const meta = inject(Meta);
     meta.updateTag({ name: "robots", content: "noindex" });
     inject(DestroyRef).onDestroy(() => meta.removeTag('name="robots"'));
+    // an old address staff pointed somewhere new (Admin → Redirects): follow it instead of showing "not found"
+    if (this.shop()) {
+      api<{ to: string }>(`/api/catalog/redirect?path=${encodeURIComponent(window.location.pathname)}`)
+        .then((r) => (r.to.startsWith("/") ? void this.router.navigateByUrl(r.to, { replaceUrl: true }) : window.location.replace(r.to)))
+        .catch(() => undefined);
+    }
   }
 
   protected search(e: Event): void {

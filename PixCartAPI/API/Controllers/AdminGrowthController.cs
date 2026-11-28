@@ -206,3 +206,19 @@ public class CollectionsPublicController(IMySqlDapperHelper db, ICatalogBAL cata
     [HttpGet("/api/catalog/collections"), RouteGuard("public")] public async Task<object> List() => await BAL.ProductCollections.PublicListAsync(db);
     [HttpGet("/api/catalog/collections/{slug}"), RouteGuard("public")] public async Task<object> Page(string slug) => await BAL.ProductCollections.PublicPageAsync(db, catalog, dal, slug);
 }
+
+/// <summary>URL redirects: staff map old addresses to new ones; the shop's page-not-found screen follows them.</summary>
+[ApiController, SignedIn]
+public class RedirectsAdminController(IMySqlDapperHelper db, ICurrentUser me) : ControllerBase
+{
+    [HttpGet("/api/admin/redirects"), RouteGuard("perm:marketing")] public async Task<object> List() { await me.RequireAsync(); return await BAL.UrlRedirects.AdminListAsync(db); }
+    [HttpPost("/api/admin/redirects"), RouteGuard("perm:marketing")] public async Task<IActionResult> Create(BAL.UrlRedirects.Input b) => StatusCode(201, await BAL.UrlRedirects.CreateAsync(db, await me.RequireAsync(), b));
+    [HttpPut("/api/admin/redirects/{id:guid}"), RouteGuard("perm:marketing")] public async Task<object> Edit(Guid id, BAL.UrlRedirects.Input b) => await BAL.UrlRedirects.EditAsync(db, await me.RequireAsync(), id, b);
+    [HttpDelete("/api/admin/redirects/{id:guid}"), RouteGuard("perm:marketing")] public async Task<object> Delete(Guid id) => await BAL.UrlRedirects.DeleteAsync(db, await me.RequireAsync(), id);
+}
+
+[ApiController]
+public class RedirectsPublicController(IMySqlDapperHelper db) : ControllerBase
+{
+    [HttpGet("/api/catalog/redirect"), RouteGuard("public")] public async Task<object> Resolve([System.ComponentModel.DataAnnotations.MaxLength(300)] string path = "") => await BAL.UrlRedirects.ResolveAsync(db, path);
+}
