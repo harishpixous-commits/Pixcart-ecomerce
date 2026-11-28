@@ -74,6 +74,14 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
                 summary["grand_total"] = summary["grand_total"]!.GetValue<long>() - auto.Discount;
                 summary["coupon_discount"] = auto.Discount;
             }
+            var nudge = await coupons.VolumeNudgeAsync(user.Id, await cart.LoadCartAsync(user.Id));
+            if (nudge is not null)
+            {
+                var hints = new JsonArray { nudge };
+                if (view["hints"] is JsonArray old) foreach (var h in old.ToList()) hints.Add(h!.DeepClone());
+                while (hints.Count > 3) hints.RemoveAt(3);
+                view["hints"] = hints;
+            }
         }
         view["cod_allowed"] = cfg.Bool("cod_enabled") && summary["grand_total"]!.GetValue<long>() <= cfg.Int("cod_max_order_paise");
         view["address_id"] = address.Id.ToString();

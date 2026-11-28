@@ -108,6 +108,24 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         return best;
     }
 
+    /// <summary>A short cart hint for the closest automatic volume offer the cart is just short of ("Add 1 more item to get 10% off"), or null.</summary>
+    public async Task<string?> VolumeNudgeAsync(Guid userId, IReadOnlyList<CartBAL.CartLine> lines)
+    {
+        var saved = JsonHelper.Object(await coupons.GrowthJsonAsync());
+        if (!((JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["auto_discounts"]!).Bool("enabled")) return null;
+        (int N, CouponModel C)? best = null;
+        foreach (var c in (await coupons.AutomaticAsync()).Where(x => x.Kind == "volume"))
+        {
+            try { await EvaluateAsync(c.Code, userId, lines); }
+            catch (AppException exc)
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(exc.Message, @"^Add (\d+) more item");
+                if (exc.Code == "coupon_not_applicable" && m.Success && (best is null || int.Parse(m.Groups[1].Value) < best.Value.N)) best = (int.Parse(m.Groups[1].Value), c);
+            }
+        }
+        return best is { } b ? $"Add {b.N} more item{(b.N > 1 ? "s" : "")} to get {b.C.Value}% off" : null;
+    }
+
     /// <summary>The coupons shown at checkout.</summary>
     public async Task<List<JsonObject>> ListForCheckoutAsync()
     {

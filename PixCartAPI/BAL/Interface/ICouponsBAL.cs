@@ -11,6 +11,7 @@ public interface ICouponsBAL
 
     /// <summary>The automatic coupon that saves the most on this cart, or null (Growth, Automatic discounts must be on).</summary>
     Task<CouponsBAL.Result?> BestAutomaticAsync(Guid userId, IReadOnlyList<CartBAL.CartLine> lines);
+    Task<string?> VolumeNudgeAsync(Guid userId, IReadOnlyList<CartBAL.CartLine> lines);
 
     /// <summary>The coupons shown at checkout.</summary>
     Task<List<JsonObject>> ListForCheckoutAsync();
