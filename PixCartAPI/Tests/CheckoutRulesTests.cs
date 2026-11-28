@@ -931,6 +931,25 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Bundle_block_hides_expired_used_up_and_switched_off_bundles()
+    {
+        var admin = await Admin();
+        var (_, prodA, _) = await ShirtInStock("9400000431", "edge-shirt-a");
+        var (_, prodB, _) = await ShirtInStock("9400000432", "edge-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "EDGESET", description = "", kind = "bundle", value = 10, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = true, product_slugs = new[] { "edge-shirt-a", "edge-shirt-b" } })).Status);
+        var v = Factory.CreateClient();
+        async Task<bool> Shown() => (await v.GetFromJsonAsync<JsonObject>("/api/catalog/products/edge-shirt-a/bundles"))!["bundles"]!.AsArray().Count > 0;
+        Task Change(string set) => ApiFactory.DbExecAsync("UPDATE coupons SET " + set + " WHERE code = 'EDGESET'");
+        Assert.True(await Shown());
+        await Change("ends_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE"); Assert.False(await Shown());
+        await Change("ends_at = NULL, starts_at = UTC_TIMESTAMP() + INTERVAL 1 DAY"); Assert.False(await Shown());
+        await Change("starts_at = NULL, usage_limit = 1, used_count = 1"); Assert.False(await Shown());
+        await Change("usage_limit = NULL, is_active = 0"); Assert.False(await Shown());
+        await Change("is_active = 1"); Assert.True(await Shown());
+    }
+
+    [Fact]
     public async Task Bundle_block_lists_the_set_with_price_and_saving()
     {
         var admin = await Admin();
