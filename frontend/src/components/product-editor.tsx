@@ -244,6 +244,17 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
     onSaved?.(await api<SellerProduct>(`/api/seller/products/${product.id}`));
   }
 
+  async function duplicate() {
+    if (!product) return;
+    try {
+      const copy = await api<SellerProduct>(`/api/seller/products/${product.id}/duplicate`, { method: "POST" });
+      toast("Copied as a draft with no stock. Set the stock and prices, then submit.");
+      router.push(`/seller/products/${copy.id}`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Could not copy the product");
+    }
+  }
+
   const canSubmit = !product || product.status === "draft" || product.status === "rejected";
 
   return (
@@ -255,6 +266,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         actions={product && (
           <>
             {product.status === "approved" && <Link href={`/p/${product.slug}`} target="_blank" className="inline-flex h-10 items-center rounded-lg px-3 font-semibold text-peacock hover:bg-peacock-light">View on store</Link>}
+            <Button variant="ghost" onClick={duplicate}>Duplicate</Button>
             {product.status === "archived" ? <Button variant="secondary" onClick={() => archive(true)}>Restore</Button> : <Button variant="ghost" onClick={() => archive(false)}>Archive</Button>}
           </>
         )}

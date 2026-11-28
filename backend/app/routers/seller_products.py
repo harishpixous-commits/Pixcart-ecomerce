@@ -576,6 +576,31 @@ async def submit_product(product_id: uuid.UUID, seller: SellerAccount, user: Cur
     return await product_detail(session, p)
 
 
+@router.post("/products/{product_id}/duplicate", status_code=201)
+async def duplicate_product(product_id: uuid.UUID, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
+    """A new draft copy of one of your listings ("Copy of ..."): same content, images and videos; every version gets a fresh SKU and starts with no stock."""
+    src = await product_detail(session, await _owned(session, seller.id, product_id))
+    variants = []
+    used: set[str] = set()
+    for v in src["variants"]:
+        n = 0
+        while True:
+            suffix = "-COPY" + (str(n + 1) if n else "")
+            sku = v["sku"][: 60 - len(suffix)] + suffix
+            if sku.lower() not in used and not await _sku_conflict(session, seller.id, sku, None):
+                break
+            n += 1
+        used.add(sku.lower())
+        variants.append(VariantIn(sku=sku, options=v["options"], mrp_paise=v["mrp_paise"], price_paise=v["price_paise"], stock=0,
+                                  weight_grams=v.get("weight_grams") or 500, net_qty=v.get("net_qty"), is_active=v.get("is_active", True)))
+    body = ProductIn(
+        **{k: src[k] for k in ("category_id", "title", "brand", "description", "highlights", "specs", "hsn_code", "gst_bps", "country_of_origin",
+                               "return_window_days", "size_guide", "images", "videos", "details") if k in src},
+        variants=variants)
+    body.title = ("Copy of " + body.title)[:200]
+    return await create_product(body, seller, user, session)
+
+
 @router.post("/products/{product_id}/archive")
 async def archive_product(product_id: uuid.UUID, seller: SellerAccount, user: CurrentUser, session: SessionDep) -> dict:
     p = await _owned(session, seller.id, product_id, lock=True)
