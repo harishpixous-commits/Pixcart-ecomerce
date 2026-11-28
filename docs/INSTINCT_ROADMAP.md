@@ -530,3 +530,4 @@ Grepped both repos: neither exists. Written designs only, nothing built, for Har
 - Push 193: odd request bodies (NUL characters, huge text, wrong types, file routes sent JSON) never end as a server error; sweep tests over every staff and customer write route in both stacks.
 - Push 194: odd query strings never cause a server error. Python: page numbers capped at 1,000,000 on 31 list routes (a huge page crashed the database), NUL in the query refused with 400. .NET was already clean. Sweep tests in both.
 - Push 195: tests only. The last use of a coupon goes to exactly one order when five customers order at once (both stacks held, no bug found).
+- Push 196: tests only. Double payment confirm and double cancel at the same moment (payment counted once, refund once, coupon use and stock given back once). Held in both stacks, no bug found.

@@ -2345,5 +2345,27 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(1, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = 'ONLYONE'"));
     }
 
+    [Fact]
+    public async Task Cancelling_one_order_three_times_at_once_gives_back_one_coupon_use_and_one_unit_of_stock()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000531", "cancel-race-shirt");
+        await Refresh(productId);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "CANCELRACE", description = "", kind = "flat", value = 1000, min_order_paise = 0, usage_limit = 5, per_user_limit = 5, is_active = true, show_on_checkout = false, is_automatic = false })).Status);
+        var stockBefore = await ApiFactory.DbScalarAsync<int>("SELECT stock FROM variants WHERE id = @id", new { id = variantId });
+        var buyer = await LoginPhone("9620000531", "Cancel Racer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = "CANCELRACE" });
+        Assert.True(r.Status == 201, r.ToString());
+        var orderId = r.Json["order"]!["id"]!.GetValue<string>();
+        Assert.Equal(stockBefore - 1, await ApiFactory.DbScalarAsync<int>("SELECT stock FROM variants WHERE id = @id", new { id = variantId }));
+        var res = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => buyer.Post($"/api/orders/{orderId}/cancel", new { reason = "Ordered by mistake" })));
+        var codes = res.Select(x => x.Status).ToList();
+        Assert.True(codes.Count(c => c == 200) == 1 && codes.Where(c => c != 200).All(c => c is 400 or 409), string.Join(",", codes));
+        Assert.Equal(0, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = 'CANCELRACE'"));
+        Assert.Equal(stockBefore, await ApiFactory.DbScalarAsync<int>("SELECT stock FROM variants WHERE id = @id", new { id = variantId }));
+    }
+
     private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }
