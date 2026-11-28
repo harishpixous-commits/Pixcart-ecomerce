@@ -169,6 +169,6 @@ public class CustomerAccountController(
         return new { ok = true, points_cleared = cleared };
     }
 
-    [HttpGet("/api/account/delete-info"), SignedIn]
+    [HttpGet("/api/account/delete-info"), SignedIn, RouteGuard("signed_in")]
     public async Task<object> DeleteInfo() => await account.DeleteInfoAsync(await me.RequireAsync());
 }
