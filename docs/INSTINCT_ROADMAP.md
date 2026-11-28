@@ -455,3 +455,5 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 - Push 149: Customer staff notes and tags (private, on the customer page; V032). Python and .NET.
 - Push 150: Customer list search finds staff tags, plus a tag filter (?tag=). Python and .NET.
 - Push 151: A platform coupon can be limited to chosen products (typed as product link names; unknown name is refused). Empty = whole cart. V033. Python and .NET.
+
+- Push 152 was withdrawn: a per-product size guide already existed (size_guide in the buy box). My duplicate size_chart was reverted by a new commit, nothing deleted from history.
