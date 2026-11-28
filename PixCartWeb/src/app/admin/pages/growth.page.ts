@@ -31,6 +31,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
+  return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
   return_reasons: { title: "Return reasons", hint: "Rename a reason shown to customers (label_...) or switch it off (off_...). Leave a label empty to keep the built-in text. Damaged, faulty, wrong or incomplete items keep their special rule." },
   shipping_zones: { title: "Shipping zones", hint: "Add a delivery fee per seller package for remote pincodes. List pincode prefixes separated by commas (for example 744, 19). By default the fee is not added to a package that already ships free. State fees: list state code and fee in paise, like 33:3000, 29:5000, to change the delivery fee for a seller package that does not ship free. Free above by state: list state code and item total in paise, like 33:80000, to set a different free-delivery amount there (a seller's own amount still wins)." },

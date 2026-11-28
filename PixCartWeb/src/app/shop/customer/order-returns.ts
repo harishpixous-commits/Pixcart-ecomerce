@@ -7,7 +7,7 @@
 
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, inject, input, output, signal, untracked } from "@angular/core";
 import { FileText } from "lucide-angular";
-import { ApiError, api, quietly } from "../../core/api";
+import { ApiError, api, quietly, uploadWithProgress } from "../../core/api";
 import { date, rupees } from "../../core/format";
 import type { ReturnView, ReturnableItem } from "../../core/types";
 import { RETURN_STATUS, openPdf } from "../../shared/portal/helpers";
@@ -58,12 +58,27 @@ type Reason = { code: string; label: string; defect: boolean };
           </select>
         </pc-field>
         <pc-field label="More details (optional)" for="rc"><textarea pcTextarea id="rc" [value]="comment()" (input)="comment.set($any($event.target).value)" maxlength="2000" rows="3"></textarea></pc-field>
+        @if (showPhotos()) {
+          <pc-field [label]="photoCfg().required_for_defects ? 'Photos of the problem (needed for damaged or faulty items)' : 'Photos (optional)'" for="rp" [hint]="'Up to ' + photoCfg().max + ' photos'">
+            <div class="flex flex-wrap items-center gap-2" data-testid="return-photos">
+              @for (u of photos(); track u) {
+                <span class="relative">
+                  <img [src]="u" alt="Return photo" class="h-16 w-16 rounded-lg border border-line object-cover" />
+                  <button type="button" aria-label="Remove photo" class="absolute -right-1 -top-1 rounded-full bg-white px-1 text-xs shadow" (click)="removePhoto(u)">×</button>
+                </span>
+              }
+              @if (photos().length < photoCfg().max) {
+                <input id="rp" type="file" accept="image/*" [disabled]="uploading()" (change)="addPhoto($event)" class="text-sm" />
+              }
+            </div>
+          </pc-field>
+        }
         @if (needsUpi()) {
           <pc-text-field [label]="copy().upi" [value]="upi()" [filter]="trim" (valueChange)="upi.set($event)" placeholder="yourname@okbank" [hint]="copy().upiHint" />
         }
         <div class="flex items-center justify-between gap-3 border-t border-line pt-3">
           <p>Refund: <span class="font-display text-lg font-bold">{{ fmt(refund()) }}</span></p>
-          <button pcButton (click)="submit()" [loading]="busy()" [disabled]="!chosen().length || !why() || (needsUpi() && !upi())">{{ copy().submit }}</button>
+          <button pcButton (click)="submit()" [loading]="busy()" [disabled]="!chosen().length || !why() || (needsUpi() && !upi()) || photoNeeded() || uploading()">{{ copy().submit }}</button>
         </div>
       </div>
     </pc-modal>
@@ -84,6 +99,9 @@ export class ReturnRequestModal {
   protected readonly reason = signal("");
   protected readonly comment = signal("");
   protected readonly upi = signal("");
+  protected readonly photoCfg = signal<{ enabled: boolean; required_for_defects: boolean; max: number }>({ enabled: false, required_for_defects: false, max: 3 });
+  protected readonly photos = signal<string[]>([]);
+  protected readonly uploading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly fmt = rupees;
@@ -97,9 +115,33 @@ export class ReturnRequestModal {
   protected readonly allowed = computed(() => (this.defectsOnly() ? this.reasons().filter((r) => r.defect) : this.reasons()));
   protected readonly why = computed(() => (this.allowed().some((r) => r.code === this.reason()) ? this.reason() : ""));
 
+  protected readonly showPhotos = computed(() => !this.staff() && this.photoCfg().enabled);
+  protected readonly photoNeeded = computed(() => this.showPhotos() && this.photoCfg().required_for_defects && !!this.allowed().find((r) => r.code === this.why())?.defect && this.photos().length === 0);
+
+  protected async addPhoto(ev: Event): Promise<void> {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    this.uploading.set(true);
+    this.error.set(null);
+    try {
+      const up = await uploadWithProgress<{ url: string }>("/api/returns/photos", file, () => {});
+      this.photos.update((p) => [...p, up.url]);
+    } catch (e) {
+      this.error.set(e instanceof ApiError ? e.message : "Could not upload the photo");
+    } finally {
+      this.uploading.set(false);
+    }
+  }
+
+  protected removePhoto(u: string): void {
+    this.photos.update((p) => p.filter((x) => x !== u));
+  }
+
   constructor() {
     effect(() => {
-      if (this.open()) untracked(() => api<{ reasons: Reason[] }>("/api/returns/reasons").then((r) => this.reasons.set(r.reasons)).catch(quietly));
+      if (this.open()) untracked(() => api<{ reasons: Reason[]; photos?: { enabled: boolean; required_for_defects: boolean; max: number } }>("/api/returns/reasons").then((r) => { this.reasons.set(r.reasons); if (r.photos) this.photoCfg.set(r.photos); }).catch(quietly));
     });
   }
 
@@ -120,7 +162,7 @@ export class ReturnRequestModal {
       const qty = this.qty();
       await api(this.copy().path, {
         method: "POST",
-        body: { sub_order_id: this.subId(), items: this.chosen().map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: this.why(), comment: this.comment(), refund_upi: this.upi() },
+        body: { sub_order_id: this.subId(), items: this.chosen().map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: this.why(), comment: this.comment(), refund_upi: this.upi(), ...(this.showPhotos() ? { photos: this.photos() } : {}) },
       });
       this.toast.show(this.copy().done);
       this.done.emit();

@@ -53,6 +53,13 @@ const TABS = [["requested", "Waiting for seller"], ["approved", "Approved"], ["p
                 </div>
               }
               <p class="text-ink-soft"><strong>{{ r.reason_label }}.</strong> {{ r.comment }}</p>
+              @if ((r.photos ?? []).length) {
+                <div class="mt-2 flex flex-wrap gap-2" data-testid="return-photos">
+                  @for (u of r.photos ?? []; track u) {
+                    <a [href]="u" target="_blank" rel="noreferrer"><img [src]="u" alt="Photo from the customer" class="h-16 w-16 rounded-lg border border-line object-cover" /></a>
+                  }
+                </div>
+              }
               <p class="text-sm text-ink-faint">Requested {{ dateTime(r.created_at) }}{{ r.refund_upi ? ". Refund to UPI " + r.refund_upi : "" }}</p>
               @if (canAct()) {
                 <div class="mt-2 flex flex-wrap gap-2">

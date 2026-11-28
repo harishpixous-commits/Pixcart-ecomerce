@@ -786,6 +786,7 @@ export interface ReturnView {
   status: "requested" | "approved" | "picked_up" | "received" | "refunded" | "rejected" | "cancelled";
   reason: string;
   reason_label: string;
+  photos?: string[];
   comment: string;
   seller_note: string;
   refund_amount: Paise;
