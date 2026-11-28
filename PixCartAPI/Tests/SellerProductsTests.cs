@@ -22,7 +22,9 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(400,(await admin.Put("/api/admin/settings",new{search_synonyms="shirt"})).Status);
         var r=await admin.Put("/api/admin/settings",new{search_synonyms="shirt = kurta;\nshoes = sneakers"}); Assert.True(r.Status==200,r.ToString()); Assert.Equal("shirt = kurta; shoes = sneakers",r.Json["search_synonyms"]!.GetValue<string>());
         Assert.Equal(1,await Total("kurta")); Assert.Equal(0,await Total("sneakers"));
+        Assert.Single((await user.Get("/api/catalog/suggest?q=kurta")).Json["products"]!.AsArray());
         Assert.Equal(200,(await admin.Put("/api/admin/settings",new{search_synonyms=""})).Status); Assert.Equal(0,await Total("kurta"));
+        Assert.Empty((await user.Get("/api/catalog/suggest?q=kurta")).Json["products"]!.AsArray());
     }
     [Fact]
     public async Task Seller_list_detail_requirements_and_lifecycle()

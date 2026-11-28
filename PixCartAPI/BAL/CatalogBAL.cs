@@ -404,10 +404,14 @@ public class CatalogBAL(
         if (text.Length > 0)
         {
             // the words or a close title (not the brand), closest title first; equally close ones best-selling first
-            var query = ProductTextQuery.For(text);
+            var queries = SearchSynonyms.Variants(text, SearchSynonyms.Parse(cfg.Str("search_synonyms"))).Select(v => ProductTextQuery.For(v)).ToList();
             var hits = new List<(CatalogDAL.SearchCandidate Product, float Similarity)>();
             foreach (var c in await catalog.SearchCandidatesAsync(new ProductFilter()))
-                if (query.Suggests(c.Entry.Document, out var similarity)) hits.Add((c, similarity));
+            {
+                var best = -1f;
+                foreach (var query in queries) if (query.Suggests(c.Entry.Document, out var similarity)) best = Math.Max(best, similarity);
+                if (best >= 0) hits.Add((c, best));
+            }
             titles = hits.OrderByDescending(h => h.Similarity).ThenByDescending(h => h.Product.SoldCount)
                 .ThenBy(h => h.Product.Id.ToString("D"), StringComparer.Ordinal).Take(limit)
                 .Select(h => (h.Product.Entry.Document.Title, h.Product.Entry.Slug)).ToList();
