@@ -239,6 +239,7 @@ class Coupon(IdMixin, TimestampMixin, Base):
     only_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))  # a code made for one person (loyalty, gift card)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     show_on_checkout: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_automatic: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # applied at checkout with no code (Admin → Growth → Automatic discounts)
 
     __table_args__ = (
         CheckConstraint("kind IN ('percent','flat')", name="kind"),

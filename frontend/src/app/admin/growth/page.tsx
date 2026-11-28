@@ -32,6 +32,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   promo_popup: { title: "Welcome popup", hint: "A one-time popup a few seconds after a shopper arrives. It shows again only if you change its words. The link must start with / (a page on this shop); other links are dropped." },
   new_badge: { title: "New badge", hint: "Shows a \"New\" line on product tiles for products added in the last number of days." },
   newsletter: { title: "Newsletter box", hint: "Shows an email box above the shop footer. Addresses are collected on the Newsletter tab. Nothing is emailed from here: use the list yourself or with your email tool." },
+  auto_discounts: { title: "Automatic discounts", hint: "Coupons marked \"Apply automatically\" (Admin, Coupons) are applied at checkout with no code. If several qualify, the one that saves the customer most is used. A code the customer types replaces it. Every normal coupon rule still applies: dates, limits, category, minimum." },
   wishlist_share: { title: "Share wishlist", hint: "Shoppers can make a private link to their wishlist. Anyone with the link sees the saved products and the shopper's first name. Shoppers can stop sharing, which kills the link. Switching this off stops every link." },
   return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },

@@ -318,6 +318,14 @@ async def place_order(
         locked = (await session.execute(select(Coupon).where(Coupon.id == coupon.coupon.id).with_for_update())).scalar_one()
         if locked.usage_limit is not None and locked.used_count >= locked.usage_limit:
             raise ApiError("This coupon has been fully used", "coupon_exhausted")
+    elif cfg["feature_coupons"]:
+        from app.services.coupons import best_automatic
+
+        coupon = await best_automatic(session, user.id, lines)  # no code typed: the best automatic discount, if any
+        if coupon is not None:
+            locked = (await session.execute(select(Coupon).where(Coupon.id == coupon.coupon.id).with_for_update())).scalar_one()
+            if locked.usage_limit is not None and locked.used_count >= locked.usage_limit:
+                coupon = None
 
     from app.services import growth as growth_svc
 

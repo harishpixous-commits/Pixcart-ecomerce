@@ -66,6 +66,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
                "marketing_min_items": (3, "int", 1, 1000), "marketing_discount_percent": (10, "int", 1, 50), "marketing_valid_days": (7, "int", 1, 60),
                "listing_enabled": (False, "bool", 0, 0), "support_enabled": (False, "bool", 0, 0), "support_wait_hours": (4, "int", 1, 168), "support_max_age_days": (14, "int", 1, 90),
                "assistant_enabled": (False, "bool", 0, 0), "assistant_window_days": (7, "int", 1, 60), "assistant_low_stock": (5, "int", 0, 1000), "assistant_ticket_hours": (24, "int", 1, 720)},
+    "auto_discounts": {"enabled": (False, "bool", 0, 0)},
     "review_reminders": {"enabled": (False, "bool", 0, 0), "after_days": (5, "int", 1, 60), "max_age_days": (30, "int", 1, 180)},
     "seller_shipping": {"enabled": (False, "bool", 0, 0), "min_paise": (0, "int", 0, 10000000), "max_paise": (500000, "int", 0, 10000000)},
     "segments": {"enabled": (False, "bool", 0, 0), "vip_spend_paise": (2500000, "int", 0, 1000000000), "lapsed_days": (90, "int", 7, 1000),

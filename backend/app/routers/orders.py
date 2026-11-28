@@ -272,6 +272,14 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
             view["summary"]["coupon_discount"] = res.discount
         except ApiError as exc:
             view["coupon"] = {"code": body.coupon_code.strip().upper(), "discount": 0, "error": exc.message}
+    elif cfg["feature_coupons"]:
+        from app.services.coupons import best_automatic
+
+        auto = await best_automatic(session, user.id, await load_cart(session, user.id))
+        if auto is not None:
+            view["coupon"] = {"code": auto.coupon.code, "discount": auto.discount, "description": auto.coupon.description, "error": None, "automatic": True}
+            view["summary"]["grand_total"] -= auto.discount
+            view["summary"]["coupon_discount"] = auto.discount
     view["cod_allowed"] = cfg["cod_enabled"] and view["summary"]["grand_total"] <= cfg["cod_max_order_paise"]
     view["address_id"] = str(address.id)
     return view

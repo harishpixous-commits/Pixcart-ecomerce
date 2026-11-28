@@ -97,6 +97,7 @@ class AdminCouponIn(SellerCouponIn):
     category_id: uuid.UUID | None = None
     first_order_only: bool = False
     show_on_checkout: bool = True
+    is_automatic: bool = False
 
 
 @router.get("/coupons")

@@ -9,7 +9,7 @@ import { date, paiseToInput, rupees, toLocalInput, toPaise } from "@/lib/format"
 export type CouponRow = {
   id: string; code: string; description: string; kind: "percent" | "flat"; value: number; max_discount_paise: number | null; min_order_paise: number;
   starts_at: string | null; ends_at: string | null; usage_limit: number | null; per_user_limit: number; used_count: number; funded_by: string;
-  category_id: string | null; first_order_only: boolean; is_active: boolean; show_on_checkout: boolean;
+  category_id: string | null; first_order_only: boolean; is_active: boolean; show_on_checkout: boolean; is_automatic?: boolean;
 };
 
 export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discount_paise" | "min_order_paise">) {
@@ -31,7 +31,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   const [batch, setBatch] = useState({ count: "10", prefix: "", single: true });
   const [batchCodes, setBatchCodes] = useState("");
   const [cats, setCats] = useState<{ id: string; path?: string; name?: string }[]>([]);
-  const [f, setF] = useState({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_active: true });
+  const [f, setF] = useState({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, is_active: true });
   const [error, setError] = useState<string | null>(null);
   const load = () => api<CouponRow[]>(base).then(setRows).catch(quietly);
   useEffect(() => {
@@ -43,12 +43,12 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   function open(c: CouponRow | "new") {
     setError(null);
     setEdit(c);
-    if (c === "new") setF({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_active: true });
+    if (c === "new") setF({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, is_active: true });
     else setF({
       code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : paiseToInput(c.value),
       max: c.max_discount_paise ? paiseToInput(c.max_discount_paise) : "", min: c.min_order_paise ? paiseToInput(c.min_order_paise) : "",
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
-      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_active: c.is_active,
+      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, is_active: c.is_active,
     });
   }
 
@@ -74,7 +74,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
       starts_at: f.starts ? new Date(f.starts).toISOString() : null, ends_at: f.ends ? new Date(f.ends).toISOString() : null,
       usage_limit: f.limit ? Number(f.limit) : null, per_user_limit: Number(f.per_user) || 1, is_active: f.is_active,
     };
-    if (admin) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout });
+    if (admin) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic });
     try {
       if (edit === "new") await api(base, { method: "POST", body });
       else await api(`${base}/${(edit as CouponRow).id}`, { method: "PUT", body });
@@ -142,6 +142,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
                 </Field>
                 <label className="flex items-center gap-2"><input type="checkbox" className="accent-peacock" checked={f.first_order_only} onChange={(e) => setF({ ...f, first_order_only: e.target.checked })} /> First order only</label>
                 <label className="flex items-center gap-2"><input type="checkbox" className="accent-peacock" checked={f.show_on_checkout} onChange={(e) => setF({ ...f, show_on_checkout: e.target.checked })} /> Show in the offers list at checkout</label>
+                <label className="flex items-center gap-2"><input type="checkbox" className="accent-peacock" checked={f.is_automatic} onChange={(e) => setF({ ...f, is_automatic: e.target.checked })} /> Apply automatically, no code needed (needs Growth, Automatic discounts, switched on)</label>
               </>
             )}
             <label className="flex items-center gap-2 sm:col-span-2"><input type="checkbox" className="accent-peacock" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> Coupon is on</label>

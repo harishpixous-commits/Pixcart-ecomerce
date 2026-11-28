@@ -91,6 +91,26 @@ async def evaluate(session: AsyncSession, code: str, user_id: uuid.UUID, lines: 
     return CouponResult(c, discount, _allocate(discount, eligible))
 
 
+async def best_automatic(session: AsyncSession, user_id: uuid.UUID, lines: list) -> CouponResult | None:
+    """The automatic coupon that saves the customer the most on this cart, or None. Admin → Growth → Automatic discounts must be on.
+    Every normal coupon rule still applies (dates, limits, category, minimum): a coupon that fails is simply skipped."""
+    from app.services import growth
+
+    if not (await growth.get(session))["auto_discounts"]["enabled"]:
+        return None
+    rows = (await session.execute(select(Coupon).where(Coupon.is_automatic.is_(True), Coupon.is_active.is_(True), Coupon.funded_by == "platform",
+                                                       Coupon.only_user_id.is_(None)).limit(50))).scalars().all()
+    best: CouponResult | None = None
+    for c in rows:
+        try:
+            res = await evaluate(session, c.code, user_id, lines)
+        except ApiError:
+            continue
+        if best is None or res.discount > best.discount:
+            best = res
+    return best
+
+
 async def list_for_checkout(session: AsyncSession) -> list[dict]:
     now = utcnow()
     rows = (
