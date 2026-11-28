@@ -964,6 +964,10 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
             Assert.True(r.Status == 201, r.ToString());
             var orderId = r.Json["order"]!["id"]!.GetValue<string>();
             Assert.Equal(baseFee + 2000, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(shipping_fee), 0) FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+            long Est() => Factory.CreateClient().GetFromJsonAsync<JsonObject>($"/api/catalog/delivery-estimate?variant_id={variantId}&pincode=641001").Result!["delivery_fee_paise"]!.GetValue<long>();
+            var plainEst = Est();
+            await ApiFactory.DbExecAsync("UPDATE variants SET weight_grams = 2500 WHERE id = @variantId", new { variantId });
+            Assert.Equal(plainEst + 2000, Est());                             // the product page estimate (one unit) follows the same rule
             Assert.Equal(400, (await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 100001 })).Status);
         }
         finally

@@ -276,6 +276,8 @@ public class CatalogBAL(
         var stateCode = DeliveryEstimate.StateForPin(pin) ?? "";
         var freeFrom = CartBAL.FreeThreshold(seller, await ShippingZones.WithStateThresholdAsync(sellerDb, cfg, stateCode), await ShippingZones.SellerFreeBoundsAsync(sellerDb));
         var fee = v.PricePaise >= freeFrom ? 0 : await ShippingZones.StateFeeAsync(sellerDb, stateCode) ?? cfg.Long("shipping_fee_paise");
+        if (fee > 0 && cfg.Long("shipping_per_kg_paise") > 0 && v.WeightGrams > cfg.Long("shipping_free_grams"))   // the weight surcharge, for one unit
+            fee += (v.WeightGrams - cfg.Long("shipping_free_grams") + 999) / 1000 * cfg.Long("shipping_per_kg_paise");
         var (extra, waive) = await ShippingZones.SurchargeAsync(sellerDb, pin);
         if (extra > 0 && !(waive && fee == 0)) fee += extra;
         var memberFree = userId is not null && await LoyaltyPoints.FreeDeliveryAsync(sellerDb, userId.Value); // a signed-in member whose tier carries free delivery
