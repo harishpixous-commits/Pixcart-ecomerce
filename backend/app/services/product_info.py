@@ -13,7 +13,7 @@ from datetime import date, timedelta, datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # unit -> (label shown after the quantity)
 NET_UNITS: dict[str, str] = {"g": "g", "kg": "kg", "ml": "ml", "l": "l", "m": "m", "pcs": "pcs", "pair": "pair"}
@@ -52,6 +52,7 @@ class ProductDetails(BaseModel):
     net_unit: Literal["", "g", "kg", "ml", "l", "m", "pcs", "pair"] = ""
     ships_on: str = ""  # pre-order: the date (YYYY-MM-DD) the seller starts shipping; shown while it is still ahead
     min_qty: int = Field(default=0, ge=0, le=100)  # the fewest units one order may hold; 0 or 1 means no minimum
+    max_qty: int = Field(default=0, ge=0, le=100)  # the most units of one option an order may hold; 0 means no product limit (the marketplace limit still applies)
     generic_name: str = Field(default="", max_length=120)
     model_number: str = Field(default="", max_length=60)
     manufacturer: str = Field(default="", max_length=400)
@@ -70,6 +71,12 @@ class ProductDetails(BaseModel):
     width_cm: float | None = Field(default=None, gt=0, le=10_000)
     height_cm: float | None = Field(default=None, gt=0, le=10_000)
     key_specs: list[str] = Field(default_factory=list, max_length=6)  # specification names shown beside the price
+
+    @model_validator(mode="after")
+    def _qty_limits(self):
+        if self.max_qty and self.min_qty > self.max_qty:
+            raise ValueError("The most units per order cannot be below the minimum order quantity")
+        return self
 
     @field_validator("generic_name", "model_number", "manufacturer", "packer", "importer", "customer_care", "ingredients",
                      "directions", "safety_info", "legal_disclaimer", "shelf_life", "warranty")

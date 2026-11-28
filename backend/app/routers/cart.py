@@ -70,12 +70,14 @@ async def _set(session, user, variant_id: uuid.UUID, qty: int, *, add: bool = Fa
     wanted = (item.qty if item and add else 0) + qty
     new_qty, note = wanted, ""
     deal_left = (await deals_svc.units_left(session, [variant.id])).get(variant.id)
-    for cap, why in ((cfg["max_qty_per_item"], f"You can buy at most {cfg['max_qty_per_item']} of this item in one order"),
+    product = await session.get(Product, variant.product_id)
+    product_max = details_of(product.details).max_qty if product else 0
+    for cap, why in ((product_max, f"This item is limited to {product_max} per order"),
+                     (cfg["max_qty_per_item"], f"You can buy at most {cfg['max_qty_per_item']} of this item in one order"),
                      (variant.stock, f"Only {variant.stock} left in stock"),
                      (deal_left or 0, f"Only {deal_left} left at the deal price")):
         if 0 < cap < new_qty:
             new_qty, note = cap, why
-    product = await session.get(Product, variant.product_id)
     min_qty = max(1, min(details_of(product.details).min_qty if product else 1, cfg["max_qty_per_item"]))
     if new_qty < min_qty:
         if min_qty > variant.stock:

@@ -128,3 +128,36 @@ async def test_scheduled_publish_hides_an_approved_product_until_its_time(client
     assert r.json()["publish_at"] is None
     dup = (await tn.post(f"/api/seller/products/{shirt['id']}/duplicate")).json()
     assert dup["publish_at"] is None                                                       # a copy goes live on approval as usual
+
+
+async def test_most_units_per_order_limits_the_cart_and_blocks_the_order(client, admin, categories):
+    from tests.conftest import add_address
+    from tests.test_phase2_money import key
+
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9770000461", name="Limit Buyer")
+    addr = await add_address(buyer, state="33")
+    detail = (await tn.get(f"/api/seller/products/{shirt['id']}")).json()
+    vid = shirt["variants"][0]["id"]
+    bad = detail | {"details": (detail.get("details") or {}) | {"min_qty": 3, "max_qty": 2}}
+    assert (await tn.put(f"/api/seller/products/{shirt['id']}", bad)).status_code == 422          # the limit cannot be below the minimum
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"details": (detail.get("details") or {}) | {"max_qty": 2}})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "pending"                    # details are listing content, like the minimum order quantity
+    assert (await admin.post(f"/api/admin/products/{shirt['id']}/approve")).status_code == 200
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["max_qty"] == 2
+    r = await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 5})
+    assert r.status_code == 200 and r.json()["notice"] and "limited to 2" in r.json()["notice"]
+    assert r.json()["groups"][0]["lines"][0]["qty"] == 2
+    # the seller lowers the limit after the item is in the cart: the cart shows it and the order is refused
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"details": (detail.get("details") or {}) | {"max_qty": 1}})
+    assert r.status_code == 200, r.text
+    assert (await admin.post(f"/api/admin/products/{shirt['id']}/approve")).status_code == 200
+    cart = (await buyer.get("/api/cart")).json()
+    assert "limited to 1" in (cart["groups"][0]["lines"][0].get("problem") or "")
+    o = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key(), "expected_total": cart["summary"]["grand_total"]})
+    assert o.status_code >= 400
+    # no limit again: back to the marketplace rule
+    await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"details": (detail.get("details") or {}) | {"max_qty": 0}})
+    assert (await admin.post(f"/api/admin/products/{shirt['id']}/approve")).status_code == 200
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["max_qty"] is None

@@ -13,7 +13,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui";
 import type { ProductDetails } from "@/lib/types";
 
 export const EMPTY_DETAILS: ProductDetails = {
-  net_unit: "", ships_on: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
+  net_unit: "", ships_on: "", min_qty: 0, max_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
   ingredients: "", directions: "", safety_info: "", legal_disclaimer: "", shelf_life: "", warranty: "", in_the_box: [],
   length_cm: null, width_cm: null, height_cm: null, key_specs: [],
 };
@@ -67,6 +67,9 @@ export function ProductInfoSection({ details, onChange, required, countryOfOrigi
         </Field>
         <Field label="Minimum order quantity" hint="The fewest units one order can hold. 0 or 1 means no minimum.">
           <input type="number" min={0} max={100} value={details.min_qty ?? 0} onChange={(e) => set("min_qty", Math.max(0, Math.min(100, Number(e.target.value) || 0)) as never)} aria-label="Minimum order quantity" className="h-10 w-full rounded-lg border border-line bg-mist px-3" />
+        </Field>
+        <Field label="Most units per order" hint="The most units of one option an order can hold. 0 means no limit from you (the marketplace limit still applies). Not below the minimum.">
+          <input type="number" min={0} max={100} value={details.max_qty ?? 0} onChange={(e) => set("max_qty", Math.max(0, Math.min(100, Number(e.target.value) || 0)) as never)} aria-label="Most units per order" className="h-10 w-full rounded-lg border border-line bg-mist px-3" />
         </Field>
         {text("fssai_license", "FSSAI licence number", { max: 14, hint: "14 digits, for food and supplements", placeholder: "e.g. 10012345000123" })}
       </div>

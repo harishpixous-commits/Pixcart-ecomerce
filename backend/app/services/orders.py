@@ -148,6 +148,8 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
         line.max_qty = max(0, min(variant.stock, per_item, deal_left if deal_left else per_item))
         det = details_of(product.details)
         line.min_qty = max(1, min(det.min_qty, per_item))
+        if det.max_qty:
+            line.max_qty = min(line.max_qty, max(det.max_qty, line.min_qty))
         line.ships_on = preorder_date(det)
         if product.status != "approved" or seller.status != "approved" or not variant.is_active or (product.publish_at and product.publish_at > utcnow()):
             line.problem = "This item is no longer available"
@@ -159,6 +161,8 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
             line.problem = f"Only {variant.stock} left in stock"
         elif item.qty < line.min_qty:
             line.problem = f"The minimum order for this item is {line.min_qty}"
+        elif det.max_qty and item.qty > det.max_qty:
+            line.problem = f"This item is limited to {det.max_qty} per order"
         elif item.qty > per_item:
             line.problem = f"You can buy at most {per_item} of this item in one order"
         elif deal_left and item.qty > deal_left:

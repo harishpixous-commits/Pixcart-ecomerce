@@ -461,6 +461,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "seller_snapshot": await pp.seller_snapshot(session, seller, cfg) if cfg["pdp_seller_snapshot"] else None,
         "returnable": p.return_window_days > 0,
         "min_qty": max(1, details.min_qty),
+        "max_qty": details.max_qty or None,
         "ships_on": preorder_date(details),
         "deal": (await deals_svc.active_for_products(session, [p.id])).get(p.id) if cfg["feature_deals"] else None,
         # Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.

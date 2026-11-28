@@ -240,7 +240,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
   // the quantity picker stops at the stock, the per-item limit (Admin → Marketplace settings) and a lightning deal's units left
   const dealLeft = dealHere && variant && p.deal!.units_left ? p.deal!.units_left : null;
   const minQty = Math.max(1, p.min_qty ?? 1);
-  const maxQty = Math.max(minQty, Math.min(site.max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
+  const maxQty = Math.max(minQty, Math.min(site.max_qty_per_item ?? 10, p.max_qty ?? Infinity, variant?.stock_left ?? 10, dealLeft ?? Infinity));
   const netRow = shown?.net_quantity ? [{ label: "Net quantity", value: shown.net_quantity }] : [];
   const stock = variant ? (variant.in_stock
     ? <p className={clsx("text-lg font-semibold", variant.low_stock ? "text-vermilion" : "text-leaf")}>{variant.low_stock ? `Only ${variant.stock_left} left in stock` : "In stock"}</p>

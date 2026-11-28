@@ -160,6 +160,7 @@ export interface ProductDetails {
   net_unit: "" | "g" | "kg" | "ml" | "l" | "m" | "pcs" | "pair";
   ships_on: string;
   min_qty: number;
+  max_qty: number;
   generic_name: string;
   model_number: string;
   manufacturer: string;
@@ -236,6 +237,7 @@ export interface ProductPage {
   seller_snapshot?: SellerSnapshot | null;
   returnable?: boolean;
   min_qty?: number;
+  max_qty?: number | null;
   ships_on?: string;
 }
 
