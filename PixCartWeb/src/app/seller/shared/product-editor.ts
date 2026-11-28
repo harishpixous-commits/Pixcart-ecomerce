@@ -66,6 +66,7 @@ const STATUS_TEXT: Record<string, string> = {
       @if (product(); as p) {
         <ng-container ngProjectAs="[actions]">
           @if (p.status === "approved") {<a [pcLink]="'/p/' + p.slug" target="_blank" class="inline-flex h-10 items-center rounded-lg px-3 font-semibold text-peacock hover:bg-peacock-light">View on store</a>}
+          <button pcButton variant="ghost" (click)="duplicate()">Duplicate</button>
           @if (p.status === "archived") {<button pcButton variant="secondary" (click)="archive(true)">Restore</button>} @else {<button pcButton variant="ghost" (click)="archive(false)">Archive</button>}
         </ng-container>
       }
@@ -630,6 +631,18 @@ export class ProductEditor implements OnInit {
       return undefined;
     } finally {
       this.busy.set(null);
+    }
+  }
+
+  protected async duplicate(): Promise<void> {
+    const product = this.product();
+    if (!product) return;
+    try {
+      const copy = await api<SellerProduct>(`/api/seller/products/${product.id}/duplicate`, { method: "POST" });
+      this.toast.show("Copied as a draft with no stock. Set the stock and prices, then submit.");
+      void this.router.navigateByUrl(`/seller/products/${copy.id}`);
+    } catch (e) {
+      this.toast.show(e instanceof ApiError ? e.message : "Could not copy the product");
     }
   }
 

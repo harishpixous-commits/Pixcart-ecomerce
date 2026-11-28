@@ -459,3 +459,5 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 - Push 152 was withdrawn: a per-product size guide already existed (size_guide in the buy box). My duplicate size_chart was reverted by a new commit, nothing deleted from history.
 
 - Push 153: Order tags (Python and .NET/Angular done): up to 10 private staff tags per order (Admin > Order > Tags), shown under the order number in the list, filter ?tag= (exact, any letter case), the search box finds tags. Alembic 0057 / .NET V034. Test: Staff_tags_on_an_order_are_saved_filtered_and_private. Angular type-check clean; not run in a browser.
+
+- Push 154: Duplicate a product (Python and .NET/Angular done): Duplicate button on the seller product page makes a draft "Copy of ..." with same content, images, videos and prices, fresh SKUs (-COPY, -COPY2) and zero stock; original untouched. Test: Duplicate_makes_a_draft_copy_with_fresh_skus_and_no_stock. Angular type-check clean; not run in a browser (unverified: that the page reloads when it moves from the original to the copy).

@@ -27,6 +27,19 @@ public class SellerInventoryTests(ApiFactory f):ApiTest(f)
         Assert.Equal(422,(await Adjust(u,v,a,"bogus",1)).Status);Assert.Equal(422,(await Adjust(u,v,a,"set",-1)).Status);Assert.Equal(422,(await u.Get("/api/seller/inventory?page=0")).Status);
     }
     [Fact]
+    public async Task Duplicate_makes_a_draft_copy_with_fresh_skus_and_no_stock()
+    {
+        var(u,s,p,v,a,b)=await Seed();await Adjust(u,v,a,"set",10);
+        var before=(await u.Get($"/api/seller/products/{p}")).Json;
+        var r=await u.Post($"/api/seller/products/{p}/duplicate");Assert.True(r.Status==201,r.ToString());
+        var c=r.Json;Assert.NotEqual(p,c["id"]!.GetValue<string>());Assert.Equal("draft",c["status"]!.GetValue<string>());Assert.Equal("Copy of "+before["title"]!.GetValue<string>(),c["title"]!.GetValue<string>());
+        Assert.Equal("STOCK-SKU-COPY",c["variants"]![0]!["sku"]!.GetValue<string>());Assert.Equal(0,c["variants"]![0]!["stock"]!.GetValue<int>());Assert.Equal(10000,c["variants"]![0]!["price_paise"]!.GetValue<long>());
+        Assert.Equal(before["description"]!.GetValue<string>(),c["description"]!.GetValue<string>());Assert.Equal(before["category_id"]!.GetValue<string>(),c["category_id"]!.GetValue<string>());
+        var c2=(await u.Post($"/api/seller/products/{p}/duplicate")).Json;Assert.Equal("STOCK-SKU-COPY2",c2["variants"]![0]!["sku"]!.GetValue<string>());
+        var after=(await u.Get($"/api/seller/products/{p}")).Json;Assert.Equal(10,after["variants"]![0]!["stock"]!.GetValue<int>());Assert.Equal(before["status"]!.GetValue<string>(),after["status"]!.GetValue<string>());
+        var other=await LoginPhone("9893000003");await other.Post("/api/seller/register",new{display_name="Copy Other Store"});Assert.Equal(404,(await other.Post($"/api/seller/products/{p}/duplicate")).Status);
+    }
+    [Fact]
     public async Task Stock_import_partial_row_errors_and_ownership()
     {
         var(u,s,p,v,a,b)=await Seed();var r=await u.Post("/api/seller/inventory/import",File("\ufeff SKU , warehouse_code , QUANTITY \r\nstock-sku,a1,12\r\nunknown,A1,1\r\nSTOCK-SKU,NO,1\r\nSTOCK-SKU,A1,-1\r\nSTOCK-SKU,B1,0000002\r\n"));Assert.True(r.Status==200,r.ToString());Assert.Equal(2,r.Json["updated"]!.GetValue<int>());Assert.Equal(3,r.Json["errors"]!.AsArray().Count);Assert.Equal(14,await ApiFactory.DbScalarAsync<long>("SELECT stock FROM variants WHERE id=@v",new{v}));Assert.Equal(1,await ApiFactory.DbScalarAsync<long>("SELECT in_stock FROM products WHERE id=@p",new{p}));

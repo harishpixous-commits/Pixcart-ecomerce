@@ -7,6 +7,7 @@ public interface ISellerProductsBAL
     Task<JsonObject> ImportAsync(UserModel user,SellerModel seller,byte[] data,string filename,bool dryRun);
     Task<JsonObject> SaveAsync(UserModel user,SellerModel seller,Guid? id,JsonObject body);
     Task<JsonObject> ListAsync(SellerModel seller,string? status,string q,bool lowStock,int page,int pageSize);
+    Task<JsonObject> DuplicateAsync(UserModel user,SellerModel seller,Guid id);
     Task<JsonObject> DetailAsync(SellerModel seller,Guid id);
     Task<JsonObject> RequirementsAsync(SellerModel seller,Guid categoryId);
     Task<object> CategoriesAsync(SellerModel seller);
