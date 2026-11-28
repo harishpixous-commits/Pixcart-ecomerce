@@ -18,7 +18,7 @@ public class AdminCouponsController(ICouponAdminBAL bal, ICurrentUser current) :
         var user = await current.RequireAsync();
         var c = await bal.CreateAsync(user, body.Code, body.Description, body.Kind, body.Value, body.MaxDiscountPaise,
             body.MinOrderPaise, body.StartsAt, body.EndsAt, body.UsageLimit, body.PerUserLimit, body.IsActive,
-            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic, body.BuyQty, body.GetQty);
+            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic, body.BuyQty, body.GetQty, body.ProductSlugs);
         return StatusCode(201, c);
     }
 
@@ -30,7 +30,7 @@ public class AdminCouponsController(ICouponAdminBAL bal, ICurrentUser current) :
         var user = await current.RequireAsync();
         var c = await bal.UpdateAsync(user, coupon_id, body.Description, body.Kind, body.Value, body.MaxDiscountPaise,
             body.MinOrderPaise, body.StartsAt, body.EndsAt, body.UsageLimit, body.PerUserLimit, body.IsActive,
-            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic, body.BuyQty, body.GetQty);
+            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic, body.BuyQty, body.GetQty, body.ProductSlugs);
         return Ok(c);
     }
 }
@@ -56,7 +56,8 @@ public sealed record AdminCouponIn(
     bool ShowOnCheckout,
     bool IsAutomatic = false,
     int BuyQty = 0,
-    int GetQty = 0)
+    int GetQty = 0,
+    [property: Model.CustomeAttributes.Len(0, 30)] List<string>? ProductSlugs = null)
 {
     public AdminCouponIn()
         : this("", "", "percent", 100, null, 0, null, null, null, 1, true, null, false, true)

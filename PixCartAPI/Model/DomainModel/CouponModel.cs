@@ -38,6 +38,8 @@ public class CouponModel
     public Guid? OnlyUserId { get; set; }
     /// <summary>coupons.is_active</summary>
     public bool IsActive { get; set; }
+    /// <summary>coupons.product_ids: JSON list of product ids a platform coupon is limited to ([] = all)</summary>
+    public string ProductIds { get; set; } = "[]";
     /// <summary>coupons.buy_qty: units bought (kind bxgy)</summary>
     public int BuyQty { get; set; }
     /// <summary>coupons.get_qty: units that get value percent off (kind bxgy)</summary>

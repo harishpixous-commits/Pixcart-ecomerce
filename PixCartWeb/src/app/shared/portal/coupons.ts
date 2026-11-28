@@ -11,7 +11,7 @@ import { PageLoader } from "../ui/page-loader";
 import { Button, EmptyState, ErrorNote, Field, Modal, Pill, Select, TextField, Toast } from "../ui/ui";
 
 export type CouponRow = {
-  id: string; code: string; description: string; kind: "percent" | "flat" | "bxgy"; value: number; buy_qty?: number; get_qty?: number; max_discount_paise: number | null; min_order_paise: number;
+  id: string; code: string; description: string; kind: "percent" | "flat" | "bxgy"; value: number; buy_qty?: number; get_qty?: number; product_slugs?: string[]; max_discount_paise: number | null; min_order_paise: number;
   starts_at: string | null; ends_at: string | null; usage_limit: number | null; per_user_limit: number; used_count: number; funded_by: string;
   category_id: string | null; first_order_only: boolean; is_active: boolean; show_on_checkout: boolean; is_automatic?: boolean;
 };
@@ -27,7 +27,7 @@ export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discoun
 // The form shows the browser's local time; toISOString() would show UTC and shift the time on every save.
 const toLocal = (iso: string | null) => toLocalInput(iso);
 
-const BLANK = { code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, buy_qty: "2", get_qty: "1", is_active: true };
+const BLANK = { code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, buy_qty: "2", get_qty: "1", product_slugs: "", is_active: true };
 type Form = typeof BLANK;
 
 const digits = (v: string) => v.replace(/\D/g, "");
@@ -98,6 +98,7 @@ const codeChars = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
             </pc-field>
             <label class="flex items-center gap-2"><input type="checkbox" class="accent-peacock" [checked]="f().first_order_only" (change)="set('first_order_only', $any($event.target).checked)" /> First order only</label>
             <label class="flex items-center gap-2"><input type="checkbox" class="accent-peacock" [checked]="f().show_on_checkout" (change)="set('show_on_checkout', $any($event.target).checked)" /> Show in the offers list at checkout</label>
+            <pc-text-field label="Only these products (optional)" [value]="f().product_slugs" (valueChange)="set('product_slugs', $event)" hint="Product link names (the last part of the product page address), comma separated. Empty means the whole cart." />
             <label class="flex items-center gap-2"><input type="checkbox" class="accent-peacock" [checked]="f().is_automatic" (change)="set('is_automatic', $any($event.target).checked)" /> Apply automatically, no code needed (needs Growth, Automatic discounts, switched on)</label>
           }
           <label class="flex items-center gap-2 sm:col-span-2"><input type="checkbox" class="accent-peacock" [checked]="f().is_active" (change)="set('is_active', $any($event.target).checked)" /> Coupon is on</label>
@@ -184,7 +185,7 @@ export class CouponManager {
       code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : c.kind === "bxgy" ? String(c.value) : paiseToInput(c.value),
       max: c.max_discount_paise ? paiseToInput(c.max_discount_paise) : "", min: c.min_order_paise ? paiseToInput(c.min_order_paise) : "",
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
-      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, buy_qty: String(c.buy_qty || 2), get_qty: String(c.get_qty || 1), is_active: c.is_active,
+      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, buy_qty: String(c.buy_qty || 2), get_qty: String(c.get_qty || 1), product_slugs: (c.product_slugs ?? []).join(", "), is_active: c.is_active,
     });
   }
 
@@ -213,7 +214,7 @@ export class CouponManager {
       starts_at: f.starts ? new Date(f.starts).toISOString() : null, ends_at: f.ends ? new Date(f.ends).toISOString() : null,
       usage_limit: f.limit ? Number(f.limit) : null, per_user_limit: Number(f.per_user) || 1, is_active: f.is_active,
     };
-    if (this.admin()) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic, buy_qty: f.kind === "bxgy" ? Number(f.buy_qty) || 0 : 0, get_qty: f.kind === "bxgy" ? Number(f.get_qty) || 0 : 0 });
+    if (this.admin()) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic, product_slugs: f.product_slugs.split(",").map((t) => t.trim()).filter(Boolean), buy_qty: f.kind === "bxgy" ? Number(f.buy_qty) || 0 : 0, get_qty: f.kind === "bxgy" ? Number(f.get_qty) || 0 : 0 });
     try {
       const edit = this.edit();
       if (edit === "new") await api(this.base(), { method: "POST", body });

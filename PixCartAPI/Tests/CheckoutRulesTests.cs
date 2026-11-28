@@ -789,6 +789,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Coupon_limited_to_chosen_products_only_counts_those()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000393", "only-shirt-a");
+        var (varB, prodB, _) = await ShirtInStock("9400000394", "only-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        var body = new { code = "ONLYA", description = "", kind = "percent", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, product_slugs = new[] { "only-shirt-a" } };
+        var made = await admin.Post("/api/admin/coupons", body);
+        Assert.True(made.Status == 201 && made.Json["product_slugs"]!.AsArray().Count == 1, made.ToString());
+        var bad = await admin.Post("/api/admin/coupons", new { body.description, code = "NOSUCH", body.kind, body.value, body.min_order_paise, body.per_user_limit, body.is_active, body.show_on_checkout, product_slugs = new[] { "no-such-product" } });
+        Assert.True(bad.Status == 400 && bad.ErrorCode == "product_not_found", bad.ToString());
+        var buyer = await LoginPhone("9620000393", "Product Coupon Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 1 });
+        var q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "ONLYA" });
+        Assert.NotNull(q.Json["coupon"]!["error"]);
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 });
+        q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "ONLYA" });
+        var price = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varA });
+        Assert.Null(q.Json["coupon"]!["error"]);
+        Assert.Equal(price / 10, q.Json["coupon"]!["discount"]!.GetValue<long>());
+        var listed = (await admin.Get("/api/admin/coupons")).Json.AsArray().First(x => x!["code"]!.GetValue<string>() == "ONLYA")!;
+        Assert.Equal("only-shirt-a", listed["product_slugs"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
     {
         var admin = await Admin();

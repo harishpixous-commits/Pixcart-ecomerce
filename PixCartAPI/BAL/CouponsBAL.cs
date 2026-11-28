@@ -41,9 +41,11 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
             var cat = await catalogDal.GetCategoryAsync(catId);
             allowedCategories = cat is not null ? (await catalog.CategoryDescendantIdsAsync(cat.Id)).ToHashSet() : [];
         }
+        var productIds = JsonHelper.Array(c.ProductIds).Select(x => x!.GetValue<string>()).ToHashSet();
         var eligible = lines
             .Where(l => l.Problem == "" && (c.SellerId is null || l.Seller.Id == c.SellerId)
-                        && (allowedCategories is null || allowedCategories.Contains(l.Product.CategoryId)))
+                        && (allowedCategories is null || allowedCategories.Contains(l.Product.CategoryId))
+                        && (productIds.Count == 0 || productIds.Contains(l.Product.Id.ToString())))
             .ToDictionary(l => l.Variant.Id, l => l.LineTotal);
         var baseSum = eligible.Values.Sum();
         if (c.Kind == "bxgy") // buy X get Y: the cheapest Y of every X+Y units get Value percent off

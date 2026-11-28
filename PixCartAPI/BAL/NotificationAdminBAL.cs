@@ -16,5 +16,5 @@ public class NotificationAdminBAL(NotificationAdminDAL data,IAccessBAL access,II
     }
     public async Task<JsonObject> SaveAsync(UserModel u,string evt,string channel,string subject,string body,string provider,bool active)
     {await access.RequireAsync(u,"marketing");if(!NotificationEvents.Events.ContainsKey(evt))throw new NotFoundException("Event");await using var tx=await db.BeginAsync();await data.SaveAsync(evt,channel,subject,body,provider.Trim(),active,tx);await audit.AuditAsync(u,"template.save","template",evt+":"+channel,"",tx);await tx.CommitAsync();return new(){["ok"]=true};}
-    public async Task<JsonArray> CouponsAsync(UserModel u){await access.RequireAsync(u,"marketing");return new JsonArray((await data.CouponsAsync()).Select(x=>(JsonNode)CouponAdminBAL.AdminOut(x)).ToArray());}
+    public async Task<JsonArray> CouponsAsync(UserModel u){await access.RequireAsync(u,"marketing");var arr=new JsonArray();foreach(var x in await data.CouponsAsync())arr.Add(await CouponAdminBAL.WithSlugsAsync(db,CouponAdminBAL.AdminOut(x),x));return arr;}
 }
