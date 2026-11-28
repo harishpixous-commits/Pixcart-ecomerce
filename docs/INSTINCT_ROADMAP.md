@@ -444,3 +444,6 @@ Proposal, not built: void sets balance to 0 and writes an audit row; a refund is
 
 ## Browser click-through, Python storefront (28 Nov)
 Scripted headless Chrome on seeded demo: sign-in by OTP, add to cart, cart, address form, checkout, cash on delivery, order page. All worked, no console or page errors. Online payment with fake test keys fails cleanly with 502 from the gateway. Not covered: online payment success, admin pages, Angular app.
+
+## Browser load check, all Python admin pages (28 Nov)
+Signed in as admin, opened every admin route in headless Chrome on the seeded demo. No page errors, console errors or failing requests. Loading only, controls were not exercised.
