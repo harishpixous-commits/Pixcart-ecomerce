@@ -286,6 +286,12 @@ async def search(
             select(Product.brand, func.count()).where(facet_where, Product.brand != "").group_by(Product.brand).order_by(func.count().desc()).limit(lists["brand_filter_max"])
         )
     ).all()
+    tag_counts: dict[str, int] = {}
+    for (tg,) in (await session.execute(select(Product.tags).where(facet_where, func.jsonb_array_length(Product.tags) > 0).limit(3000))).all():
+        for t in tg or []:
+            if isinstance(t, str) and t:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+    top_tags = sorted(tag_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:20]
     price_range = (await session.execute(select(func.min(Product.price_from), func.max(Product.price_from)).where(facet_where))).one()
     cat_counts = (await session.execute(
         select(Category.name, Category.slug, func.count()).join(Product, Product.category_id == Category.id)
@@ -313,6 +319,7 @@ async def search(
         "breadcrumbs": breadcrumbs,
         "facets": {
             "brands": [{"name": b, "count": c} for b, c in brands],
+            "tags": [{"name": n, "count": c} for n, c in top_tags],
             "price_min": price_range[0] or 0,
             "price_max": price_range[1] or 0,
         },

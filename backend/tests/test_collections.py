@@ -54,6 +54,8 @@ async def test_product_tags_filter_search_and_collection_rule(client, admin, cat
     assert got["tags"] == ["gift", "cotton", "x" * 30]            # tidied: lower case, no repeats, 30 characters at most
     assert got["status"] == "approved"                              # labels never send a live product back for approval
     assert (await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"tags": [f"t{i}" for i in range(11)]})).status_code == 422
+    facet = (await client.get("/api/catalog/products")).json()["facets"]["tags"]
+    assert {"name": "gift", "count": 1} in facet
     found = (await client.get("/api/catalog/products", params={"tag": "GIFT"})).json()
     assert [p["slug"] for p in found["items"]] == [shirt["slug"]]
     assert (await client.get("/api/catalog/products", params={"tag": "nothing"})).json()["items"] == []
