@@ -2,7 +2,15 @@
 
 Read this first. Branches: `instinct/continue` (.NET API + Angular) and `instinct/python-advanced` (Python + Next.js). Rule: every feature is in both, same settings and workflow. `main` (live Python demo) and the company repos are untouched.
 
-## Validation (after Push 137)
+## Latest numbers (28 Nov, after Push 177)
+- Single full runs: Python 349 passed, .NET 416 passed, 0 failed. Angular `ngc` and Next.js `tsc` clean. Anything older below is history.
+- Since Push 137: collections, redirects, product tags, search listing text, bundle and volume coupon kinds, "Buy the set" block, tag filter on the search page, cart hints for volume, buy-X-get-Y and bundle offers, a fix so product-limited coupons only show on their own product pages, and money-path tests (totals, seller split, rounding, cancel, per-customer limits).
+- Alembic 0060 to 0063 and .NET V037 to V040 were run on a real local Postgres/MySQL: upgrade, downgrade, upgrade again, clean.
+- New browser screens since Push 137 (Tags block, Buy the set, cart hints) are type-checked only, never run in a browser. The tag block is missing from the small-screen filter bar.
+- Not wired: a "volume price tiers" table on the product page (the Offers block shows the offer text instead), a tag facet in the mobile filter bar.
+- Migrations: Alembic latest 0063, .NET latest V040. New settings are off by default.
+
+## Validation (after Push 137, history)
 - Python: 323 tests passed (full suite, 28 Nov after Push 145). .NET: 392 tests in one full run, all green after a route-guard fix (the earlier figure "579 (5 groups)" was a sum of overlapping filter groups, not a real count; the suite had about 383 tests then). Angular `ngc` and Next.js `tsc` clean.
 - The Angular app has NOT been built for a browser: `ng build` exhausts the 2 GB build sandbox (tried twice, it froze the sandbox). It needs a machine with 4 GB or more. Angular is type-checked with `ngc` only.
 - NOT run anywhere: a real browser, Flutter apps, Windows publish, live payment gateways (simulators only), real email or SMS delivery.
