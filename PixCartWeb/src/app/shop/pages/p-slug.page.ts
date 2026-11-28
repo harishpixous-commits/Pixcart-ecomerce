@@ -1,7 +1,8 @@
 /* The product page: breadcrumbs, the gallery and buy box, details, reviews, questions and rails.
  * Port of frontend/src/app/(shop)/p/[slug]/page.tsx (+ loading.tsx: the product page skeleton while it loads). */
 
-import { ChangeDetectionStrategy, Component, computed, effect, input, signal, untracked } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from "@angular/core";
+import { Meta } from "@angular/platform-browser";
 import { ApiError, api } from "../../core/api";
 import { date as fmtDate } from "../../core/format";
 import type { ProductPage } from "../../core/types";
@@ -123,8 +124,14 @@ export class ShopPSlugPage {
   private ld: HTMLScriptElement | null = null;
   private notFound = false;
 
+  private readonly meta = inject(Meta);
+
   constructor() {
-    keepPageTitle(() => this.product()?.title ?? (this.state() === "missing" && this.notFound ? "Product not found" : null));
+    effect(() => {
+      const d = this.product()?.seo_description;
+      if (d) this.meta.updateTag({ name: "description", content: d });
+    });
+    keepPageTitle(() => (this.product()?.seo_title || this.product()?.title) ?? (this.state() === "missing" && this.notFound ? "Product not found" : null));
     effect(() => {
       const slug = this.slug();
       untracked(() => {
