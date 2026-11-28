@@ -31,3 +31,6 @@ Also working from before (not part of the proposal queue): admin business assist
 
 ## Marketing agent (Python: working and tested)
 Key `marketing`. Finds categories with live stock but few recent sales and proposes a time-limited category coupon; approving creates the coupon through the same fields as the admin Coupons page, audited. Test: tests/test_agents.py (5 green). Not built: emails or ads, customer targeting, measuring results. .NET version: pending.
+
+## Listing review agent and Support agent (Python: working and tested)
+Listing (`listing`): runs the listing rules on pending products; proposes approve for clean ones and send-back with exact reasons for the rest; approval uses the normal admin approve/reject. Support (`support`): drafts a first acknowledging reply for open tickets unanswered for N hours; approval sends it as staff. Both rule based, no AI model, tested (7 green). Not done: photos, brand checks, refund decisions, follow-up answers. .NET versions pending.

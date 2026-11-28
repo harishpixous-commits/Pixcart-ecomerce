@@ -207,3 +207,69 @@ async def test_marketing_agent_proposes_coupon_for_slow_category_and_approval_cr
 
         c = (await s.execute(select(Coupon).where(Coupon.description.like("% off %")))).scalars().first()
         assert c is not None and c.kind == "percent" and c.funded_by == "platform" and c.category_id is not None and c.ends_at > utcnow()
+
+
+async def test_listing_agent_approves_clean_listings_and_sends_back_bad_ones(client, admin, categories):
+    from app.models import Product
+
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    async with SessionLocal() as s:
+        ps = (await s.execute(select(Product))).scalars().all()
+        for p in ps:
+            p.status = "pending"
+        ps[0].description = "Call me on 9876543210 for a cheaper price"
+        await s.commit()
+        ids = [str(p.id) for p in ps]
+    await admin.put("/api/admin/agents/settings", {"enabled": True})
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await core.run_agent(s, "listing")
+            await s.commit()
+            return n
+
+    assert await run() == 0
+    assert (await admin.put("/api/admin/agents/settings", {"listing_enabled": True})).status_code == 200
+    assert await run() == len(ids) and await run() == 0
+    items = (await admin.get("/api/admin/agents/proposals?agent=listing")).json()["items"]
+    kinds = {i["kind"] for i in items}
+    assert "reject_listing" in kinds
+    bad = next(i for i in items if i["kind"] == "reject_listing")
+    async with SessionLocal() as s:
+        assert (await s.get(Product, uuid.UUID(bad["params"]["product_id"] if "params" in bad else ids[0]))).status == "pending"
+    assert (await admin.post(f"/api/admin/agents/proposals/{bad['id']}/approve")).json()["status"] == "done"
+    async with SessionLocal() as s:
+        sts = {str(p.id): p.status for p in (await s.execute(select(Product))).scalars()}
+    assert "rejected" in sts.values()
+
+
+async def test_support_agent_drafts_first_reply_and_staff_approval_sends_it(client, admin, categories):
+    from app.models import SupportTicket
+
+    a = await login_phone(client, "9770000207", name="Ticket Buyer")
+    r = await a.post("/api/support/tickets", {"category": "order", "subject": "Where is my parcel", "message": "It has been a week with no update."})
+    assert r.status_code == 201
+    async with SessionLocal() as s:
+        await s.execute(update(SupportTicket).values(created_at=utcnow() - timedelta(hours=10)))
+        from app.models import TicketMessage
+
+        await s.execute(update(TicketMessage).values(created_at=utcnow() - timedelta(hours=10)))
+        await s.commit()
+    await admin.put("/api/admin/agents/settings", {"enabled": True})
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await core.run_agent(s, "support")
+            await s.commit()
+            return n
+
+    assert await run() == 0
+    assert (await admin.put("/api/admin/agents/settings", {"support_enabled": True})).status_code == 200
+    assert await run() == 1 and await run() == 0
+    p = (await admin.get("/api/admin/agents/proposals?agent=support")).json()["items"][0]
+    assert p["kind"] == "reply_ticket"
+    tid = r.json()["id"]
+    assert len((await a.get(f"/api/support/tickets/{tid}")).json()["messages"]) == 1
+    assert (await admin.post(f"/api/admin/agents/proposals/{p['id']}/approve")).json()["status"] == "done"
+    msgs = (await a.get(f"/api/support/tickets/{tid}")).json()["messages"]
+    assert len(msgs) == 2 and "Ticket" in msgs[1]["body"] and "refund" not in msgs[1]["body"].lower()

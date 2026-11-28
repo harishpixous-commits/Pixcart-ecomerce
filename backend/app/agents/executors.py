@@ -62,6 +62,29 @@ async def run(session: AsyncSession, user: User, row: AgentProposal, bg: Backgro
         audit(session, user, "coupon.create", "coupon", c.code, "made by the marketing agent")
         await session.commit()
         return {"ok": True, "code": c.code}
+    if k in ("approve_listing", "reject_listing"):
+        from app.models import Product
+        from app.routers import admin as admin_r
+
+        pr = await session.get(Product, uuid.UUID(p["product_id"]))
+        if pr is None or pr.status != "pending":
+            raise Stale("This listing is no longer waiting for review, so nothing was changed.")
+        if k == "approve_listing":
+            return await admin_r.approve_product(pr.id, user, session)
+        return await admin_r.reject_product(pr.id, admin_r.ReasonIn(reason=p["reason"]), user, session)
+    if k == "reply_ticket":
+        from sqlalchemy import func, select
+
+        from app.models import SupportTicket, TicketMessage
+        from app.routers import admin_extras as ax
+
+        t = await session.get(SupportTicket, uuid.UUID(p["ticket_id"]))
+        if t is None or t.status != "open" or t.acknowledged_at is not None:
+            raise Stale("The ticket was already answered or closed, so nothing was sent.")
+        n = (await session.execute(select(func.count()).select_from(TicketMessage).where(TicketMessage.ticket_id == t.id, TicketMessage.is_internal.is_(False)))).scalar_one()
+        if n != p["messages"]:
+            raise Stale("The ticket has new messages since this draft, so nothing was sent.")
+        return await ax.staff_reply(t.id, ax.StaffReply(body=p["body"]), user, session)
     if k == "delay_notice":
         from app.models import Order
         from app.services.notify import notify
