@@ -1310,6 +1310,15 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public void Drop_note_leads_with_the_customers_preferred_time()
+    {
+        Assert.Equal("Blue gate", BAL.DeliveryFleetBAL.DropNote(new System.Text.Json.Nodes.JsonObject { ["instructions"] = "Blue gate" }));
+        Assert.Equal("Customer would like delivery: Evening. Blue gate", BAL.DeliveryFleetBAL.DropNote(new System.Text.Json.Nodes.JsonObject { ["instructions"] = "Blue gate", ["delivery_slot"] = "Evening" }));
+        Assert.Equal("Customer would like delivery: Morning.", BAL.DeliveryFleetBAL.DropNote(new System.Text.Json.Nodes.JsonObject { ["delivery_slot"] = "Morning" }));
+        Assert.Equal("", BAL.DeliveryFleetBAL.DropNote(new System.Text.Json.Nodes.JsonObject()));
+    }
+
+    [Fact]
     public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
     {
         var admin = await Admin();

@@ -406,3 +406,7 @@ Admin → Checkout has "Minimum order" (fees key `min_order_paise`, 0 means none
 ## Push 134: preferred delivery time
 
 Admin → Checkout → Checkout options: "Preferred delivery time" (off) with 2 to 6 choices split with ; (default Morning, Afternoon, Evening). When on, checkout shows the choices plus "No preference". The pick is stored in `ship_to.delivery_slot` (no migration) and shown to the customer, seller and admin as a request. Plainly NOT wired: nothing in couriers, delivery partner assignment or shipping rules reads it, so it is not a promise and the screens say so. Error codes `slot_off`, `slot_unknown`. Tests in both versions, tsc and ngc clean. Not run in a browser. Open question for Harish: should the delivery partner app show it on the task.
+
+## Push 135: delivery time reaches the delivery partner
+
+Wiring for Push 134. The delivery partner trip screen (and admin trip view) now leads the drop instructions with "Customer would like delivery: <time>." when the customer picked one, only while the partner is allowed to see customer details. No UI change, no migration. Still a request: assignment, routing and ETAs do not use it. Unit tests in both versions (drop_note / DropNote); not run against a live trip in a browser.

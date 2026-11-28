@@ -1209,6 +1209,14 @@ public partial class DeliveryFleetBAL(
     }
 
     /// <summary>Reference: assignment_brief.</summary>
+    /// <summary>What the partner reads under the drop address: the customer's instructions, led by their preferred delivery time when they picked one (a request, not a promise).</summary>
+    public static string DropNote(JsonObject st)
+    {
+        var note = st["instructions"]?.GetValue<string>() ?? "";
+        var slot = (st["delivery_slot"]?.GetValue<string>() ?? "").Trim();
+        return slot.Length > 0 ? $"Customer would like delivery: {slot}. {note}".Trim() : note;
+    }
+
     private static JsonObject AssignmentBrief(DeliveryAssignmentModel a) => new()
     {
         ["id"] = a.Id.ToString(), ["status"] = a.Status,
@@ -1258,7 +1266,7 @@ public partial class DeliveryFleetBAL(
                     ? string.Join(", ", new[] { S("line1"), S("line2"), S("landmark") }.Where(x => x.Length > 0)) : "",
                 ["city"] = S("city"), ["pincode"] = S("pincode"),
                 ["lat"] = JDec(st["lat"]), ["lng"] = JDec(st["lng"]),
-                ["instructions"] = showCustomer ? S("instructions") : "", ["no_bag"] = st["no_bag"]?.GetValue<bool>() ?? false,
+                ["instructions"] = showCustomer ? DropNote(st) : "", ["no_bag"] = st["no_bag"]?.GetValue<bool>() ?? false,
             },
             ["items"] = new JsonArray(items.Select(i => (JsonNode?)new JsonObject
             {
