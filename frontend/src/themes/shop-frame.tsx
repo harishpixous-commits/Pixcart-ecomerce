@@ -5,6 +5,7 @@
  * (back to top, help assistant, compare tray) and, while an admin previews a theme, the preview bar.
  */
 
+import { NewsletterBox } from "@/components/newsletter";
 import { Construction, Eye, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -121,6 +122,7 @@ function OpenShop({ maintenance, children }: { maintenance: boolean; children: R
       <main className="mx-auto w-full min-h-[60vh] max-w-shop flex-1 px-3 py-4 sm:px-4 sm:py-6">{children}</main>
       <BackToTop />
       <RegionStrip />
+      <NewsletterBox />
       <Footer />
       {MobileNav && <MobileNav />}
       <ShopAssistant />

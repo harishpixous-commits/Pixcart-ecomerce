@@ -29,6 +29,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
+  newsletter: { title: "Newsletter box", hint: "Shows an email box above the shop footer. Addresses are collected on the Newsletter tab. Nothing is emailed from here: use the list yourself or with your email tool." },
   return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
   segments: { title: "Customer segments", hint: "VIP, new and lapsed customers for targeted offers." },
@@ -139,6 +140,36 @@ function CartRemindersTab() {
             {rl.items.length === 0 && <tr><td className="p-4 text-ink-soft" colSpan={6}>No reminders sent yet.</td></tr>}
             {rl.items.map((r) => (
               <tr key={r.id} className="border-b border-line/50"><td className="p-3 font-semibold">{r.customer}</td><td className="p-3">{r.contact}</td><td className="p-3">#{r.stage}</td><td className="p-3">{rupees(r.cart_paise)}</td><td className="p-3">{date(r.sent_at)}</td><td className="p-3">{r.ordered_after ? "Yes" : "No"}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+type NewsletterRow = { id: string; email: string; created_at: string };
+
+function NewsletterTab() {
+  const [data, setData] = useState<{ enabled: boolean; total: number; items: NewsletterRow[] } | null>(null);
+  const load = () => api<{ enabled: boolean; total: number; items: NewsletterRow[] }>("/api/admin/growth/newsletter").then(setData).catch(quietly);
+  useEffect(() => { load(); }, []);
+  if (!data) return <PageLoader />;
+  async function remove(id: string) {
+    await api(`/api/admin/growth/newsletter/${id}`, { method: "DELETE" }).catch(quietly);
+    load();
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="rounded-lg bg-white p-4 text-sm" data-testid="newsletter-summary">{data.total} addresses.{!data.enabled && " The newsletter box is switched off in Settings."}</p>
+      <div className="overflow-x-auto rounded-xl bg-white">
+        <table className="w-full text-left text-sm" data-testid="newsletter-list">
+          <thead><tr className="border-b border-line"><th className="p-3">Email</th><th className="p-3">Joined</th><th className="p-3"><span className="sr-only">Remove</span></th></tr></thead>
+          <tbody>
+            {data.items.length === 0 && <tr><td className="p-4 text-ink-soft" colSpan={3}>Nobody has signed up yet.</td></tr>}
+            {data.items.map((r) => (
+              <tr key={r.id} className="border-b border-line/50"><td className="p-3 font-semibold">{r.email}</td><td className="p-3">{new Date(r.created_at).toLocaleDateString("en-IN")}</td>
+                <td className="p-3 text-right"><button type="button" className="text-sm font-semibold text-red-600 hover:underline" onClick={() => remove(r.id)}>Remove</button></td></tr>
             ))}
           </tbody>
         </table>
@@ -356,8 +387,8 @@ export default function AdminGrowthPage() {
   return (
     <div>
       <PageHeader title="Growth" sub="Loyalty, referrals, reminders, flash sales, gift cards, seller quality and risk. Every module starts switched off." />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }, { value: "referrals", label: "Referrals" }]} />
-      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "loyalty" ? <LoyaltyTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "referrals" ? <ReferralsTab /> : tab === "segments" ? <SegmentsTab /> : tab === "campaigns" ? <CampaignsTab /> : tab === "scorecard-view" ? (
+      <Tabs value={tab} onChange={setTab} items={[{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }, { value: "referrals", label: "Referrals" }, { value: "newsletter", label: "Newsletter" }]} />
+      {tab === "gift-cards" ? <GiftCardsTab /> : tab === "loyalty" ? <LoyaltyTab /> : tab === "cart-reminders" ? <CartRemindersTab /> : tab === "newsletter" ? <NewsletterTab /> : tab === "referrals" ? <ReferralsTab /> : tab === "segments" ? <SegmentsTab /> : tab === "campaigns" ? <CampaignsTab /> : tab === "scorecard-view" ? (
         !score ? <PageLoader /> : (
           <>
             {!scoreOn && <p className="mb-3 rounded-lg bg-white p-3 text-sm text-ink-soft">The scorecard is switched off in Settings. Figures below are for information.</p>}

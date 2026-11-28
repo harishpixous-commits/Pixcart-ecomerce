@@ -10,13 +10,16 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from app.core.deps import ApprovedSeller, CurrentUser, SessionDep, audit
+from fastapi import Request
+
+from app.core.deps import ApprovedSeller, CurrentUser, SessionDep, audit, client_ip, rate_limit
 from app.core.errors import ApiError, NotFound
 from app.core.permissions import Perm
 from app.db import utcnow
-from app.models import LoyaltyEntry
+from app.models import LoyaltyEntry, NewsletterSubscriber
 from app.config import settings
 from app.services import campaigns, cart_reminders, gift_cards, growth, loyalty, referral, saved_searches, segments, seo
+from app.services import newsletter
 
 router = APIRouter(prefix="/api/admin/growth", tags=["growth"])
 
@@ -41,6 +44,23 @@ async def put_settings(body: dict[str, Any], admin: Perm("marketing"), session: 
 async def scorecard(admin: Perm("dashboard"), session: SessionDep) -> dict:
     cfg = (await growth.get(session))["scorecard"]
     return {"enabled": cfg["enabled"], "window_days": cfg["window_days"], "items": await growth.seller_scorecard(session, cfg)}
+
+
+@router.get("/newsletter")
+async def newsletter_list(admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Addresses collected by the footer newsletter box, newest first."""
+    return {"enabled": (await newsletter.config(session))["enabled"], **await newsletter.listing(session)}
+
+
+@router.delete("/newsletter/{subscriber_id}")
+async def newsletter_remove(subscriber_id: uuid.UUID, admin: Perm("marketing"), session: SessionDep) -> dict:
+    row = await session.get(NewsletterSubscriber, subscriber_id)
+    if row is None:
+        raise NotFound("Subscriber")
+    await session.delete(row)
+    audit(session, admin, "newsletter.remove", "newsletter", subscriber_id, "")
+    await session.commit()
+    return {"ok": True}
 
 
 @router.get("/cart-reminders")
@@ -133,6 +153,30 @@ async def adjust_points(body: AdjustIn, admin: Perm("marketing"), session: Sessi
 
 
 me_router = APIRouter(prefix="/api", tags=["loyalty"])
+
+
+class NewsletterIn(BaseModel):
+    email: str = Field(max_length=254)
+
+
+@me_router.get("/newsletter")
+async def newsletter_box(session: SessionDep) -> dict:
+    """Whether the footer shows the newsletter box, and its heading."""
+    cfg = await newsletter.config(session)
+    return {"enabled": cfg["enabled"], "title": cfg["title"]}
+
+
+@me_router.post("/newsletter", status_code=201)
+async def newsletter_join(body: NewsletterIn, request: Request, session: SessionDep) -> dict:
+    if not (await newsletter.config(session))["enabled"]:
+        raise ApiError("The newsletter is not open", "newsletter_off")
+    await rate_limit(session, f"newsletter:ip:{client_ip(request)}", limit=10, window_seconds=3600)
+    email = newsletter.clean_email(body.email)
+    if email is None:
+        raise ApiError("Enter a valid email address", "invalid_email", fields={"email": "Invalid"})
+    await newsletter.subscribe(session, email)  # an address already on the list gets the same answer
+    await session.commit()
+    return {"ok": True}
 
 
 @me_router.get("/loyalty")

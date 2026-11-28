@@ -143,3 +143,12 @@ class OrderNote(IdMixin, Base):
     author_name: Mapped[str] = mapped_column(String(120), default="")
     note: Mapped[str] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class NewsletterSubscriber(IdMixin, Base):
+    """An email address that asked, in the shop footer, to hear about offers. One row per address (lower case)."""
+
+    __tablename__ = "newsletter_subscribers"
+
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
