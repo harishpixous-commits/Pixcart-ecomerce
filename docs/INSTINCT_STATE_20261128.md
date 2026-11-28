@@ -4,6 +4,7 @@ Read this first. Branches: `instinct/continue` (.NET API + Angular) and `instinc
 
 ## Validation (after Push 137)
 - Python: 312 tests passed. .NET: 579 passed (5 groups). Angular `ngc` and Next.js `tsc` clean.
+- The Angular app has NOT been built for a browser: `ng build` exhausts the 2 GB build sandbox (tried twice, it froze the sandbox). It needs a machine with 4 GB or more. Angular is type-checked with `ngc` only.
 - NOT run anywhere: a real browser, Flutter apps, Windows publish, live payment gateways (simulators only), real email or SMS delivery.
 - Python dependencies are unpinned because the pinned fastapi version was not on the index in the build sandbox. Run once on pinned versions.
 
