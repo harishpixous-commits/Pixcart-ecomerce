@@ -453,3 +453,6 @@ In headless Chrome as admin: switched on Share wishlist, set New badge days to 2
 
 ## Browser check, seller order handling (28 Nov)
 As the seller (Chennai Silks & Co): 11 seller pages loaded clean. Confirmed, packed, shipped (courier plus tracking) and delivered the demo COD order; the invoice number was issued on shipping. No errors. Not covered: returns and refunds, delivery partner app screens, online payment.
+
+## Browser check, return flow (28 Nov)
+Customer requested a return on the delivered COD order, seller approved and marked received, credit note issued, admin Returns shows it as refund due. The staff step that records the UPI refund was not clicked. No errors.
