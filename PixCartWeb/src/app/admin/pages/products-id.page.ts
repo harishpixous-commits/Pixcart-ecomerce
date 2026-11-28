@@ -200,7 +200,7 @@ type Check = { risk: "low" | "medium" | "high"; issues: string[]; suggested_reas
     } @else {
       @let p = product()!;
       <div class="flex flex-col gap-4">
-        <pc-page-header [title]="p.title" [sub]="p.seller?.name + ' (' + p.seller?.status + '), ' + p.category_name" [withActions]="true">
+        <pc-page-header [title]="p.title" [sub]="subtitle(p)" [withActions]="true">
           @if (site.site().features.ai) {<button actions pcButton variant="secondary" (click)="runCheck()" [loading]="checking()"><svg [pcIcon]="Sparkles" class="h-4 w-4" /> AI check</button>}
           @if (p.status === "pending") {<button actions pcButton (click)="act('approve')" [loading]="busy()">Approve</button>}
           @if (p.status === "pending" || p.status === "approved") {<button actions pcButton variant="danger" (click)="rejecting.set(true)">{{ p.status === "approved" ? "Take down" : "Reject" }}</button>}
@@ -331,6 +331,10 @@ export class AdminProductsIdPage {
     } finally {
       this.checking.set(false);
     }
+  }
+
+  protected subtitle(p: SellerProduct): string {
+    return [p.seller ? `${p.seller.name} (${p.seller.status})` : "", p.category_name].filter(Boolean).join(", ");
   }
 
   protected readonly goLive = signal<string | null>(null);

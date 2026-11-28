@@ -13,7 +13,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/admin")]
 [SignedIn]
-public class AdminProductsController(IProductModerationBAL products, ICurrentUser current) : ControllerBase
+public class AdminProductsController(IProductModerationBAL products, IAdminProductReadBAL read, ICurrentUser current) : ControllerBase
 {
     /// <summary>Approve a pending listing (reference: POST /api/admin/products/{product_id}/approve).</summary>
     [HttpPost("products/{productId}/approve")]
@@ -26,15 +26,23 @@ public class AdminProductsController(IProductModerationBAL products, ICurrentUse
 
     /// <summary>Staff sets or clears a listing's go-live time.</summary>
     [HttpPut("products/{productId}/publish-at")]
-    public async Task<JsonObject> SetPublishAt(Guid productId, PublishAtIn body) =>
-        await products.SetPublishAtAsync(await current.RequireAsync(), productId, body.PublishAt);
+    public async Task<JsonObject> SetPublishAt(Guid productId, PublishAtIn body)
+    {
+        var user = await current.RequireAsync();
+        await products.SetPublishAtAsync(user, productId, body.PublishAt);
+        return await read.DetailAsync(user, productId);   // with the seller, like the page's own load
+    }
 
     public sealed record UnitLimitIn([param: Range(0, 100)] int MaxQty);
 
     /// <summary>Staff sets the most units of one option an order may hold (0 removes it). No new approval round.</summary>
     [HttpPut("products/{productId}/unit-limit")]
-    public async Task<JsonObject> SetUnitLimit(Guid productId, UnitLimitIn body) =>
-        await products.SetUnitLimitAsync(await current.RequireAsync(), productId, body.MaxQty);
+    public async Task<JsonObject> SetUnitLimit(Guid productId, UnitLimitIn body)
+    {
+        var user = await current.RequireAsync();
+        await products.SetUnitLimitAsync(user, productId, body.MaxQty);
+        return await read.DetailAsync(user, productId);
+    }
 
     /// <summary>Reject a pending listing or take down a live one (reference: POST /api/admin/products/{product_id}/reject).</summary>
     [HttpPost("products/{productId}/reject")]

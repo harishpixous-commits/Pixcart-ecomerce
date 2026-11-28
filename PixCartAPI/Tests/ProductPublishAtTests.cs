@@ -72,7 +72,7 @@ public class ProductPublishAtTests(ApiFactory f) : ApiTest(f)
         var soon = DateTime.UtcNow.AddDays(3).ToString("o");
         var put = await admin.Put(path, new { publish_at = soon });
         Assert.True(put.Status == 200, put.ToString());
-        Assert.NotNull(put.Json["publish_at"]); Assert.Equal("approved", put.Json["status"]!.GetValue<string>());
+        Assert.NotNull(put.Json["seller"]!["name"]); Assert.NotNull(put.Json["publish_at"]); Assert.Equal("approved", put.Json["status"]!.GetValue<string>());
         Assert.Equal(404, (int)(await v.GetAsync($"/api/catalog/products/{slug}")).StatusCode);
         Assert.NotNull((await seller.Get($"/api/seller/products/{pid}")).Json["publish_at"]);
         Assert.Equal(400, (await admin.Put(path, new { publish_at = DateTime.UtcNow.AddDays(400).ToString("o") })).Status);
@@ -107,6 +107,7 @@ public class ProductPublishAtTests(ApiFactory f) : ApiTest(f)
         var put = await admin.Put(path, new { max_qty = 3 });
         Assert.True(put.Status == 200, put.ToString());
         Assert.Equal("approved", put.Json["status"]!.GetValue<string>());
+        Assert.NotNull(put.Json["seller"]!["name"]);
         Assert.Equal(3, (await v.GetFromJsonAsync<JsonObject>($"/api/catalog/products/{slug}"))!["max_qty"]!.GetValue<int>());
         Assert.Equal(422, (await admin.Put(path, new { max_qty = 101 })).Status);
         Assert.Equal(422, (await admin.Put(path, new { max_qty = -1 })).Status);
