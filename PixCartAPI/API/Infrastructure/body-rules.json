@@ -3602,7 +3602,8 @@
 "enum": [
 "percent",
 "flat",
-"bxgy"
+"bxgy",
+"bundle"
 ],
 "title": "Kind"
 },
@@ -3725,7 +3726,8 @@
 "enum": [
 "percent",
 "flat",
-"bxgy"
+"bxgy",
+"bundle"
 ],
 "title": "Kind"
 },
