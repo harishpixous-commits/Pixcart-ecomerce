@@ -46,6 +46,19 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
                         && (allowedCategories is null || allowedCategories.Contains(l.Product.CategoryId)))
             .ToDictionary(l => l.Variant.Id, l => l.LineTotal);
         var baseSum = eligible.Values.Sum();
+        if (c.Kind == "bxgy") // buy X get Y: the cheapest Y of every X+Y units get Value percent off
+        {
+            var units = lines.Where(l => eligible.ContainsKey(l.Variant.Id)).SelectMany(l => Enumerable.Repeat(l.LineTotal / l.Item.Qty, l.Item.Qty))
+                .OrderByDescending(x => x).ToList();
+            var group = c.BuyQty + c.GetQty;
+            var free = group > 0 ? units.Count / group * c.GetQty : 0;
+            if (free == 0)
+                throw new AppException(group > units.Count ? $"Add {group - units.Count} more item(s) to get this offer" : "This coupon does not apply to the items in your cart", "coupon_not_applicable");
+            var off = Money.ApplyBps(units.Skip(units.Count - free).Sum(), c.Value * 100);
+            if (c.MaxDiscountPaise is { } cap) off = Math.Min(off, cap);
+            off = Math.Min(off, baseSum);
+            return new Result(c, off, Money.Allocate(off, eligible));
+        }
         if (baseSum == 0) throw new AppException("This coupon does not apply to the items in your cart", "coupon_not_applicable");
         if (baseSum < c.MinOrderPaise)
             throw new AppException($"Add items worth ₹{ShortfallRupees(c.MinOrderPaise - baseSum)} more to use this coupon", "coupon_min_order");

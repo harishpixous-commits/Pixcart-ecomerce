@@ -38,6 +38,10 @@ public class CouponModel
     public Guid? OnlyUserId { get; set; }
     /// <summary>coupons.is_active</summary>
     public bool IsActive { get; set; }
+    /// <summary>coupons.buy_qty: units bought (kind bxgy)</summary>
+    public int BuyQty { get; set; }
+    /// <summary>coupons.get_qty: units that get value percent off (kind bxgy)</summary>
+    public int GetQty { get; set; }
     /// <summary>coupons.is_automatic: applied at checkout with no code</summary>
     public bool IsAutomatic { get; set; }
     /// <summary>coupons.show_on_checkout</summary>

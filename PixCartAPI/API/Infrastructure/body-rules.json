@@ -3601,7 +3601,8 @@
 "type": "string",
 "enum": [
 "percent",
-"flat"
+"flat",
+"bxgy"
 ],
 "title": "Kind"
 },
@@ -3723,7 +3724,8 @@
 "type": "string",
 "enum": [
 "percent",
-"flat"
+"flat",
+"bxgy"
 ],
 "title": "Kind"
 },

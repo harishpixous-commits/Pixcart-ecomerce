@@ -478,6 +478,7 @@ public class CatalogBAL(
             title = $"{(c.Value / 100.0).ToString("G6", CultureInfo.InvariantCulture)}% off";
             if (c.MaxDiscountPaise is > 0) title += $" up to {Rupees(c.MaxDiscountPaise.Value)}";
         }
+        else if (c.Kind == "bxgy") title = $"Buy {c.BuyQty}, get {c.GetQty} " + (c.Value == 100 ? "free" : $"at {c.Value}% off");
         else title = $"{Rupees(c.Value)} off";
         var terms = new List<string>();
         if (c.MinOrderPaise > 0) terms.Add($"on orders of {Rupees(c.MinOrderPaise)} or more");

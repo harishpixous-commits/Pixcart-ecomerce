@@ -11,12 +11,13 @@ import { PageLoader } from "../ui/page-loader";
 import { Button, EmptyState, ErrorNote, Field, Modal, Pill, Select, TextField, Toast } from "../ui/ui";
 
 export type CouponRow = {
-  id: string; code: string; description: string; kind: "percent" | "flat"; value: number; max_discount_paise: number | null; min_order_paise: number;
+  id: string; code: string; description: string; kind: "percent" | "flat" | "bxgy"; value: number; buy_qty?: number; get_qty?: number; max_discount_paise: number | null; min_order_paise: number;
   starts_at: string | null; ends_at: string | null; usage_limit: number | null; per_user_limit: number; used_count: number; funded_by: string;
   category_id: string | null; first_order_only: boolean; is_active: boolean; show_on_checkout: boolean; is_automatic?: boolean;
 };
 
-export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discount_paise" | "min_order_paise">) {
+export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discount_paise" | "min_order_paise" | "buy_qty" | "get_qty">) {
+  if (c.kind === "bxgy") return `Buy ${c.buy_qty}, get ${c.get_qty} ${c.value === 100 ? "free" : `at ${c.value}% off`}`;
   const off = c.kind === "percent" ? `${c.value / 100}% off` : `${rupees(c.value)} off`;
   const cap = c.kind === "percent" && c.max_discount_paise ? ` up to ${rupees(c.max_discount_paise)}` : "";
   const min = c.min_order_paise ? ` on ${rupees(c.min_order_paise)} or more` : "";
@@ -26,7 +27,7 @@ export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discoun
 // The form shows the browser's local time; toISOString() would show UTC and shift the time on every save.
 const toLocal = (iso: string | null) => toLocalInput(iso);
 
-const BLANK = { code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, is_active: true };
+const BLANK = { code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, buy_qty: "2", get_qty: "1", is_active: true };
 type Form = typeof BLANK;
 
 const digits = (v: string) => v.replace(/\D/g, "");
@@ -77,10 +78,11 @@ const codeChars = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
           <pc-text-field label="Short description" [value]="f().description" (valueChange)="set('description', $event)" [maxlength]="200" hint="Shown to customers at checkout" />
           <pc-field label="Discount type" for="ck">
             <select pcSelect id="ck" (change)="set('kind', $any($event.target).value)">
-              <option value="percent" [selected]="f().kind === 'percent'">Percentage</option><option value="flat" [selected]="f().kind === 'flat'">Fixed amount</option>
+              <option value="percent" [selected]="f().kind === 'percent'">Percentage</option><option value="flat" [selected]="f().kind === 'flat'">Fixed amount</option>@if (admin()) {<option value="bxgy" [selected]="f().kind === 'bxgy'">Buy X get Y</option>}
             </select>
           </pc-field>
-          <pc-text-field [label]="f().kind === 'percent' ? 'Percentage off (1 to 90)' : 'Amount off (₹)'" inputmode="decimal" [value]="f().value" (valueChange)="set('value', $event)" [required]="true" />
+          @if (f().kind === "bxgy") {<pc-text-field label="Customer buys (items)" inputmode="numeric" [value]="f().buy_qty" (valueChange)="set('buy_qty', $event)" [required]="true" /><pc-text-field label="Customer gets (items)" inputmode="numeric" [value]="f().get_qty" (valueChange)="set('get_qty', $event)" [required]="true" />}
+          <pc-text-field [label]="f().kind === 'percent' ? 'Percentage off (1 to 90)' : f().kind === 'bxgy' ? 'Percent off the extra items (100 = free)' : 'Amount off (₹)'" inputmode="decimal" [value]="f().value" (valueChange)="set('value', $event)" [required]="true" />
           @if (f().kind === "percent") {<pc-text-field label="Maximum discount (₹, optional)" inputmode="decimal" [value]="f().max" (valueChange)="set('max', $event)" />}
           <pc-text-field label="Minimum order (₹, optional)" inputmode="decimal" [value]="f().min" (valueChange)="set('min', $event)" [hint]="admin() ? 'Counted on the whole cart' : 'Counted on your items in the cart'" />
           <pc-text-field label="Starts" type="datetime-local" [value]="f().starts" (valueChange)="set('starts', $event)" />
@@ -179,10 +181,10 @@ export class CouponManager {
     this.edit.set(c);
     if (c === "new") this.f.set({ ...BLANK });
     else this.f.set({
-      code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : paiseToInput(c.value),
+      code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : c.kind === "bxgy" ? String(c.value) : paiseToInput(c.value),
       max: c.max_discount_paise ? paiseToInput(c.max_discount_paise) : "", min: c.min_order_paise ? paiseToInput(c.min_order_paise) : "",
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
-      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, is_active: c.is_active,
+      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, buy_qty: String(c.buy_qty || 2), get_qty: String(c.get_qty || 1), is_active: c.is_active,
     });
   }
 
@@ -203,7 +205,7 @@ export class CouponManager {
     e.preventDefault();
     this.error.set(null);
     const f = this.f();
-    const value = f.kind === "percent" ? Math.round(Number(f.value) * 100) : toPaise(f.value);
+    const value = f.kind === "percent" ? Math.round(Number(f.value) * 100) : f.kind === "bxgy" ? Math.round(Number(f.value)) : toPaise(f.value);
     if (!value || value <= 0) return void this.error.set("Enter the discount");
     const body: Record<string, unknown> = {
       code: f.code, description: f.description, kind: f.kind, value,
@@ -211,7 +213,7 @@ export class CouponManager {
       starts_at: f.starts ? new Date(f.starts).toISOString() : null, ends_at: f.ends ? new Date(f.ends).toISOString() : null,
       usage_limit: f.limit ? Number(f.limit) : null, per_user_limit: Number(f.per_user) || 1, is_active: f.is_active,
     };
-    if (this.admin()) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic });
+    if (this.admin()) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic, buy_qty: f.kind === "bxgy" ? Number(f.buy_qty) || 0 : 0, get_qty: f.kind === "bxgy" ? Number(f.get_qty) || 0 : 0 });
     try {
       const edit = this.edit();
       if (edit === "new") await api(this.base(), { method: "POST", body });

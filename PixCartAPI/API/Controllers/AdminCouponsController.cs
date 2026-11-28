@@ -18,7 +18,7 @@ public class AdminCouponsController(ICouponAdminBAL bal, ICurrentUser current) :
         var user = await current.RequireAsync();
         var c = await bal.CreateAsync(user, body.Code, body.Description, body.Kind, body.Value, body.MaxDiscountPaise,
             body.MinOrderPaise, body.StartsAt, body.EndsAt, body.UsageLimit, body.PerUserLimit, body.IsActive,
-            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic);
+            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic, body.BuyQty, body.GetQty);
         return StatusCode(201, c);
     }
 
@@ -30,7 +30,7 @@ public class AdminCouponsController(ICouponAdminBAL bal, ICurrentUser current) :
         var user = await current.RequireAsync();
         var c = await bal.UpdateAsync(user, coupon_id, body.Description, body.Kind, body.Value, body.MaxDiscountPaise,
             body.MinOrderPaise, body.StartsAt, body.EndsAt, body.UsageLimit, body.PerUserLimit, body.IsActive,
-            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic);
+            body.CategoryId, body.FirstOrderOnly, body.ShowOnCheckout, body.IsAutomatic, body.BuyQty, body.GetQty);
         return Ok(c);
     }
 }
@@ -54,16 +54,18 @@ public sealed record AdminCouponIn(
     Guid? CategoryId,
     bool FirstOrderOnly,
     bool ShowOnCheckout,
-    bool IsAutomatic = false)
+    bool IsAutomatic = false,
+    int BuyQty = 0,
+    int GetQty = 0)
 {
     public AdminCouponIn()
         : this("", "", "percent", 100, null, 0, null, null, null, 1, true, null, false, true)
     {
     }
 
-    /// <summary>Reference: kind is Literal["percent", "flat"].</summary>
+    /// <summary>Reference: kind is Literal["percent", "flat", "bxgy"].</summary>
     public static System.ComponentModel.DataAnnotations.ValidationResult? ValidateKind(string? kind, System.ComponentModel.DataAnnotations.ValidationContext context)
-        => kind is "percent" or "flat"
+        => kind is "percent" or "flat" or "bxgy"
             ? System.ComponentModel.DataAnnotations.ValidationResult.Success
-            : new System.ComponentModel.DataAnnotations.ValidationResult("kind must be percent or flat", ["Kind"]);
+            : new System.ComponentModel.DataAnnotations.ValidationResult("kind must be percent, flat or bxgy", ["Kind"]);
 }

@@ -33,6 +33,7 @@ public static class CouponBatch
             await tx.ExecuteAsync(@"INSERT INTO coupons (id, code, description, kind, value, max_discount_paise, min_order_paise, starts_at, ends_at, usage_limit, per_user_limit, used_count, funded_by, category_id, first_order_only, is_active, show_on_checkout)
                 VALUES (@id, @code, @d, @k, @v, @max, @min, @s, @e, @lim, 1, 0, 'platform', @cat, @first, @active, 0)",
                 new { id = Guid.NewGuid(), code, d = c.Description, k = c.Kind, v = c.Value, max = c.Max, min = c.MinOrder, s = c.Starts, e = c.Ends, lim = singleUse ? 1 : c.Limit, cat = c.Category, first = c.First, active = c.Active });
+        await tx.ExecuteAsync("UPDATE coupons c JOIN coupons b ON b.id = @couponId SET c.buy_qty = b.buy_qty, c.get_qty = b.get_qty WHERE c.code IN @codes", new { couponId, codes });
         await tx.ExecuteAsync("INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) VALUES (@by, 'coupon.generate', 'coupon', @eid, '', UTC_TIMESTAMP(6), @id)",
             new { by = admin.Id, eid = $"{couponId} x{codes.Count}", id = Guid.NewGuid() });
         await tx.CommitAsync();

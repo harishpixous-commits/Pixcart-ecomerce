@@ -24,6 +24,8 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
     {
         if (kind == "percent" && value is < 100 or > 9000)
             throw new AppException("A percentage coupon must be between 1% and 90%", "invalid_value");
+        if (kind == "bxgy" && value is < 1 or > 100)
+            throw new AppException("A buy X get Y offer takes between 1% and 100% off the extra items", "invalid_value", 400);
     }
 
     /// <summary>Reference: coupon_admin_out.</summary>
@@ -35,15 +37,17 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
         ["ends_at"] = c.EndsAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff+00:00"),
         ["usage_limit"] = c.UsageLimit, ["per_user_limit"] = c.PerUserLimit, ["used_count"] = c.UsedCount,
         ["funded_by"] = c.FundedBy, ["seller_id"] = c.SellerId?.ToString(), ["category_id"] = c.CategoryId?.ToString(),
-        ["first_order_only"] = c.FirstOrderOnly, ["is_active"] = c.IsActive, ["show_on_checkout"] = c.ShowOnCheckout, ["is_automatic"] = c.IsAutomatic,
+        ["first_order_only"] = c.FirstOrderOnly, ["is_active"] = c.IsActive, ["show_on_checkout"] = c.ShowOnCheckout, ["is_automatic"] = c.IsAutomatic, ["buy_qty"] = c.BuyQty, ["get_qty"] = c.GetQty,
     };
 
     public async Task<JsonObject> CreateAsync(UserModel admin, string code, string description, string kind, int value,
         long? maxDiscountPaise, long minOrderPaise, DateTime? startsAt, DateTime? endsAt, int? usageLimit,
-        int perUserLimit, bool isActive, Guid? categoryId, bool firstOrderOnly, bool showOnCheckout, bool isAutomatic = false)
+        int perUserLimit, bool isActive, Guid? categoryId, bool firstOrderOnly, bool showOnCheckout, bool isAutomatic = false, int buyQty = 0, int getQty = 0)
     {
         await access.RequireAsync(admin, "marketing");
         CheckValues(kind, value);
+        if (kind == "bxgy" && (buyQty < 1 || getQty < 1)) throw new AppException("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value", 400);
+        if (kind != "bxgy") buyQty = getQty = 0;
         code = code.ToUpperInvariant();
         await using var uow = await db.BeginAsync();
         if (await uow.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM coupons WHERE UPPER(code) = @code", new { code }) > 0)
@@ -53,15 +57,15 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
             Code = code, Description = description, Kind = kind, Value = value, MaxDiscountPaise = maxDiscountPaise,
             MinOrderPaise = minOrderPaise, StartsAt = startsAt, EndsAt = endsAt, UsageLimit = usageLimit,
             PerUserLimit = perUserLimit, UsedCount = 0, FundedBy = "platform", CategoryId = categoryId,
-            FirstOrderOnly = firstOrderOnly, IsActive = isActive, ShowOnCheckout = showOnCheckout, IsAutomatic = isAutomatic,
+            FirstOrderOnly = firstOrderOnly, IsActive = isActive, ShowOnCheckout = showOnCheckout, IsAutomatic = isAutomatic, BuyQty = buyQty, GetQty = getQty,
             Id = Guid.NewGuid(), CreatedAt = DateTimeFunctions.UtcNow(), UpdatedAt = DateTimeFunctions.UtcNow(),
         };
         await uow.ExecuteAsync(
             "INSERT INTO coupons (code, description, kind, value, max_discount_paise, min_order_paise, starts_at, ends_at, " +
             "usage_limit, per_user_limit, used_count, funded_by, seller_id, category_id, first_order_only, is_active, " +
-            "show_on_checkout, is_automatic, id, created_at, updated_at) VALUES (@Code, @Description, @Kind, @Value, @MaxDiscountPaise, " +
+            "show_on_checkout, is_automatic, buy_qty, get_qty, id, created_at, updated_at) VALUES (@Code, @Description, @Kind, @Value, @MaxDiscountPaise, " +
             "@MinOrderPaise, @StartsAt, @EndsAt, @UsageLimit, @PerUserLimit, @UsedCount, @FundedBy, @SellerId, @CategoryId, " +
-            "@FirstOrderOnly, @IsActive, @ShowOnCheckout, @IsAutomatic, @Id, @CreatedAt, @UpdatedAt)", c);
+            "@FirstOrderOnly, @IsActive, @ShowOnCheckout, @IsAutomatic, @BuyQty, @GetQty, @Id, @CreatedAt, @UpdatedAt)", c);
         await AuditAsync(uow, admin, "coupon.create", c.Code);
         await uow.CommitAsync();
         return AdminOut(c);
@@ -69,10 +73,12 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
 
     public async Task<JsonObject> UpdateAsync(UserModel admin, Guid couponId, string description, string kind, int value,
         long? maxDiscountPaise, long minOrderPaise, DateTime? startsAt, DateTime? endsAt, int? usageLimit,
-        int perUserLimit, bool isActive, Guid? categoryId, bool firstOrderOnly, bool showOnCheckout, bool isAutomatic = false)
+        int perUserLimit, bool isActive, Guid? categoryId, bool firstOrderOnly, bool showOnCheckout, bool isAutomatic = false, int buyQty = 0, int getQty = 0)
     {
         await access.RequireAsync(admin, "marketing");
         CheckValues(kind, value);
+        if (kind == "bxgy" && (buyQty < 1 || getQty < 1)) throw new AppException("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value", 400);
+        if (kind != "bxgy") buyQty = getQty = 0;
         await using var uow = await db.BeginAsync();
         var c = await uow.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE id = @couponId FOR UPDATE", new { couponId })
             ?? throw new NotFoundException("Coupon");
@@ -81,12 +87,12 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
             "UPDATE coupons SET description = @description, kind = @kind, value = @value, max_discount_paise = @maxDiscountPaise, " +
             "min_order_paise = @minOrderPaise, starts_at = @startsAt, ends_at = @endsAt, usage_limit = @usageLimit, " +
             "per_user_limit = @perUserLimit, is_active = @isActive, first_order_only = @firstOrderOnly, " +
-            "show_on_checkout = @showOnCheckout, is_automatic = @isAutomatic, updated_at = UTC_TIMESTAMP(6)" +
+            "show_on_checkout = @showOnCheckout, is_automatic = @isAutomatic, buy_qty = @buyQty, get_qty = @getQty, updated_at = UTC_TIMESTAMP(6)" +
             (c.FundedBy == "seller" ? "" : ", category_id = @categoryId") + " WHERE id = @couponId",
             new
             {
                 description, kind, value, maxDiscountPaise, minOrderPaise, startsAt, endsAt, usageLimit, perUserLimit,
-                isActive, firstOrderOnly, showOnCheckout, isAutomatic, categoryId, couponId,
+                isActive, firstOrderOnly, showOnCheckout, isAutomatic, buyQty, getQty, categoryId, couponId,
             });
         await AuditAsync(uow, admin, "coupon.update", c.Code);
         var fresh = await uow.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE id = @couponId", new { couponId }) ?? c;
