@@ -31,4 +31,17 @@ async def run(session: AsyncSession, user: User, row: AgentProposal, bg: Backgro
         event = "seller_tracking_reminder" if k == "nudge_tracking" else "seller_ship_reminder"
         await notify_seller(session, sub.seller_id, event, {"order_number": sub.number, "hours": str(hours)}, link=f"/seller/orders/{sub.id}")
         return {"ok": True, "told_seller": True}
+    if k == "delay_notice":
+        from app.models import Order
+        from app.services.notify import notify
+
+        sub = await session.get(SubOrder, uuid.UUID(p["sub_id"]))
+        if sub is None or sub.status != "shipped":
+            raise Stale("The package is no longer on its way, so nothing was sent.")
+        order = await session.get(Order, sub.order_id)
+        customer = await session.get(User, order.user_id) if order else None
+        if customer is None:
+            raise Stale("The customer no longer exists.")
+        await notify(session, "order_delay", customer, {"order_number": sub.number, "expected": p["expected"]}, link="/account/orders")
+        return {"ok": True, "told_customer": True}
     raise Stale("This kind of proposal is no longer supported.")

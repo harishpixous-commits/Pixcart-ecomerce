@@ -44,8 +44,8 @@ async def test_delivery_agent_proposes_and_staff_approve(client, admin, categori
     assert (await admin.put("/api/admin/agents/settings", {"delivery_nudge_hours": 0})).status_code == 400
     ov = (await admin.get("/api/admin/agents")).json()
     assert ov["agents"][0]["key"] == "delivery" and ov["agents"][0]["enabled"] and ov["agents"][0]["not_wired"]
-    assert (await admin.post("/api/admin/agents/run")).json()["new"] == {"delivery": 1}
-    assert (await admin.post("/api/admin/agents/run")).json()["new"] == {"delivery": 0}  # the same idea is not written twice
+    assert (await admin.post("/api/admin/agents/run")).json()["new"]["delivery"] == 1
+    assert (await admin.post("/api/admin/agents/run")).json()["new"]["delivery"] == 0  # the same idea is not written twice
     items = (await admin.get("/api/admin/agents/proposals")).json()["items"]
     assert len(items) == 1 and items[0]["kind"] == "nudge_seller" and "ship" in items[0]["summary"]
     # nothing has been sent yet
@@ -95,3 +95,40 @@ async def test_delivery_agent_cancel_reject_and_stale(client, admin, categories)
     assert (await admin.post(f"/api/admin/agents/proposals/{pid}/approve")).status_code == 200
     async with SessionLocal() as s:
         assert (await s.get(SubOrder, uuid.UUID(sid))).status == "cancelled"
+
+
+async def test_order_update_agent_proposes_delay_notice_and_customer_hears_only_after_approval(client, admin, categories):
+    tn, buyer, sid = await _place(client, admin, categories, "9770000203")
+    assert (await tn.post(f"/api/seller/orders/{sid}/confirm")).status_code == 200
+    assert (await tn.post(f"/api/seller/orders/{sid}/pack")).status_code == 200
+    assert (await tn.post(f"/api/seller/orders/{sid}/ship", {"courier_name": "DTDC", "tracking_number": "AWB7"})).status_code == 200
+    await _age(sid, expected_delivery_at=utcnow() - timedelta(hours=30))
+    await admin.put("/api/admin/agents/settings", {"enabled": True})
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await core.run_agent(s, "orderupdate")
+            await s.commit()
+            return n
+
+    assert await run() == 0  # its own switch is off
+    assert (await admin.put("/api/admin/agents/settings", {"orderupdate_enabled": True})).status_code == 200
+    assert await run() == 1 and await run() == 0
+    p = (await admin.get("/api/admin/agents/proposals?agent=orderupdate")).json()["items"][0]
+    assert p["kind"] == "delay_notice" and "late" in p["summary"]
+
+    def delay_notes(items):
+        return [n for n in items if n["title"] == "Your package is running late"]
+
+    assert delay_notes((await buyer.get("/api/notifications")).json()["items"]) == []
+    assert (await admin.post(f"/api/admin/agents/proposals/{p['id']}/approve")).json()["status"] == "done"
+    assert len(delay_notes((await buyer.get("/api/notifications")).json()["items"])) == 1
+    # a package that arrived before approval is skipped, not messaged
+    await _age(sid, expected_delivery_at=utcnow() - timedelta(hours=40), status="delivered", delivered_at=utcnow())
+    async with SessionLocal() as s:
+        s.add(AgentProposal(agent="orderupdate", kind="delay_notice", dedupe_key="delay_notice:manual", summary="x", details=[], params={"sub_id": sid, "expected": "1 Jan"},
+                            permission="orders", status="pending", result={}, created_at=utcnow()))
+        await s.commit()
+    pid = (await admin.get("/api/admin/agents/proposals")).json()["items"][0]["id"]
+    assert (await admin.post(f"/api/admin/agents/proposals/{pid}/approve")).status_code == 409
+    assert len(delay_notes((await buyer.get("/api/notifications")).json()["items"])) == 1

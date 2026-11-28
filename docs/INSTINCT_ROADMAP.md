@@ -471,3 +471,6 @@ Not wired: automatic gateway refund call.
 ## Push 141: AI agents framework and the delivery agent (Python)
 - New: `agent_proposals` table (alembic 0052), `app/agents/` (core, executors, delivery), `/api/admin/agents` (overview, settings, proposals, run, approve, reject), job every 30 minutes, Admin -> AI agents page, `agents` growth section, notification `seller_tracking_reminder`.
 - Delivery agent: seller reminder, cancel and refund, ask for tracking. Owner approval always. Tests: `tests/test_agents.py` (2). Status doc: `docs/AI_AGENTS_STATUS.md`. .NET port next.
+
+## Push 142: Order update agent (Python)
+- `app/agents/orderupdate.py`: shipped packages past the promised delivery date by N hours get a proposal to tell the customer (event `order_delay`, in-app and email). Approve sends it; a package delivered meanwhile is skipped. Settings `orderupdate_*`. Test added to `tests/test_agents.py`. .NET port next.
