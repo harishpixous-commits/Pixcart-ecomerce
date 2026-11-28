@@ -80,12 +80,13 @@ DEFAULTS: dict[str, Any] = {
     "no_bag_enabled": False,         # "I don't need a bag"
     "gift_message_enabled": False,   # a gift message the seller packs with the order
     "gift_message_max": 150,         # its longest length
+    "min_order_paise": 0,            # the lowest item total the shop takes an order for; 0 means no minimum
     "cancellation_note": "You can cancel until your order is shipped. After delivery, use returns if the product allows them.",
 }
 
 _INTS = {"handling_paise": (0, 100_000), "handling_list_paise": (0, 100_000), "handling_free_above_paise": (0, 100_000_000),
          "small_cart_paise": (0, 100_000), "small_cart_below_paise": (0, 10_000_000), "platform_paise": (0, 100_000),
-         "fees_gst_bps": (0, 2800), "tip_max_paise": (0, 500_000), "surge_paise": (0, 100_000), "late_night_paise": (0, 100_000), "gift_message_max": (20, 300)}
+         "fees_gst_bps": (0, 2800), "tip_max_paise": (0, 500_000), "surge_paise": (0, 100_000), "late_night_paise": (0, 100_000), "gift_message_max": (20, 300), "min_order_paise": (0, 10_000_000)}
 _TEXTS = {"delivery_label": 40, "delivery_info": 300, "handling_label": 40, "handling_info": 300, "small_cart_label": 40, "small_cart_info": 300,
           "platform_label": 40, "platform_info": 300, "surge_label": 40, "surge_info": 300, "late_night_label": 40, "late_night_info": 300,
           "cancellation_note": 600}
@@ -274,6 +275,8 @@ def tip_amount(ck: dict, tip: int | None) -> int:
 def hints(ck: dict, cfg: dict, items_total: int, groups: list[dict]) -> list[str]:
     """Short nudges under the bill: how much more for free delivery or to drop the small cart fee."""
     out = []
+    if ck["min_order_paise"] and 0 < items_total < ck["min_order_paise"]:
+        out.append(f"Minimum order is {_rupees(ck['min_order_paise'])}. Add items worth {_rupees(ck['min_order_paise'] - items_total)} to place your order")
     if ck["small_cart_enabled"] and ck["small_cart_paise"] and 0 < items_total < ck["small_cart_below_paise"]:
         out.append(f"Add items worth {_rupees(ck['small_cart_below_paise'] - items_total)} to avoid the small cart fee")
     for g in groups:
@@ -292,7 +295,7 @@ def public(ck: dict) -> dict:
     """Options the checkout screen needs."""
     return {
         "tip_enabled": ck["tip_enabled"], "tip_presets": ck["tip_presets"], "tip_max_paise": ck["tip_max_paise"], "gstin_enabled": ck["gstin_enabled"],
-        "instructions_enabled": ck["instructions_enabled"], "no_bag_enabled": ck["no_bag_enabled"], "gift_message_enabled": ck["gift_message_enabled"], "gift_message_max": ck["gift_message_max"], "cancellation_note": ck["cancellation_note"],
+        "instructions_enabled": ck["instructions_enabled"], "no_bag_enabled": ck["no_bag_enabled"], "gift_message_enabled": ck["gift_message_enabled"], "gift_message_max": ck["gift_message_max"], "min_order_paise": ck["min_order_paise"], "cancellation_note": ck["cancellation_note"],
         "delivery_label": ck["delivery_label"], "delivery_info": ck["delivery_info"],
     }
 

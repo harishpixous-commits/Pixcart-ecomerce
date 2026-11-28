@@ -210,3 +210,22 @@ async def test_gift_message_is_off_until_admin_allows_it(client, admin, categori
     seller_view = (await tn.get(f"/api/seller/orders/{sub_id}")).json()
     assert seller_view["ship_to"]["gift_message"] == "Happy birthday, Meena!"
     assert (await admin.put("/api/admin/checkout", {"fees": {"gift_message_max": 10}})).status_code == 400
+
+
+async def test_minimum_order_value_blocks_small_orders_and_nudges_in_the_cart(client, admin, categories):
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9600000612", name="Min Buyer")
+    addr = await add_address(buyer, state="33")
+    vid = shirt["variants"][0]["id"]
+    price = shirt["variants"][0]["price_paise"]
+    await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    cart = (await buyer.get("/api/cart")).json()
+    assert cart["checkout"]["min_order_paise"] == 0 and not any("Minimum order" in h for h in cart["hints"])
+    assert (await admin.put("/api/admin/checkout", {"fees": {"min_order_paise": price + 5000}})).status_code == 200
+    cart = (await buyer.get("/api/cart")).json()
+    assert any("Minimum order is" in h for h in cart["hints"]), cart["hints"]
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "min_order", r.text
+    await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})
+    assert r.status_code == 201, r.text

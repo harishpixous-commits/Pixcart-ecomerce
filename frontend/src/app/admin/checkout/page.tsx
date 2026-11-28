@@ -25,7 +25,7 @@ type Marketplace = {
 type Fees = {
   delivery_label: string; delivery_info: string;
   handling_enabled: boolean; handling_paise: number; handling_list_paise: number; handling_free_above_paise: number; handling_label: string; handling_info: string;
-  small_cart_enabled: boolean; small_cart_paise: number; small_cart_below_paise: number; small_cart_label: string; small_cart_info: string;
+  small_cart_enabled: boolean; small_cart_paise: number; small_cart_below_paise: number; min_order_paise: number; small_cart_label: string; small_cart_info: string;
   platform_enabled: boolean; platform_paise: number; platform_label: string; platform_info: string;
   surge_enabled: boolean; surge_paise: number; surge_until: string; surge_label: string; surge_info: string;
   late_night_enabled: boolean; late_night_paise: number; late_night_from: string; late_night_to: string; late_night_label: string; late_night_info: string;
@@ -40,7 +40,7 @@ type Body = { marketplace: Marketplace; fees: Partial<Fees> & { surge_hours?: nu
 type Preview = { items_total: number; shipping: number; cod_fee: number; fees: FeeLine[]; total: number; hints: string[] };
 
 const MARKET_MONEY = ["shipping_fee_paise", "free_shipping_threshold_paise", "cod_fee_paise", "cod_max_order_paise"] as const;
-const FEE_MONEY = ["handling_paise", "handling_list_paise", "handling_free_above_paise", "small_cart_paise", "small_cart_below_paise", "platform_paise",
+const FEE_MONEY = ["handling_paise", "handling_list_paise", "handling_free_above_paise", "small_cart_paise", "small_cart_below_paise", "min_order_paise", "platform_paise",
   "surge_paise", "late_night_paise", "tip_max_paise"] as const;
 const MONEY = [...MARKET_MONEY, ...FEE_MONEY];
 const FEE_FLAGS = ["handling_enabled", "small_cart_enabled", "platform_enabled", "surge_enabled", "late_night_enabled", "fees_refund_on_cancel", "tip_enabled",
@@ -76,6 +76,7 @@ const NAMES: Record<MoneyKey | "fees_gst_bps", string> = {
   handling_free_above_paise: "Free handling amount",
   small_cart_paise: "Small cart fee",
   small_cart_below_paise: "Small cart limit",
+  min_order_paise: "Minimum order",
   platform_paise: "Platform fee",
   surge_paise: "Bad weather fee",
   late_night_paise: "Late night fee",
@@ -425,6 +426,11 @@ export default function CheckoutAndFees() {
                 <OnTheBill {...wording("small_cart_label", "small_cart_info")} placeholder="Small cart fee" />
               </>
             )}
+          </Section>
+
+          <Section icon={ShoppingBasket} title="Minimum order" on={(toPaise(d.money.min_order_paise) ?? 0) > 0}
+            sub="The lowest item total an order can have. Smaller carts see a note in the cart and cannot be placed.">
+            <TextField label="Minimum item total (₹)" {...money("min_order_paise")} hint="0 means no minimum" />
           </Section>
 
           <Section icon={Building2} title="Platform fee" on={d.flags.platform_enabled}

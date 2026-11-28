@@ -352,6 +352,8 @@ async def place_order(
     cod_fee = cfg["cod_fee_paise"] if payment_method == "cod" else 0
     discount_total = coupon.discount if coupon else 0
     ck = await fees_svc.get(session)
+    if ck["min_order_paise"] and items_total < ck["min_order_paise"]:
+        raise ApiError(f"The minimum order is {fees_svc._rupees(ck['min_order_paise'])}. Add items worth {fees_svc._rupees(ck['min_order_paise'] - items_total)} more.", "min_order")
     fee_lines = fees_svc.order_fees(ck, items_total)
     fees_total = sum(f["amount"] for f in fee_lines)
     try:

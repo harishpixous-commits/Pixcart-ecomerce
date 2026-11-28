@@ -279,6 +279,7 @@ export interface CheckoutOptions {
   no_bag_enabled: boolean;
   gift_message_enabled?: boolean;
   gift_message_max?: number;
+  min_order_paise?: number;
   cancellation_note: string;
   delivery_label: string;
   delivery_info: string;
