@@ -39,3 +39,22 @@ async def test_bundle_discount_needs_every_product_of_the_set(client, admin, cat
     await a.post("/api/cart/items", {"variant_id": pv["id"], "qty": 1})
     c = (await q()).json()["coupon"]
     assert c["error"] is None and c["discount"] == (sv["price_paise"] + pv["price_paise"]) // 10   # one complete set, 10% off (the second shirt is not part of it)
+
+
+async def test_volume_offer_needs_the_minimum_number_of_items(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    body = {"code": "BUY3SAVE", "kind": "volume", "value": 15, "show_on_checkout": False}
+    assert (await admin.post("/api/admin/coupons", body | {"buy_qty": 1})).status_code == 400   # a minimum of one is not a volume offer
+    assert (await admin.post("/api/admin/coupons", body | {"buy_qty": 3, "value": 95})).status_code in (400, 422)
+    r = await admin.post("/api/admin/coupons", body | {"buy_qty": 3, "product_slugs": [shirt["slug"]]})
+    assert r.status_code == 201 and r.json()["buy_qty"] == 3 and r.json()["get_qty"] == 0, r.text
+    a = await login_phone(client, "9770000403", name="Volume Buyer")
+    addr = await add_address(a, state="33")
+    sv, pv = shirt["variants"][0], phone_p["variants"][0]
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 2})
+    await a.post("/api/cart/items", {"variant_id": pv["id"], "qty": 5})                 # the phone is not in the offer
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod", "coupon_code": "BUY3SAVE"})
+    assert (await q()).json()["coupon"]["discount"] == 0                                  # two shirts: not enough
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 1})
+    c = (await q()).json()["coupon"]
+    assert c["error"] is None and c["discount"] == sv["price_paise"] * 3 * 15 // 100
