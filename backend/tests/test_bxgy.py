@@ -196,3 +196,30 @@ async def test_bundle_block_hides_expired_used_up_and_switched_off_bundles(clien
     assert not await shown()
     await change(is_active=True)
     assert await shown()
+
+
+async def test_volume_offer_counts_units_across_variants_of_the_product(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import Variant
+    v0 = shirt["variants"][0]
+    async with SessionLocal() as s:   # a second variant of the same shirt, same price
+        row = (await s.execute(select(Variant).where(Variant.id == uuid.UUID(v0["id"])))).scalar_one()
+        clone = Variant(**{c.name: getattr(row, c.name) for c in Variant.__table__.columns if c.name not in ("id", "sku", "created_at", "updated_at")}, id=uuid.uuid4(), sku="VARMIX-2")
+        s.add(clone)
+        await s.commit()
+        v1 = {"id": str(clone.id), "price_paise": clone.price_paise}
+    assert (await admin.post("/api/admin/coupons", {"code": "VARMIX", "kind": "volume", "value": 10, "buy_qty": 2, "show_on_checkout": False, "product_slugs": [shirt["slug"]]})).status_code == 201
+    a = await login_phone(client, "9770000431", name="Variant Mix Buyer")
+    addr = await add_address(a, state="33")
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod", "coupon_code": "VARMIX"})
+    await a.post("/api/cart/items", {"variant_id": v0["id"], "qty": 1})
+    await a.post("/api/cart/items", {"variant_id": phone_p["variants"][0]["id"], "qty": 1})   # another product does not count
+    assert (await q()).json()["coupon"]["error"] is not None
+    await a.post("/api/cart/items", {"variant_id": v1["id"], "qty": 1})                         # a second shirt variant does
+    c = (await q()).json()["coupon"]
+    assert c["error"] is None and c["discount"] == (v0["price_paise"] + v1["price_paise"]) // 10
