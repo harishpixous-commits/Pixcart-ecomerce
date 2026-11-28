@@ -30,3 +30,21 @@ async def test_automatic_coupon_applies_without_a_code_only_when_switched_on(cli
     async with SessionLocal() as s:
         n = (await s.execute(select(func.count()).select_from(CouponRedemption))).scalar_one()
     assert n == 1
+
+
+async def test_automatic_volume_offer_competes_with_other_automatic_coupons(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": True}})).status_code == 200
+    await admin.post("/api/admin/coupons", {"code": "AUTO10B", "kind": "percent", "value": 1000, "is_automatic": True, "show_on_checkout": False})
+    r = await admin.post("/api/admin/coupons", {"code": "AUTOVOL20", "kind": "volume", "value": 20, "buy_qty": 2, "is_automatic": True, "show_on_checkout": False})
+    assert r.status_code == 201 and r.json()["is_automatic"] is True
+    a = await login_phone(client, "9770000302", name="Auto Volume Buyer")
+    addr = await add_address(a, state="33")
+    vid = shirt["variants"][0]["id"]
+    price = shirt["variants"][0]["price_paise"]
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert (await q()).json()["coupon"]["code"] == "AUTO10B"                 # one unit: the volume offer does not apply yet, the plain one does
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    c = (await q()).json()["coupon"]
+    assert c["code"] == "AUTOVOL20" and c["discount"] == price * 2 * 20 // 100   # two units: the bigger saving wins
