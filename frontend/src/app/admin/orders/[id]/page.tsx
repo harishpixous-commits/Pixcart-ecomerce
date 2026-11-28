@@ -12,7 +12,7 @@ import { api, ApiError, quietly } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupeesExact, SUB_STATUS_LABEL } from "@/lib/format";
 import type { FleetTracking, OrderDetail, ReturnableItem } from "@/lib/types";
 import { CustomerMessage } from "./message";
-import { StaffNotes } from "./notes";
+import { OrderTags, StaffNotes } from "./notes";
 import { PaymentCheck } from "./payment-check";
 import { RiskBrief } from "@/components/ai";
 import { openPdf } from "@/components/order-returns";
@@ -59,6 +59,7 @@ export default function AdminOrderDetail() {
       <div className="grid gap-4 lg:grid-cols-2">
         <RiskBrief path={`/api/admin/ai/briefs/order/${o.id}`} title="Order risk" />
         <CustomerMessage orderId={o.id} />
+        <OrderTags orderId={o.id} initial={o.staff_tags ?? []} />
         <StaffNotes orderId={o.id} />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">

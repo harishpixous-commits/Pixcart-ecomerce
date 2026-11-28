@@ -11,9 +11,9 @@ import { api, quietly } from "@/lib/api";
 import { dateTime, PAYMENT_STATUS_LABEL, rupees } from "@/lib/format";
 import type { Paged } from "@/lib/types";
 
-type Row = { id: string; number: string; customer: string; phone: string; status: string; payment_method: string; payment_status: string; grand_total: number; created_at: string; package_statuses: string[] };
-type Filters = { status: string; q: string; payment_method: string; payment_status: string; package_status: string; date_from: string; date_to: string; seller_id: string; customer_id: string; late: string };
-const KEYS: (keyof Filters)[] = ["status", "q", "payment_method", "payment_status", "package_status", "date_from", "date_to", "seller_id", "customer_id", "late"];
+type Row = { id: string; number: string; customer: string; phone: string; status: string; payment_method: string; payment_status: string; grand_total: number; created_at: string; package_statuses: string[]; staff_tags?: string[] };
+type Filters = { status: string; q: string; payment_method: string; payment_status: string; package_status: string; date_from: string; date_to: string; seller_id: string; customer_id: string; late: string; tag: string };
+const KEYS: (keyof Filters)[] = ["status", "q", "payment_method", "payment_status", "package_status", "date_from", "date_to", "seller_id", "customer_id", "late", "tag"];
 
 function Orders() {
   const sp = useSearchParams();
@@ -53,6 +53,7 @@ function Orders() {
           <option value="">Any package status</option>
           {["placed", "confirmed", "packed", "shipped", "delivered", "cancelled"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
         </Select>
+        <Input placeholder="Staff tag (exact)" maxLength={30} defaultValue={f.tag} onBlur={(e) => { if (e.target.value.trim() !== f.tag) set({ tag: e.target.value.trim(), page: 1 }); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} aria-label="Staff tag" />
         <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={!!f.late} onChange={(e) => set({ late: e.target.checked ? "1" : "", page: 1 })} />Late to ship only</label>
         <Select value={f.payment_method} onChange={(e) => set({ payment_method: e.target.value, page: 1 })} aria-label="Payment method">
           <option value="">COD and online</option><option value="cod">Cash on delivery</option><option value="online">Paid online</option>
@@ -75,7 +76,7 @@ function Orders() {
           <Table head={["Order", "Customer", "Placed", "Payment", "Total", "Packages", "Order status"]}>
             {d.items.map((o) => (
               <tr key={o.id} className="hover:bg-mist/60">
-                <td className="px-4 py-3"><Link href={`/admin/orders/${o.id}`} className="font-semibold text-peacock hover:underline">{o.number}</Link></td>
+                <td className="px-4 py-3"><Link href={`/admin/orders/${o.id}`} className="font-semibold text-peacock hover:underline">{o.number}</Link>{(o.staff_tags?.length ?? 0) > 0 && <span className="mt-1 flex flex-wrap gap-1">{o.staff_tags!.map((t) => <span key={t} className="rounded-full bg-mist px-2 text-xs text-ink-soft">{t}</span>)}</span>}</td>
                 <td className="px-4 py-3">{o.customer}<p className="text-sm text-ink-faint">{o.phone}</p></td>
                 <td className="px-4 py-3 text-sm">{dateTime(o.created_at)}</td>
                 <td className="px-4 py-3 text-sm">{o.payment_method === "cod" ? "COD" : "Online"}, {PAYMENT_STATUS_LABEL[o.payment_status]}</td>

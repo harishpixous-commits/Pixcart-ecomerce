@@ -423,6 +423,7 @@ export interface CheckoutPayload {
 
 export interface OrderDetail {
   id: string;
+  staff_tags?: string[];
   number: string;
   status: "pending_payment" | "placed" | "cancelled";
   payment_method: "cod" | "online";

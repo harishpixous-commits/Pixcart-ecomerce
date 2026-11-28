@@ -495,3 +495,5 @@ Not wired: automatic gateway refund call.
 - Admin, Coupons: "Only these products" takes product link names (last part of the product page address), comma separated. Only those products count towards the discount and the minimum; empty means the whole cart. An unknown name is refused. Platform coupons only (seller coupons are unchanged). Column coupons.product_ids (Alembic 0056; .NET V033). Tests: tests/test_coupon_products.py and the .NET Coupon_limited test. Not wired: a product picker (names are typed). Forms type-checked only.
 
 - Push 152 was withdrawn: a per-product size guide (and category one) already existed (size_guide, shown in the buy box). My duplicate size_chart was reverted by new commits, nothing deleted from history.
+
+- Push 153: Order tags (Python done; .NET/Angular next): staff can add up to 10 private tags to an order (Admin > Order page > Tags), see them under the order number in the list, and filter the list by an exact tag (?tag=); the search box finds tags too. Alembic 0057 orders.staff_tags. Test: tests/test_order_tags.py. Next.js type-check clean; not run in a browser.

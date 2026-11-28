@@ -539,6 +539,7 @@ async def list_orders(
     date_from: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     date_to: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     late: bool = False,
+    tag: str = Query(default="", max_length=30),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
@@ -562,6 +563,8 @@ async def list_orders(
         stmt = stmt.where(pkg)
     if customer_id:
         stmt = stmt.where(Order.user_id == customer_id)
+    if tag.strip():  # a staff tag, any letter case
+        stmt = stmt.where(func.lower(cast(Order.staff_tags, Text)).contains(json.dumps(tag.strip().lower(), ensure_ascii=False)))
     try:
         if date_from:
             stmt = stmt.where(Order.created_at >= datetime.combine(datetime.fromisoformat(date_from).date(), time.min, IST))
@@ -573,7 +576,7 @@ async def list_orders(
         text = q.strip()
         like = f"%{text}%"
         digits = "".join(ch for ch in text if ch.isdigit())
-        conds = [Order.number.ilike(like), User.phone.ilike(like), User.name.ilike(like), User.email.ilike(like),
+        conds = [Order.number.ilike(like), cast(Order.staff_tags, Text).ilike(like), User.phone.ilike(like), User.name.ilike(like), User.email.ilike(like),
                  exists().where(SubOrder.order_id == Order.id, or_(SubOrder.number.ilike(like), SubOrder.tracking_number.ilike(like)))]
         if len(digits) >= 6:
             conds.append(Order.ship_to["phone"].astext.ilike(f"%{digits[-10:]}%"))
@@ -598,6 +601,7 @@ async def list_orders(
                 "grand_total": r.Order.grand_total,
                 "created_at": r.Order.created_at.isoformat(),
                 "package_statuses": subs.get(r.Order.id, []),
+                "staff_tags": r.Order.staff_tags or [],
             }
             for r in rows
         ],
@@ -642,6 +646,7 @@ async def get_order(order_id: uuid.UUID, admin: Perm("orders"), session: Session
     data = await order_detail(session, o, for_admin=True)
     u = await session.get(User, o.user_id)
     data["customer"] = {"id": str(u.id), "name": u.name, "phone": u.phone, "email": u.email}
+    data["staff_tags"] = o.staff_tags or []
     refunds = (await session.execute(select(Refund).where(Refund.order_id == o.id).order_by(Refund.created_at))).scalars()
     data["refunds"] = [
         {"id": str(r.id), "amount": r.amount_paise, "status": r.status, "reason": r.reason, "attempts": r.attempts, "last_error": r.last_error, "provider_refund_id": r.provider_refund_id}
@@ -652,6 +657,24 @@ async def get_order(order_id: uuid.UUID, admin: Perm("orders"), session: Session
 
 class OrderNoteIn(BaseModel):
     note: str = Field(min_length=1, max_length=1000)
+
+
+class OrderTagsIn(BaseModel):
+    tags: list[str] = Field(max_length=10)
+
+
+@router.put("/orders/{order_id}/tags")
+async def set_order_tags(order_id: uuid.UUID, body: OrderTagsIn, admin: Perm("orders"), session: SessionDep) -> dict:
+    """Private staff labels on an order (up to 10, 30 characters each). They replace the old list; customers and sellers never see them."""
+    o = await session.get(Order, order_id)
+    if o is None:
+        raise NotFound("Order")
+    tags = list(dict.fromkeys(" ".join(t.split())[:30] for t in body.tags if t.strip()))
+    if tags != (o.staff_tags or []):
+        o.staff_tags = tags
+        audit(session, admin, "order.tags", "order", str(order_id), ", ".join(tags)[:60] or "cleared")
+        await session.commit()
+    return {"staff_tags": tags}
 
 
 def _note_out(n: OrderNote) -> dict:

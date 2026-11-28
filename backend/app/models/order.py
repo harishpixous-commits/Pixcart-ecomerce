@@ -71,6 +71,7 @@ class Order(IdMixin, TimestampMixin, Base):
     shipping_total: Mapped[int] = mapped_column(BigInteger)
     cod_fee: Mapped[int] = mapped_column(BigInteger, default=0)
     discount_total: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    staff_tags: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # private labels staff give an order (fraud check, gift ...)
     coupon_code: Mapped[str] = mapped_column(String(30), default="", server_default="")
     # The marketplace's own fees (handling, small cart, platform; GST included) as billed, and their sum.
     fees: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
