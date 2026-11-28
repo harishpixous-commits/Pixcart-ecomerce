@@ -10,7 +10,7 @@ public partial class SellerProductsBAL
     {
         var src=await DetailAsync(seller,id);
         var body=new JsonObject();
-        foreach(var k in new[]{"category_id","title","brand","description","highlights","specs","hsn_code","gst_bps","country_of_origin","return_window_days","size_guide","tags","images","videos","details"})
+        foreach(var k in new[]{"category_id","title","brand","description","highlights","specs","hsn_code","gst_bps","country_of_origin","return_window_days","size_guide","tags","seo_title","seo_description","images","videos","details"})
             if(src[k] is {} v) body[k]=v.DeepClone();
         var title="Copy of "+(src["title"]?.GetValue<string>()??"");
         body["title"]=title.Length>200?title[..200]:title;

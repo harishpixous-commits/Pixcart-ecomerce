@@ -91,6 +91,7 @@ public class ProductModerationBAL(
             ["country_of_origin"] = p.CountryOfOrigin,
             ["size_guide"] = p.SizeGuide ?? "",
             ["tags"] = JsonHelper.Node(p.Tags) ?? new JsonArray(),
+            ["seo_title"] = p.SeoTitle ?? "", ["seo_description"] = p.SeoDescription ?? "",
             ["return_window_days"] = p.ReturnWindowDays,
             ["images"] = new JsonArray(imgs.Select(x => (JsonNode)JsonValue.Create(x)).ToArray()),
             ["videos"] = videosOut,

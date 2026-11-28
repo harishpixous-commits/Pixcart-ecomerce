@@ -29,6 +29,8 @@ public class ProductModel
     public string SizeGuide { get; set; } = "";
     /// <summary>products.tags (JSON array of short lower-case labels)</summary>
     public string Tags { get; set; } = "[]";
+    public string SeoTitle { get; set; } = "";
+    public string SeoDescription { get; set; } = "";
     /// <summary>products.return_window_days</summary>
     public int ReturnWindowDays { get; set; }
     /// <summary>products.status</summary>

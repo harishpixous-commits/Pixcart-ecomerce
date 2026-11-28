@@ -589,6 +589,7 @@ public class CatalogBAL(
             ["in_stock"] = p.InStock,
             ["breadcrumbs"] = breadcrumbs,
             ["size_guide"] = sizeGuide,
+            ["seo_title"] = p.SeoTitle ?? "", ["seo_description"] = p.SeoDescription ?? "",
             ["option_axes"] = axes,
             ["variants"] = variantsOut,
             ["key_specs"] = keySpecs,

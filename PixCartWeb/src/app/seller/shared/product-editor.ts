@@ -239,6 +239,8 @@ const STATUS_TEXT: Record<string, string> = {
         <textarea pcTextarea id="sg" data-testid="product-size-guide" [value]="sizeGuide()" (input)="sizeGuide.set($any($event.target).value)" rows="4" maxlength="2000" placeholder="Size | Chest (in) | Length (in)&#10;S | 38 | 27"></textarea>
       </pc-field>
       <pc-text-field class="sm:col-span-2" label="Tags (optional)" [(value)]="tags" maxlength="400" hint="Up to 10 short labels, separated by commas, e.g. summer sale, new. Used to group products into collections." />
+      <pc-text-field class="sm:col-span-2" label="Search listing title (optional)" [(value)]="seoTitle" maxlength="70" hint="What Google shows as the title, up to 70 characters. Leave empty to use the product title." />
+      <pc-text-field class="sm:col-span-2" label="Search listing description (optional)" [(value)]="seoDescription" maxlength="160" hint="Up to 160 characters. Leave empty to use the start of the description." />
     </section>
 
     <section class="rounded-xl bg-white p-5">
@@ -328,6 +330,8 @@ export class ProductEditor implements OnInit {
   protected readonly returnDays = signal("7");
   protected readonly sizeGuide = signal("");
   protected readonly tags = signal("");
+  protected readonly seoTitle = signal("");
+  protected readonly seoDescription = signal("");
   protected readonly images = signal<string[]>([]);
   protected readonly videos = signal<ProductVideo[]>([]);
   protected readonly details = signal<ProductDetails>({ ...EMPTY_DETAILS });
@@ -385,6 +389,8 @@ export class ProductEditor implements OnInit {
     this.returnDays.set(String(p?.return_window_days ?? 7));
     this.sizeGuide.set(p?.size_guide ?? "");
     this.tags.set((p?.tags ?? []).join(", "));
+    this.seoTitle.set(p?.seo_title ?? "");
+    this.seoDescription.set(p?.seo_description ?? "");
     this.images.set(p?.images ?? []);
     this.videos.set(p?.videos ?? []);
     this.details.set({ ...EMPTY_DETAILS, ...(p?.details ?? {}) });
@@ -605,6 +611,8 @@ export class ProductEditor implements OnInit {
       country_of_origin: this.origin().trim(),
       return_window_days: Number(this.returnDays()),
       size_guide: this.sizeGuide(),
+      seo_title: this.seoTitle(),
+      seo_description: this.seoDescription(),
       tags: this.tags().split(",").map((t) => t.trim()).filter(Boolean),
       images: this.images(),
       videos: this.videos(),

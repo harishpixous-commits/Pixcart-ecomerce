@@ -23,7 +23,13 @@ public class ProductTagsTests(ApiFactory f) : ApiTest(f)
         var dup = await seller.Post($"/api/seller/products/{pid}/duplicate", new { });
         Assert.Equal(201, dup.Status);
         Assert.Equal("[\"summer sale\",\"new\"]", (await seller.Get($"/api/seller/products/{dup.Json["id"]!.GetValue<string>()}")).Json["tags"]!.ToJsonString());
+        var seo = await seller.Put($"/api/seller/products/{pid}", new { category_id = cat, title = "Tagged Cotton Shirt", hsn_code = "6205", gst_bps = 500, tags = new[] { "summer sale", "new" }, seo_title = "  Cotton   shirt, Kovai ", seo_description = "Soft  cotton.", variants = new[] { new { id = r.Json["variants"]![0]!["id"]!.GetValue<string>(), sku = "TAG-SKU", mrp_paise = 20000, price_paise = 10000, stock = 5 } } });
+        Assert.True(seo.Status == 200, seo.ToString());
+        Assert.Equal("approved", seo.Json["status"]!.GetValue<string>());
         var v = Factory.CreateClient();
+        var pub = (await v.GetFromJsonAsync<JsonObject>($"/api/catalog/products/{(await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id=@pid", new { pid = Guid.Parse(pid) }))}"))!;
+        Assert.Equal("Cotton shirt, Kovai", pub["seo_title"]!.GetValue<string>());
+        Assert.Equal("Soft cotton.", pub["seo_description"]!.GetValue<string>());
         Assert.Single((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products?tag=Summer%20Sale"))!["items"]!.AsArray());
         Assert.Empty((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products?tag=winter"))!["items"]!.AsArray());
         var c = await admin.Post("/api/admin/collections", new { title = "Summer picks", tag = "Summer Sale" });
