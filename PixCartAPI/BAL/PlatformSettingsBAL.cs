@@ -32,6 +32,8 @@ public partial class PlatformSettingsBAL(SettingsDAL settings, CatalogSupportDAL
         ["tds_bps"] = 10,
         ["commission_gst_bps"] = 1800,
         ["max_qty_per_item"] = 10,
+        ["shipping_per_kg_paise"] = 0,
+        ["shipping_free_grams"] = 1000,
         ["low_stock_threshold"] = 5,
         ["feature_wishlist"] = true,
         ["feature_reviews"] = true,
@@ -182,7 +184,7 @@ public partial class PlatformSettingsBAL(SettingsDAL settings, CatalogSupportDAL
         {
             ("shipping_fee_paise", 0, 100_000), ("free_shipping_threshold_paise", 0, 10_000_000), ("payment_window_minutes", 10, 120),
             ("cod_fee_paise", 0, 10_000), ("cod_max_order_paise", 0, 100_000_000), ("tcs_bps", 0, 100), ("tds_bps", 0, 500),
-            ("commission_gst_bps", 0, 2800), ("max_qty_per_item", 1, 10), ("low_stock_threshold", 1, 1000), ("search_page_size", 8, 60),
+            ("commission_gst_bps", 0, 2800), ("max_qty_per_item", 1, 10), ("shipping_per_kg_paise", 0, 100000), ("shipping_free_grams", 0, 50000), ("low_stock_threshold", 1, 1000), ("search_page_size", 8, 60),
             ("search_suggestions", 1, 12), ("recent_searches_max", 0, 20), ("brand_filter_max", 5, 100), ("similar_products", 0, 24),
             ("sponsored_on_product", 0, 20), ("highlights_shown", 1, 20), ("customer_photos_shown", 0, 20), ("reviews_page_size", 5, 50),
             ("questions_page_size", 5, 50), ("bestseller_badge_top", 1, 100), ("recently_viewed_max", 4, 30), ("compare_max", 2, 6),

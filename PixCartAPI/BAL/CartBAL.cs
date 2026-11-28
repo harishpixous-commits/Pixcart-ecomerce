@@ -90,6 +90,12 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
         {
             var hasItems = g.ItemsTotal > 0;
             g.ShippingFee = !hasItems || memberFree || g.ItemsTotal >= FreeThreshold(g.Seller, cfg, bounds) ? 0 : stateFee ?? cfg.Int("shipping_fee_paise");
+            // Weight surcharge (Admin → Marketplace settings, off by default): per started kg above the free weight, on a package that pays delivery.
+            if (g.ShippingFee > 0 && cfg.Long("shipping_per_kg_paise") > 0)
+            {
+                var over = g.Lines.Where(l => l.Problem == "").Sum(l => (long)l.Variant.WeightGrams * l.Item.Qty) - cfg.Long("shipping_free_grams");
+                if (over > 0) g.ShippingFee += (over + 999) / 1000 * cfg.Long("shipping_per_kg_paise");
+            }
             // Remote-area surcharge (Admin → Growth → Shipping zones): once per seller package.
             if (hasItems && remote.Amount > 0 && !memberFree && !(remote.Waive && g.ShippingFee == 0)) g.ShippingFee += remote.Amount;
         }

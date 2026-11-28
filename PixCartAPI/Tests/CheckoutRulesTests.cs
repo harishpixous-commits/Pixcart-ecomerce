@@ -936,6 +936,44 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Weight_surcharge_adds_per_started_kg_above_the_free_weight()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000493", "weight-shirt");
+        await Refresh(productId);
+        await ApiFactory.DbExecAsync("UPDATE variants SET weight_grams = 500 WHERE id = @variantId", new { variantId });
+        Assert.Equal(200, (await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 5_000_000 } })).Status);
+        try
+        {
+            var buyer = await LoginPhone("9620000493", "Weight Buyer");
+            var addr = await AddAddress(buyer, state: "33");
+            Task<Res> Quote() => buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" });
+            async Task<long> Ship() => (await Quote()).Json["summary"]!["shipping_total"]!.GetValue<long>();
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 3 });
+            var baseFee = await Ship();
+            Assert.True(baseFee > 0);
+            var set = await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 1000, shipping_free_grams = 1000 });
+            Assert.True(set.Status == 200, set.ToString());
+            Assert.Equal(baseFee + 1000, await Ship());                       // 1500 g: 500 g over, one started kg
+            await buyer.Put("/api/cart/items", new { variant_id = variantId, qty = 2 });
+            Assert.Equal(baseFee, await Ship());                              // 1000 g is covered
+            await buyer.Put("/api/cart/items", new { variant_id = variantId, qty = 5 });
+            var q = (await Quote()).Json;
+            Assert.Equal(baseFee + 2000, q["summary"]!["shipping_total"]!.GetValue<long>());   // 2500 g: two started kg
+            var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), expected_total = q["summary"]!["grand_total"]!.GetValue<long>() });
+            Assert.True(r.Status == 201, r.ToString());
+            var orderId = r.Json["order"]!["id"]!.GetValue<string>();
+            Assert.Equal(baseFee + 2000, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(shipping_fee), 0) FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+            Assert.Equal(400, (await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 100001 })).Status);
+        }
+        finally
+        {
+            await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 0 });
+            await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 49900 } });
+        }
+    }
+
+    [Fact]
     public async Task Cart_hint_also_covers_an_automatic_buy_x_get_y_offer()
     {
         var admin = await Admin();

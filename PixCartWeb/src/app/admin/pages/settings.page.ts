@@ -11,7 +11,7 @@ import { Button, ErrorNote, Field, Select, TextField, Toast } from "../../shared
 import { MobileApps, type AppSettings } from "../settings/mobile-apps";
 
 type S = Record<string, unknown> & {
-  shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number;
+  shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number; shipping_per_kg_paise?: number; shipping_free_grams?: number;
   transit_days_same_city: number; transit_days_same_state: number; transit_days_national: number;
   auto_cancel_unconfirmed_hours: number; payout_min_paise: number; low_stock_threshold: number;
   payout_weekday: number; payout_every_weeks: number; defect_return_days: number; admin_layout_default: string;
@@ -101,6 +101,8 @@ const AREA = "w-full rounded-lg border border-line bg-white px-3 py-2 text-[15px
           <pc-text-field label="Delivery fee per seller package (₹)" [value]="v('shipping')" (valueChange)="setF('shipping', $event)" />
           <pc-text-field label="Free delivery from (₹, per seller)" [value]="v('free')" (valueChange)="setF('free', $event)" />
           <pc-text-field label="Maximum quantity per item" [value]="v('qty')" (valueChange)="setF('qty', $event)" hint="1 to 10 units of one item in an order" />
+          <pc-text-field label="Extra delivery fee per kg (₹)" [value]="v('perKg')" (valueChange)="setF('perKg', $event)" hint="Added for each started kg above the free weight, per seller package. 0 switches it off. Packages that already ship free stay free." />
+          <pc-text-field label="Weight covered by the delivery fee (grams)" [value]="v('freeGrams')" (valueChange)="setF('freeGrams', $event)" hint="0 to 50000. Used only when the extra fee per kg is above 0." />
           <pc-text-field label="Low stock at (units)" [value]="v('lowStock')" (valueChange)="setF('lowStock', $event)" inputmode="numeric"
             hint="Shoppers see “Only N left”, and sellers get a low-stock alert, at or below this many units" />
         </section>
@@ -259,7 +261,7 @@ export class AdminSettingsPage {
       this.flags.set(Object.fromEntries(FLAGS.map(([k]) => [k, Boolean(x[k])])));
       this.f.set({
         shipping: paiseToInput(x.shipping_fee_paise), free: paiseToInput(x.free_shipping_threshold_paise), codFee: paiseToInput(x.cod_fee_paise),
-        codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item),
+        codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item), perKg: paiseToInput(x.shipping_per_kg_paise ?? 0), freeGrams: String(x.shipping_free_grams ?? 1000),
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
@@ -297,7 +299,7 @@ export class AdminSettingsPage {
     try {
       const body = {
         shipping_fee_paise: toPaise(f["shipping"]), free_shipping_threshold_paise: toPaise(f["free"]), cod_enabled: this.cod(), cod_fee_paise: toPaise(f["codFee"]),
-        cod_max_order_paise: toPaise(f["codMax"]), tcs_bps: bps(f["tcs"]), tds_bps: bps(f["tds"]), commission_gst_bps: bps(f["cgst"]), max_qty_per_item: Number(f["qty"]),
+        cod_max_order_paise: toPaise(f["codMax"]), tcs_bps: bps(f["tcs"]), tds_bps: bps(f["tds"]), commission_gst_bps: bps(f["cgst"]), max_qty_per_item: Number(f["qty"]), shipping_per_kg_paise: toPaise(f["perKg"]), shipping_free_grams: Number(f["freeGrams"]),
         transit_days_same_city: Number(f["city"]), transit_days_same_state: Number(f["state"]), transit_days_national: Number(f["national"]),
         auto_cancel_unconfirmed_hours: Number(f["autoCancel"]), payout_min_paise: toPaise(f["payoutMin"]), low_stock_threshold: Number(f["lowStock"]), ...this.flags(),
         defect_return_days: Number(f["defectDays"]), payout_weekday: Number(f["payDay"]), payout_every_weeks: Number(f["payEvery"]),
