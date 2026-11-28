@@ -22,3 +22,4 @@ async def test_newsletter_box(client, admin):
     assert (await client.get("/api/admin/growth/newsletter")).status_code in (401, 403)
     assert (await admin.delete(f"/api/admin/growth/newsletter/{lst['items'][0]['id']}")).status_code == 200
     assert (await admin.get("/api/admin/growth/newsletter")).json()["total"] == 0
+

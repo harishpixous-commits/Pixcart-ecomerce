@@ -149,3 +149,31 @@ async def test_oversized_upload_refused(client, admin):
     assert r.status_code == 400 and r.json()["error"]["code"] == "file_too_large"
     r = await client.post("/api/seller/documents/pan_card", headers=s.h(), files={"file": ("big.pdf", b"%PDF-" + b"0" * (5 * 1024 * 1024 + 10), "application/pdf")})
     assert r.status_code in (400, 409)  # 409 once approved: KYC is locked
+
+
+async def test_wishlist_share_link(client, admin, categories):
+    seller = await make_seller(client, admin, "9100000777", name="Share Seller", pan="SHARE1234K")
+    shirt = await make_live_product(client, admin, seller, categories["shirts"], title="Shared Shirt", variants=SHIRT_VARIANTS)
+    me = await login_phone(client, "9600000777", name="Meena Kumar")
+    assert (await me.put(f"/api/wishlist/{shirt['id']}")).status_code == 200
+
+    assert (await me.get("/api/wishlist/share")).json() == {"enabled": False, "token": None}
+    off = await me.post("/api/wishlist/share")
+    assert off.status_code == 400 and off.json()["error"]["code"] == "share_off"
+
+    assert (await admin.put("/api/admin/growth/settings", {"wishlist_share": {"enabled": True}})).status_code == 200
+    token = (await me.post("/api/wishlist/share")).json()["token"]
+    assert len(token) >= 16 and (await me.post("/api/wishlist/share")).json()["token"] == token  # same link again
+    shared = await client.get(f"/api/wishlist/shared/{token}")  # no sign-in needed
+    assert shared.status_code == 200
+    body = shared.json()
+    assert body["owner"] == "Meena" and [i["title"] for i in body["items"]] == ["Shared Shirt"]
+    assert (await client.get("/api/wishlist/shared/" + "x" * 24)).status_code == 404
+
+    gone = await me.delete("/api/wishlist/share")
+    assert gone.status_code == 200 and gone.json()["token"] is None, gone.text  # the old link dies
+    assert (await client.get(f"/api/wishlist/shared/{token}")).status_code == 404
+    new = (await me.post("/api/wishlist/share")).json()["token"]
+    assert new != token
+    await admin.put("/api/admin/growth/settings", {"wishlist_share": {"enabled": False}})  # switched off: every link stops
+    assert (await client.get(f"/api/wishlist/shared/{new}")).status_code == 404

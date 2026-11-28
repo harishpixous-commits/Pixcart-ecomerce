@@ -399,3 +399,7 @@ Admin → Categories has a "Size guide" box: one line per size, columns split wi
 ## Push 129: newsletter box
 
 Admin → Growth → Settings has "Newsletter box" (off, with a heading). When on, the shop shows an email box above the footer (all themes). The address is checked, lower-cased and kept once; asking again gives the same answer. 10 sign-ups per hour per visitor address. Admin → Growth → Newsletter lists the latest 200 and lets staff remove an address. Alembic 0048, .NET V025. Tests in both versions; tsc and ngc clean. Not run in a browser. NOT wired: nothing is emailed, no unsubscribe link, campaigns do not use this list (they send in-app notes to customers). Open question for Harish: should this list feed real email once an email provider is approved.
+
+## Push 131: share my wishlist
+
+Admin → Growth → Settings has "Share wishlist" (off). When on, the wishlist page has "Share my wishlist": it makes a private link (`/wishlist/shared/<secret>`), with Copy link and Stop sharing. Anyone with the link, signed in or not, sees the shopper first name and the saved products that are live. Stop sharing kills the link, and a new one is made next time. Switching the setting off stops every link. Alembic 0049, .NET V026 (users.wishlist_share_token). Tests in both versions; tsc and ngc clean. Not run in a browser. Python route order matters: the share routes sit before /api/wishlist/{product_id}.

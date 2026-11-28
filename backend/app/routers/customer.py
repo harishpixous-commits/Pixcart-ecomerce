@@ -3,6 +3,7 @@ delivery estimates, privacy (DPDP) and product events for analytics."""
 from __future__ import annotations
 
 import re
+import secrets
 import time
 import uuid
 from typing import Literal
@@ -68,6 +69,51 @@ async def wishlist(user: CurrentUser, session: SessionDep) -> dict:
         ).scalars()
     )
     return {"items": await product_cards(session, rows), "ids": [str(p.id) for p in rows]}
+
+
+async def _share_enabled(session) -> bool:
+    from app.services import growth
+
+    return bool((await growth.get(session))["wishlist_share"]["enabled"])
+
+
+@router.get("/api/wishlist/share")
+async def wishlist_share_status(user: CurrentUser, session: SessionDep) -> dict:
+    return {"enabled": await _share_enabled(session), "token": user.wishlist_share_token}
+
+
+@router.post("/api/wishlist/share")
+async def wishlist_share_on(user: CurrentUser, session: SessionDep) -> dict:
+    """Make (or return) the shopper's private link. Anyone with the link sees the saved products and the shopper's first name."""
+    if not await _share_enabled(session):
+        raise ApiError("Sharing a wishlist is not switched on", "share_off")
+    if not user.wishlist_share_token:
+        user.wishlist_share_token = secrets.token_urlsafe(18)[:24]
+        await session.commit()
+    return {"enabled": True, "token": user.wishlist_share_token}
+
+
+@router.delete("/api/wishlist/share")
+async def wishlist_share_off(user: CurrentUser, session: SessionDep) -> dict:
+    """Stop sharing: the old link stops working, and a new one is made next time."""
+    user.wishlist_share_token = None
+    await session.commit()
+    return {"enabled": await _share_enabled(session), "token": None}
+
+
+@router.get("/api/wishlist/shared/{token}")
+async def wishlist_shared(token: str, session: SessionDep) -> dict:
+    """What a shared link shows: the shopper's first name and the products that are live in the shop."""
+    if not await _share_enabled(session) or len(token) < 16:
+        raise NotFound("Wishlist")
+    owner = (await session.execute(select(User).where(User.wishlist_share_token == token))).scalar_one_or_none()
+    if owner is None:
+        raise NotFound("Wishlist")
+    rows = list((await session.execute(
+        select(Product).join(WishlistItem, WishlistItem.product_id == Product.id)
+        .where(WishlistItem.user_id == owner.id, *public_product_filter()).order_by(WishlistItem.created_at.desc()))).scalars())
+    first = (owner.name or "").split()[0][:30] if (owner.name or "").strip() else ""
+    return {"owner": first, "items": await product_cards(session, rows)}
 
 
 @router.put("/api/wishlist/{product_id}")
