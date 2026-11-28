@@ -2415,5 +2415,40 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
             Assert.Equal(0L, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(amount), 0) FROM seller_ledger WHERE seller_id = @sellerId AND kind <> 'cod_collected'", new { sellerId }));
     }
 
+    [Fact]
+    public async Task Returning_a_two_unit_line_one_at_a_time_refunds_the_discounted_total_once()
+    {
+        var admin = await Admin();
+        var (varA, prodA, sellerA) = await ShirtInStock("9400000551", "cons-shirt-p");
+        await Refresh(prodA);
+        var ownerA = await LoginPhone("9400000551", "Owner P");
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "SAVE10", description = "", kind = "percent", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = false })).Status);
+        var buyer = await LoginPhone("9620000551", "Partial Returner");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 2 });
+        var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = "SAVE10" });
+        Assert.True(r.Status == 201, r.ToString());
+        var order = r.Json["order"]!; var orderId = order["id"]!.GetValue<string>();
+        var sid = order["sub_orders"]![0]!["id"]!.GetValue<string>();
+        Assert.Equal(200, (await ownerA.Post($"/api/seller/orders/{sid}/confirm")).Status);
+        Assert.Equal(200, (await ownerA.Post($"/api/seller/orders/{sid}/pack")).Status);
+        Assert.Equal(200, (await ownerA.Post($"/api/seller/orders/{sid}/ship", new { courier_name = "DTDC", tracking_number = "AWB78" })).Status);
+        Assert.Equal(200, (await ownerA.Post($"/api/seller/orders/{sid}/deliver")).Status);
+        long refunds = 0;
+        for (var step = 0; step < 2; step++)
+        {
+            var line = (await buyer.Get($"/api/orders/{orderId}/returnable")).Json["items"]![sid]!.AsArray()[0]!;
+            Assert.Equal(2 - step, line["qty_left"]!.GetValue<int>());
+            var ret = await buyer.Post("/api/returns", new { sub_order_id = sid, items = new[] { new { order_item_id = line["order_item_id"]!.GetValue<string>(), qty = 1 } }, reason = "size_fit", refund_upi = "priya@okaxis" });
+            Assert.True(ret.Status == 201, ret.ToString());
+            refunds += ret.Json["refund_amount"]!.GetValue<long>();
+            var rid = ret.Json["id"]!.GetValue<string>();
+            Assert.Equal(200, (await ownerA.Post($"/api/seller/returns/{rid}", new { action = "approve" })).Status);
+            Assert.Equal(200, (await ownerA.Post($"/api/seller/returns/{rid}", new { action = "received" })).Status);
+        }
+        Assert.Equal(order["grand_total"]!.GetValue<long>(), refunds);
+        Assert.Equal(0L, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(amount), 0) FROM seller_ledger WHERE seller_id = @sellerA AND kind <> 'cod_collected'", new { sellerA }));
+    }
+
     private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }
