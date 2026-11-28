@@ -6,6 +6,7 @@ commission and TCS are worked out on the discounted price.
 """
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -144,6 +145,28 @@ async def best_automatic(session: AsyncSession, user_id: uuid.UUID, lines: list)
         if best is None or res.discount > best.discount:
             best = res
     return best
+
+
+async def volume_nudge(session: AsyncSession, user_id: uuid.UUID, lines: list) -> str | None:
+    """A short cart hint for the closest automatic volume offer the cart is just short of ("Add 1 more item to get 10% off"), or None."""
+    from app.services import growth
+
+    if not (await growth.get(session))["auto_discounts"]["enabled"]:
+        return None
+    rows = (await session.execute(select(Coupon).where(Coupon.is_automatic.is_(True), Coupon.is_active.is_(True), Coupon.funded_by == "platform",
+                                                       Coupon.only_user_id.is_(None), Coupon.kind == "volume").limit(50))).scalars().all()
+    best: tuple[int, Coupon] | None = None
+    for c in rows:
+        try:
+            await evaluate(session, c.code, user_id, lines)
+        except ApiError as exc:
+            m = re.match(r"Add (\d+) more item", exc.message)
+            if exc.code == "coupon_not_applicable" and m and (best is None or int(m.group(1)) < best[0]):
+                best = (int(m.group(1)), c)
+    if best is None:
+        return None
+    n, c = best
+    return f"Add {n} more item{'s' if n > 1 else ''} to get {c.value}% off"
 
 
 async def list_for_checkout(session: AsyncSession) -> list[dict]:

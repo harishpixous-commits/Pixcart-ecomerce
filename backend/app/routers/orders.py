@@ -280,6 +280,11 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
             view["coupon"] = {"code": auto.coupon.code, "discount": auto.discount, "description": auto.coupon.description, "error": None, "automatic": True}
             view["summary"]["grand_total"] -= auto.discount
             view["summary"]["coupon_discount"] = auto.discount
+        from app.services.coupons import volume_nudge
+
+        nudge = await volume_nudge(session, user.id, await load_cart(session, user.id))
+        if nudge:
+            view["hints"] = [nudge, *view.get("hints", [])][:3]
     view["cod_allowed"] = cfg["cod_enabled"] and view["summary"]["grand_total"] <= cfg["cod_max_order_paise"]
     view["address_id"] = str(address.id)
     return view

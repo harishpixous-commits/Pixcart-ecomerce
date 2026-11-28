@@ -66,3 +66,22 @@ async def test_automatic_coupon_with_a_per_user_limit_stops_after_the_customers_
     await first.post("/api/cart/items", {"variant_id": vid, "qty": 1})
     assert (await q(first)).json()["coupon"] is None                  # used once: no longer applied to this customer
     assert (await q(other)).json()["coupon"]["code"] == "ONCEAUTO"    # another customer still gets it
+
+
+async def test_cart_hint_says_how_many_more_items_unlock_an_automatic_volume_offer(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": True}})).status_code == 200
+    assert (await admin.post("/api/admin/coupons", {"code": "NUDGE15", "kind": "volume", "value": 15, "buy_qty": 3, "is_automatic": True, "show_on_checkout": False})).status_code == 201
+    a = await login_phone(client, "9770000341", name="Nudge Buyer")
+    addr = await add_address(a, state="33")
+    vid = shirt["variants"][0]["id"]
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert "Add 2 more items to get 15% off" in (await q()).json()["hints"]
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert "Add 1 more item to get 15% off" in (await q()).json()["hints"]
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    r = (await q()).json()
+    assert r["coupon"]["code"] == "NUDGE15" and not any("15% off" in h for h in r["hints"])    # unlocked: no hint left
+    assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": False}})).status_code == 200
+    assert not any("15% off" in h for h in (await q()).json()["hints"])                          # switched off: no hint
