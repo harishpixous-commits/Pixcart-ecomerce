@@ -2,13 +2,15 @@
 
 Read this first. Branches: `instinct/continue` (.NET API + Angular) and `instinct/python-advanced` (Python + Next.js). Rule: every feature is in both, same settings and workflow. `main` (live Python demo) and the company repos are untouched.
 
-## Latest numbers (28 Nov, after Push 177)
-- Single full runs: Python 349 passed, .NET 416 passed, 0 failed. Angular `ngc` and Next.js `tsc` clean. Anything older below is history.
+## Latest numbers (28 Nov, after Push 183)
+- Pushes 178 to 183 since the block below: free delivery coupon kind, scheduled publish ("Go live at") with a seller note when it goes live, most units per order on a product, weight-based delivery surcharge (cart, quote, order, product page estimate). New browser screens (admin coupon kind, seller product fields, admin settings fields) are type-checked only. Alembic 0064 to 0066 downgraded and upgraded again on a real local Postgres, clean; .NET V041 to V043 are applied by the full test run. Not wired: staff cannot edit a product's go-live time or unit limit for a seller; no email when a scheduled product goes live; draft orders and subscribe-and-save are written designs only.
+- Single full runs (after Push 183): Python 353 passed, .NET 420 passed, 0 failed. Older figures follow.
+- Single full runs (after Push 177): Python 349 passed, .NET 416 passed, 0 failed. Angular `ngc` and Next.js `tsc` clean. Anything older below is history.
 - Since Push 137: collections, redirects, product tags, search listing text, bundle and volume coupon kinds, "Buy the set" block, tag filter on the search page, cart hints for volume, buy-X-get-Y and bundle offers, a fix so product-limited coupons only show on their own product pages, and money-path tests (totals, seller split, rounding, cancel, per-customer limits).
 - Alembic 0060 to 0063 and .NET V037 to V040 were run on a real local Postgres/MySQL: upgrade, downgrade, upgrade again, clean.
 - New browser screens since Push 137 (Tags block, Buy the set, cart hints) are type-checked only, never run in a browser. The tag block is missing from the small-screen filter bar.
 - Not wired: a "volume price tiers" table on the product page (the Offers block shows the offer text instead), a tag facet in the mobile filter bar.
-- Migrations: Alembic latest 0063, .NET latest V040. New settings are off by default.
+- Migrations: Alembic latest 0066, .NET latest V043. New settings are off by default.
 
 ## Validation (after Push 137, history)
 - Python: 323 tests passed (full suite, 28 Nov after Push 145). .NET: 392 tests in one full run, all green after a route-guard fix (the earlier figure "579 (5 groups)" was a sum of overlapping filter groups, not a real count; the suite had about 383 tests then). Angular `ngc` and Next.js `tsc` clean.
