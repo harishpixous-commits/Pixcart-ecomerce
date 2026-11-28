@@ -35,6 +35,7 @@ const FRAME: Record<ThemeLayout["productGrid"], string> = {
         <p class="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-ink transition-colors group-hover:text-peacock">{{ p().title }}</p>
         <pc-tile-rating [p]="p()" ratingClass="mt-1.5" />
         @if (p().bought) {<p class="mt-1 text-xs text-ink-soft">{{ p().bought }}</p>}
+        @if (p().is_new) {<p class="mt-1 text-xs font-semibold text-leaf" data-testid="new-badge">New</p>}
         @if (p().deal) {<div class="mt-2"><pc-deal-badge [deal]="p().deal!" [discount]="p().discount_pct" /></div>}
         <pc-tile-price [p]="p()" [showDiscount]="false" class="mt-auto pt-2" priceClass="font-display text-lg font-bold text-ink" />
         <pc-tile-delivery [p]="p()" />

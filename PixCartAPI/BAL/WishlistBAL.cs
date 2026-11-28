@@ -116,6 +116,8 @@ public class WishlistBAL(WishlistDAL dal, SettingsDAL settings) : IWishlistBAL
         var boughtMin = minNode is JsonValue mv && mv.TryGetValue<int>(out var m) ? m : 10;
         bool? showCountdown = null;
         var outp = new List<Dictionary<string, object?>>();
+        var nb = (JsonObject)SettingsDAL.Merge(GrowthBAL.Defaults(), await settings.GetAsync("growth"))["new_badge"]!;
+        DateTime? newSince = nb.Bool("enabled") ? DateTimeFunctions.UtcNow().AddDays(-nb.Int("days")) : null;
         foreach (var p in products)
         {
             var vs = variants.GetValueOrDefault(p.Id) ?? [];
@@ -141,7 +143,7 @@ public class WishlistBAL(WishlistDAL dal, SettingsDAL settings) : IWishlistBAL
                 ["price"] = p.PriceFrom, ["mrp"] = p.MrpFrom, ["discount_pct"] = DiscountPct(p.PriceFrom, p.MrpFrom), ["rating_avg"] = (double)p.RatingAvg,
                 ["rating_count"] = p.RatingCount, ["in_stock"] = p.InStock, ["seller_name"] = sellers.TryGetValue(p.SellerId, out var s) ? s.DisplayName : "",
                 ["deal"] = deal, ["unit_price"] = cheapest is not null && unitOn ? UnitPrice(cheapest.PricePaise, cheapest.NetQty, unit) : null,
-                ["bought"] = units >= boughtMin ? $"{Bucket(units)} bought in past month" : null, ["variant_count"] = vs.Count,
+                ["bought"] = units >= boughtMin ? $"{Bucket(units)} bought in past month" : null, ["is_new"] = newSince is not null && p.CreatedAt >= newSince, ["variant_count"] = vs.Count,
                 ["variant_id"] = cheapest is not null && vs.Count == 1 && cheapest.Stock > 0 ? cheapest.Id.ToString() : null,
             });
         }

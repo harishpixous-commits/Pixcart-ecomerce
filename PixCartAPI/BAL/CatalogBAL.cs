@@ -94,6 +94,8 @@ public class CatalogBAL(
         var deals = cfg.Bool("feature_deals") ? await ActiveDealsForAsync(ids) : [];
         var variants = (await catalog.ActiveVariantsAsync(ids)).GroupBy(v => v.ProductId).ToDictionary(g => g.Key, g => g.ToList());
         var bought = cfg.Bool("pdp_bought_count") ? await catalog.UnitsSoldSinceAsync(ids, DateTimeFunctions.UtcNow().AddDays(-30)) : [];
+        var nb = (JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), JsonHelper.Object(await sellerDb.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'")))["new_badge"]!;
+        DateTime? newSince = nb.Bool("enabled") ? DateTimeFunctions.UtcNow().AddDays(-nb.Int("days")) : null;
         var outp = new List<JsonObject>();
         foreach (var p in products)
         {
@@ -118,6 +120,7 @@ public class CatalogBAL(
                 ["deal"] = deals.TryGetValue(p.Id, out var d) ? d.DeepClone() : null,
                 ["unit_price"] = cheapest != null && cfg.Bool("pdp_unit_price") ? ProductInfo.UnitPrice(cheapest.PricePaise, cheapest.NetQty, unit) : null,
                 ["bought"] = units >= cfg.Long("pdp_bought_min") ? $"{Bucket(units)} bought in past month" : null,
+                ["is_new"] = newSince is not null && p.CreatedAt >= newSince,
                 ["variant_count"] = vs.Count,
                 ["variant_id"] = cheapest != null && vs.Count == 1 && cheapest.Stock > 0 ? cheapest.Id.ToString() : null,
             };

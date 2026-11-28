@@ -100,6 +100,7 @@ const FRAME: Record<ThemeLayout["productGrid"], string> = {
             </p>
           }
           @if (p().bought) {<p class="mt-1 text-[12px] text-ink-soft">{{ p().bought }}</p>}
+          @if (p().is_new) {<p class="mt-1 text-[12px] font-semibold text-leaf" data-testid="new-badge">New</p>}
           <div class="mt-1.5"><pc-tile-delivery [p]="p()" /></div>
         </div>
       </a>

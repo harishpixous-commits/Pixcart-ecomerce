@@ -1337,6 +1337,29 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task New_badge_marks_fresh_products_only_when_switched_on()
+    {
+        var admin = await Admin();
+        var (_, freshId, _) = await ShirtInStock("9400000616", "newbadge-fresh");
+        var (_, oldId, _) = await ShirtInStock("9400000617", "newbadge-old", "33KOVAI7777K1Z");
+        await Refresh(freshId); await Refresh(oldId);
+        await ApiFactory.DbExecAsync("UPDATE products SET created_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 40 DAY) WHERE id = @oldId", new { oldId });
+        var freshSlug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id = @freshId", new { freshId });
+        var oldSlug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id = @oldId", new { oldId });
+        async Task<Dictionary<string, bool>> Flags()
+        {
+            var items = (await admin.Get("/api/catalog/products?q=shirt")).Json["items"]!.AsArray();
+            return items.ToDictionary(i => i!["slug"]!.GetValue<string>(), i => i!["is_new"]!.GetValue<bool>());
+        }
+        var off = await Flags();
+        Assert.All(off.Values, v => Assert.False(v));
+        var r = await admin.Put("/api/admin/growth/settings", new { new_badge = new { enabled = true, days = 14 } });
+        Assert.True(r.Status == 200, r.ToString());
+        var on = await Flags();
+        Assert.True(on[freshSlug]); Assert.False(on[oldSlug]);
+    }
+
+    [Fact]
     public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
     {
         var admin = await Admin();

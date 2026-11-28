@@ -25,6 +25,7 @@ import { PcLink } from "../../shared/ui/link";
       <p class="line-clamp-2 text-[15px] leading-snug text-ink group-hover:text-peacock">{{ p().title }}</p>
       <pc-tile-rating [p]="p()" ratingClass="mt-1" />
       @if (p().bought) {<p class="mt-0.5 text-xs text-ink-soft">{{ p().bought }}</p>}
+      @if (p().is_new) {<p class="mt-0.5 text-xs font-semibold text-leaf" data-testid="new-badge">New</p>}
       @if (p().deal) {<div class="mt-1.5"><pc-deal-badge [deal]="p().deal!" [discount]="p().discount_pct" /></div>}
       <pc-tile-price [p]="p()" class="mt-auto pt-1.5" />
       <pc-tile-delivery [p]="p()" />

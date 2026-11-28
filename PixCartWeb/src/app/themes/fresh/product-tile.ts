@@ -58,6 +58,7 @@ const TAG = "max-w-full truncate rounded-md px-1.5 py-1 text-[11px] font-extrabo
         }
         @if (p().sponsored) {<span class="text-[11px] font-semibold uppercase tracking-wide text-ink-soft" data-testid="sponsored-label">Sponsored</span>}
         <p class="line-clamp-2 min-h-[2.75em] text-[13px] font-semibold leading-snug text-ink">{{ p().title }}</p>
+        @if (p().is_new) {<p class="mt-0.5 text-[11px] font-semibold text-leaf" data-testid="new-badge">New</p>}
         @if (p().unit_price) {<p class="mt-0.5 text-[11px] text-ink-soft">{{ fmt(p().unit_price!.paise) }}/{{ p().unit_price!.per }}</p>}
         @if (p().rating_count > 0) {
           <p class="mt-1 flex items-center gap-1 text-[11px] leading-none">

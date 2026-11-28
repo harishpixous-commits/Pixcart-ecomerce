@@ -414,3 +414,6 @@ Wiring for Push 134. The delivery partner trip screen (and admin trip view) now 
 ## Push 136: welcome popup
 
 Admin → Growth → Settings → "Welcome popup" (off): title, text, button label, link, delay (0 to 60 seconds). The storefront opens it once per browser after the delay (stored in the browser, so it shows again only when the title or text changes). Close by button, Escape or clicking outside. The link is only offered when it starts with / (a page on this shop); outside links are dropped by the public endpoint `GET /api/promo-popup`. No migration. Tests in both versions, tsc and ngc clean. Not run in a browser, so timing and focus handling are unchecked. Not wired: no targeting by page, device or new/returning shopper.
+
+## Push 137: "New" badge on product tiles
+Growth section `new_badge` (off by default, window of 1 to 90 days, default 14). Product cards carry `is_new`; bazaar, luxe, classic and fresh tiles show a "New" line. Same on wishlist cards in .NET. Python: tests/test_catalog.py. .NET: New_badge test. No migration. Not run in a browser.
