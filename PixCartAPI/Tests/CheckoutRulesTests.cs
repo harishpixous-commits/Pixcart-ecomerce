@@ -832,6 +832,26 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Automatic_coupon_with_a_per_user_limit_stops_after_the_customers_first_order()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000451", "once-auto-shirt");
+        await Refresh(productId);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { auto_discounts = new { enabled = true } })).Status);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "ONCEAUTO", description = "", kind = "percent", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = true })).Status);
+        var first = await LoginPhone("9620000451", "Once Buyer"); var other = await LoginPhone("9620000452", "Other Buyer");
+        var a1 = await AddAddress(first, state: "33"); var a2 = await AddAddress(other, state: "33");
+        await first.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        await other.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.Equal("ONCEAUTO", (await first.Post("/api/checkout/quote", new { address_id = a1, payment_method = "cod" })).Json["coupon"]!["code"]!.GetValue<string>());
+        var o = await first.Post("/api/orders", new { address_id = a1, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        await first.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.Null((await first.Post("/api/checkout/quote", new { address_id = a1, payment_method = "cod" })).Json["coupon"]);   // used once: no longer applied to this customer
+        Assert.Equal("ONCEAUTO", (await other.Post("/api/checkout/quote", new { address_id = a2, payment_method = "cod" })).Json["coupon"]!["code"]!.GetValue<string>());   // another customer still gets it
+    }
+
+    [Fact]
     public async Task Buy_two_get_one_free_coupon_takes_the_cheapest_unit_off()
     {
         var admin = await Admin();
