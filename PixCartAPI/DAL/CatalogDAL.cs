@@ -418,6 +418,15 @@ public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
             $"SELECT p.brand COLLATE utf8mb4_0900_bin AS b, COUNT(*) AS n FROM {from} WHERE {where} AND p.brand <> '' GROUP BY b", p);
     }
 
+    /// <summary>The raw tags JSON of products in the facet scope (capped); the caller counts the tags.</summary>
+    public async Task<IEnumerable<string>> FacetTagsJsonAsync(ProductFilter f)
+    {
+        var p = new DynamicParameters();
+        var from = Source(f, p);
+        var where = Where(f, p, true);
+        return await db.QueryAsync<string>($"SELECT CAST(p.tags AS CHAR) FROM {from} WHERE {where} AND JSON_LENGTH(p.tags) > 0 LIMIT 3000", p);
+    }
+
     public async Task<(long Min, long Max)> FacetPriceRangeAsync(ProductFilter f)
     {
         var p = new DynamicParameters();

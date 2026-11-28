@@ -31,6 +31,8 @@ public class ProductTagsTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("Cotton shirt, Kovai", pub["seo_title"]!.GetValue<string>());
         Assert.Equal("[\"summer sale\",\"new\"]", pub["tags"]!.ToJsonString());
         Assert.Equal("Soft cotton.", pub["seo_description"]!.GetValue<string>());
+        var tagFacet = (await v.GetFromJsonAsync<JsonObject>("/api/catalog/products"))!["facets"]!["tags"]!.AsArray();
+        Assert.Contains(tagFacet, t => t!["name"]!.GetValue<string>() == "summer sale" && t["count"]!.GetValue<long>() >= 1);
         Assert.Single((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products?tag=Summer%20Sale"))!["items"]!.AsArray());
         Assert.Empty((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products?tag=winter"))!["items"]!.AsArray());
         var c = await admin.Post("/api/admin/collections", new { title = "Summer picks", tag = "Summer Sale" });

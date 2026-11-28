@@ -353,6 +353,11 @@ public class CatalogBAL(
         // Most products first; equal counts in a fixed order: grouped in name order, then sorted by count (ResultSort).
         var brands = ResultSort.Order((await catalog.FacetBrandsAsync(facet)).OrderBy(b => b.Name, TextCollation.Instance),
             (x, y) => y.Count.CompareTo(x.Count), cfg.Int("brand_filter_max"));
+        var tagCounts = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var json in await catalog.FacetTagsJsonAsync(facet))
+            if (System.Text.Json.Nodes.JsonNode.Parse(json) is JsonArray ta)
+                foreach (var t in ta) { var name = t?.GetValue<string>() ?? ""; if (name.Length > 0) tagCounts[name] = tagCounts.GetValueOrDefault(name) + 1; }
+        var topTags = tagCounts.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.Ordinal).Take(20).ToList();
         var (priceMin, priceMax) = await catalog.FacetPriceRangeAsync(facet);
         var catCounts = ResultSort.Order((await catalog.FacetCategoriesAsync(facet))
                 .OrderBy(c => c.Name, TextCollation.Instance).ThenBy(c => c.Slug, TextCollation.Instance),
@@ -392,6 +397,7 @@ public class CatalogBAL(
             ["facets"] = new JsonObject
             {
                 ["brands"] = Arr(brands.Select(b => (JsonNode)new JsonObject { ["name"] = b.Name, ["count"] = b.Count })),
+                ["tags"] = Arr(topTags.Select(t => (JsonNode)new JsonObject { ["name"] = t.Key, ["count"] = t.Value })),
                 ["price_min"] = priceMin,
                 ["price_max"] = priceMax,
             },
