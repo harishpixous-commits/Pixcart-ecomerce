@@ -618,3 +618,21 @@ class AgentProposal(IdMixin, Base):
     decided_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
 
     __table_args__ = (CheckConstraint("status IN ('pending','running','done','rejected','expired','failed')", name="status"),)
+
+
+class ProductCollection(IdMixin, TimestampMixin, Base):
+    """A page of chosen products ("Diwali gifts"). Either a hand-picked list, or products matching rules (category, brand, price)."""
+
+    __tablename__ = "product_collections"
+
+    slug: Mapped[str] = mapped_column(String(80), unique=True)
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(String(1000), default="", server_default="")
+    image_url: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    product_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # hand-picked, in this order; wins over the rules
+    category_slug: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    brand: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    min_price_paise: Mapped[int | None] = mapped_column(BigInteger)
+    max_price_paise: Mapped[int | None] = mapped_column(BigInteger)

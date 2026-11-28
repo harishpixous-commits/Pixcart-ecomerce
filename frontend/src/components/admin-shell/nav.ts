@@ -6,7 +6,7 @@
 
 import {
   BarChart3, Bell, Bike, Bot, ChartColumn, Cpu, FileClock, FileDown, Flag, FolderTree, Globe, IndianRupee, KeyRound, LayoutDashboard, LifeBuoy, LogIn,
-  MapPinned, Megaphone, MessageCircleQuestion, MessageSquareText, MessageSquareWarning, MessagesSquare, Package, PackageCheck, Palette,
+  Layers, MapPinned, Megaphone, MessageCircleQuestion, MessageSquareText, MessageSquareWarning, MessagesSquare, Package, PackageCheck, Palette,
   PanelsTopLeft, Plug, Radar, Receipt, Rocket, RotateCcw, Route, Settings, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Store, Tag,
   Truck, Undo2, Users, Wallet, Zap, type LucideIcon,
 } from "lucide-react";
@@ -61,6 +61,7 @@ const DEFS: Def[] = [
   { section: "Store and marketing", href: "/admin/product-page", label: "Product page", icon: PanelsTopLeft, p: "settings" },
   { section: "Store and marketing", href: "/admin/checkout", label: "Checkout and fees", icon: Receipt, p: "settings" },
   { section: "Store and marketing", href: "/admin/coupons", label: "Coupons", icon: Tag, p: "marketing" },
+  { section: "Store and marketing", href: "/admin/collections", label: "Collections", icon: Layers, p: "marketing" },
   { section: "Store and marketing", href: "/admin/deals", label: "Deals", icon: Zap, count: "dl", p: "catalog" },
   { section: "Store and marketing", href: "/admin/advertising", label: "Advertising", icon: Megaphone, count: "ad", p: "marketing" },
   { section: "Store and marketing", href: "/admin/notifications", label: "Messages", icon: Bell, p: "marketing" },
