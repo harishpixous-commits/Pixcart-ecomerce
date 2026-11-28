@@ -40,3 +40,15 @@ Full Python suite: 323 passed. .NET full suite: see the instinct/continue copy o
 
 ## Business assistant (Python: working and tested)
 Key `assistant`. Once a week proposes a digest: sales for the last N days against the N before, items with few units left, tickets nobody answered, listings waiting for review. Approving sends it to the person who approved, in-app and by email. Counts only: no explanation of why, no forecast, goes to the approver only. Test: tests/test_agents.py (8 green). Note on test counts: earlier "573" and "579" .NET figures were sums of overlapping filter groups; the true single-run count is 392 before this push. .NET version: pending.
+
+## Summary for claims (28 Nov, after Push 146)
+Seven agents, in both versions, each with an on/off switch in Admin, AI agents, a master switch, and staff approval before anything happens. All rule based: no AI model is called, nothing paid. Each has an automated test in both versions.
+- Delivery and shipping: reminds sellers, asks for tracking, proposes cancel and refund for packages not shipped. No live courier tracking.
+- Order update: proposes a delay message to customers for late packages. No live tracking, no new date promised.
+- Sourcing and reorder: asks sellers to restock fast-selling items, with a suggested quantity. Does not buy stock.
+- Marketing: proposes a limited-time category coupon for slow categories. No emails or ads, does not measure results.
+- Listing review: approves clean pending listings, sends back the rest with reasons. Text and price rules only, no photo checks.
+- Support: drafts a first acknowledging reply for unanswered tickets. Does not decide refunds or answer follow-ups.
+- Business assistant: weekly digest of sales, low stock, unanswered tickets, pending listings. Counts only.
+Not run anywhere: a real browser (Angular and Next.js are type-checked only), live couriers, live AI model, live payments.
+Test counts, single full runs (28 Nov, 2:10 PM): Python 324 passed; .NET 393 passed, 0 failed.
