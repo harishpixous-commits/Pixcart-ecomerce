@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { ImageField } from "@/components/media-picker";
 import { Button, Field, Input, Select, Textarea, TextField } from "@/components/ui";
+import { api } from "@/lib/api";
 import { useSite } from "@/lib/site";
 import { fillTokens } from "@/lib/tokens";
 import type { LinkItem, Site } from "@/lib/types";
@@ -122,6 +124,8 @@ export function BrandEditor({ site, set }: { site: Site; set: (s: Site) => void 
 }
 
 function LinksEditor({ links, onChange, max }: { links: LinkItem[]; onChange: (l: LinkItem[]) => void; max: number }) {
+  const [cols, setCols] = useState<{ slug: string; title: string }[]>([]);
+  useEffect(() => { api<{ items: { slug: string; title: string }[] }>("/api/catalog/collections").then((r) => setCols(r.items)).catch(() => setCols([])); }, []);
   const move = (i: number, d: number) => {
     const n = [...links];
     const j = i + d;
@@ -141,6 +145,12 @@ function LinksEditor({ links, onChange, max }: { links: LinkItem[]; onChange: (l
         </div>
       ))}
       {links.length < max && <Button type="button" size="sm" variant="ghost" className="self-start" onClick={() => onChange([...links, { label: "", href: "/" }])}><Plus className="h-4 w-4" /> Add link</Button>}
+      {links.length < max && cols.length > 0 && (
+        <select className="self-start rounded-md border border-line bg-white px-2 py-1.5 text-sm" aria-label="Add a collection link" value="" onChange={(e) => { const c = cols.find((x) => x.slug === e.target.value); if (c) onChange([...links, { label: c.title.slice(0, 40), href: `/collections/${c.slug}` }]); }}>
+          <option value="">Add a collection link...</option>
+          {cols.map((c) => <option key={c.slug} value={c.slug}>{c.title}</option>)}
+        </select>
+      )}
     </div>
   );
 }
