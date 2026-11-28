@@ -852,6 +852,26 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Cart_hint_names_the_missing_product_of_an_automatic_bundle()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000481", "setnudge-shirt-a");
+        var (varB, prodB, _) = await ShirtInStock("9400000482", "setnudge-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { auto_discounts = new { enabled = true } })).Status);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "AUTOSET", description = "", kind = "bundle", value = 10, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = true, product_slugs = new[] { "setnudge-shirt-a", "setnudge-shirt-b" } })).Status);
+        var titleB = await ApiFactory.DbScalarAsync<string>("SELECT title FROM products WHERE id = @id", new { id = prodB });
+        var buyer = await LoginPhone("9620000481", "Set Nudge Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        async Task<List<string>> Hints() => ((await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["hints"]?.AsArray() ?? []).Select(h => h!.GetValue<string>()).ToList();
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 });
+        Assert.Contains($"Add {titleB} to get 10% off the set", await Hints());
+        await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 1 });
+        Assert.Equal("AUTOSET", (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["coupon"]!["code"]!.GetValue<string>());
+        Assert.DoesNotContain(await Hints(), h => h.Contains("the set"));
+    }
+
+    [Fact]
     public async Task Cart_hint_also_covers_an_automatic_buy_x_get_y_offer()
     {
         var admin = await Admin();

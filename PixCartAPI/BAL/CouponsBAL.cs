@@ -108,24 +108,37 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         return best;
     }
 
-    /// <summary>A short cart hint for the closest automatic volume offer the cart is just short of ("Add 1 more item to get 10% off"), or null.</summary>
+    /// <summary>A short cart hint for the closest automatic offer the cart is just short of: "Add 1 more item to get 10% off" (volume),
+    /// "Add 1 more item to get 1 free" (buy X get Y), "Add &lt;product&gt; to get 10% off the set" (bundle missing one product). Null if none is close.</summary>
     public async Task<string?> VolumeNudgeAsync(Guid userId, IReadOnlyList<CartBAL.CartLine> lines)
     {
         var saved = JsonHelper.Object(await coupons.GrowthJsonAsync());
         if (!((JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["auto_discounts"]!).Bool("enabled")) return null;
-        (int N, CouponModel C)? best = null;
-        foreach (var c in (await coupons.AutomaticAsync()).Where(x => x.Kind == "volume" || x.Kind == "bxgy"))
+        (int N, string Text)? best = null;
+        var inCart = lines.Where(l => string.IsNullOrEmpty(l.Problem)).Select(l => l.Product.Id.ToString()).ToHashSet();
+        foreach (var c in (await coupons.AutomaticAsync()).Where(x => x.Kind is "volume" or "bxgy" or "bundle"))
         {
             try { await EvaluateAsync(c.Code, userId, lines); }
             catch (AppException exc)
             {
+                if (exc.Code != "coupon_not_applicable") continue;
+                if (c.Kind == "bundle")
+                {
+                    var all = JsonHelper.Array(c.ProductIds).Select(x => x!.GetValue<string>()).ToList();
+                    var missing = all.Where(x => !inCart.Contains(x)).ToList();
+                    if (missing.Count != 1 || missing.Count == all.Count) continue;   // only when the cart already holds the rest of the set
+                    var prod = (await catalogDal.PublicProductsByIdsAsync([Guid.Parse(missing[0])], inStockOnly: true)).FirstOrDefault();
+                    if (prod is not null && (best is null || 1 < best.Value.N)) best = (1, $"Add {prod.Title} to get {c.Value}% off the set");
+                    continue;
+                }
                 var m = System.Text.RegularExpressions.Regex.Match(exc.Message, @"^Add (\d+) more item");
-                if (exc.Code == "coupon_not_applicable" && m.Success && (best is null || int.Parse(m.Groups[1].Value) < best.Value.N)) best = (int.Parse(m.Groups[1].Value), c);
+                if (!m.Success || (best is not null && int.Parse(m.Groups[1].Value) >= best.Value.N)) continue;
+                var n = int.Parse(m.Groups[1].Value);
+                var reward = c.Kind == "volume" ? $"{c.Value}% off" : c.Value == 100 ? $"{c.GetQty} free" : $"{c.GetQty} at {c.Value}% off";
+                best = (n, $"Add {n} more item{(n > 1 ? "s" : "")} to get {reward}");
             }
         }
-        if (best is not { } b) return null;
-        var reward = b.C.Kind == "volume" ? $"{b.C.Value}% off" : b.C.Value == 100 ? $"{b.C.GetQty} free" : $"{b.C.GetQty} at {b.C.Value}% off";
-        return $"Add {b.N} more item{(b.N > 1 ? "s" : "")} to get {reward}";
+        return best?.Text;
     }
 
     /// <summary>The coupons shown at checkout.</summary>

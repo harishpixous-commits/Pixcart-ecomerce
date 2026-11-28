@@ -495,3 +495,4 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
   - Push 174 (tests only): an automatic coupon with a per-customer limit stops applying to a customer after their first order, and still applies to other customers (both stacks). No bug found.
   - Push 175: the checkout quote hints now say how many more items unlock an automatic volume offer ("Add 1 more item to get 15% off"), shown with the other bill hints; only while automatic discounts are on. Same text in both stacks, tested in both. No new route.
   - Push 176: the cart hint also covers automatic buy-X-get-Y offers ("Add 1 more item to get 1 free"), same text in both stacks, tested in both.
+  - Push 177: the cart hint also names the missing product of an automatic bundle ("Add <product> to get 10% off the set"), only when the cart already holds the rest of the set and the missing product is on sale and in stock. Same text in both stacks, tested in both.
