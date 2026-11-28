@@ -303,5 +303,15 @@ async def test_weight_surcharge_adds_per_started_kg_above_the_free_weight(client
     async with SessionLocal() as s:
         subs = list((await s.execute(select(SubOrder).where(SubOrder.order_id == uuid.UUID(o["id"])))).scalars())
         assert sum(x.shipping_fee for x in subs) == base + 2000
+    # the product page estimate (one unit) follows the same rule
+    est = lambda: client.get(f"/api/catalog/delivery-estimate?variant_id={sv['id']}&pincode=641001")
+    plain_est = (await est()).json()["delivery_fee_paise"]
+    from sqlalchemy import update
+
+    from app.models import Variant
+    async with SessionLocal() as s:
+        await s.execute(update(Variant).where(Variant.id == uuid.UUID(sv["id"])).values(weight_grams=2500))
+        await s.commit()
+    assert (await est()).json()["delivery_fee_paise"] == plain_est + 2000          # 2500 g: two started kg over the free 1000 g
     assert (await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 0})).status_code == 200
     assert (await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 100_001})).status_code == 400

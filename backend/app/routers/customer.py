@@ -798,6 +798,8 @@ async def delivery_estimate(session: SessionDep, user: OptionalUser, variant_id:
     free_from = free_threshold(seller, await growth_svc.with_state_threshold(session, cfg, state_code), await growth_svc.seller_free_bounds(session))
     state_fee = None if v.price_paise >= free_from else await growth_svc.state_fee(session, state_code)
     fee = 0 if v.price_paise >= free_from else (cfg["shipping_fee_paise"] if state_fee is None else state_fee)
+    if fee and cfg.get("shipping_per_kg_paise") and v.weight_grams > cfg["shipping_free_grams"]:   # the weight surcharge, for one unit
+        fee += -(-(v.weight_grams - cfg["shipping_free_grams"]) // 1000) * cfg["shipping_per_kg_paise"]
     extra, waive = await growth_svc.remote_surcharge(session, pin)
     if extra and not (waive and fee == 0):
         fee += extra
