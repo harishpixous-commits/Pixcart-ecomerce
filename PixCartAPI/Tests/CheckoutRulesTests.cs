@@ -931,6 +931,41 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Bundle_and_volume_offers_flow_into_the_order_and_come_back_on_cancel()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000399", "flow-shirt-a");
+        var (varB, prodB, _) = await ShirtInStock("9400000400", "flow-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "SETDEAL2", description = "", kind = "bundle", value = 10, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, product_slugs = new[] { "flow-shirt-a", "flow-shirt-b" } })).Status);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "VOL2", description = "", kind = "volume", value = 10, buy_qty = 2, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false })).Status);
+        var a = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varA });
+        var b = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varB });
+        foreach (var (code, phone) in new[] { ("SETDEAL2", "9620000399"), ("VOL2", "9620000400") })
+        {
+            var buyer = await LoginPhone(phone, "Offer Buyer");
+            var addr = await AddAddress(buyer, state: "33");
+            async Task Fill() { await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 }); await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 1 }); }
+            await Fill();
+            var q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = code });
+            Assert.Null(q.Json["coupon"]!["error"]);
+            var off = q.Json["coupon"]!["discount"]!.GetValue<long>();
+            Assert.Equal((a + b) / 10, off);
+            var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = code, expected_total = q.Json["summary"]!["grand_total"]!.GetValue<long>() });
+            Assert.True(r.Status == 201, r.ToString());
+            var orderId = r.Json["order"]!["id"]!.GetValue<string>();
+            Assert.Equal(q.Json["summary"]!["grand_total"]!.GetValue<long>(), r.Json["order"]!["grand_total"]!.GetValue<long>());
+            Assert.Equal(off, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(platform_discount), 0) FROM sub_orders WHERE order_id = @orderId", new { orderId }));   // the split adds up to the paise
+            Assert.Equal(1, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = @code", new { code }));
+            Assert.Equal(200, (await buyer.Post($"/api/orders/{orderId}/cancel", new { reason = "Ordered by mistake" })).Status);
+            Assert.Equal(0, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = @code", new { code }));   // cancelling gives the use back
+            await Fill();
+            q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = code });
+            Assert.Null(q.Json["coupon"]!["error"]);
+        }
+    }
+
+    [Fact]
     public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
     {
         var admin = await Admin();
