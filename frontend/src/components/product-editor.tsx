@@ -64,6 +64,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   const [returnDays, setReturnDays] = useState(String(product?.return_window_days ?? 7));
   const [sizeGuide, setSizeGuide] = useState(product?.size_guide ?? "");
   const [seoTitle, setSeoTitle] = useState(product?.seo_title ?? "");
+  const [publishAt, setPublishAt] = useState(() => { const v = product?.publish_at; if (!v) return ""; const d = new Date(v); return Number.isNaN(d.getTime()) ? "" : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); });
   const [seoDesc, setSeoDesc] = useState(product?.seo_description ?? "");
   const [tags, setTags] = useState((product?.tags ?? []).join(", "));
   const [images, setImages] = useState<string[]>(product?.images ?? []);
@@ -211,6 +212,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       return_window_days: Number(returnDays),
       size_guide: sizeGuide,
       seo_title: seoTitle,
+      publish_at: publishAt ? new Date(publishAt).toISOString() : null,
       seo_description: seoDesc,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       images,
@@ -458,6 +460,9 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         </Field>
         <Field label="Tags (optional)" htmlFor="ptags" hint="Up to 10 short labels, separated by commas, like gift, cotton. Staff use them to group products. Changing them does not send the product for approval again.">
           <Input id="ptags" value={tags} maxLength={400} onChange={(e) => setTags(e.target.value)} data-testid="product-tags" />
+        </Field>
+        <Field label="Go live at (optional)" htmlFor="ppub" hint="Once approved, the product shows to shoppers from this time. Leave empty to show it as soon as it is approved. Changing it does not send the product for approval again.">
+          <Input id="ppub" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} data-testid="product-publish-at" />
         </Field>
         <Field label="Search listing title (optional)" htmlFor="pseot" hint="What Google shows as the title, up to 70 characters. Leave empty to use the product title.">
           <Input id="pseot" value={seoTitle} maxLength={70} onChange={(e) => setSeoTitle(e.target.value)} data-testid="product-seo-title" />

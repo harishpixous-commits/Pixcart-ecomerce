@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.services.product_info import details_of
 from app.core.deps import CurrentUser, SessionDep
@@ -46,7 +46,8 @@ async def _purchasable(session, variant_id: uuid.UUID) -> Variant:
             select(Variant)
             .join(Product, Product.id == Variant.product_id)
             .join(Seller, Seller.id == Product.seller_id)
-            .where(Variant.id == variant_id, Variant.is_active.is_(True), Product.status == "approved", Seller.status == "approved")
+            .where(Variant.id == variant_id, Variant.is_active.is_(True), Product.status == "approved", Seller.status == "approved",
+                   or_(Product.publish_at.is_(None), Product.publish_at <= func.now()))
         )
     ).scalar_one_or_none()
     if row is None:

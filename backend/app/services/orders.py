@@ -149,7 +149,7 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
         det = details_of(product.details)
         line.min_qty = max(1, min(det.min_qty, per_item))
         line.ships_on = preorder_date(det)
-        if product.status != "approved" or seller.status != "approved" or not variant.is_active:
+        if product.status != "approved" or seller.status != "approved" or not variant.is_active or (product.publish_at and product.publish_at > utcnow()):
             line.problem = "This item is no longer available"
         elif seller.holiday_mode:
             line.problem = "The seller is not taking orders right now"

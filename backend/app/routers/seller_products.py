@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, File, Query, UploadFile
@@ -114,6 +115,7 @@ class ProductIn(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=10)  # short labels for grouping; they do not need re-approval
     seo_title: str = Field(default="", max_length=70)  # search listing; empty: the product title and description are used
     seo_description: str = Field(default="", max_length=160)
+    publish_at: datetime | None = None  # go live at this time (once approved); empty: as soon as approved
     images: list[str] = Field(default_factory=list, max_length=MAX_IMAGES)
     videos: list[VideoIn] = Field(default_factory=list, max_length=10)
     variants: list[VariantIn] = Field(min_length=1, max_length=MAX_VARIANTS)
@@ -125,6 +127,17 @@ class ProductIn(BaseModel):
         from app.services.size_guide import clean
 
         return clean(v)
+
+    @field_validator("publish_at")
+    @classmethod
+    def _publish_at(cls, v: datetime | None) -> datetime | None:
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v > datetime.now(timezone.utc) + timedelta(days=365):
+            raise ValueError("Pick a go-live time within the next year")
+        return v
 
     @field_validator("seo_title", "seo_description")
     @classmethod
@@ -228,6 +241,7 @@ async def product_detail(session, p: Product) -> dict:
         "tags": p.tags or [],
         "seo_title": p.seo_title or "",
         "seo_description": p.seo_description or "",
+        "publish_at": p.publish_at.isoformat() if p.publish_at else None,
         "images": imgs,
         "videos": vids,
         "details": details.model_dump(),
@@ -402,7 +416,7 @@ async def create_product(body: ProductIn, seller: SellerAccount, user: CurrentUs
         seller_id=seller.id,
         slug=await unique_product_slug(session, body.title),
         status="draft",
-        tags=body.tags, seo_title=body.seo_title, seo_description=body.seo_description,
+        tags=body.tags, seo_title=body.seo_title, seo_description=body.seo_description, publish_at=body.publish_at,
         **body.model_dump(include=set(CONTENT_FIELDS)),
     )
     p.title, p.brand = body.title.strip(), body.brand.strip()
@@ -441,7 +455,7 @@ async def import_products(seller: SellerAccount, user: CurrentUser, session: Ses
             body = item["payload"]
             if body is None:
                 continue
-            p = Product(seller_id=seller.id, slug=await unique_product_slug(session, body.title), status="draft", tags=body.tags, seo_title=body.seo_title, seo_description=body.seo_description, **body.model_dump(include=set(CONTENT_FIELDS)))
+            p = Product(seller_id=seller.id, slug=await unique_product_slug(session, body.title), status="draft", tags=body.tags, seo_title=body.seo_title, seo_description=body.seo_description, publish_at=body.publish_at, **body.model_dump(include=set(CONTENT_FIELDS)))
             p.title, p.brand = body.title.strip(), body.brand.strip()
             session.add(p)
             await session.flush()
@@ -483,6 +497,7 @@ async def update_product(product_id: uuid.UUID, body: ProductIn, seller: SellerA
         setattr(p, f, dumped[f])
     p.title, p.brand = body.title.strip(), body.brand.strip()
     p.seo_title, p.seo_description = body.seo_title, body.seo_description  # search listing text: no re-approval
+    p.publish_at = body.publish_at  # a go-live time never sends a live product back for approval
     p.tags = body.tags  # labels only: changing them never sends a live product back for approval
     content_changed = (any(before[f] != getattr(p, f) for f in CONTENT_FIELDS) or before_images != body.images
                        or before_videos != [v.url for v in body.videos])

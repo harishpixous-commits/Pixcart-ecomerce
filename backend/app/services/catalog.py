@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 import uuid
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -117,6 +117,7 @@ def public_product_filter():
     """SQL conditions for a product that customers may see and buy."""
     return (
         Product.status == "approved",
+        or_(Product.publish_at.is_(None), Product.publish_at <= func.now()),   # scheduled publish: not live before its time
         Product.price_from > 0,
         Product.seller_id.in_(select(Seller.id).where(Seller.status == "approved", Seller.holiday_mode.is_(False))),
     )

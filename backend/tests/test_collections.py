@@ -1,6 +1,9 @@
 """Collections: staff make a page of chosen products (hand-picked or by rules); customers open it by its link name."""
 from __future__ import annotations
 
+import uuid
+
+from tests.conftest import login_phone
 from tests.test_phase2_money import setup
 
 
@@ -82,3 +85,39 @@ async def test_product_search_listing_text(client, admin, categories):
     assert (await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"seo_title": "x" * 71})).status_code == 422
     dup = (await tn.post(f"/api/seller/products/{shirt['id']}/duplicate")).json()
     assert dup["seo_title"] == "Cotton shirt, made in Kovai"
+
+
+async def test_scheduled_publish_hides_an_approved_product_until_its_time(client, admin, categories):
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models import Product
+
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9770000451", name="Schedule Buyer")
+    detail = (await tn.get(f"/api/seller/products/{shirt['id']}")).json()
+    assert detail["publish_at"] is None
+    soon = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"publish_at": soon})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved" and r.json()["publish_at"] is not None          # no new approval round
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).status_code == 404
+    listed = (await client.get("/api/catalog/products")).json()
+    assert shirt["slug"] not in [p["slug"] for p in listed["items"]]
+    assert (await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})).status_code == 404
+    # the time passes
+    async with SessionLocal() as s:
+        await s.execute(update(Product).where(Product.id == uuid.UUID(shirt["id"])).values(publish_at=datetime.now(timezone.utc) - timedelta(minutes=1)))
+        await s.commit()
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).status_code == 200
+    assert shirt["slug"] in [p["slug"] for p in (await client.get("/api/catalog/products")).json()["items"]]
+    assert (await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})).status_code in (200, 201)
+    # too far ahead is refused, and an empty value clears it
+    far = (datetime.now(timezone.utc) + timedelta(days=400)).isoformat()
+    assert (await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"publish_at": far})).status_code == 422
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"publish_at": None})
+    assert r.json()["publish_at"] is None
+    dup = (await tn.post(f"/api/seller/products/{shirt['id']}/duplicate")).json()
+    assert dup["publish_at"] is None                                                       # a copy goes live on approval as usual

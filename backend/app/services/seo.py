@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from xml.sax.saxutils import escape
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Category, Product, Seller
@@ -20,7 +20,7 @@ async def sitemap_xml(session: AsyncSession, base: str) -> str | None:
     urls = [base + "/"]
     if cfg["sitemap_include_categories"]:
         urls += [f"{base}/c/{s}" for s in (await session.execute(select(Category.slug).where(Category.is_active.is_(True)).order_by(Category.slug))).scalars()]
-    urls += [f"{base}/p/{s}" for s in (await session.execute(select(Product.slug).where(Product.status == "approved").order_by(Product.slug).limit(50000))).scalars()]
+    urls += [f"{base}/p/{s}" for s in (await session.execute(select(Product.slug).where(Product.status == "approved", or_(Product.publish_at.is_(None), Product.publish_at <= func.now())).order_by(Product.slug).limit(50000))).scalars()]
     if cfg["sitemap_include_sellers"]:
         urls += [f"{base}/store/{s}" for s in (await session.execute(select(Seller.slug).where(Seller.status == "approved").order_by(Seller.slug))).scalars()]
     if cfg["sitemap_include_collections"]:
