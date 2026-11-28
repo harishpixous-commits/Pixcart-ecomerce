@@ -171,6 +171,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         var page = (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections/gifts-for-him"))!;
         Assert.Equal("Gifts for him", page["title"]!.GetValue<string>()); Assert.Equal(shirtSlug, page["products"]![0]!["slug"]!.GetValue<string>());
         Assert.Equal("gifts-for-him", (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections"))!["items"]![0]!["slug"]!.GetValue<string>());
+        Assert.Contains("/collections/gifts-for-him</loc>", await (await visitor.GetAsync("/api/seo/sitemap.xml")).Content.ReadAsStringAsync());
         var c2 = (await admin.Post("/api/admin/collections", new { title = "Gifts for him", min_price_paise = 1, max_price_paise = 100000000 })).Json;
         Assert.Equal("gifts-for-him-2", c2["slug"]!.GetValue<string>());
         var byRule = (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections/gifts-for-him-2"))!;
@@ -180,6 +181,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(422, (await admin.Put($"/api/admin/collections/{c2["id"]!.GetValue<string>()}", new { title = "Bad", min_price_paise = 5, max_price_paise = 1 })).Status);
         await admin.Put($"/api/admin/collections/{col["id"]!.GetValue<string>()}", new { title = "Gifts for him", product_slugs = new[] { shirtSlug }, is_active = false });
         Assert.Equal(404, (int)(await visitor.GetAsync("/api/catalog/collections/gifts-for-him")).StatusCode);
+        Assert.DoesNotContain("/collections/gifts-for-him</loc>", await (await visitor.GetAsync("/api/seo/sitemap.xml")).Content.ReadAsStringAsync());
         Assert.Equal(200, (await admin.Delete($"/api/admin/collections/{col["id"]!.GetValue<string>()}")).Status);
         Assert.Single((await admin.Get("/api/admin/collections")).Json["items"]!.AsArray());
         var buyer = await LoginPhone("9620000415", "Collection Buyer");

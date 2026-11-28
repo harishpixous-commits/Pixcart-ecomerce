@@ -35,7 +35,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
             new("min_orders", 10, K.Int, 1, 10000), new("auto_suspend", false, K.Bool)],
         ["cod_risk"] = [new("enabled", false, K.Bool), new("max_cod_paise", 500000, K.Int, 0, 100000000), new("block_after_refused", 2, K.Int, 1, 20),
             new("new_account_max_cod_paise", 200000, K.Int, 0, 100000000), new("blocked_pincodes", Array.Empty<string>(), K.List, 0, 500)],
-        ["seo"] = [new("sitemap_enabled", true, K.Bool), new("sitemap_include_categories", true, K.Bool), new("sitemap_include_sellers", false, K.Bool)],
+        ["seo"] = [new("sitemap_enabled", true, K.Bool), new("sitemap_include_categories", true, K.Bool), new("sitemap_include_sellers", false, K.Bool), new("sitemap_include_collections", true, K.Bool)],
         ["return_photos"] = [new("enabled", false, K.Bool), new("required_for_defects", false, K.Bool), new("max_photos", 3, K.Int, 1, 6)],
         ["newsletter"] = [new("enabled", false, K.Bool), new("title", "Get offers in your inbox", K.Label, 0, 60)],
         ["auto_discounts"] = [new("enabled", false, K.Bool)],
@@ -278,6 +278,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         if (cfg.Bool("sitemap_include_categories")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM categories WHERE is_active = 1 ORDER BY slug")).Select(x => $"{b}/c/{x}"));
         urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM products WHERE status = 'approved' ORDER BY slug LIMIT 50000")).Select(x => $"{b}/p/{x}"));
         if (cfg.Bool("sitemap_include_sellers")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM sellers WHERE status = 'approved' ORDER BY slug")).Select(x => $"{b}/store/{x}"));
+        if (cfg.Bool("sitemap_include_collections")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM product_collections WHERE is_active = 1 ORDER BY slug")).Select(x => $"{b}/collections/{x}"));
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +
                string.Concat(urls.Select(u => "<url><loc>" + System.Security.SecurityElement.Escape(u) + "</loc></url>")) + "</urlset>";
     }
