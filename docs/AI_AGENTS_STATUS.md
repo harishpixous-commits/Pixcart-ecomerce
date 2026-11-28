@@ -28,3 +28,6 @@ Also working from before (not part of the proposal queue): admin business assist
 - Listing and support drafts feeding the same approval queue.
 - Delivery agent: no courier calls, no pickup re-booking, no live tracking events.
 - Any live AI model. Every agent today is rule-based.
+
+## Marketing agent (.NET: working and tested)
+Key `marketing`. Proposes a time-limited category coupon for categories with live stock but few recent sales; approving creates the coupon (audited). Test Marketing_agent_proposes_a_coupon... passed. Angular page type-checked only. Not built: emails or ads, customer targeting, measuring results.

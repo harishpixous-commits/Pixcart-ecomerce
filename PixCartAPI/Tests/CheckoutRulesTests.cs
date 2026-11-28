@@ -1033,6 +1033,25 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Marketing_agent_proposes_a_coupon_for_a_slow_category_and_approval_creates_it()
+    {
+        var admin = await Admin();
+        var (_, productId, _) = await ShirtInStock("9400000315", "agent-marketing-shirt");
+        await Refresh(productId);
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true, marketing_min_items = 1, marketing_max_sold = 5 })).Status);
+        Assert.Equal(0, (await Run())["marketing"]!.GetValue<int>()); // its switch is off
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { marketing_enabled = true })).Status);
+        Assert.True((await Run())["marketing"]!.GetValue<int>() >= 1);
+        Assert.Equal(0, (await Run())["marketing"]!.GetValue<int>());
+        var p = (await admin.Get("/api/admin/agents/proposals?agent=marketing")).Json["items"]![0]!;
+        Assert.Equal("create_coupon", p["kind"]!.GetValue<string>());
+        Assert.Equal(0, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM coupons WHERE description LIKE '% off %'"));
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{p["id"]!.GetValue<string>()}/approve", new { })).Status);
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM coupons WHERE description LIKE '% off %' AND kind = 'percent' AND funded_by = 'platform' AND category_id IS NOT NULL AND ends_at > UTC_TIMESTAMP()"));
+    }
+
+    [Fact]
     public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
     {
         var admin = await Admin();

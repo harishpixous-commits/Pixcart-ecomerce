@@ -30,6 +30,10 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             "Compares each live item's stock with how fast it sold recently. When it would run out within the cover period, proposes asking the seller to restock, with a suggested quantity.",
             "Does not buy stock, raise purchase orders or contact outside suppliers: on this marketplace sellers own their stock. Does not predict seasons or sales spikes, only the recent average.",
             ReorderScanAsync),
+        new("marketing", "Marketing agent",
+            "Finds categories with plenty of live stock but few recent sales and proposes a limited-time category coupon. Staff approve before any coupon exists.",
+            "Only proposes category coupons. Does not send emails or ads, does not pick customers, and does not measure whether the coupon worked.",
+            MarketingScanAsync),
     ];
 
     private async Task<JsonObject> CfgAsync() => (JsonObject)(await growth.GetAsync())["agents"]!;
@@ -105,6 +109,28 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             outp.Add(new("request_restock", $"{r.Id}:{month}", $"Ask {r.Seller} to restock {label}: {r.Stock} left, sells about {rate:0.0} a day, out in about {daysLeft} days",
                 [["Item", label], ["Seller", r.Seller], ["In stock", r.Stock.ToString()], [$"Sold in {window} days", r.Sold.ToString()], ["Suggested to add", suggest.ToString()]],
                 new() { ["variant_id"] = r.Id.ToString(), ["item"] = label[..Math.Min(100, label.Length)], ["stock"] = r.Stock.ToString(), ["sold"] = r.Sold.ToString(), ["days"] = window.ToString(), ["left"] = daysLeft.ToString(), ["suggest"] = suggest.ToString() }, "orders"));
+        }
+        return outp;
+    }
+
+    // ---------- marketing agent ----------
+    private async Task<List<Draft>> MarketingScanAsync(JsonObject cfg)
+    {
+        var now = DateTime.UtcNow; var window = cfg.Int("marketing_window_days"); var since = now.AddDays(-window);
+        var pct = cfg.Int("marketing_discount_percent"); var days = cfg.Int("marketing_valid_days");
+        var rows = await db.QueryAsync<(Guid Id, string Name, long Items, long Sold)>(
+            "SELECT c.id AS Id, c.name AS Name, x.items AS Items, COALESCE(y.qty, 0) AS Sold FROM categories c " +
+            "JOIN (SELECT p.category_id AS cid, COUNT(DISTINCT p.id) AS items FROM products p JOIN variants v ON v.product_id = p.id WHERE p.status = 'approved' AND v.is_active = 1 AND v.stock > 0 GROUP BY p.category_id) x ON x.cid = c.id " +
+            "LEFT JOIN (SELECT p.category_id AS cid, SUM(oi.qty) AS qty FROM order_items oi JOIN variants v ON v.id = oi.variant_id JOIN products p ON p.id = v.product_id JOIN sub_orders s ON s.id = oi.sub_order_id " +
+            "WHERE s.created_at >= @since AND s.status NOT IN ('pending_payment','cancelled') GROUP BY p.category_id) y ON y.cid = c.id " +
+            "WHERE x.items >= @minItems AND COALESCE(y.qty, 0) <= @maxSold LIMIT 200", new { since, minItems = cfg.Int("marketing_min_items"), maxSold = cfg.Int("marketing_max_sold") });
+        var outp = new List<Draft>(); var month = now.ToString("yyyy-MM");
+        foreach (var r in rows)
+        {
+            var code = $"SLOW{pct}{r.Id.ToString("N")[..6].ToUpperInvariant()}{now:MMdd}";
+            outp.Add(new("create_coupon", $"{r.Id}:{month}", $"Run {pct}% off {r.Name} for {days} days: {r.Items} items in stock but only {r.Sold} sold in {window} days",
+                [["Category", r.Name], ["Items in stock", r.Items.ToString()], [$"Sold in {window} days", r.Sold.ToString()], ["Coupon", $"{pct}% off, code {code}, {days} days"]],
+                new() { ["category_id"] = r.Id.ToString(), ["category"] = r.Name, ["code"] = code, ["percent"] = pct.ToString(), ["days"] = days.ToString() }, "marketing"));
         }
         return outp;
     }
@@ -259,6 +285,21 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
                 ["item"] = p["item"]!.GetValue<string>(), ["stock"] = v.Stock.ToString(), ["sold"] = p["sold"]!.GetValue<string>(), ["days"] = p["days"]!.GetValue<string>(),
                 ["left"] = p["left"]!.GetValue<string>(), ["suggest"] = p["suggest"]!.GetValue<string>(),
             }, "/seller/inventory?low_stock=1");
+            return;
+        }
+        if (row.Kind == "create_coupon")
+        {
+            var cat = Guid.Parse(p["category_id"]!.GetValue<string>()); var code = p["code"]!.GetValue<string>().ToUpperInvariant();
+            var pct = int.Parse(p["percent"]!.GetValue<string>()); var days = int.Parse(p["days"]!.GetValue<string>());
+            if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM categories WHERE id = @cat", new { cat }) == 0) throw new Stale("The category no longer exists, so no coupon was made.");
+            if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM coupons WHERE UPPER(code) = @code", new { code }) > 0) throw new Stale("A coupon with this code already exists, so nothing was made.");
+            var now = DateTime.UtcNow;
+            await db.ExecuteAsync(
+                "INSERT INTO coupons (id, code, description, kind, value, min_order_paise, starts_at, ends_at, per_user_limit, used_count, funded_by, category_id, first_order_only, is_active, show_on_checkout) " +
+                "VALUES (@id, @code, @d, 'percent', @v, 0, @s, @e, 1, 0, 'platform', @cat, 0, 1, 1)",
+                new { id = Guid.NewGuid(), code, d = $"{pct}% off {p["category"]!.GetValue<string>()}", v = pct * 100, s = now, e = now.AddDays(days), cat });
+            await db.ExecuteAsync("INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) VALUES (@by, 'coupon.create', 'coupon', @code, 'made by the marketing agent', UTC_TIMESTAMP(6), @id)",
+                new { by = admin.Id, code, id = Guid.NewGuid() });
             return;
         }
         if (row.Kind == "delay_notice")
