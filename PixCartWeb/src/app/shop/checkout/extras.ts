@@ -4,7 +4,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from "@angular/core";
-import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-angular";
+import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, Gift, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-angular";
 import { currencySymbol, paiseToShown, rupees, shownToPaise } from "../../core/format";
 import { Icon } from "../../shared/ui/icon";
 import { Autofocus, Button, Input, TextField, Textarea, uid } from "../../shared/ui/ui";
@@ -269,4 +269,30 @@ export class NoBagSection {
   readonly on = input(false);
   readonly onChange = output<boolean>();
   protected readonly Leaf = Leaf;
+}
+
+/* ---------------------------------------------------------------- gift message */
+
+@Component({
+  selector: "pc-gift-message-section",
+  imports: [CardHeading, Textarea],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: "contents" },
+  template: `
+    <section aria-labelledby="co-gift-h" data-testid="checkout-gift" [class]="CARD">
+      <div pcCardHeading headingId="co-gift-h" [icon]="Gift" title="Gift message" sub="The seller packs it with your order. The price is not shown."></div>
+      <label [attr.for]="id" class="sr-only">Gift message</label>
+      <textarea pcTextarea [id]="id" [value]="text()" [attr.maxlength]="max()" rows="3" (input)="textChange.emit($any($event.target).value)"
+        placeholder="E.g. Happy birthday! Hope you like it."></textarea>
+      <p class="mt-1 text-right text-xs tabular-nums text-ink-faint" aria-live="polite">{{ text().length }}/{{ max() }}</p>
+    </section>
+  `,
+})
+export class GiftMessageSection {
+  readonly text = input.required<string>();
+  readonly max = input(150);
+  readonly textChange = output<string>();
+  protected readonly id = uid();
+  protected readonly CARD = CARD;
+  protected readonly Gift = Gift;
 }

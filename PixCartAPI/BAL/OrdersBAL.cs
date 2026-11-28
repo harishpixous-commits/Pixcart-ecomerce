@@ -80,12 +80,12 @@ public class OrdersBAL(
     public async Task<(OrderModel Order, PaymentModel? Payment)> PlaceOrderAsync(
         UserModel user, Guid addressId, string paymentMethod, string idempotencyKey, long? expectedTotal,
         string? couponCode = null, int tipPaise = 0, string buyerGstin = "", string buyerBusiness = "",
-        string? instructions = null, bool noBag = false, string? currency = null)
+        string? instructions = null, bool noBag = false, string? currency = null, string giftMessage = "")
     {
         try
         {
             return await PlaceOrderOnceAsync(user, addressId, paymentMethod, idempotencyKey, expectedTotal, couponCode, tipPaise,
-                buyerGstin, buyerBusiness, instructions, noBag, currency);
+                buyerGstin, buyerBusiness, instructions, noBag, currency, giftMessage);
         }
         catch (MySqlException exc) when (exc.Number == 1062)
         {
@@ -100,7 +100,7 @@ public class OrdersBAL(
     private async Task<(OrderModel Order, PaymentModel? Payment)> PlaceOrderOnceAsync(
         UserModel user, Guid addressId, string paymentMethod, string idempotencyKey, long? expectedTotal,
         string? couponCode, int tipPaise, string buyerGstin, string buyerBusiness,
-        string? instructions, bool noBag, string? currency)
+        string? instructions, bool noBag, string? currency, string giftMessage)
     {
         var existing = await orders.FindByIdempotencyAsync(user.Id, idempotencyKey);
         if (existing is not null)
@@ -217,6 +217,9 @@ public class OrdersBAL(
         }
         var rawNote = string.Join(' ', (instructions ?? address.Instructions ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         var note = ck.Bool("instructions_enabled") ? (rawNote.Length > 300 ? rawNote[..300] : rawNote) : "";
+        var gift = string.Join(' ', (giftMessage ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (gift.Length > 0 && !ck.Bool("gift_message_enabled")) throw new AppException("Gift messages are switched off", "gift_off");
+        if (gift.Length > ck.Int("gift_message_max")) throw new AppException($"Keep the gift message to {ck.Int("gift_message_max")} characters", "gift_too_long");
         var grandTotal = itemsTotal + shippingTotal + codFee + feesTotal + tip - discountTotal;
 
         if (paymentMethod == "cod")
@@ -239,7 +242,7 @@ public class OrdersBAL(
             ["landmark"] = address.Landmark, ["city"] = address.City, ["state_code"] = address.StateCode,
             ["state"] = IndianStates.Name(address.StateCode), ["pincode"] = address.Pincode, ["label"] = address.Label, ["kind"] = address.Kind,
             ["lat"] = address.Lat is { } la ? (double)la : null, ["lng"] = address.Lng is { } ln2 ? (double)ln2 : null,
-            ["instructions"] = note, ["no_bag"] = noBag && ck.Bool("no_bag_enabled"),
+            ["instructions"] = note, ["no_bag"] = noBag && ck.Bool("no_bag_enabled"), ["gift_message"] = gift,
         };
 
         var order = new OrderModel

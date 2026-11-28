@@ -60,6 +60,8 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
         ["gstin_enabled"] = true,           // "Add GSTIN" for business purchases (the GSTIN goes on the tax invoices)
         ["instructions_enabled"] = true,    // delivery instructions for the delivery partner or courier
         ["no_bag_enabled"] = false,         // "I don't need a bag"
+        ["gift_message_enabled"] = false,   // a gift message the seller packs with the order
+        ["gift_message_max"] = 150,         // its longest length
         ["cancellation_note"] = "You can cancel until your order is shipped. After delivery, use returns if the product allows them.",
     };
 
@@ -67,7 +69,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
     {
         ["handling_paise"] = (0, 100_000), ["handling_list_paise"] = (0, 100_000), ["handling_free_above_paise"] = (0, 100_000_000),
         ["small_cart_paise"] = (0, 100_000), ["small_cart_below_paise"] = (0, 10_000_000), ["platform_paise"] = (0, 100_000),
-        ["fees_gst_bps"] = (0, 2800), ["tip_max_paise"] = (0, 500_000), ["surge_paise"] = (0, 100_000), ["late_night_paise"] = (0, 100_000),
+        ["fees_gst_bps"] = (0, 2800), ["tip_max_paise"] = (0, 500_000), ["surge_paise"] = (0, 100_000), ["late_night_paise"] = (0, 100_000), ["gift_message_max"] = (20, 300),
     };
     private static readonly IReadOnlyDictionary<string, int> Texts = new Dictionary<string, int>
     {
@@ -227,7 +229,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
     {
         ["tip_enabled"] = ck.Bool("tip_enabled"), ["tip_presets"] = ck["tip_presets"]?.DeepClone(), ["tip_max_paise"] = ck.Int("tip_max_paise"),
         ["gstin_enabled"] = ck.Bool("gstin_enabled"), ["instructions_enabled"] = ck.Bool("instructions_enabled"),
-        ["no_bag_enabled"] = ck.Bool("no_bag_enabled"), ["cancellation_note"] = ck.Str("cancellation_note"),
+        ["no_bag_enabled"] = ck.Bool("no_bag_enabled"), ["gift_message_enabled"] = ck.Bool("gift_message_enabled"), ["gift_message_max"] = ck.Int("gift_message_max"), ["cancellation_note"] = ck.Str("cancellation_note"),
         ["delivery_label"] = ck.Str("delivery_label"), ["delivery_info"] = ck.Str("delivery_info"),
     };
 

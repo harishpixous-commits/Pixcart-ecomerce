@@ -33,7 +33,7 @@ type Fees = {
   late_night_enabled: boolean; late_night_paise: number; late_night_from: string; late_night_to: string; late_night_label: string; late_night_info: string;
   fees_gst_bps: number; fees_refund_on_cancel: boolean; fees_sac_code: string; fee_invoice_prefix: string;
   tip_enabled: boolean; tip_presets: number[]; tip_max_paise: number;
-  gstin_enabled: boolean; instructions_enabled: boolean; no_bag_enabled: boolean; cancellation_note: string;
+  gstin_enabled: boolean; instructions_enabled: boolean; no_bag_enabled: boolean; gift_message_enabled: boolean; gift_message_max: number; cancellation_note: string;
 };
 /** Whether the time-bound fees are being charged at this moment (worked out by the server's clock). */
 type FeeStatus = { surge_active: boolean; surge_until: string | null; surge_ended: boolean; late_night_active: boolean; night_window_now: boolean };
@@ -46,7 +46,7 @@ const FEE_MONEY = ["handling_paise", "handling_list_paise", "handling_free_above
   "surge_paise", "late_night_paise", "tip_max_paise"] as const;
 const MONEY = [...MARKET_MONEY, ...FEE_MONEY];
 const FEE_FLAGS = ["handling_enabled", "small_cart_enabled", "platform_enabled", "surge_enabled", "late_night_enabled", "fees_refund_on_cancel", "tip_enabled",
-  "gstin_enabled", "instructions_enabled", "no_bag_enabled"] as const;
+  "gstin_enabled", "instructions_enabled", "no_bag_enabled", "gift_message_enabled"] as const;
 const FEE_TEXTS = ["delivery_label", "delivery_info", "handling_label", "handling_info", "small_cart_label", "small_cart_info", "platform_label", "platform_info",
   "surge_label", "surge_info", "late_night_label", "late_night_info", "cancellation_note", "fees_sac_code", "fee_invoice_prefix"] as const;
 const LABELS = ["delivery_label", "handling_label", "small_cart_label", "platform_label", "surge_label", "late_night_label"] as const;
@@ -59,12 +59,12 @@ type FlagKey = "cod_enabled" | (typeof FEE_FLAGS)[number];
 type TextKey = (typeof FEE_TEXTS)[number];
 type LabelKey = (typeof LABELS)[number];
 type TimeKey = (typeof TIMES)[number];
-type IssueKey = MoneyKey | LabelKey | TimeKey | "gst" | "surge_for" | "fees_sac_code" | "fee_invoice_prefix";
+type IssueKey = MoneyKey | LabelKey | TimeKey | "gst" | "gift_max" | "surge_for" | "fees_sac_code" | "fee_invoice_prefix";
 
 /** The form as typed: amounts (rupees) and the GST rate (percent) stay text until they are sent. */
 type Draft = {
   money: Record<MoneyKey, string>; flags: Record<FlagKey, boolean>; text: Record<TextKey, string>; times: Record<TimeKey, string>;
-  gst: string; tips: number[]; surgeFor: string;
+  gst: string; giftMax: string; tips: number[]; surgeFor: string;
 };
 
 /** What this page calls each amount, to put the server's messages (setting keys, paise) in plain words. */
@@ -104,6 +104,7 @@ function toDraft({ marketplace: m, fees: f }: Settings): Draft {
     text: pick(FEE_TEXTS, (k) => f[k]),
     times: pick(TIMES, (k) => f[k]),
     gst: String(f.fees_gst_bps / 100),
+    giftMax: String(f.gift_message_max ?? 150),
     tips: [...f.tip_presets].sort((a, b) => a - b),
     surgeFor: "",
   };
@@ -118,7 +119,7 @@ function toBody(d: Draft): Body | null {
   return {
     marketplace: { ...pick(MARKET_MONEY, p), cod_enabled: d.flags.cod_enabled },
     fees: {
-      ...d.text, ...d.times, ...pick(FEE_FLAGS, (k) => d.flags[k]), ...pick(FEE_MONEY, p), fees_gst_bps: bps, tip_presets: d.tips,
+      ...d.text, ...d.times, ...pick(FEE_FLAGS, (k) => d.flags[k]), ...pick(FEE_MONEY, p), fees_gst_bps: bps, gift_message_max: Number(d.giftMax), tip_presets: d.tips,
       ...(d.surgeFor !== "" && d.flags.surge_enabled ? { surge_hours: Number(d.surgeFor) } : {}),
     },
   };
@@ -134,6 +135,7 @@ function findIssues(d: Draft, surgeEnded: boolean): Partial<Record<IssueKey, str
   const list = toPaise(d.money.handling_list_paise);
   if (fee !== null && list !== null && list > 0 && list <= fee) out.handling_list_paise = "Make it higher than the fee charged, or 0 to show none";
   if (toBps(d.gst) === null) out.gst = "Enter 0 to 28";
+  if (!/^\d{2,3}$/.test(d.giftMax.trim()) || Number(d.giftMax) < 20 || Number(d.giftMax) > 300) out.gift_max = "Enter 20 to 300";
   for (const k of LABELS) if (d.text[k].trim().length < 2) out[k] = "Use 2 to 40 characters";
   for (const k of TIMES) if (!HHMM.test(d.times[k])) out[k] = "Pick a time";
   if (!out.late_night_to && d.times.late_night_from === d.times.late_night_to) out.late_night_to = "Make it different from the start time";
@@ -401,6 +403,10 @@ export class OnTheBill {
               <label pcFeeToggle [checked]="fl('gstin_enabled')" (toggled)="setFlag('gstin_enabled', $event)" testId="gstin_enabled" label="Business purchases (GSTIN on the invoice)" hint="Shoppers can add a GSTIN and business name; the sellers' tax invoices are made out to the business."></label>
               <label pcFeeToggle [checked]="fl('instructions_enabled')" (toggled)="setFlag('instructions_enabled', $event)" testId="instructions_enabled" label="Delivery instructions" hint="Shoppers can leave a note for the delivery partner or courier."></label>
               <label pcFeeToggle [checked]="fl('no_bag_enabled')" (toggled)="setFlag('no_bag_enabled', $event)" testId="no_bag_enabled" label="I don't need a bag" hint="Shoppers can ask for their order without a carry bag."></label>
+              <label pcFeeToggle [checked]="fl('gift_message_enabled')" (toggled)="setFlag('gift_message_enabled', $event)" testId="gift_message_enabled" label="Gift message" hint="Shoppers can add a short message the seller packs with the order."></label>
+              @if (fl('gift_message_enabled')) {
+                <pc-text-field label="Longest gift message (characters)" [value]="d()!.giftMax" inputmode="numeric" [error]="issues().gift_max" hint="20 to 300" (valueChange)="setGiftMax($event)" />
+              }
               <pc-long-text label="Cancellation note" hint="Shown at checkout" [value]="tx('cancellation_note')" [max]="600" (edited)="setText('cancellation_note', $event)" class="sm:col-span-2" />
             </section>
 
@@ -614,6 +620,7 @@ export class AdminCheckoutPage {
   protected setFlag(k: FlagKey, v: boolean): void { this.d.update((x) => x && { ...x, flags: { ...x.flags, [k]: v } }); }
   protected setText(k: TextKey, v: string): void { this.d.update((x) => x && { ...x, text: { ...x.text, [k]: v } }); }
   protected setTime(k: TimeKey, v: string): void { this.d.update((x) => x && { ...x, times: { ...x.times, [k]: v } }); }
+  protected setGiftMax(v: string): void { this.d.update((x) => x && { ...x, giftMax: v }); }
   protected setGst(v: string): void { this.d.update((x) => x && { ...x, gst: v }); }
   protected setSurgeFor(v: string): void { this.d.update((x) => x && { ...x, surgeFor: v }); }
   protected setSample(x: Partial<{ items: string; cod: boolean; night: boolean }>): void { this.sample.update((s) => ({ ...s, ...x })); }

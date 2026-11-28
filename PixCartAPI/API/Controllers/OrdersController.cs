@@ -28,6 +28,7 @@ public class OrdersController(IOrdersBAL orders, IPlatformSettingsBAL platform, 
         [param: MaxLength(160)] string BuyerBusiness = "",
         [param: MaxLength(300)] string? Instructions = null,
         bool NoBag = false,
+        [param: MaxLength(300)] string GiftMessage = "",
         [param: RegularExpression("^[A-Z]{3}$")] string? Currency = null);
 
     /// <summary>Place the order (reference: POST /api/orders).</summary>
@@ -52,6 +53,7 @@ public class OrdersController(IOrdersBAL orders, IPlatformSettingsBAL platform, 
             buyerBusiness: body.BuyerBusiness,
             instructions: body.Instructions,
             noBag: body.NoBag,
+            giftMessage: body.GiftMessage,
             currency: body.Currency);
         Response.StatusCode = StatusCodes.Status201Created;
         return new JsonObject

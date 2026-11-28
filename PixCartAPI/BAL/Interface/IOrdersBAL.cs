@@ -22,7 +22,8 @@ public interface IOrdersBAL
         string buyerBusiness = "",
         string? instructions = null,
         bool noBag = false,
-        string? currency = null);
+        string? currency = null,
+        string giftMessage = "");
 
     /// <summary>The order as its shopper sees it (reference: routers/orders.py order_detail with for_admin false).</summary>
     Task<JsonObject> DetailAsync(OrderModel order, bool forAdmin = false);

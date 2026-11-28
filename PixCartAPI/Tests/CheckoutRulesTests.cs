@@ -1182,4 +1182,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(403, (await buyer.Get($"/api/admin/growth/loyalty/{uid}")).Status);
         Assert.Equal(403, (await buyer.Get("/api/admin/growth/loyalty")).Status); // staff only
     }
+
+    [Fact]
+    public async Task Gift_message_is_off_until_admin_allows_it_then_rides_on_the_order()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000611", "giftmsg-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000611", "Gift Msg Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        async Task<Res> Place(string msg)
+        {
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            return await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), gift_message = msg });
+        }
+        Assert.False((await buyer.Get("/api/cart")).Json["checkout"]!["gift_message_enabled"]!.GetValue<bool>());
+        var r = await Place("Happy birthday!");
+        Assert.Equal(400, r.Status); Assert.Equal("gift_off", r.Json["error"]!["code"]!.GetValue<string>());
+        r = await admin.Put("/api/admin/checkout", new { fees = new { gift_message_enabled = true, gift_message_max = 30 } });
+        Assert.True(r.Status == 200, r.ToString());
+        var chk = (await buyer.Get("/api/cart")).Json["checkout"]!;
+        Assert.True(chk["gift_message_enabled"]!.GetValue<bool>()); Assert.Equal(30, chk["gift_message_max"]!.GetValue<int>());
+        r = await Place(new string('x', 31));
+        Assert.Equal(400, r.Status); Assert.Equal("gift_too_long", r.Json["error"]!["code"]!.GetValue<string>());
+        r = await Place("  Happy   birthday, Meena!  ");
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal("Happy birthday, Meena!", r.Json["order"]!["ship_to"]!["gift_message"]!.GetValue<string>());
+        Assert.Equal(400, (await admin.Put("/api/admin/checkout", new { fees = new { gift_message_max = 10 } })).Status);
+    }
 }

@@ -308,7 +308,7 @@ export class FleetLine {
         </div>
         <div class="grid gap-4 lg:grid-cols-3">
           <section class="rounded-xl bg-white p-4"><h2 class="mb-1 font-semibold">Customer</h2><p>{{ o()!.customer?.name }}</p><p class="text-ink-soft">{{ o()!.customer?.phone }} {{ o()!.customer?.email }}</p></section>
-          <section class="rounded-xl bg-white p-4"><h2 class="mb-1 font-semibold">Ship to</h2><p class="text-ink-soft">{{ a()["full_name"] }}, {{ a()["phone"] }}, {{ a()["line1"] }}, {{ a()["city"] }}, {{ a()["state"] }} {{ a()["pincode"] }}</p></section>
+          <section class="rounded-xl bg-white p-4"><h2 class="mb-1 font-semibold">Ship to</h2><p class="text-ink-soft">{{ a()["full_name"] }}, {{ a()["phone"] }}, {{ a()["line1"] }}, {{ a()["city"] }}, {{ a()["state"] }} {{ a()["pincode"] }}</p>@if (a()["gift_message"]) {<p class="mt-1 text-sm"><strong>Gift message:</strong> {{ a()["gift_message"] }}</p>}</section>
           <section class="rounded-xl bg-white p-4">
             <h2 class="mb-1 font-semibold">Totals</h2><p>Order {{ rupeesExact(o()!.grand_total) }}</p>@if (o()!.refunded_total > 0) {<p class="text-leaf">Refunded {{ rupeesExact(o()!.refunded_total) }}</p>}
             @if (o()!.fee_invoice_number) {

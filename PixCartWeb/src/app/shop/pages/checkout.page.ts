@@ -24,7 +24,7 @@ import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, ButtonLink, EmptyState, ErrorNote, Toast } from "../../shared/ui/ui";
 import { AddressSection } from "../checkout/address";
 import { CARD } from "../checkout/card";
-import { BusinessSection, InstructionsSection, NoBagSection, TipSection, businessErrors } from "../checkout/extras";
+import { BusinessSection, GiftMessageSection, InstructionsSection, NoBagSection, TipSection, businessErrors } from "../checkout/extras";
 import { CouponSection, type OfferCoupon } from "../checkout/offers";
 import { CancellationNote, PayBar, PaymentMethods, type PayMethod } from "../checkout/payment";
 import { BillSkeleton, ItemsReview, ReviewSkeleton } from "../checkout/review";
@@ -59,7 +59,7 @@ function scrollToSection(id: string, focusSelector?: string) {
   selector: "pc-shop-checkout-page",
   imports: [
     Icon, PageLoader, Button, ButtonLink, EmptyState, ErrorNote, BillDetails, ProductRail, AddressSection, InstructionsSection, ItemsReview, ReviewSkeleton,
-    BillSkeleton, CouponSection, TipSection, BusinessSection, NoBagSection, CancellationNote, PaymentMethods, PayBar,
+    BillSkeleton, CouponSection, TipSection, BusinessSection, NoBagSection, GiftMessageSection, CancellationNote, PaymentMethods, PayBar,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
@@ -120,6 +120,10 @@ function scrollToSection(id: string, focusSelector?: string) {
               <pc-business-section [gstin]="gstin()" [business]="business()" (gstinChange)="gstin.set($event); bizServerError.set(null)"
                 (businessChange)="business.set($event); bizServerError.set(null)" [open]="bizOpen()" (openChange)="bizOpen.set($event)"
                 [showErrors]="bizChecked()" [serverError]="bizServerError()" />
+            }
+
+            @if (opts()?.gift_message_enabled) {
+              <pc-gift-message-section [text]="gift()" [max]="opts()?.gift_message_max ?? 150" (textChange)="gift.set($event)" />
             }
 
             @if (opts()?.no_bag_enabled) {
@@ -201,6 +205,7 @@ export class ShopCheckoutPage {
   protected readonly bizChecked = signal(false);
   protected readonly bizServerError = signal<string | null>(null);
   protected readonly noBag = signal(false);
+  protected readonly gift = signal("");
 
   protected readonly error = signal<string | null>(null);
   protected readonly placing = signal(false);
@@ -410,6 +415,7 @@ export class ShopCheckoutPage {
           buyer_business: withBiz ? this.business().trim() : "",
           instructions,
           no_bag: !!opts?.no_bag_enabled && this.noBag(),
+          gift_message: opts?.gift_message_enabled ? this.gift().trim() : "",
           currency: currency !== "INR" ? currency : undefined, // Admin → Languages and currencies: may be charged in it
         },
       });

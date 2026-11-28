@@ -276,6 +276,8 @@ export interface CheckoutOptions {
   gstin_enabled: boolean;
   instructions_enabled: boolean;
   no_bag_enabled: boolean;
+  gift_message_enabled?: boolean;
+  gift_message_max?: number;
   cancellation_note: string;
   delivery_label: string;
   delivery_info: string;
