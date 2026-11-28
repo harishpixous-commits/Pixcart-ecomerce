@@ -48,3 +48,21 @@ async def test_automatic_volume_offer_competes_with_other_automatic_coupons(clie
     await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
     c = (await q()).json()["coupon"]
     assert c["code"] == "AUTOVOL20" and c["discount"] == price * 2 * 20 // 100   # two units: the bigger saving wins
+
+
+async def test_automatic_coupon_with_a_per_user_limit_stops_after_the_customers_first_order(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": True}})).status_code == 200
+    assert (await admin.post("/api/admin/coupons", {"code": "ONCEAUTO", "kind": "percent", "value": 1000, "per_user_limit": 1, "is_automatic": True, "show_on_checkout": False})).status_code == 201
+    vid = shirt["variants"][0]["id"]
+    q = lambda c: c.post("/api/checkout/quote", {"address_id": addr_of[c], "payment_method": "cod"})
+    first, other = await login_phone(client, "9770000321", name="Once Buyer"), await login_phone(client, "9770000322", name="Other Buyer")
+    addr_of = {first: await add_address(first, state="33"), other: await add_address(other, state="33")}
+    for c in (first, other):
+        await c.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert (await q(first)).json()["coupon"]["code"] == "ONCEAUTO"
+    o = await first.post("/api/orders", {"address_id": addr_of[first], "payment_method": "cod", "idempotency_key": key()})
+    assert o.status_code == 201
+    await first.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert (await q(first)).json()["coupon"] is None                  # used once: no longer applied to this customer
+    assert (await q(other)).json()["coupon"]["code"] == "ONCEAUTO"    # another customer still gets it
