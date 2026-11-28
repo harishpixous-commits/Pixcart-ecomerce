@@ -26,7 +26,7 @@ public class SellerProductsController(ISellerProductsBAL bal,IOrdersBAL orders,I
     [HttpGet("categories")] public async Task<object> Categories()=>await bal.CategoriesAsync(await Seller());
     [HttpGet("fees")] public async Task<object> Fees() { await Seller(); return await bal.FeesAsync(); }
     [HttpPost("products/{id}/submit")] public async Task<object> Submit(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"submit");
-    [HttpPost("products/{id}/duplicate")] public async Task<IActionResult> Duplicate(Guid id)=>StatusCode(201,await bal.DuplicateAsync(await me.RequireAsync(),await Seller(),id));
+    [HttpPost("products/{id}/duplicate"),RouteGuard("seller")] public async Task<IActionResult> Duplicate(Guid id)=>StatusCode(201,await bal.DuplicateAsync(await me.RequireAsync(),await Seller(),id));
     [HttpPost("products/{id}/archive")] public async Task<object> Archive(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"archive");
     [HttpPost("products/{id}/restore")] public async Task<object> Restore(Guid id)=>await bal.LifecycleAsync(await me.RequireAsync(),await Seller(),id,"restore");
     public record VariantPatch

@@ -203,6 +203,6 @@ public class CollectionsAdminController(IMySqlDapperHelper db, ICurrentUser me) 
 [ApiController]
 public class CollectionsPublicController(IMySqlDapperHelper db, ICatalogBAL catalog, CatalogDAL dal) : ControllerBase
 {
-    [HttpGet("/api/catalog/collections")] public async Task<object> List() => await BAL.ProductCollections.PublicListAsync(db);
-    [HttpGet("/api/catalog/collections/{slug}")] public async Task<object> Page(string slug) => await BAL.ProductCollections.PublicPageAsync(db, catalog, dal, slug);
+    [HttpGet("/api/catalog/collections"), RouteGuard("public")] public async Task<object> List() => await BAL.ProductCollections.PublicListAsync(db);
+    [HttpGet("/api/catalog/collections/{slug}"), RouteGuard("public")] public async Task<object> Page(string slug) => await BAL.ProductCollections.PublicPageAsync(db, catalog, dal, slug);
 }
