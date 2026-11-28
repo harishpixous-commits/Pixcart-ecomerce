@@ -333,3 +333,31 @@ async def test_weight_surcharge_is_waived_by_free_shipping_coupon_and_by_thresho
     assert q["summary"]["grand_total"] == plain["grand_total"] - plain["shipping_total"]
     assert (await admin.put("/api/admin/settings", {"free_shipping_threshold_paise": 1})).status_code == 200
     assert (await quote()).json()["summary"]["shipping_total"] == 0                         # the threshold waives it too
+
+
+async def test_cancelling_a_paid_order_refunds_the_weight_surcharge_too(client, admin, categories, gateway):
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import Refund
+    from tests.test_phase2_money import key
+
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    sv = shirt["variants"][0]
+    assert (await admin.put("/api/admin/settings", {"free_shipping_threshold_paise": 10_000_000, "shipping_per_kg_paise": 1000, "shipping_free_grams": 1000})).status_code == 200
+    a = await login_phone(client, "9770000491", name="Refund Weight Buyer")
+    addr = await add_address(a, state="33")
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 5})
+    q = (await a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "online"})).json()["summary"]
+    r = (await a.post("/api/orders", {"address_id": addr, "payment_method": "online", "idempotency_key": key(), "expected_total": q["grand_total"]})).json()
+    pay = r["payment"]
+    pid, sig = gateway.pay(pay["razorpay_order_id"])
+    assert (await a.post("/api/payments/razorpay/verify", {"razorpay_order_id": pay["razorpay_order_id"], "razorpay_payment_id": pid, "razorpay_signature": sig})).status_code == 200
+    c = await a.post(f"/api/orders/{r['order']['id']}/cancel", {"reason": "Changed my mind"})
+    assert c.status_code == 200, c.text
+    await asyncio.sleep(0.05)
+    async with SessionLocal() as s:
+        refund = (await s.execute(select(Refund))).scalar_one()
+        assert refund.amount_paise == q["grand_total"]            # goods, delivery and the weight surcharge all go back

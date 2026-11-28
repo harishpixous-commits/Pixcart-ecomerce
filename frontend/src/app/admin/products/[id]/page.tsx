@@ -29,6 +29,7 @@ export default function AdminProductReview() {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [goLive, setGoLive] = useState("");
   const site = useSite();
   const [check, setCheck] = useState<{ risk: "low" | "medium" | "high"; issues: string[]; suggested_reason: string } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -85,6 +86,19 @@ export default function AdminProductReview() {
           <p className="mt-1 text-xs text-ink-faint">Suggestions only. You make the decision.</p>
         </section>
       )}
+      <section className="flex flex-wrap items-end gap-3 rounded-xl bg-white p-5">
+        <label className="text-sm font-semibold">Go live at
+          <input type="datetime-local" className="ml-3 h-10 rounded-lg border border-black/15 px-3 font-normal" value={goLive || (p.publish_at ? new Date(new Date(p.publish_at).getTime() - new Date(p.publish_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "")} onChange={(e) => setGoLive(e.target.value)} data-testid="admin-publish-at" />
+        </label>
+        <Button size="sm" loading={busy} onClick={async () => {
+          setBusy(true);
+          try {
+            const next = await api<SellerProduct>(`/api/admin/products/${id}/publish-at`, { method: "PUT", body: { publish_at: goLive ? new Date(goLive).toISOString() : null } });
+            setP(next); setGoLive(""); toast("Go-live time saved");
+          } catch (e) { toast(e instanceof ApiError ? e.message : "Could not save"); } finally { setBusy(false); }
+        }}>Save go-live time</Button>
+        <span className="text-sm text-ink/60">Leave empty to go live as soon as approved.</span>
+      </section>
       <div className="flex items-center gap-3"><StatusPill status={p.status} />{p.rejection_reason && <span className="text-vermilion">{p.rejection_reason}</span>}</div>
       <section className="rounded-xl bg-white p-5">
         <PhotoEditor key={p.images.join("|")} productId={id} images={p.images} onSaved={(next) => { setP(next); toast("Photos saved"); }} />
