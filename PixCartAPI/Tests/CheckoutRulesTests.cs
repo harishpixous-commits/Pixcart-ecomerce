@@ -906,6 +906,31 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Volume_coupon_needs_the_minimum_number_of_items()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000397", "volume-shirt-a");
+        var (varB, prodB, _) = await ShirtInStock("9400000398", "volume-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        object Body(int min, int value = 15) => new { code = "BUY3SAVE", description = "", kind = "volume", value, buy_qty = min, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, product_slugs = new[] { "volume-shirt-a" } };
+        Assert.Equal(400, (await admin.Post("/api/admin/coupons", Body(1))).Status);
+        Assert.Contains((await admin.Post("/api/admin/coupons", Body(3, 95))).Status, new[] { 400, 422 });
+        var made = await admin.Post("/api/admin/coupons", Body(3));
+        Assert.True(made.Status == 201 && made.Json["buy_qty"]!.GetValue<int>() == 3 && made.Json["get_qty"]!.GetValue<int>() == 0, made.ToString());
+        var buyer = await LoginPhone("9620000397", "Volume Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 2 });
+        await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 5 });    // not in the offer
+        var q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "BUY3SAVE" });
+        Assert.NotNull(q.Json["coupon"]!["error"]);                                  // two eligible units: not enough
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 });
+        q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "BUY3SAVE" });
+        var a = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varA });
+        Assert.Null(q.Json["coupon"]!["error"]);
+        Assert.Equal(a * 3 * 15 / 100, q.Json["coupon"]!["discount"]!.GetValue<long>());
+    }
+
+    [Fact]
     public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
     {
         var admin = await Admin();

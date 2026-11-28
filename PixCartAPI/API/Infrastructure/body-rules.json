@@ -3603,7 +3603,8 @@
 "percent",
 "flat",
 "bxgy",
-"bundle"
+"bundle",
+"volume"
 ],
 "title": "Kind"
 },
@@ -3727,7 +3728,8 @@
 "percent",
 "flat",
 "bxgy",
-"bundle"
+"bundle",
+"volume"
 ],
 "title": "Kind"
 },

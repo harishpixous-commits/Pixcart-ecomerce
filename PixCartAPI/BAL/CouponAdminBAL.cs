@@ -24,7 +24,7 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
     {
         if (kind == "percent" && value is < 100 or > 9000)
             throw new AppException("A percentage coupon must be between 1% and 90%", "invalid_value");
-        if (kind == "bundle" && value is < 1 or > 90)
+        if (kind is "bundle" or "volume" && value is < 1 or > 90)
             throw new AppException("A bundle takes between 1% and 90% off", "invalid_value", 400);
         if (kind == "bxgy" && value is < 1 or > 100)
             throw new AppException("A buy X get Y offer takes between 1% and 100% off the extra items", "invalid_value", 400);
@@ -71,7 +71,9 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
         CheckValues(kind, value);
         if (kind == "bxgy" && (buyQty < 1 || getQty < 1)) throw new AppException("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value", 400);
         if (kind == "bundle" && (productSlugs ?? []).Select(s => s.Trim().ToLowerInvariant()).Where(s => s.Length > 0).Distinct().Count() is < 2 or > 10) throw new AppException("A bundle needs between 2 and 10 products", "invalid_value", 400);
-        if (kind != "bxgy") buyQty = getQty = 0;
+        if (kind == "volume" && buyQty < 2) throw new AppException("A volume offer needs a minimum of at least 2 items", "invalid_value", 400);
+        if (kind is not ("bxgy" or "volume")) buyQty = 0;
+        if (kind != "bxgy") getQty = 0;
         var productIds = await ProductIdsJsonAsync(db, productSlugs);
         code = code.ToUpperInvariant();
         await using var uow = await db.BeginAsync();
@@ -104,7 +106,9 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
         CheckValues(kind, value);
         if (kind == "bxgy" && (buyQty < 1 || getQty < 1)) throw new AppException("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value", 400);
         if (kind == "bundle" && (productSlugs ?? []).Select(s => s.Trim().ToLowerInvariant()).Where(s => s.Length > 0).Distinct().Count() is < 2 or > 10) throw new AppException("A bundle needs between 2 and 10 products", "invalid_value", 400);
-        if (kind != "bxgy") buyQty = getQty = 0;
+        if (kind == "volume" && buyQty < 2) throw new AppException("A volume offer needs a minimum of at least 2 items", "invalid_value", 400);
+        if (kind is not ("bxgy" or "volume")) buyQty = 0;
+        if (kind != "bxgy") getQty = 0;
         var productIds = await ProductIdsJsonAsync(db, productSlugs);
         await using var uow = await db.BeginAsync();
         var c = await uow.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE id = @couponId FOR UPDATE", new { couponId })

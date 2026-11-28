@@ -61,6 +61,16 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
             off = Math.Min(off, baseSum);
             return new Result(c, off, Money.Allocate(off, eligible));
         }
+        if (c.Kind == "volume") // at least BuyQty eligible units: Value percent off all of them
+        {
+            var unitsN = lines.Where(l => eligible.ContainsKey(l.Variant.Id)).Sum(l => l.Item.Qty);
+            if (unitsN < c.BuyQty)
+                throw new AppException(unitsN > 0 ? $"Add {c.BuyQty - unitsN} more item(s) to get this offer" : "This coupon does not apply to the items in your cart", "coupon_not_applicable");
+            var off = Money.ApplyBps(baseSum, c.Value * 100);
+            if (c.MaxDiscountPaise is { } cap) off = Math.Min(off, cap);
+            off = Math.Min(off, baseSum);
+            return new Result(c, off, Money.Allocate(off, eligible));
+        }
         if (c.Kind == "bundle") // every product of the set in the cart: Value percent off one of each, per complete set
         {
             var byProduct = lines.Where(l => eligible.ContainsKey(l.Variant.Id)).GroupBy(l => l.Product.Id.ToString())
