@@ -122,11 +122,29 @@ public class ProductModerationBAL(
         await uow.CommitAsync();
         await notify.NotifySellerAsync(p.SellerId, "listing_update", new Dictionary<string, string>
         {
-            ["status"] = "approved", ["title"] = p.Title, ["message"] = "It is live on the store now.",
+            ["status"] = "approved", ["title"] = p.Title,
+            ["message"] = p.PublishAt is { } goLive && goLive > DateTime.UtcNow
+                ? $"It goes live on the store on {TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(goLive, DateTimeKind.Utc), TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")).ToString("dd MMM yyyy 'at' hh:mm tt", System.Globalization.CultureInfo.InvariantCulture)} IST."
+                : "It is live on the store now.",
         }, $"/seller/products/{p.Id}");
         p.Status = "approved";
         p.ApprovedAt = DateTimeFunctions.UtcNow();
         p.RejectionReason = "";
+        return await DetailAsync(p);
+    }
+
+    public async Task<JsonObject> SetPublishAtAsync(UserModel admin, Guid productId, DateTimeOffset? publishAt)
+    {
+        await access.RequireAsync(admin, "catalog");
+        if (publishAt is { } far && far > DateTimeOffset.UtcNow.AddDays(365)) throw new AppException("Pick a go-live time within the next year", "invalid_value");
+        await using var uow = await db.BeginAsync();
+        var p = await productsDal.ProductForUpdateAsync(productId, uow) ?? throw new NotFoundException("Product");
+        if (p.Status == "archived") throw new ConflictException("Restore this product before changing it", "invalid_status");
+        var when = publishAt?.UtcDateTime;
+        await uow.ExecuteAsync("UPDATE products SET publish_at = @when, publish_notified_at = IF(publish_at <=> @when, publish_notified_at, NULL) WHERE id = @id", new { when, id = p.Id });
+        await AuditAsync(uow, admin, "product.publish_at", p.Id, when is null ? "cleared" : when.Value.ToString("o"));
+        await uow.CommitAsync();
+        p.PublishAt = when;
         return await DetailAsync(p);
     }
 

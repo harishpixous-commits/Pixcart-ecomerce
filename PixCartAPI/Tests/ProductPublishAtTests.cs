@@ -50,4 +50,40 @@ public class ProductPublishAtTests(ApiFactory f) : ApiTest(f)
         var dup = await seller.Post($"/api/seller/products/{pid}/duplicate", new { });
         Assert.Null((await seller.Get($"/api/seller/products/{dup.Json["id"]!.GetValue<string>()}")).Json["publish_at"]);
     }
+
+    [Fact]
+    public async Task Staff_can_set_the_go_live_time_and_approval_says_when_it_goes_live()
+    {
+        var admin = await Admin();
+        var seller = await LoginPhone("9877100004", "Staff Schedule Owner");
+        Assert.Equal(201, (await seller.Post("/api/seller/register", new { display_name = "Staff Schedule Store" })).Status);
+        var cat = Guid.NewGuid();
+        await ApiFactory.DbExecAsync("INSERT INTO categories(id,name,slug,image_url,commission_bps,default_gst_bps,position,is_active,required_details)VALUES(@cat,'Pub Cat 2','pub-cat-2','',1000,500,0,1,'[]')", new { cat });
+        object Body(string vid, object? publishAt, object? details) => new { category_id = cat, title = "Staff Scheduled Shirt", hsn_code = "6205", gst_bps = 500, publish_at = publishAt, details, variants = new[] { vid.Length == 0 ? (object)new { sku = "STF-SKU", mrp_paise = 20000, price_paise = 10000, stock = 5 } : new { id = vid, sku = "STF-SKU", mrp_paise = 20000, price_paise = 10000, stock = 5 } } };
+        var r = await seller.Post("/api/seller/products", Body("", null, new { }));
+        Assert.Equal(201, r.Status);
+        var pid = r.Json["id"]!.GetValue<string>(); var vid = r.Json["variants"]![0]!["id"]!.GetValue<string>();
+        await ApiFactory.DbExecAsync("UPDATE sellers SET status='approved'");
+        await ApiFactory.DbExecAsync("UPDATE products SET status='approved' WHERE id=@pid", new { pid = Guid.Parse(pid) });
+        await using (var scope = Factory.Services.CreateAsyncScope()) await scope.ServiceProvider.GetRequiredService<BAL.Interface.ICatalogBAL>().RefreshProductAggregatesAsync(Guid.Parse(pid));
+        var slug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id=@pid", new { pid = Guid.Parse(pid) });
+        var v = Factory.CreateClient();
+        var path = $"/api/admin/products/{pid}/publish-at";
+        var soon = DateTime.UtcNow.AddDays(3).ToString("o");
+        var put = await admin.Put(path, new { publish_at = soon });
+        Assert.True(put.Status == 200, put.ToString());
+        Assert.NotNull(put.Json["publish_at"]); Assert.Equal("approved", put.Json["status"]!.GetValue<string>());
+        Assert.Equal(404, (int)(await v.GetAsync($"/api/catalog/products/{slug}")).StatusCode);
+        Assert.NotNull((await seller.Get($"/api/seller/products/{pid}")).Json["publish_at"]);
+        Assert.Equal(400, (await admin.Put(path, new { publish_at = DateTime.UtcNow.AddDays(400).ToString("o") })).Status);
+        put = await admin.Put(path, new { publish_at = (string?)null });
+        Assert.Null(put.Json["publish_at"]);
+        Assert.Equal(200, (int)(await v.GetAsync($"/api/catalog/products/{slug}")).StatusCode);
+        Assert.Contains((await v.PutAsJsonAsync(path, new { publish_at = (string?)null })).StatusCode, new[] { System.Net.HttpStatusCode.Unauthorized, System.Net.HttpStatusCode.Forbidden });
+        var up = await seller.Put($"/api/seller/products/{pid}", Body(vid, soon, new { max_qty = 4 }));
+        Assert.Equal("pending", up.Json["status"]!.GetValue<string>());
+        Assert.Equal(200, (await admin.Post($"/api/admin/products/{pid}/approve", new { })).Status);
+        var notes = (await seller.Get("/api/notifications")).Json["items"]!.AsArray();
+        Assert.Contains(notes, n => n!["body"]!.GetValue<string>().Contains("goes live on the store on"));
+    }
 }

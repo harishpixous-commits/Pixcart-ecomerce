@@ -22,6 +22,13 @@ public class AdminProductsController(IProductModerationBAL products, ICurrentUse
 
     public sealed record ReasonIn([param: Required, MinLength(5), MaxLength(1000)] string Reason);
 
+    public sealed record PublishAtIn(DateTimeOffset? PublishAt);
+
+    /// <summary>Staff sets or clears a listing's go-live time.</summary>
+    [HttpPut("products/{productId}/publish-at")]
+    public async Task<JsonObject> SetPublishAt(Guid productId, PublishAtIn body) =>
+        await products.SetPublishAtAsync(await current.RequireAsync(), productId, body.PublishAt);
+
     /// <summary>Reject a pending listing or take down a live one (reference: POST /api/admin/products/{product_id}/reject).</summary>
     [HttpPost("products/{productId}/reject")]
     public async Task<JsonObject> Reject(Guid productId, ReasonIn body) =>

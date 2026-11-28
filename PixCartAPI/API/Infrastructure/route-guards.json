@@ -746,6 +746,11 @@
 },
 {
 "method": "PUT",
+"path": "/api/admin/products/{product_id}/publish-at",
+"guard": "perm:catalog"
+},
+{
+"method": "PUT",
 "path": "/api/admin/products/{product_id}/videos",
 "guard": "perm:catalog"
 },
