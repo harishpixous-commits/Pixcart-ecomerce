@@ -63,6 +63,10 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
     "gift_card_bought": {
         "email": ("Your {{brand}} gift card", "Hi {{name}},\n\nThank you. Your gift card for {{amount}} is ready.\n\nCode: {{code}}\nValid until {{expires}}\n\nUse it at checkout, or see the balance here: {{link}}"),
     },
+    "gift_card_refunded": {
+        "inapp": ("Gift card refunded", "Your gift card purchase of {{amount}} was refunded (reference {{reference}})."),
+        "email": ("Your gift card was refunded", "Hi {{name}},\n\nYour gift card purchase of {{amount}} was refunded. Payment reference: {{reference}}.\n\nThe card can no longer be used."),
+    },
     "marketing_message": {
         "inapp": ("{{title}}", "{{message}}"),
     },

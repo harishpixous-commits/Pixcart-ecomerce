@@ -120,6 +120,34 @@ async def void(session: AsyncSession, card_id: uuid.UUID) -> GiftCard:
     return card
 
 
+async def refund_purchase(session: AsyncSession, purchase_id: uuid.UUID, reference: str) -> GiftCardPurchase:
+    """Staff give back what a shopper paid for a card that was never used (Admin -> Growth -> Gift cards, setting "Staff can refund
+    unused bought cards"). The card is voided and its balance zeroed, the purchase becomes 'refunded' with the staff member's payment
+    reference. Staff send the money from the gateway dashboard; no gateway is called here. A card with any use cannot be refunded."""
+    cfg = _cfg(await growth.get(session))
+    if not cfg["staff_refund"]:
+        raise ApiError("Refunding bought gift cards is switched off in Admin → Growth.", "gift_refund_off", 400)
+    ref = " ".join((reference or "").split())
+    if not ref or len(ref) > 100:
+        raise ApiError("Enter the payment reference of the refund (up to 100 characters).", "reference_required", 400)
+    p = (await session.execute(select(GiftCardPurchase).where(GiftCardPurchase.id == purchase_id).with_for_update())).scalar_one_or_none()
+    if p is None:
+        raise NotFound("Purchase")
+    if p.status == "refunded":
+        return p
+    if p.status != "issued" or p.gift_card_id is None:
+        raise ApiError("Only a paid purchase whose card was issued can be refunded.", "not_refundable", 409)
+    card = (await session.execute(select(GiftCard).where(GiftCard.id == p.gift_card_id).with_for_update())).scalar_one()
+    used = (await session.execute(select(GiftCardUse.id).where(GiftCardUse.gift_card_id == card.id).limit(1))).first()
+    if used is not None or card.balance_paise != card.initial_paise:
+        raise ApiError("This card has been used, so it cannot be refunded.", "card_used", 409)
+    card.status, card.balance_paise = "void", 0
+    p.status, p.refund_reference, p.refunded_at = "refunded", ref, utcnow()
+    await session.flush()
+    await notify(session, "gift_card_refunded", await session.get(User, p.user_id), {"amount": f"₹{p.amount_paise / 100:,.2f}", "reference": ref}, channels=("inapp", "email"))
+    return p
+
+
 # ----------------------------------------------------------------------------- buying a card online
 
 

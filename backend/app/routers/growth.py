@@ -264,7 +264,7 @@ async def list_gift_card_purchases(admin: Perm("marketing"), session: SessionDep
     rows = (await session.execute(select(GiftCardPurchase, User).join(User, User.id == GiftCardPurchase.user_id)
                                   .order_by(GiftCardPurchase.created_at.desc()).limit(200))).all()
     return {"items": [{"id": str(p.id), "user": u.name, "phone": u.phone, "amount_paise": p.amount_paise, "gateway": p.gateway, "status": p.status,
-                       "error": p.error, "gift_card_id": str(p.gift_card_id) if p.gift_card_id else None, "created_at": p.created_at.isoformat()} for p, u in rows]}
+                       "error": p.error, "refund_reference": p.refund_reference, "gift_card_id": str(p.gift_card_id) if p.gift_card_id else None, "created_at": p.created_at.isoformat()} for p, u in rows]}
 
 
 @router.post("/gift-card-purchases/{purchase_id}/check")
@@ -274,6 +274,19 @@ async def staff_check_gift_card_purchase(purchase_id: uuid.UUID, admin: Perm("ma
     audit(session, admin, "gift_card.purchase_check", "gift_card_purchase", purchase_id, out["status"])
     await session.commit()
     return {k: v for k, v in out.items() if k != "code"}  # the code goes to the buyer, staff see it in the cards list
+
+
+class GiftRefundIn(BaseModel):
+    reference: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/gift-card-purchases/{purchase_id}/refund")
+async def refund_gift_card_purchase(purchase_id: uuid.UUID, body: GiftRefundIn, admin: Perm("marketing"), session: SessionDep) -> dict:
+    """Voids a never-used bought card and records the refund (only when "staff_refund" is on in Growth settings)."""
+    p = await gift_cards.refund_purchase(session, purchase_id, body.reference)
+    audit(session, admin, "gift_card.purchase_refund", "gift_card_purchase", purchase_id, f"₹{p.amount_paise / 100:,.2f} ref {p.refund_reference}")
+    await session.commit()
+    return gift_cards.purchase_view(p)
 
 
 @router.post("/gift-cards/{card_id}/void")

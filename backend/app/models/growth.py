@@ -97,8 +97,10 @@ class GiftCardPurchase(IdMixin, Base):
     gift_card_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("gift_cards.id", ondelete="SET NULL"))
     error: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    refund_reference: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (CheckConstraint("status IN ('created','issued','failed')", name="status"),
+    __table_args__ = (CheckConstraint("status IN ('created','issued','failed','refunded')", name="status"),
                       UniqueConstraint("gateway", "gateway_ref", name="uq_gift_purchase_ref"))
 
 

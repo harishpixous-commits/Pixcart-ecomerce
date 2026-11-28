@@ -462,3 +462,8 @@ Seller or admin sets "Minimum order quantity" (0 to 100, 0/1 = none) in the prod
 
 ## Push 139: Pre-order ship date per product
 Seller/admin can set "Pre-order: ships from" (a date up to a year ahead) in the product info editor, stored in `Product.details.ships_on` (no migration). While the date is ahead, the product page and cart line show "Ships from <date>"; once it passes the listing is normal. Not wired: it does not move the seller's dispatch deadline or tell the buyer by email; the order itself is placed as usual (COD or simulator payment). Test: `tests/test_cart_limits.py`.
+
+## Push 140: Both held policies built, chosen by the owner in Admin (Python done; .NET/Angular pending)
+1. Account delete and loyalty points: Admin > Growth > Loyalty "on_account_delete" = keep (default, rows stay as before) or zero (an "adjust" row takes the whole balance to 0 at delete, audit note says how many). The shopper sees a warning with their point count before confirming (GET /api/account/delete-info, shown in the delete dialog). 
+2. Refund of a bought gift card nobody used: Admin > Growth > Gift cards "staff_refund" (off by default). On: staff get a Refund button on the Bought online table, enter the payment reference; the card is voided, balance zeroed, purchase shows "refunded" with the reference, buyer is told in-app and by email, audit row. A card with any use is refused (409). Staff send the money from the gateway dashboard; no gateway is called (nothing live). Migration 0051. Tests: tests/test_policies.py (both branches of both policies).
+Not wired: automatic gateway refund call.

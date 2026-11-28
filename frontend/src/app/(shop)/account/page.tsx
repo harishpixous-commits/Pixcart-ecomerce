@@ -15,6 +15,7 @@ function PrivacySection({ marketing, onChanged, onDeleted }: { marketing: boolea
   const toast = useToast();
   const [confirm, setConfirm] = useState(false);
   const [typed, setTyped] = useState("");
+  const [info, setInfo] = useState<{ loyalty_points: number; points_will_be_cleared: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   async function download() {
     const data = await api("/api/account/export");
@@ -42,10 +43,11 @@ function PrivacySection({ marketing, onChanged, onDeleted }: { marketing: boolea
       </label>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" onClick={download}>Download my data</Button>
-        <Button variant="danger" size="sm" onClick={() => setConfirm(true)}>Delete my account</Button>
+        <Button variant="danger" size="sm" onClick={() => { setConfirm(true); api<{ loyalty_points: number; points_will_be_cleared: boolean }>("/api/account/delete-info").then(setInfo).catch(quietly); }}>Delete my account</Button>
       </div>
       <Modal open={confirm} onClose={() => setConfirm(false)} title="Delete your account?">
         <p className="mb-3 text-ink-soft">Your profile, addresses and wishlist are erased and you are signed out everywhere. Invoices and order records are kept for the period the GST law requires, without your name or contact details on your account.</p>
+        {info?.points_will_be_cleared && <p className="mb-3 rounded-lg bg-vermilion-light px-3 py-2 text-sm text-vermilion">You have {info.loyalty_points} loyalty points. They will be cleared and cannot be recovered.</p>}
         <ErrorNote message={error} />
         <TextField label='Type "DELETE" to confirm' value={typed} onChange={(e) => setTyped(e.target.value)} />
         <Button className="mt-3" variant="buy" disabled={typed !== "DELETE"} onClick={remove}>Delete my account</Button>

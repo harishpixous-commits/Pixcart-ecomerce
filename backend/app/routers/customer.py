@@ -905,9 +905,25 @@ async def delete_account(user: CurrentUser, session: SessionDep, background: Bac
     await session.execute(update(RefreshSession).where(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None)).values(revoked_at=utcnow()))
     user.name, user.phone, user.email = "Deleted user", None, f"deleted-{user.id}@deleted.invalid"
     user.password_hash, user.is_active, user.deleted_at, user.marketing_opt_in = None, False, utcnow(), False
-    audit(session, None, "account.deleted", "user", user.id)
+    cleared = 0
+    from app.services import growth as growth_svc
+    if (await growth_svc.get(session))["loyalty"]["on_account_delete"] == "zero":
+        balance = int((await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user.id))).scalar_one())
+        if balance > 0:
+            session.add(LoyaltyEntry(user_id=user.id, kind="adjust", points=-balance, note="Account deleted: points cleared", created_at=utcnow()))
+            cleared = balance
+    audit(session, None, "account.deleted", "user", user.id, f"{cleared} loyalty points cleared" if cleared else "")
     await session.commit()
-    return {"ok": True}
+    return {"ok": True, "points_cleared": cleared}
+
+
+@router.get("/api/account/delete-info")
+async def delete_info(user: CurrentUser, session: SessionDep) -> dict:
+    """What deleting the account will do to loyalty points, so the shopper is told before confirming."""
+    from app.services import growth as growth_svc
+    policy = (await growth_svc.get(session))["loyalty"]["on_account_delete"]
+    balance = int((await session.execute(select(func.coalesce(func.sum(LoyaltyEntry.points), 0)).where(LoyaltyEntry.user_id == user.id))).scalar_one())
+    return {"loyalty_points": max(0, balance), "points_will_be_cleared": policy == "zero" and balance > 0}
 
 
 _ = (run_refunds,)

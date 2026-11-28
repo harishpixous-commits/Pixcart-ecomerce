@@ -26,7 +26,8 @@ SCHEMA: dict[str, dict[str, tuple]] = {
                 "silver_bonus_percent": (0, "int", 0, 500), "gold_bonus_percent": (0, "int", 0, 500),
                 "silver_free_delivery": (False, "bool", 0, 0), "gold_free_delivery": (False, "bool", 0, 0),
                 "first_order_points": (0, "int", 0, 10000), "review_points": (0, "int", 0, 10000), "review_min_chars": (30, "int", 0, 2000),
-                "expiry_reminder": (False, "bool", 0, 0)},
+                "expiry_reminder": (False, "bool", 0, 0),
+                "on_account_delete": ("keep", "choice", ("keep", "zero"), 0)},
     "referral": {"enabled": (False, "bool", 0, 0), "referrer_reward_paise": (10000, "int", 0, 1000000), "friend_reward_paise": (5000, "int", 0, 1000000),
                  "min_order_paise": (49900, "int", 0, 10000000), "max_per_user": (20, "int", 1, 1000)},
     "abandoned_cart": {"enabled": (False, "bool", 0, 0), "first_reminder_hours": (4, "int", 1, 720), "second_reminder_hours": (24, "int", 1, 720),
@@ -34,7 +35,8 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "flash_sales": {"enabled": (False, "bool", 0, 0), "max_duration_hours": (48, "int", 1, 720), "max_discount_percent": (70, "int", 1, 95),
                     "show_countdown": (True, "bool", 0, 0)},
     "gift_cards": {"enabled": (False, "bool", 0, 0), "min_paise": (10000, "int", 100, 10000000), "max_paise": (1000000, "int", 100, 100000000),
-                   "validity_days": (365, "int", 1, 3650), "allow_purchase": (False, "bool", 0, 0)},
+                   "validity_days": (365, "int", 1, 3650), "allow_purchase": (False, "bool", 0, 0),
+                   "staff_refund": (False, "bool", 0, 0)},
     "scorecard": {"enabled": (False, "bool", 0, 0), "window_days": (30, "int", 7, 365), "ship_within_hours": (48, "int", 1, 720),
                   "late_warn_percent": (10, "int", 0, 100), "late_critical_percent": (25, "int", 0, 100),
                   "cancel_warn_percent": (5, "int", 0, 100), "cancel_critical_percent": (10, "int", 0, 100),
@@ -100,6 +102,9 @@ def _clean(sec: str, k: str, v: Any) -> Any:
         if not isinstance(v, str) or len(v.strip()) > hi:
             raise GrowthError(f"{sec}.{k} is too long")
         v = v.strip().upper()
+    elif kind == "choice":  # one of a fixed list of words (lo holds the list)
+        if v not in lo:
+            raise GrowthError(f"{sec}.{k} must be one of: {', '.join(lo)}")
     elif kind == "label":  # free text kept as typed (the code kinds above are upper-cased)
         if not isinstance(v, str) or len(v.strip()) > hi:
             raise GrowthError(f"{sec}.{k} is too long")

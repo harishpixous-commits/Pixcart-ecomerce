@@ -25,7 +25,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   campaigns: { title: "Segment campaigns", hint: "Send an in-app message to a customer segment. Only customers who opted in to marketing get it. Needs Segments switched on." },
   abandoned_cart: { title: "Abandoned cart reminders", hint: "Remind shoppers who left items in the cart. Optional coupon in the reminder." },
   flash_sales: { title: "Flash sales", hint: "Time-limited discounts. Sellers pick a window within these limits." },
-  gift_cards: { title: "Gift cards", hint: "Prepaid codes customers can buy and send." },
+  gift_cards: { title: "Gift cards", hint: "Prepaid codes customers can buy and send. Turn on staff_refund to let staff refund a bought card that was never used (Bought online table, Refund button). The card is voided; staff send the money from the payment gateway and enter its reference." },
   scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
@@ -36,6 +36,10 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
   segments: { title: "Customer segments", hint: "VIP, new and lapsed customers for targeted offers." },
+};
+// Settings that pick one of a few words
+const CHOICES: Record<string, Record<string, [string, string][]>> = {
+  loyalty: { on_account_delete: [["keep", "Keep the points on record"], ["zero", "Clear the points (an adjustment entry is added)"]] },
 };
 const LEVEL: Record<string, string> = { ok: "Good", warning: "Warning", critical: "Critical", not_enough_orders: "Not enough orders" };
 
@@ -49,7 +53,7 @@ type Card = { id: string; code: string; note: string; balance_paise: number; ini
 type Seg = { key: string; label: string; count: number };
 type Member = { id: string; name: string; phone: string | null; email: string | null; marketing_opt_in: boolean; orders: number; spent_paise: number; last_order_at: string | null };
 
-type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
+type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string; refund_reference?: string };
 
 function GiftCardsTab() {
   const toast = useToast();
@@ -63,6 +67,12 @@ function GiftCardsTab() {
   const checkPurchase = async (p: Purchase) => {
     try { const r = await api<{ status: string }>(`/api/admin/growth/gift-card-purchases/${p.id}/check`, { method: "POST", body: {} }); toast(r.status === "issued" ? "Paid. The card was issued." : r.status === "failed" ? "The payment failed." : "Not paid yet."); load(); }
     catch (x) { setError(x instanceof ApiError ? x.message : "Could not check"); }
+  };
+  const refundPurchase = async (p: Purchase) => {
+    const reference = window.prompt(`Refund ${rupees(p.amount_paise)} to ${p.user}. Send the money from the payment gateway first, then enter its reference:`);
+    if (!reference?.trim()) return;
+    try { await api(`/api/admin/growth/gift-card-purchases/${p.id}/refund`, { method: "POST", body: { reference: reference.trim() } }); toast("Refund recorded. The card is void."); setError(null); load(); }
+    catch (x) { setError(x instanceof ApiError ? x.message : "Could not refund"); }
   };
   const load = () => {
     api<{ items: Card[] }>("/api/admin/growth/gift-cards").then((x) => setCards(x.items)).catch(quietly);
@@ -116,8 +126,8 @@ function GiftCardsTab() {
             <thead><tr className="border-b border-line"><th className="p-3">Buyer</th><th className="p-3">Amount</th><th className="p-3">Gateway</th><th className="p-3">Status</th><th className="p-3">Started</th><th className="p-3">Note</th><th className="p-3" /></tr></thead>
             <tbody>
               {purchases.map((p) => (
-                <tr key={p.id} className="border-b border-line/50"><td className="p-3">{p.user} {p.phone}</td><td className="p-3">{rupees(p.amount_paise)}</td><td className="p-3">{p.gateway}</td><td className="p-3">{p.status}</td><td className="p-3">{date(p.created_at)}</td><td className="p-3 text-ink-soft">{p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error}</td>
-                  <td className="p-3">{p.status === "created" && <button type="button" className="font-semibold text-peacock" onClick={() => checkPurchase(p)}>Check payment</button>}</td></tr>
+                <tr key={p.id} className="border-b border-line/50"><td className="p-3">{p.user} {p.phone}</td><td className="p-3">{rupees(p.amount_paise)}</td><td className="p-3">{p.gateway}</td><td className="p-3">{p.status}</td><td className="p-3">{date(p.created_at)}</td><td className="p-3 text-ink-soft">{p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.status === "refunded" ? "Refunded, ref " + p.refund_reference : p.error}</td>
+                  <td className="p-3">{p.status === "created" && <button type="button" className="font-semibold text-peacock" onClick={() => checkPurchase(p)}>Check payment</button>}{p.status === "issued" && <button type="button" className="font-semibold text-vermilion" onClick={() => refundPurchase(p)}>Refund</button>}</td></tr>
               ))}
             </tbody>
           </table>
@@ -420,7 +430,13 @@ export default function AdminGrowthPage() {
               <div className="sm:col-span-2"><h2 className="text-lg font-semibold">{TITLES[sec].title}</h2><p className="text-sm text-ink-soft">{TITLES[sec].hint}</p></div>
               {Object.keys(s[sec]).sort((a, b) => (a === "enabled" ? -1 : b === "enabled" ? 1 : 0)).map((k) => {
                 const v = s[sec][k];
-                return typeof v === "boolean" ? (
+                const choices = CHOICES[sec]?.[k];
+                return choices ? (
+                  <label key={k} className="flex flex-col gap-1 text-sm"><span className="font-semibold">When a customer deletes their account</span>
+                    <select className="rounded-lg border border-line px-3 py-2" value={String(v)} onChange={(e) => set(sec, k, e.target.value)} aria-label={TITLES[sec].title + " " + label(k)}>
+                      {choices.map(([val, text]) => <option key={val} value={val}>{text}</option>)}
+                    </select></label>
+                ) : typeof v === "boolean" ? (
                   <label key={k} className="flex items-center gap-3 rounded-lg border border-line p-3"><input type="checkbox" className="h-4 w-4 accent-peacock" checked={v} onChange={(e) => set(sec, k, e.target.checked)} /> <span className="font-semibold">{label(k === "enabled" ? "Switched on" : k)}</span></label>
                 ) : (
                   <label key={k} className="flex flex-col gap-1 text-sm"><span className="font-semibold">{label(k)}</span>
