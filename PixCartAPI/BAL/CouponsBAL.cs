@@ -114,7 +114,7 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         var saved = JsonHelper.Object(await coupons.GrowthJsonAsync());
         if (!((JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["auto_discounts"]!).Bool("enabled")) return null;
         (int N, CouponModel C)? best = null;
-        foreach (var c in (await coupons.AutomaticAsync()).Where(x => x.Kind == "volume"))
+        foreach (var c in (await coupons.AutomaticAsync()).Where(x => x.Kind == "volume" || x.Kind == "bxgy"))
         {
             try { await EvaluateAsync(c.Code, userId, lines); }
             catch (AppException exc)
@@ -123,7 +123,9 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
                 if (exc.Code == "coupon_not_applicable" && m.Success && (best is null || int.Parse(m.Groups[1].Value) < best.Value.N)) best = (int.Parse(m.Groups[1].Value), c);
             }
         }
-        return best is { } b ? $"Add {b.N} more item{(b.N > 1 ? "s" : "")} to get {b.C.Value}% off" : null;
+        if (best is not { } b) return null;
+        var reward = b.C.Kind == "volume" ? $"{b.C.Value}% off" : b.C.Value == 100 ? $"{b.C.GetQty} free" : $"{b.C.GetQty} at {b.C.Value}% off";
+        return $"Add {b.N} more item{(b.N > 1 ? "s" : "")} to get {reward}";
     }
 
     /// <summary>The coupons shown at checkout.</summary>

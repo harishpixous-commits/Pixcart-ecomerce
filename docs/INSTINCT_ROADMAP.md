@@ -494,3 +494,4 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
   - Push 173 (tests only): a volume offer limited to one product counts units across that product's variants and ignores other products (both stacks). No bug found.
   - Push 174 (tests only): an automatic coupon with a per-customer limit stops applying to a customer after their first order, and still applies to other customers (both stacks). No bug found.
   - Push 175: the checkout quote hints now say how many more items unlock an automatic volume offer ("Add 1 more item to get 15% off"), shown with the other bill hints; only while automatic discounts are on. Same text in both stacks, tested in both. No new route.
+  - Push 176: the cart hint also covers automatic buy-X-get-Y offers ("Add 1 more item to get 1 free"), same text in both stacks, tested in both.
