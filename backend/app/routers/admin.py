@@ -2,6 +2,7 @@
 customers, settings, audit log and the monthly GST TCS (GSTR-8 basis) report."""
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from datetime import datetime, time, timedelta
@@ -11,7 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import exists, func, or_, select, update
+from sqlalchemy import Text, cast, exists, func, or_, select, update
 
 from app.config import settings
 from app.core.deps import SessionDep, audit
@@ -812,6 +813,7 @@ async def list_customers(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     kind: Literal["all", "customers", "sellers", "staff", "blocked"] = "all",
+    tag: str = Query(default="", max_length=30),
 ) -> dict:
     stmt = select(User).where(User.deleted_at.is_(None))
     has_seller = exists().where(Seller.user_id == User.id)
@@ -825,7 +827,9 @@ async def list_customers(
         stmt = stmt.where(User.is_active.is_(False))
     if q.strip():
         like = f"%{q.strip()}%"
-        stmt = stmt.where(or_(User.name.ilike(like), User.phone.ilike(like), User.email.ilike(like)))
+        stmt = stmt.where(or_(User.name.ilike(like), User.phone.ilike(like), User.email.ilike(like), cast(User.staff_tags, Text).ilike(like)))  # the search box finds staff tags too
+    if tag.strip():  # a staff tag, any letter case
+        stmt = stmt.where(func.lower(cast(User.staff_tags, Text)).contains(json.dumps(tag.strip().lower(), ensure_ascii=False)))
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     off, lim = _page(page, page_size)
     users = list((await session.execute(stmt.order_by(User.created_at.desc()).offset(off).limit(lim))).scalars())
@@ -842,6 +846,7 @@ async def list_customers(
                 "email": u.email,
                 "is_admin": u.is_admin,
                 "is_active": u.is_active,
+                "staff_tags": u.staff_tags or [],
                 "orders": order_counts.get(u.id, 0),
                 "seller": {"id": str(sellers[u.id].id), "status": sellers[u.id].status} if u.id in sellers else None,
                 "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,

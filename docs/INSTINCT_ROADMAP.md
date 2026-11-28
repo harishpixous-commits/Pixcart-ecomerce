@@ -487,3 +487,6 @@ Not wired: automatic gateway refund call.
 
 ## Push 149: Customer staff notes and tags (Python and .NET/Angular done)
 - Admin, Customers, a customer's page: private "Staff note" (up to 1000 characters) and up to 10 "Tags" (VIP, wholesale ...), edited in the Edit form, saved with the customer edit audit line. Never shown to the customer (the sign-in/me output does not carry them). Columns users.staff_note, users.staff_tags (Alembic 0055; .NET V032). Tests: tests/test_customer_notes.py and the .NET Staff_note test. Not wired: filtering the customer list or segments by tag, tag-based coupons. Alembic 0055 not run as a real upgrade. Next.js and Angular forms type-checked only.
+
+## Push 150: Customer list finds staff tags (Python and .NET done)
+- Admin, Customers: the search box also matches staff tags, and the list API takes ?tag= for an exact tag (any letter case). Each row carries its tags. Tests: tests/test_customer_notes.py, .NET Customer_list_filters_and_searches_by_staff_tag. Full suites at this point: Python 328 passed; .NET 397 passed, 0 failed (single full runs).

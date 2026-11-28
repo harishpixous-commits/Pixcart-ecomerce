@@ -18,3 +18,14 @@ async def test_staff_note_and_tags_are_saved_and_stay_private(client, admin):
     me = (await u.get("/api/auth/me")).json()
     assert "staff_note" not in str(me) and "Calls before" not in str(me)
     assert (await admin.patch(f"/api/admin/customers/{uid}", {"staff_note": "x" * 1001})).status_code == 422
+
+
+async def test_customer_list_filters_by_staff_tag(client, admin):
+    a = await login_phone(client, "9770000511", name="Tag Alpha")
+    b = await login_phone(client, "9770000512", name="Tag Beta")
+    await admin.patch(f"/api/admin/customers/{a.user['id']}", {"staff_tags": ["VIP"]})
+    await admin.patch(f"/api/admin/customers/{b.user['id']}", {"staff_tags": ["Wholesale"]})
+    r = (await admin.get("/api/admin/customers?tag=vip")).json()
+    assert [i["name"] for i in r["items"]] == ["Tag Alpha"] and r["items"][0]["staff_tags"] == ["VIP"]
+    assert [i["name"] for i in (await admin.get("/api/admin/customers?q=wholesal")).json()["items"]] == ["Tag Beta"]  # the search box finds tags
+    assert (await admin.get("/api/admin/customers?tag=nothing")).json()["total"] == 0
