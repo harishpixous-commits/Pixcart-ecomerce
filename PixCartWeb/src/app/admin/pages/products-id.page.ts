@@ -214,6 +214,13 @@ type Check = { risk: "low" | "medium" | "high"; issues: string[]; suggested_reas
           <button pcButton size="sm" [loading]="busy()" (click)="saveGoLive()">Save go-live time</button>
           <span class="text-sm text-ink-faint">Leave empty to go live as soon as approved.</span>
         </section>
+        <section class="flex flex-wrap items-end gap-3 rounded-xl bg-white p-5">
+          <label class="text-sm font-semibold">Most per order (each option)
+            <input type="number" min="0" max="100" class="ml-3 h-10 w-24 rounded-lg border border-black/15 px-3 font-normal" [value]="unitLimitValue()" (input)="unitLimit.set($any($event.target).value)" data-testid="admin-unit-limit" />
+          </label>
+          <button pcButton size="sm" [loading]="busy()" (click)="saveUnitLimit()">Save limit</button>
+          <span class="text-sm text-ink-faint">0 means no limit for this product. The store-wide limit still applies.</span>
+        </section>
         @if (check(); as c) {
           <section [class]="'rounded-xl border p-4 ' + (c.risk === 'high' ? 'border-vermilion bg-vermilion/5' : c.risk === 'medium' ? 'border-marigold bg-marigold-light' : 'border-leaf bg-leaf-light')">
             <div class="mb-1 flex items-center gap-2"><svg [pcIcon]="Sparkles" class="h-4 w-4" /><p class="font-semibold">AI check</p><pc-pill [tone]="c.risk === 'high' ? 'red' : c.risk === 'medium' ? 'blue' : 'green'">{{ c.risk }} risk</pc-pill></div>
@@ -335,6 +342,26 @@ export class AdminProductsIdPage {
     if (!v) return "";
     const d = new Date(v);
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  protected readonly unitLimit = signal<string | null>(null);
+
+  protected unitLimitValue(): string {
+    return this.unitLimit() ?? String(this.product()?.details?.max_qty ?? 0);
+  }
+
+  protected async saveUnitLimit(): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      this.product.set(await api<SellerProduct>(`/api/admin/products/${this.id()}/unit-limit`, { method: "PUT", body: { max_qty: Number(this.unitLimitValue()) } }));
+      this.unitLimit.set(null);
+      this.toast.show("Limit saved");
+    } catch (e) {
+      this.error.set(e instanceof ApiError ? e.message : "Failed");
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async saveGoLive(): Promise<void> {

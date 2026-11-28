@@ -148,6 +148,26 @@ public class ProductModerationBAL(
         return await DetailAsync(p);
     }
 
+    public async Task<JsonObject> SetUnitLimitAsync(UserModel admin, Guid productId, int maxQty)
+    {
+        await access.RequireAsync(admin, "catalog");
+        if (maxQty is < 0 or > 100) throw new AppException("Pick a limit from 0 to 100", "invalid_value", 422);
+        await using var uow = await db.BeginAsync();
+        var p = await productsDal.ProductForUpdateAsync(productId, uow) ?? throw new NotFoundException("Product");
+        if (p.Status == "archived") throw new ConflictException("Restore this product before changing it", "invalid_status");
+        var det = ProductInfo.DetailsOf(p.Details);
+        if (maxQty > 0 && det.MinQty > maxQty)
+            throw new AppException($"The most per order cannot be below the minimum of {det.MinQty}", "invalid_value", 422, new Dictionary<string, string> { ["max_qty"] = "Below the minimum order quantity" });
+        var raw = System.Text.Json.Nodes.JsonNode.Parse(string.IsNullOrWhiteSpace(p.Details) ? "{}" : p.Details) as JsonObject ?? new JsonObject();
+        raw["max_qty"] = maxQty;
+        var json = raw.ToJsonString();
+        await uow.ExecuteAsync("UPDATE products SET details = @json WHERE id = @id", new { json, id = p.Id });
+        await AuditAsync(uow, admin, "product.unit_limit", p.Id, maxQty.ToString());
+        await uow.CommitAsync();
+        p.Details = json;
+        return await DetailAsync(p);
+    }
+
     public async Task<JsonObject> RejectAsync(UserModel admin, Guid productId, string reason)
     {
         await access.RequireAsync(admin, "catalog");

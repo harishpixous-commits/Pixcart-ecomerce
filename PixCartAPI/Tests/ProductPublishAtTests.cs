@@ -86,4 +86,32 @@ public class ProductPublishAtTests(ApiFactory f) : ApiTest(f)
         var notes = (await seller.Get("/api/notifications")).Json["items"]!.AsArray();
         Assert.Contains(notes, n => n!["body"]!.GetValue<string>().Contains("goes live on the store on"));
     }
+
+    [Fact]
+    public async Task Staff_can_set_the_unit_limit_without_a_new_approval_round()
+    {
+        var admin = await Admin();
+        var seller = await LoginPhone("9877100005", "Unit Limit Owner");
+        Assert.Equal(201, (await seller.Post("/api/seller/register", new { display_name = "Unit Limit Store" })).Status);
+        var cat = Guid.NewGuid();
+        await ApiFactory.DbExecAsync("INSERT INTO categories(id,name,slug,image_url,commission_bps,default_gst_bps,position,is_active,required_details)VALUES(@cat,'Pub Cat 3','pub-cat-3','',1000,500,0,1,'[]')", new { cat });
+        var r = await seller.Post("/api/seller/products", new { category_id = cat, title = "Unit Limit Shirt", hsn_code = "6205", gst_bps = 500, details = new { }, variants = new[] { new { sku = "UL-SKU", mrp_paise = 20000, price_paise = 10000, stock = 5 } } });
+        Assert.Equal(201, r.Status);
+        var pid = r.Json["id"]!.GetValue<string>();
+        await ApiFactory.DbExecAsync("UPDATE sellers SET status='approved'");
+        await ApiFactory.DbExecAsync("UPDATE products SET status='approved' WHERE id=@pid", new { pid = Guid.Parse(pid) });
+        await using (var scope = Factory.Services.CreateAsyncScope()) await scope.ServiceProvider.GetRequiredService<BAL.Interface.ICatalogBAL>().RefreshProductAggregatesAsync(Guid.Parse(pid));
+        var slug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id=@pid", new { pid = Guid.Parse(pid) });
+        var v = Factory.CreateClient();
+        var path = $"/api/admin/products/{pid}/unit-limit";
+        var put = await admin.Put(path, new { max_qty = 3 });
+        Assert.True(put.Status == 200, put.ToString());
+        Assert.Equal("approved", put.Json["status"]!.GetValue<string>());
+        Assert.Equal(3, (await v.GetFromJsonAsync<JsonObject>($"/api/catalog/products/{slug}"))!["max_qty"]!.GetValue<int>());
+        Assert.Equal(422, (await admin.Put(path, new { max_qty = 101 })).Status);
+        Assert.Equal(422, (await admin.Put(path, new { max_qty = -1 })).Status);
+        Assert.Contains((await v.PutAsJsonAsync(path, new { max_qty = 2 })).StatusCode, new[] { System.Net.HttpStatusCode.Unauthorized, System.Net.HttpStatusCode.Forbidden });
+        Assert.Equal(200, (await admin.Put(path, new { max_qty = 0 })).Status);
+        Assert.Null((await v.GetFromJsonAsync<JsonObject>($"/api/catalog/products/{slug}"))!["max_qty"]);
+    }
 }

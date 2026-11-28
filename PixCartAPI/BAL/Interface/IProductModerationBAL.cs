@@ -14,5 +14,6 @@ public interface IProductModerationBAL
 
     /// <summary>Reject a pending listing or take down a live one (reference: POST /api/admin/products/{product_id}/reject).</summary>
     Task<JsonObject> RejectAsync(UserModel admin, Guid productId, string reason);
+    Task<JsonObject> SetUnitLimitAsync(UserModel admin, Guid productId, int maxQty);
     Task<JsonObject> SetPublishAtAsync(UserModel admin, Guid productId, DateTimeOffset? publishAt);
 }
