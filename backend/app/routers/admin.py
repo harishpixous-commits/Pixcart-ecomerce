@@ -350,10 +350,7 @@ async def _product(session, product_id: uuid.UUID, *, lock: bool = False) -> Pro
 @router.get("/products/{product_id}")
 async def get_product(product_id: uuid.UUID, admin: Perm("catalog"), session: SessionDep) -> dict:
     p = await _product(session, product_id)
-    data = await product_detail(session, p)
-    s = await session.get(Seller, p.seller_id)
-    data["seller"] = {"id": str(s.id), "name": s.display_name, "status": s.status}
-    return data
+    return await admin_product_detail(session, p)
 
 
 @router.post("/products/images", status_code=201)
@@ -405,6 +402,14 @@ async def set_product_videos(product_id: uuid.UUID, body: ProductVideosIn, admin
     return data
 
 
+async def admin_product_detail(session, p: Product) -> dict:
+    """The listing as the staff page needs it: the seller's name and status come with it."""
+    data = await product_detail(session, p)
+    s = await session.get(Seller, p.seller_id)
+    data["seller"] = {"id": str(s.id), "name": s.display_name, "status": s.status}
+    return data
+
+
 class PublishAtIn(BaseModel):
     publish_at: datetime | None = None  # empty: live as soon as approved
 
@@ -428,7 +433,7 @@ async def set_publish_at(product_id: uuid.UUID, body: PublishAtIn, admin: Perm("
     p.publish_at = when
     audit(session, admin, "product.publish_at", "product", p.id, when.isoformat() if when else "cleared")
     await session.commit()
-    return await product_detail(session, p)
+    return await admin_product_detail(session, p)
 
 
 class UnitLimitIn(BaseModel):
@@ -449,7 +454,7 @@ async def set_unit_limit(product_id: uuid.UUID, body: UnitLimitIn, admin: Perm("
     p.details = {**(p.details or {}), "max_qty": body.max_qty}
     audit(session, admin, "product.unit_limit", "product", p.id, str(body.max_qty))
     await session.commit()
-    return await product_detail(session, p)
+    return await admin_product_detail(session, p)
 
 
 @router.post("/products/{product_id}/approve")
@@ -466,7 +471,7 @@ async def approve_product(product_id: uuid.UUID, admin: Perm("catalog"), session
                         "message": f"It goes live on the store on {p.publish_at.astimezone(IST):%d %b %Y at %I:%M %p} IST." if later else "It is live on the store now."},
                         link=f"/seller/products/{p.id}")
     await session.commit()
-    return await product_detail(session, p)
+    return await admin_product_detail(session, p)
 
 
 @router.post("/products/{product_id}/reject")
@@ -482,7 +487,7 @@ async def reject_product(product_id: uuid.UUID, body: ReasonIn, admin: Perm("cat
     await notify_seller(session, p.seller_id, "listing_update", {"status": "taken down" if was_live else "not approved", "title": p.title,
                         "message": f"Reason: {body.reason}. Edit the listing and send it for review again."}, link=f"/seller/products/{p.id}")
     await session.commit()
-    return await product_detail(session, p)
+    return await admin_product_detail(session, p)
 
 
 # ----------------------------------------------------------------------------- categories

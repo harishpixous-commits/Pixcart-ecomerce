@@ -171,6 +171,7 @@ async def test_staff_can_set_the_go_live_time_and_approval_says_when_it_goes_liv
     soon = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
     r = await admin.put(path, {"publish_at": soon})
     assert r.status_code == 200 and r.json()["publish_at"] is not None and r.json()["status"] == "approved"
+    assert r.json()["seller"]["name"] and r.json()["seller"]["status"]      # the staff page shows the seller under the title
     assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).status_code == 404
     assert (await tn.get(f"/api/seller/products/{shirt['id']}")).json()["publish_at"] is not None     # the seller sees it
     assert (await admin.put(path, {"publish_at": (datetime.now(timezone.utc) + timedelta(days=400)).isoformat()})).status_code == 400
@@ -192,6 +193,7 @@ async def test_staff_can_set_the_unit_limit_without_a_new_approval_round(client,
     path = f"/api/admin/products/{shirt['id']}/unit-limit"
     r = await admin.put(path, {"max_qty": 3})
     assert r.status_code == 200 and r.json()["status"] == "approved" and r.json()["details"]["max_qty"] == 3
+    assert r.json()["seller"]["name"]
     assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["max_qty"] == 3
     assert (await admin.put(path, {"max_qty": 101})).status_code == 422
     assert (await admin.put(path, {"max_qty": -1})).status_code == 422

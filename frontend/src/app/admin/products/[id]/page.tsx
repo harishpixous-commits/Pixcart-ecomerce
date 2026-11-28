@@ -68,7 +68,7 @@ export default function AdminProductReview() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title={p.title}
-        sub={`${p.seller?.name} (${p.seller?.status}), ${p.category_name}`}
+        sub={[p.seller ? `${p.seller.name} (${p.seller.status})` : "", p.category_name].filter(Boolean).join(", ")}
         actions={
           <>
             {site.features.ai && <Button variant="secondary" onClick={runCheck} loading={checking}><Sparkles className="h-4 w-4" /> AI check</Button>}
