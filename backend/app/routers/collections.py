@@ -130,11 +130,8 @@ async def public_collections(session: SessionDep) -> dict:
     return {"items": [{"slug": c.slug, "title": c.title, "description": c.description, "image_url": c.image_url} for c in rows]}
 
 
-@router.get("/catalog/collections/{slug}")
-async def public_collection(slug: str, session: SessionDep) -> dict:
-    c = (await session.execute(select(ProductCollection).where(ProductCollection.slug == slug.lower(), ProductCollection.is_active.is_(True)))).scalar_one_or_none()
-    if c is None:
-        raise NotFound("Collection")
+async def collection_products(session, c: ProductCollection) -> list[Product]:
+    """The products a collection shows (also used by home page rows set to "a collection")."""
     base = select(Product).where(*public_product_filter())
     if c.product_ids:
         ids = [uuid.UUID(i) for i in c.product_ids]
@@ -144,7 +141,7 @@ async def public_collection(slug: str, session: SessionDep) -> dict:
         if c.category_slug:
             cat = (await session.execute(select(Category).where(Category.slug == c.category_slug))).scalar_one_or_none()
             if cat is None:
-                return {"slug": c.slug, "title": c.title, "description": c.description, "image_url": c.image_url, "products": []}
+                return []
             base = base.where(Product.category_id.in_(await category_descendant_ids(session, cat.id)))
         if c.brand:
             base = base.where(func.lower(Product.brand) == c.brand.lower())
@@ -153,4 +150,13 @@ async def public_collection(slug: str, session: SessionDep) -> dict:
         if c.max_price_paise is not None:
             base = base.where(Product.price_from <= c.max_price_paise)
         products = list((await session.execute(base.order_by(Product.sold_count.desc(), Product.id).limit(MAX_SHOWN))).scalars())
+    return products
+
+
+@router.get("/catalog/collections/{slug}")
+async def public_collection(slug: str, session: SessionDep) -> dict:
+    c = (await session.execute(select(ProductCollection).where(ProductCollection.slug == slug.lower(), ProductCollection.is_active.is_(True)))).scalar_one_or_none()
+    if c is None:
+        raise NotFound("Collection")
+    products = await collection_products(session, c)
     return {"slug": c.slug, "title": c.title, "description": c.description, "image_url": c.image_url, "products": await product_cards(session, products)}

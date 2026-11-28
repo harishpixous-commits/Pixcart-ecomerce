@@ -18,6 +18,14 @@ async def test_collection_hand_picked_and_by_rules(client, admin, categories):
     assert page["title"] == "Gifts for him" and [p["slug"] for p in page["products"]] == [shirt_slug]
     assert [c["slug"] for c in (await client.get("/api/catalog/collections")).json()["items"]] == ["gifts-for-him"]
     assert "/collections/gifts-for-him</loc>" in (await client.get("/api/seo/sitemap.xml")).text   # search engines are told about it
+    # a home page row can show a collection; it needs a collection chosen, and disappears once the collection is hidden
+    assert (await admin.post("/api/admin/storefront/sections", {"kind": "products", "title": "Picked", "config": {"source": "collection"}})).status_code == 400
+    r = await admin.post("/api/admin/storefront/sections", {"kind": "products", "title": "Gifts row", "config": {"source": "collection", "collection_slug": "gifts-for-him"}})
+    assert r.status_code == 201, r.text
+    row_id = r.json()["id"]
+    def row(home):
+        return next(x for x in home["sections"] if x["id"] == row_id)
+    assert [p["slug"] for p in row((await client.get("/api/home")).json())["products"]] == [shirt_slug]
     # a second one with the same title gets its own link name; price rules pick products without a list
     c2 = (await admin.post("/api/admin/collections", {"title": "Gifts for him", "min_price_paise": 1, "max_price_paise": 100_000_000})).json()
     assert c2["slug"] == "gifts-for-him-2"
@@ -28,6 +36,7 @@ async def test_collection_hand_picked_and_by_rules(client, admin, categories):
     # hidden collections are not found; a delete removes the page
     await admin.put(f"/api/admin/collections/{col['id']}", {"title": "Gifts for him", "product_slugs": [shirt_slug], "is_active": False})
     assert (await client.get("/api/catalog/collections/gifts-for-him")).status_code == 404
+    assert all(x["id"] != row_id for x in (await client.get("/api/home")).json()["sections"])   # an empty row is left out
     assert "/collections/gifts-for-him</loc>" not in (await client.get("/api/seo/sitemap.xml")).text
     assert (await admin.delete(f"/api/admin/collections/{col['id']}")).status_code == 200
     assert len((await admin.get("/api/admin/collections")).json()["items"]) == 1

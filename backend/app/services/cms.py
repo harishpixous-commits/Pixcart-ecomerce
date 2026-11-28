@@ -314,7 +314,7 @@ SECTION_KINDS = {
     "inspired": "Inspired by your browsing history",
     "buy_again": "Buy it again (signed-in shoppers)",
 }
-PRODUCT_SOURCES = ("deals", "deals_live", "bestsellers", "new", "top_rated", "category", "manual")
+PRODUCT_SOURCES = ("deals", "deals_live", "bestsellers", "new", "top_rated", "category", "manual", "collection")
 CARD_MODES = ("tiles", "products", "recent", "buy_again")
 TONES = ("accent", "primary", "dark", "buy")
 # "auto" follows the storefront theme's own category style; "tiles" (saved by earlier versions) means "auto".
@@ -437,6 +437,10 @@ def validate_section(kind: str, config: dict) -> dict:
             out["category_slug"] = str(c.get("category_slug", ""))[:90]
             if not out["category_slug"]:
                 raise ValueError("Choose a category")
+        if source == "collection":
+            out["collection_slug"] = str(c.get("collection_slug", ""))[:90]
+            if not out["collection_slug"]:
+                raise ValueError("Choose a collection")
         if source == "manual":
             out["product_ids"] = [str(x) for x in c.get("product_ids", [])][:24]
         return out

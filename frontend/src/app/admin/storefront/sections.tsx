@@ -51,8 +51,8 @@ const STARTER: Record<string, Record<string, any>> = {
 };
 
 const ICONS = [["badge", "Verified badge"], ["wallet", "Wallet"], ["truck", "Delivery truck"], ["return", "Return arrow"], ["shield", "Shield"], ["gift", "Gift"], ["support", "Headset"], ["check", "Tick"]];
-const SOURCES = [["deals", "Biggest discounts"], ["deals_live", "Running deals (with timers)"], ["bestsellers", "Bestsellers"], ["new", "Newest"], ["top_rated", "Top rated"], ["category", "From one category"], ["manual", "Products I pick"]];
-const CARD_SOURCES = SOURCES.filter(([v]) => v !== "manual");
+const SOURCES = [["deals", "Biggest discounts"], ["deals_live", "Running deals (with timers)"], ["bestsellers", "Bestsellers"], ["new", "Newest"], ["top_rated", "Top rated"], ["category", "From one category"], ["collection", "One of your collections"], ["manual", "Products I pick"]];
+const CARD_SOURCES = SOURCES.filter(([v]) => v !== "manual" && v !== "collection");
 const CARD_MODES = [["tiles", "4 picture tiles"], ["products", "4 products"], ["recent", "Recently viewed (the shopper's own)"], ["buy_again", "Buy it again (the shopper's own)"]];
 const DEAL_KIND_LABEL = [["", "All kinds"], ["lightning", "Lightning deals"], ["deal_of_day", "Deal of the Day"], ["limited", "Limited time deals"]];
 
@@ -136,6 +136,15 @@ function CardEditor({ card, onChange, onRemove, cats }: { card: any; onChange: (
       {(card.mode === "recent" || card.mode === "buy_again") && <p className="text-sm text-ink-soft">Each shopper sees their own products. When they have none, the card is left out.</p>}
       {onRemove && <Button type="button" size="sm" variant="ghost" className="self-start" onClick={onRemove}><Trash2 className="h-4 w-4" /> Remove card</Button>}
     </div>
+  );
+}
+
+/** Picks one of the collections made in Admin → Collections (only active ones are listed). */
+function CollectionSelect({ value, onChange }: { value: string; onChange: (slug: string) => void }) {
+  const [cols, setCols] = useState<{ slug: string; title: string }[]>([]);
+  useEffect(() => { api<{ items: { slug: string; title: string }[] }>("/api/catalog/collections").then((r) => setCols(r.items)).catch(() => setCols([])); }, []);
+  return (
+    <Field label="Collection" htmlFor="pcol"><Select id="pcol" value={value} onChange={(e) => onChange(e.target.value)}><option value="">Choose</option>{cols.map((x) => <option key={x.slug} value={x.slug}>{x.title}</option>)}</Select></Field>
   );
 }
 
@@ -277,6 +286,7 @@ function ConfigEditor({ kind, c, set, cats }: { kind: string; c: Record<string, 
         {c.source === "category" && (
           <Field label="Category" htmlFor="pcat"><Select id="pcat" value={c.category_slug ?? ""} onChange={(e) => set({ ...c, category_slug: e.target.value })}><option value="">Choose</option>{cats.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}</Select></Field>
         )}
+        {c.source === "collection" && <CollectionSelect value={c.collection_slug ?? ""} onChange={(slug) => set({ ...c, collection_slug: slug })} />}
         {c.source === "manual" && <ProductPicker ids={c.product_ids ?? []} onChange={(ids) => set({ ...c, product_ids: ids })} />}
       </div>
     );

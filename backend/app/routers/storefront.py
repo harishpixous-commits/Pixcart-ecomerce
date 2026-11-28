@@ -73,6 +73,14 @@ async def _products_for(session, cfg: dict) -> list[dict]:
         if cat is None:
             return []
         stmt = base.where(Product.category_id.in_(await category_descendant_ids(session, cat.id))).order_by(Product.sold_count.desc(), Product.id)
+    elif source == "collection":
+        from app.models import ProductCollection
+        from app.routers.collections import collection_products
+
+        col = (await session.execute(select(ProductCollection).where(ProductCollection.slug == str(cfg.get("collection_slug", "")).lower(), ProductCollection.is_active.is_(True)))).scalar_one_or_none()
+        if col is None:
+            return []
+        return await product_cards(session, (await collection_products(session, col))[:limit])
     elif source == "manual":
         ids = []
         for x in cfg.get("product_ids", []):
