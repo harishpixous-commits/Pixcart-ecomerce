@@ -26,6 +26,7 @@ public class ProductModel
     public int GstBps { get; set; }
     /// <summary>products.country_of_origin</summary>
     public string CountryOfOrigin { get; set; } = "";
+    public string SizeGuide { get; set; } = "";
     /// <summary>products.return_window_days</summary>
     public int ReturnWindowDays { get; set; }
     /// <summary>products.status</summary>

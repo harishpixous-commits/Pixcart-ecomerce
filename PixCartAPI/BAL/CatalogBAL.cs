@@ -512,8 +512,8 @@ public class CatalogBAL(
         var breadcrumbs = new JsonArray();
         foreach (var c in Enumerable.Reverse(await catalog.CategoryChainAsync(p.CategoryId)))
             breadcrumbs.Add(new JsonObject { ["name"] = c.Name, ["slug"] = c.Slug });
-        JsonArray? sizeGuide = null;   // the nearest category with a guide, this one or a parent
-        foreach (var c in await catalog.CategoryChainAsync(p.CategoryId)) { sizeGuide = Utils.SizeGuide.Rows(c.SizeGuide); if (sizeGuide is not null) break; }
+        JsonArray? sizeGuide = Utils.SizeGuide.Rows(p.SizeGuide);   // the product's own table wins, else the nearest category with a guide
+        if (sizeGuide is null) foreach (var c in await catalog.CategoryChainAsync(p.CategoryId)) { sizeGuide = Utils.SizeGuide.Rows(c.SizeGuide); if (sizeGuide is not null) break; }
         var details = ProductInfo.DetailsOf(p.Details);
         var unit = details.NetUnit;
         // option axes, e.g. {"Size": ["S","M","L"], "Colour": ["Red","Blue"]}

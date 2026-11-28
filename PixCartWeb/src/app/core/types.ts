@@ -563,6 +563,7 @@ export interface SellerProduct {
   gst_bps: number;
   country_of_origin: string;
   return_window_days: number;
+  size_guide?: string;
   images: string[];
   videos?: ProductVideo[];
   variants: SellerVariant[];

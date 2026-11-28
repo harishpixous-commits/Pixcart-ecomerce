@@ -234,6 +234,9 @@ const STATUS_TEXT: Record<string, string> = {
           @for (d of returnOptions(); track d) {<option [value]="d" [selected]="'' + d === returnDays()">{{ d === 0 ? "Not returnable" : d + " days" }}</option>}
         </select>
       </pc-field>
+      <pc-field label="Size guide (optional)" for="sg" hint="Only for this product. Leave empty to show the category's guide, if there is one. One line per size, columns split with |, first line is the heading.">
+        <textarea pcTextarea id="sg" data-testid="product-size-guide" [value]="sizeGuide()" (input)="sizeGuide.set($any($event.target).value)" rows="4" maxlength="2000" placeholder="Size | Chest (in) | Length (in)&#10;S | 38 | 27"></textarea>
+      </pc-field>
     </section>
 
     <section class="rounded-xl bg-white p-5">
@@ -321,6 +324,7 @@ export class ProductEditor implements OnInit {
   protected readonly gst = signal(1800);
   protected readonly origin = signal("India");
   protected readonly returnDays = signal("7");
+  protected readonly sizeGuide = signal("");
   protected readonly images = signal<string[]>([]);
   protected readonly videos = signal<ProductVideo[]>([]);
   protected readonly details = signal<ProductDetails>({ ...EMPTY_DETAILS });
@@ -376,6 +380,7 @@ export class ProductEditor implements OnInit {
     this.gst.set(p?.gst_bps ?? 1800);
     this.origin.set(p?.country_of_origin ?? "India");
     this.returnDays.set(String(p?.return_window_days ?? 7));
+    this.sizeGuide.set(p?.size_guide ?? "");
     this.images.set(p?.images ?? []);
     this.videos.set(p?.videos ?? []);
     this.details.set({ ...EMPTY_DETAILS, ...(p?.details ?? {}) });
@@ -595,6 +600,7 @@ export class ProductEditor implements OnInit {
       gst_bps: this.gst(),
       country_of_origin: this.origin().trim(),
       return_window_days: Number(this.returnDays()),
+      size_guide: this.sizeGuide(),
       images: this.images(),
       videos: this.videos(),
       variants,

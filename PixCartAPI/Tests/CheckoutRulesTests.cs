@@ -1241,6 +1241,21 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Product_size_guide_beats_the_category_guide()
+    {
+        var admin = await Admin();
+        var (seller, productId, _) = await ShirtInStock("9400000613", "ownguide-shirt");
+        await Refresh(productId);
+        var slug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id = @productId", new { productId });
+        var cat = await ApiFactory.DbScalarAsync<Guid>("SELECT category_id FROM products WHERE id = @productId", new { productId });
+        Assert.Equal(200, (await admin.Put($"/api/admin/categories/{cat}", new { name = "Shirts", commission_bps = 1000, default_gst_bps = 500, size_guide = "Size|Waist\nL|34", return_window_days = 7 })).Status);
+        Assert.Equal("Waist", (await admin.Get($"/api/catalog/products/{slug}")).Json["size_guide"]![0]![1]!.GetValue<string>());
+        await ApiFactory.DbExecAsync("UPDATE products SET size_guide = 'Size | Chest\nM | 40' WHERE id = @productId", new { productId });
+        var g = (await admin.Get($"/api/catalog/products/{slug}")).Json["size_guide"]!.AsArray();
+        Assert.Equal("Chest", g[0]![1]!.GetValue<string>()); Assert.Equal("40", g[1]![1]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
     {
         var admin = await Admin();
