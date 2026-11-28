@@ -16,7 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BillDetails } from "@/components/bill";
 import { AddressSection } from "@/components/checkout/address";
 import { CARD } from "@/components/checkout/card";
-import { BusinessSection, businessErrors, GiftMessageSection, InstructionsSection, NoBagSection, TipSection } from "@/components/checkout/extras";
+import { BusinessSection, businessErrors, DeliverySlotSection, GiftMessageSection, InstructionsSection, NoBagSection, TipSection } from "@/components/checkout/extras";
 import { CouponSection, type OfferCoupon } from "@/components/checkout/offers";
 import { CancellationNote, PayBar, PaymentMethods, type PayMethod } from "@/components/checkout/payment";
 import { BillSkeleton, ItemsReview, ReviewSkeleton } from "@/components/checkout/review";
@@ -89,6 +89,7 @@ export default function CheckoutPage() {
   const [bizServerError, setBizServerError] = useState<string | null>(null);
   const [noBag, setNoBag] = useState(false);
   const [gift, setGift] = useState("");
+  const [slot, setSlot] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
@@ -256,6 +257,7 @@ export default function CheckoutPage() {
           instructions,
           no_bag: !!opts?.no_bag_enabled && noBag,
           gift_message: opts?.gift_message_enabled ? gift.trim() : "",
+          delivery_slot: opts?.delivery_slots_enabled && opts.delivery_slots?.includes(slot) ? slot : "",
           currency: currency !== "INR" ? currency : undefined, // Admin → Languages and currencies: may be charged in it
         },
       });
@@ -369,6 +371,7 @@ export default function CheckoutPage() {
             />
           )}
 
+          {opts?.delivery_slots_enabled && (opts.delivery_slots?.length ?? 0) > 1 && <DeliverySlotSection slots={opts.delivery_slots ?? []} value={slot} onChange={setSlot} />}
           {opts?.gift_message_enabled && <GiftMessageSection text={gift} onText={setGift} max={opts.gift_message_max ?? 150} />}
 
           {opts?.no_bag_enabled && <NoBagSection on={noBag} onChange={setNoBag} />}

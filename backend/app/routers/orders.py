@@ -75,6 +75,7 @@ class PlaceIn(QuoteIn):
     instructions: str | None = Field(default=None, max_length=300)  # empty: the address's saved instructions
     no_bag: bool = False
     gift_message: str = Field(default="", max_length=300)  # packed with the order when Admin → Checkout allows it
+    delivery_slot: str = Field(default="", max_length=60)  # one of the times Admin → Checkout offers
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")  # the shopper's currency (Admin → Languages and currencies)
 
 
@@ -297,6 +298,7 @@ async def create_order(body: PlaceIn, user: CurrentUser, session: SessionDep) ->
             instructions=body.instructions,
             no_bag=body.no_bag,
             gift_message=body.gift_message,
+            delivery_slot=body.delivery_slot,
             currency=body.currency,
         )
     except IntegrityError:

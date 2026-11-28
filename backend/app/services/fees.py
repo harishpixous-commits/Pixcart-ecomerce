@@ -80,6 +80,8 @@ DEFAULTS: dict[str, Any] = {
     "no_bag_enabled": False,         # "I don't need a bag"
     "gift_message_enabled": False,   # a gift message the seller packs with the order
     "gift_message_max": 150,         # its longest length
+    "delivery_slots_enabled": False,  # the shopper may pick a preferred delivery time; shown to the seller and delivery team as a request, not a promise
+    "delivery_slots": "Morning (9am to 12pm); Afternoon (12pm to 4pm); Evening (4pm to 8pm)",  # the choices, split with ;
     "min_order_paise": 0,            # the lowest item total the shop takes an order for; 0 means no minimum
     "cancellation_note": "You can cancel until your order is shipped. After delivery, use returns if the product allows them.",
 }
@@ -94,6 +96,16 @@ TIMES = ("late_night_from", "late_night_to")
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _CODES = {"fees_sac_code": (re.compile(r"^\d{4,8}$"), "The SAC code is 4 to 8 digits, like 998599"),
           "fee_invoice_prefix": (re.compile(r"^[A-Z0-9]{2,4}$"), "The invoice prefix is 2 to 4 capital letters or digits, like MKT")}
+
+
+def slot_list(text: str) -> list[str]:
+    """The delivery time choices from "a; b; c": tidy, no repeats, each up to 40 characters."""
+    out: list[str] = []
+    for part in (text or "").split(";"):
+        s = " ".join(part.split())[:40]
+        if s and s not in out:
+            out.append(s)
+    return out
 
 
 def valid_time(v: Any) -> bool:
@@ -154,6 +166,10 @@ async def update(session: AsyncSession, data: dict[str, Any]) -> dict[str, Any]:
             lo, hi = _INTS[k]
             if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
                 raise CheckoutSettingsError(f"{k} must be a whole number between {lo} and {hi}")
+        elif k == "delivery_slots":
+            v = "; ".join(slot_list(v if isinstance(v, str) else ""))
+            if not 2 <= len(slot_list(v)) <= 6:
+                raise CheckoutSettingsError("Give 2 to 6 delivery time choices, split with ;")
         elif k in _TEXTS:
             if not isinstance(v, str) or len(v) > _TEXTS[k]:
                 raise CheckoutSettingsError(f"{k} must be text up to {_TEXTS[k]} characters")
@@ -295,7 +311,7 @@ def public(ck: dict) -> dict:
     """Options the checkout screen needs."""
     return {
         "tip_enabled": ck["tip_enabled"], "tip_presets": ck["tip_presets"], "tip_max_paise": ck["tip_max_paise"], "gstin_enabled": ck["gstin_enabled"],
-        "instructions_enabled": ck["instructions_enabled"], "no_bag_enabled": ck["no_bag_enabled"], "gift_message_enabled": ck["gift_message_enabled"], "gift_message_max": ck["gift_message_max"], "min_order_paise": ck["min_order_paise"], "cancellation_note": ck["cancellation_note"],
+        "instructions_enabled": ck["instructions_enabled"], "no_bag_enabled": ck["no_bag_enabled"], "gift_message_enabled": ck["gift_message_enabled"], "gift_message_max": ck["gift_message_max"], "min_order_paise": ck["min_order_paise"], "delivery_slots_enabled": ck["delivery_slots_enabled"], "delivery_slots": slot_list(ck["delivery_slots"]) if ck["delivery_slots_enabled"] else [], "cancellation_note": ck["cancellation_note"],
         "delivery_label": ck["delivery_label"], "delivery_info": ck["delivery_info"],
     }
 

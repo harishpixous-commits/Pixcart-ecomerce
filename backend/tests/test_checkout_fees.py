@@ -229,3 +229,33 @@ async def test_minimum_order_value_blocks_small_orders_and_nudges_in_the_cart(cl
     await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})
     r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})
     assert r.status_code == 201, r.text
+
+
+async def test_delivery_time_choice_is_off_until_admin_offers_it(client, admin, categories):
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9600000613", name="Slot Buyer")
+    addr = await add_address(buyer, state="33")
+    vid = shirt["variants"][0]["id"]
+
+    async def order(slot: str):
+        await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+        return await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key(), "delivery_slot": slot})
+
+    chk = (await buyer.get("/api/cart")).json()["checkout"]
+    assert chk["delivery_slots_enabled"] is False and chk["delivery_slots"] == []
+    r = await order("Evening (4pm to 8pm)")
+    assert r.status_code == 400 and r.json()["error"]["code"] == "slot_off"
+    assert (await admin.put("/api/admin/checkout", {"fees": {"delivery_slots_enabled": True, "delivery_slots": " Morning ;  Evening ; Morning;; "}})).status_code == 200
+    assert (await admin.put("/api/admin/checkout", {"fees": {"delivery_slots": "Only one"}})).status_code == 400
+    chk = (await buyer.get("/api/cart")).json()["checkout"]
+    assert chk["delivery_slots"] == ["Morning", "Evening"]
+    r = await order("Night")
+    assert r.status_code == 400 and r.json()["error"]["code"] == "slot_unknown"
+    r = await order("Evening")
+    assert r.status_code == 201, r.text
+    o = r.json()["order"]
+    assert o["ship_to"]["delivery_slot"] == "Evening"
+    seller_view = (await tn.get(f"/api/seller/orders/{o['sub_orders'][0]['id']}")).json()
+    assert seller_view["ship_to"]["delivery_slot"] == "Evening"
+    r = await order("")  # no preference is fine
+    assert r.status_code == 201 and r.json()["order"]["ship_to"]["delivery_slot"] == ""

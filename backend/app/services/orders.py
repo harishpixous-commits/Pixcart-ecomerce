@@ -271,6 +271,7 @@ async def place_order(
     instructions: str | None = None,
     no_bag: bool = False,
     gift_message: str = "",
+    delivery_slot: str = "",
     currency: str | None = None,
 ) -> tuple[Order, Payment | None]:
     existing = (
@@ -376,6 +377,11 @@ async def place_order(
         raise ApiError("Gift messages are switched off", "gift_off")
     if len(gift_text) > ck["gift_message_max"]:
         raise ApiError(f"Keep the gift message to {ck['gift_message_max']} characters", "gift_too_long", fields={"gift_message": "Too long"})
+    slot = " ".join((delivery_slot or "").split())
+    if slot and not ck["delivery_slots_enabled"]:
+        raise ApiError("Choosing a delivery time is switched off", "slot_off")
+    if slot and slot not in fees_svc.slot_list(ck["delivery_slots"]):
+        raise ApiError("Choose one of the delivery times shown", "slot_unknown", fields={"delivery_slot": "Not available"})
     grand_total = items_total + shipping_total + cod_fee + fees_total + tip - discount_total
 
     if payment_method == "cod":
@@ -406,6 +412,7 @@ async def place_order(
             "lat": float(address.lat) if address.lat is not None else None, "lng": float(address.lng) if address.lng is not None else None,
             "instructions": note, "no_bag": bool(no_bag and ck["no_bag_enabled"]),
             "gift_message": gift_text,
+            "delivery_slot": slot,
         },
         items_total=items_total,
         shipping_total=shipping_total,

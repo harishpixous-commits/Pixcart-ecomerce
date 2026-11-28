@@ -6,7 +6,7 @@
  */
 
 import clsx from "clsx";
-import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, Gift, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-react";
+import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, Gift, Clock, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-react";
 import { useId, useState } from "react";
 import { Button, Input, TextField, Textarea } from "@/components/ui";
 import { currencySymbol, paiseToShown, rupees, shownToPaise } from "@/lib/format";
@@ -325,6 +325,24 @@ export function GiftMessageSection({ text, onText, max }: { text: string; onText
       <label htmlFor={id} className="sr-only">Gift message</label>
       <Textarea id={id} value={text} maxLength={max} rows={3} onChange={(e) => onText(e.target.value)} placeholder="E.g. Happy birthday! Hope you like it." />
       <p className="mt-1 text-right text-xs text-ink-soft" aria-live="polite">{text.length}/{max}</p>
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------- delivery time choice */
+
+export function DeliverySlotSection({ slots, value, onChange }: { slots: string[]; value: string; onChange: (slot: string) => void }) {
+  return (
+    <Card labelledBy="co-slot-h" testId="checkout-slot">
+      <CardHeading id="co-slot-h" icon={Clock} title="Preferred delivery time" sub="Optional. We pass it to the seller and the delivery team as a request. It is not a promise." />
+      <div role="radiogroup" aria-labelledby="co-slot-h" className="flex flex-wrap gap-2">
+        {["", ...slots].map((s) => (
+          <button key={s || "any"} type="button" role="radio" aria-checked={value === s} onClick={() => onChange(s)}
+            className={clsx("rounded-full border px-3 py-1.5 text-sm", value === s ? "border-peacock bg-peacock-light/60 font-semibold" : "border-line")}>
+            {s || "No preference"}
+          </button>
+        ))}
+      </div>
     </Card>
   );
 }
