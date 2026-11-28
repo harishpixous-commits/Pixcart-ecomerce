@@ -177,3 +177,33 @@ async def test_reorder_agent_asks_seller_to_restock_fast_sellers_only(client, ad
         (await s.get(V, uuid.UUID(vid))).stock = 400
         await s.commit()
     assert await run() == 0
+
+
+async def test_marketing_agent_proposes_coupon_for_slow_category_and_approval_creates_it(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    await admin.put("/api/admin/agents/settings", {"enabled": True, "marketing_min_items": 1, "marketing_max_sold": 5})
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await core.run_agent(s, "marketing")
+            await s.commit()
+            return n
+
+    assert await run() == 0  # its switch is off
+    assert (await admin.put("/api/admin/agents/settings", {"marketing_enabled": True})).status_code == 200
+    n = await run()
+    assert n >= 1 and await run() == 0
+    items = (await admin.get("/api/admin/agents/proposals?agent=marketing")).json()["items"]
+    p = items[0]
+    assert p["kind"] == "create_coupon"
+    code = p["params"]["code"] if "params" in p else None
+    async with SessionLocal() as s:
+        from app.models import Coupon
+
+        assert (await s.execute(select(Coupon).where(Coupon.description.like("%off%")))).scalars().first() is None
+    assert (await admin.post(f"/api/admin/agents/proposals/{p['id']}/approve")).json()["status"] == "done"
+    async with SessionLocal() as s:
+        from app.models import Coupon
+
+        c = (await s.execute(select(Coupon).where(Coupon.description.like("% off %")))).scalars().first()
+        assert c is not None and c.kind == "percent" and c.funded_by == "platform" and c.category_id is not None and c.ends_at > utcnow()

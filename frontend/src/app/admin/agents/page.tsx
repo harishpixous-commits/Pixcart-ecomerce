@@ -17,6 +17,8 @@ const NUMBERS: Record<string, string> = {
   delivery_nudge_hours: "Remind seller after (hours unshipped)", delivery_tracking_hours: "Ask for tracking after (hours since shipped)",
   delivery_cancel_hours: "Propose cancel and refund after (hours unshipped)", delivery_max_age_days: "Ignore packages older than (days)",
   reorder_cover_days: "Restock when stock lasts less than (days)", reorder_window_days: "Sales window (days)", reorder_min_sold: "Only items that sold at least (units)",
+  marketing_window_days: "Sales window (days)", marketing_max_sold: "Slow if it sold at most (units)", marketing_min_items: "Only categories with at least (items in stock)",
+  marketing_discount_percent: "Discount (%)", marketing_valid_days: "Coupon valid for (days)",
   orderupdate_late_hours: "Tell customer after (hours past the promised date)", orderupdate_max_age_days: "Ignore packages more than (days) past due",
 };
 

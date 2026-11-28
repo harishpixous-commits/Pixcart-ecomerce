@@ -42,6 +42,26 @@ async def run(session: AsyncSession, user: User, row: AgentProposal, bg: Backgro
         await notify_seller(session, v.seller_id, "seller_restock", {"item": p["item"], "stock": str(v.stock), "sold": str(p["sold"]), "days": str(p["days"]),
                                                                       "left": str(p["left"]), "suggest": str(p["suggest"])}, link="/seller/inventory?low_stock=1")
         return {"ok": True, "told_seller": True}
+    if k == "create_coupon":
+        from datetime import timedelta
+
+        from sqlalchemy import func, select
+
+        from app.core.deps import audit
+        from app.models import Category, Coupon
+
+        if await session.get(Category, uuid.UUID(p["category_id"])) is None:
+            raise Stale("The category no longer exists, so no coupon was made.")
+        if (await session.execute(select(Coupon.id).where(func.upper(Coupon.code) == p["code"].upper()))).first():
+            raise Stale("A coupon with this code already exists, so nothing was made.")
+        now = utcnow()
+        c = Coupon(code=p["code"].upper(), description=f"{p['percent']}% off {p['category']}", kind="percent", value=p["percent"] * 100,
+                   starts_at=now, ends_at=now + timedelta(days=p["days"]), category_id=uuid.UUID(p["category_id"]), per_user_limit=1,
+                   funded_by="platform", show_on_checkout=True, is_active=True)
+        session.add(c)
+        audit(session, user, "coupon.create", "coupon", c.code, "made by the marketing agent")
+        await session.commit()
+        return {"ok": True, "code": c.code}
     if k == "delay_notice":
         from app.models import Order
         from app.services.notify import notify

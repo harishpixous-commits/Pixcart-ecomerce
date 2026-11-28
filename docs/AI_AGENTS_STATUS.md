@@ -28,3 +28,6 @@ Also working from before (not part of the proposal queue): admin business assist
 - Listing and support drafts feeding the same approval queue.
 - Delivery agent: no courier calls, no pickup re-booking, no live tracking events.
 - Any live AI model. Every agent today is rule-based.
+
+## Marketing agent (Python: working and tested)
+Key `marketing`. Finds categories with live stock but few recent sales and proposes a time-limited category coupon; approving creates the coupon through the same fields as the admin Coupons page, audited. Test: tests/test_agents.py (5 green). Not built: emails or ads, customer targeting, measuring results. .NET version: pending.

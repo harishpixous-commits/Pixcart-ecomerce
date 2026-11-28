@@ -32,9 +32,9 @@ class Stale(Exception):
 
 
 def registry() -> dict[str, AgentDef]:
-    from . import delivery, orderupdate, reorder
+    from . import delivery, marketing, orderupdate, reorder
 
-    return {a.key: a for a in (delivery.AGENT, orderupdate.AGENT, reorder.AGENT)}
+    return {a.key: a for a in (delivery.AGENT, orderupdate.AGENT, reorder.AGENT, marketing.AGENT)}
 
 
 async def propose(session: AsyncSession, agent: str, kind: str, key: str, summary: str, details: list[list[str]], params: dict, permission: str) -> bool:
