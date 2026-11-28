@@ -72,3 +72,36 @@ async def test_returning_a_two_unit_line_one_at_a_time_refunds_the_discounted_to
         total = (await s.execute(select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.seller_id == uuid.UUID(tn.seller_id)))).scalar_one()
     assert total == 0, total
     assert refunds == order["grand_total"] - order.get("shipping_total", 0) - order.get("cod_fee", 0)
+
+
+async def test_paid_order_one_part_cancelled_the_other_returned_refunds_exactly_what_was_paid(client, admin, categories, gateway):
+    from app.models import Refund
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    assert (await admin.post("/api/admin/coupons", {"code": "SAVE10", "kind": "percent", "value": 1000, "show_on_checkout": False})).status_code == 201
+    buyer = await login_phone(client, "9500000323", name="Mixed Returner")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 2})
+    await buyer.post("/api/cart/items", {"variant_id": phone["variants"][0]["id"], "qty": 1})
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "online", "idempotency_key": key(), "coupon_code": "SAVE10"})
+    assert r.status_code == 201, r.text
+    order, pay = r.json()["order"], r.json()["payment"]
+    pid, sig = gateway.pay(pay["razorpay_order_id"])
+    v = await buyer.post("/api/payments/razorpay/verify", {"razorpay_order_id": pay["razorpay_order_id"], "razorpay_payment_id": pid, "razorpay_signature": sig})
+    assert v.status_code == 200, v.text
+    subs = (await buyer.get(f"/api/orders/{order['id']}")).json()["sub_orders"]
+    keep = next(s for s in subs if s["seller"]["name"] == "Kovai Textiles")
+    drop = next(s for s in subs if s["id"] != keep["id"])
+    c = await buyer.post(f"/api/orders/{order['id']}/cancel", {"sub_order_id": drop["id"], "reason": "Ordered by mistake"})
+    assert c.status_code == 200, c.text
+    await ship_and_deliver(tn, keep["id"], marketplace_courier=True)
+    line = (await buyer.get(f"/api/orders/{order['id']}/returnable")).json()["items"][keep["id"]]
+    r = await buyer.post("/api/returns", {"sub_order_id": keep["id"], "items": [{"order_item_id": i["order_item_id"], "qty": i["qty_left"]} for i in line], "reason": "size_fit", "refund_upi": "priya@okaxis"})
+    assert r.status_code == 201, r.text
+    rid = r.json()["id"]
+    assert (await tn.post(f"/api/seller/returns/{rid}", {"action": "approve"})).status_code == 200
+    assert (await tn.post(f"/api/seller/returns/{rid}", {"action": "received"})).status_code == 200
+    async with SessionLocal() as s:
+        refunded = (await s.execute(select(func.coalesce(func.sum(Refund.amount_paise), 0)))).scalar_one()
+        ledger_total = (await s.execute(select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.seller_id == uuid.UUID(tn.seller_id)))).scalar_one()
+    assert refunded == order["grand_total"], (refunded, order["grand_total"])
+    assert ledger_total == 0, ledger_total
