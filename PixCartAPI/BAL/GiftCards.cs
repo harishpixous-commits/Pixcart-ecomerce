@@ -53,7 +53,7 @@ public static class GiftCards
     }
 
     // ---- buying a card online (mirror of start_purchase / check_purchase)
-    private sealed record Purchase(Guid Id, Guid UserId, int Amount, string Gateway, string Ref, string Status, Guid? CardId, string Error);
+    public sealed record Purchase(Guid Id, Guid UserId, int Amount, string Gateway, string Ref, string Status, Guid? CardId, string Error);
     private const string PurchaseSql = "SELECT id AS Id, user_id AS UserId, amount_paise AS Amount, gateway AS Gateway, gateway_ref AS Ref, status AS Status, gift_card_id AS CardId, error AS Error FROM gift_card_purchases ";
 
     private static JsonObject PurchaseView(Purchase p, Card? card = null)
@@ -126,12 +126,12 @@ public static class GiftCards
     }
 
     public static async Task<List<JsonObject>> PurchasesAsync(IMySqlDapperHelper db) =>
-        (await db.QueryAsync<(Guid Id, string? Name, string? Phone, int Amount, string Gateway, string Status, string Error, Guid? CardId, DateTime At)>(
-            "SELECT p.id AS Id, u.name AS Name, u.phone AS Phone, p.amount_paise AS Amount, p.gateway AS Gateway, p.status AS Status, p.error AS Error, p.gift_card_id AS CardId, p.created_at AS At " +
+        (await db.QueryAsync<(Guid Id, string? Name, string? Phone, int Amount, string Gateway, string Status, string Error, Guid? CardId, DateTime At, string Ref)>(
+            "SELECT p.id AS Id, u.name AS Name, u.phone AS Phone, p.amount_paise AS Amount, p.gateway AS Gateway, p.status AS Status, p.error AS Error, p.gift_card_id AS CardId, p.created_at AS At, p.refund_reference AS Ref " +
             "FROM gift_card_purchases p JOIN users u ON u.id = p.user_id ORDER BY p.created_at DESC LIMIT 200")).Select(r => new JsonObject
         {
             ["id"] = r.Id.ToString(), ["user"] = r.Name, ["phone"] = r.Phone, ["amount_paise"] = r.Amount, ["gateway"] = r.Gateway, ["status"] = r.Status, ["error"] = r.Error,
-            ["gift_card_id"] = r.CardId?.ToString(), ["created_at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o"),
+            ["refund_reference"] = r.Ref, ["gift_card_id"] = r.CardId?.ToString(), ["created_at"] = DateTime.SpecifyKind(r.At, DateTimeKind.Utc).ToString("o"),
         }).ToList();
 
     public static async Task<List<JsonObject>> ListAsync(IMySqlDapperHelper db) =>
@@ -185,6 +185,25 @@ public static class GiftCards
         await uow.ExecuteAsync("INSERT INTO gift_card_uses (id, gift_card_id, user_id, coupon_code, amount_paise, restored, created_at) VALUES (@id, @cardId, @userId, @ccode, @amount, 0, @now)",
             new { id = Guid.NewGuid(), cardId = card.Id, userId, ccode, amount, now });
         return new JsonObject { ["code"] = ccode, ["discount_paise"] = amount, ["min_order_paise"] = amount, ["valid_days"] = CouponDays, ["card_balance_paise"] = card.Balance - amount };
+    }
+
+    /// <summary>Staff give back what a shopper paid for a card that was never used (setting gift_cards.staff_refund). The card is voided and
+    /// its balance zeroed; the purchase becomes 'refunded' with the staff member's payment reference. No gateway is called.</summary>
+    public static async Task<(JsonObject View, Purchase P, bool Changed)> RefundPurchaseAsync(IUnitOfWork uow, Guid purchaseId, string reference)
+    {
+        if (!(await CfgAsync(uow)).Bool("staff_refund")) throw new AppException("Refunding bought gift cards is switched off in Admin → Growth.", "gift_refund_off");
+        var reference2 = string.Join(' ', (reference ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (reference2.Length == 0 || reference2.Length > 100) throw new AppException("Enter the payment reference of the refund (up to 100 characters).", "reference_required");
+        var p = await uow.QueryFirstOrDefaultAsync<Purchase>(PurchaseSql + "WHERE id = @purchaseId FOR UPDATE", new { purchaseId }) ?? throw new NotFoundException("Purchase");
+        if (p.Status == "refunded") return (PurchaseView(p), p, false);
+        if (p.Status != "issued" || p.CardId is null) throw new ConflictException("Only a paid purchase whose card was issued can be refunded.", "not_refundable");
+        var card = await uow.QueryFirstOrDefaultAsync<Card>(CardSql + "WHERE id = @id FOR UPDATE", new { id = p.CardId });
+        var used = await uow.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM gift_card_uses WHERE gift_card_id = @id", new { id = p.CardId });
+        if (card is null || used > 0 || card.Balance != card.Initial) throw new ConflictException("This card has been used, so it cannot be refunded.", "card_used");
+        await uow.ExecuteAsync("UPDATE gift_cards SET status = 'void', balance_paise = 0 WHERE id = @id", new { id = card.Id });
+        await uow.ExecuteAsync("UPDATE gift_card_purchases SET status = 'refunded', refund_reference = @reference2, refunded_at = UTC_TIMESTAMP(6) WHERE id = @id", new { reference2, id = p.Id });
+        var done = p with { Status = "refunded" };
+        return (PurchaseView(done), done, true);
     }
 
     public static async Task<JsonObject> VoidAsync(IUnitOfWork uow, Guid id)

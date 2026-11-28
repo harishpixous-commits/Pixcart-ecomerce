@@ -70,6 +70,18 @@ public class GiftCardsController(Utils.Interface.IMySqlDapperHelper db, ICurrent
         await audit.AuditAsync(admin, "gift_card.purchase_check", "gift_card_purchase", id.ToString(), r["status"]!.GetValue<string>(), tx);
         await tx.CommitAsync(); foreach (var f in after) await f(); r.Remove("code"); return r; // the code goes to the buyer, staff see it in the cards list
     }
+    public sealed record GiftRefundIn(string? Reference);
+    [HttpPost("/api/admin/growth/gift-card-purchases/{id:guid}/refund"), RouteGuard("perm:marketing")]
+    public async Task<object> StaffRefund(Guid id, [FromBody] GiftRefundIn body)
+    {
+        var admin = await me.RequireAsync();
+        await using var tx = await db.BeginAsync();
+        var (view, p, changed) = await BAL.GiftCards.RefundPurchaseAsync(tx, id, body.Reference ?? "");
+        if (changed) await audit.AuditAsync(admin, "gift_card.purchase_refund", "gift_card_purchase", id.ToString(), $"₹{p.Amount / 100m:N2}", tx);
+        await tx.CommitAsync();
+        if (changed) await notify.NotifyUserAsync(p.UserId, "gift_card_refunded", new Dictionary<string, string> { ["amount"] = $"₹{p.Amount / 100m:N2}", ["reference"] = (body.Reference ?? "").Trim() }, "/rewards");
+        return view;
+    }
     [HttpPost("/api/admin/growth/gift-cards/{id:guid}/void"), RouteGuard("perm:marketing")]
     public async Task<object> Void(Guid id)
     {

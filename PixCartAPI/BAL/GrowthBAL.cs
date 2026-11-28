@@ -10,8 +10,8 @@ namespace BAL;
 public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, IAccessBAL access, IAuditBAL audit, IMySqlDapperHelper db, AppSettings app) : IGrowthBAL
 {
     public const string Key = "growth";
-    private enum K { Bool, Int, Text, Label, List }
-    private sealed record F(string Name, object Default, K Kind, long Lo = 0, long Hi = 0);
+    private enum K { Bool, Int, Text, Label, List, Choice }
+    private sealed record F(string Name, object Default, K Kind, long Lo = 0, long Hi = 0, string[]? Opts = null);
 
     private static readonly Dictionary<string, F[]> Schema = new()
     {
@@ -20,13 +20,14 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
             new("tier_silver_points", 500, K.Int, 0, 10000000), new("tier_gold_points", 2000, K.Int, 0, 10000000),
                 new("silver_bonus_percent", 0, K.Int, 0, 500), new("gold_bonus_percent", 0, K.Int, 0, 500),
                 new("silver_free_delivery", false, K.Bool), new("gold_free_delivery", false, K.Bool),
-                new("first_order_points", 0, K.Int, 0, 10000), new("review_points", 0, K.Int, 0, 10000), new("review_min_chars", 30, K.Int, 0, 2000), new("expiry_reminder", false, K.Bool)],
+                new("first_order_points", 0, K.Int, 0, 10000), new("review_points", 0, K.Int, 0, 10000), new("review_min_chars", 30, K.Int, 0, 2000), new("expiry_reminder", false, K.Bool),
+            new("on_account_delete", "keep", K.Choice, 0, 0, ["keep", "zero"])],
         ["referral"] = [new("enabled", false, K.Bool), new("referrer_reward_paise", 10000, K.Int, 0, 1000000), new("friend_reward_paise", 5000, K.Int, 0, 1000000),
             new("min_order_paise", 49900, K.Int, 0, 10000000), new("max_per_user", 20, K.Int, 1, 1000)],
         ["abandoned_cart"] = [new("enabled", false, K.Bool), new("first_reminder_hours", 4, K.Int, 1, 720), new("second_reminder_hours", 24, K.Int, 1, 720),
             new("max_reminders", 2, K.Int, 1, 5), new("min_cart_paise", 29900, K.Int, 0, 10000000), new("offer_coupon", "", K.Text, 0, 30)],
         ["flash_sales"] = [new("enabled", false, K.Bool), new("max_duration_hours", 48, K.Int, 1, 720), new("max_discount_percent", 70, K.Int, 1, 95), new("show_countdown", true, K.Bool)],
-        ["gift_cards"] = [new("enabled", false, K.Bool), new("min_paise", 10000, K.Int, 100, 10000000), new("max_paise", 1000000, K.Int, 100, 100000000), new("validity_days", 365, K.Int, 1, 3650), new("allow_purchase", false, K.Bool)],
+        ["gift_cards"] = [new("enabled", false, K.Bool), new("min_paise", 10000, K.Int, 100, 10000000), new("max_paise", 1000000, K.Int, 100, 100000000), new("validity_days", 365, K.Int, 1, 3650), new("allow_purchase", false, K.Bool), new("staff_refund", false, K.Bool)],
         ["scorecard"] = [new("enabled", false, K.Bool), new("window_days", 30, K.Int, 7, 365), new("ship_within_hours", 48, K.Int, 1, 720),
             new("late_warn_percent", 10, K.Int, 0, 100), new("late_critical_percent", 25, K.Int, 0, 100),
             new("cancel_warn_percent", 5, K.Int, 0, 100), new("cancel_critical_percent", 10, K.Int, 0, 100),
@@ -88,6 +89,9 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
             case K.Text:
                 if (v?.GetValueKind() != JsonValueKind.String || v.GetValue<string>().Trim().Length > f.Hi) throw new AppException(bad("is too long"), "invalid_setting");
                 return v.GetValue<string>().Trim().ToUpperInvariant();
+            case K.Choice:
+                if (v?.GetValueKind() != JsonValueKind.String || !f.Opts!.Contains(v.GetValue<string>())) throw new AppException(bad("must be one of: " + string.Join(", ", f.Opts!)), "invalid_setting");
+                return v.GetValue<string>();
             case K.Label:
                 if (v?.GetValueKind() != JsonValueKind.String || v.GetValue<string>().Trim().Length > f.Hi) throw new AppException(bad("is too long"), "invalid_setting");
                 return string.Join(' ', v.GetValue<string>().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));

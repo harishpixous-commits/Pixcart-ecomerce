@@ -435,3 +435,8 @@ Seller or admin sets "Minimum order quantity" (0 to 100, 0/1 = none) in the prod
 
 ## Push 139: Pre-order ship date per product
 Same as the Python version: "Pre-order: ships from" date in the product info editor (`products.details.ships_on`, no migration); product page and cart line show it while it is ahead. Not wired: no change to the seller's dispatch deadline, no email. Checked: .NET `CheckoutRulesTests` 50 pass; Angular type-checked with `ngc` only.
+
+## Push 140: Two held policies as admin settings (.NET and Angular)
+- `loyalty.on_account_delete` = keep (default) or zero. Zero writes an adjust row that takes the balance to 0 when an account is deleted. `GET /api/account/delete-info` feeds the warning in the delete dialog. `DELETE /api/account` returns `points_cleared`.
+- `gift_cards.staff_refund` (off by default). `POST /api/admin/growth/gift-card-purchases/{id}/refund` voids a never-used bought card, marks the purchase refunded with the staff payment reference, tells the buyer, audits. Used card: 409 `card_used`. Setting off: 400. No gateway is called; staff send the money by hand.
+- SQL V028. Tests: GiftPurchaseTests (refund) and CustomerAccountTests (delete policy) pass. ngc clean. Same as the Python Push 140.

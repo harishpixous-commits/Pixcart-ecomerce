@@ -60,7 +60,9 @@ public interface IAccountBAL
     Task<object> ConsentAsync(UserModel user, bool marketingOptIn);
     Task<object> ExportAsync(UserModel user);
     /// <summary>Right to erasure: the account is anonymised; order and tax records stay as the GST law requires.</summary>
-    Task DeleteAsync(UserModel user);
+    Task<int> DeleteAsync(UserModel user);
+    /// <summary>The shopper's loyalty points and whether deleting will clear them (setting loyalty.on_account_delete).</summary>
+    Task<object> DeleteInfoAsync(UserModel user);
 }
 
 /// <summary>The storefront beacon (POST /api/events): product views and add-to-cart counts per day.</summary>

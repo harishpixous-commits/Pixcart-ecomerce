@@ -110,6 +110,23 @@ public class GiftPurchaseTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("issued", staff["status"]!.GetValue<string>());
         Assert.Equal("issued", (await Tx(t => GiftCards.CheckPurchaseAsync(t, gw, null, pid3)))["status"]!.GetValue<string>());
         Assert.Equal(2, await Cards());
+        // staff refund: off by default, needs a reference, refuses a used card, voids an unused one once and tells the buyer
+        Assert.Equal(400, (await admin.Post($"/api/admin/growth/gift-card-purchases/{pid2}/refund", new { reference = "UTR1" })).Status);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { gift_cards = new { staff_refund = true } })).Status);
+        Assert.Equal(403, (await buyer.Post($"/api/admin/growth/gift-card-purchases/{pid2}/refund", new { reference = "UTR1" })).Status);
+        Assert.Equal(400, (await admin.Post($"/api/admin/growth/gift-card-purchases/{pid2}/refund", new { reference = "  " })).Status);
+        var code3 = a["code"]!.GetValue<string>();
+        await db.ExecuteAsync("UPDATE gift_cards SET balance_paise = 15000 WHERE code = @code3", new { code3 });
+        Assert.Equal(409, (await admin.Post($"/api/admin/growth/gift-card-purchases/{pid2}/refund", new { reference = "UTR1" })).Status);
+        await db.ExecuteAsync("UPDATE gift_cards SET balance_paise = initial_paise WHERE code = @code3", new { code3 });
+        var rf = await admin.Post($"/api/admin/growth/gift-card-purchases/{pid2}/refund", new { reference = "UTR1" });
+        Assert.Equal(200, rf.Status); Assert.Equal("refunded", rf.Json["status"]!.GetValue<string>());
+        Assert.Equal(200, (await admin.Post($"/api/admin/growth/gift-card-purchases/{pid2}/refund", new { reference = "UTR1" })).Status);
+        Assert.Equal(0, await db.QueryFirstOrDefaultAsync<long>("SELECT balance_paise FROM gift_cards WHERE code = @code3", new { code3 }));
+        Assert.Equal("void", await db.QueryFirstOrDefaultAsync<string>("SELECT status FROM gift_cards WHERE code = @code3", new { code3 }));
+        Assert.Equal(1, await db.QueryFirstOrDefaultAsync<long>("SELECT COUNT(*) FROM notifications WHERE user_id = @id AND event = 'gift_card_refunded' AND channel = 'email'", new { id = buyer.Id }));
+        Assert.Equal(1, await db.QueryFirstOrDefaultAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action = 'gift_card.purchase_refund' AND entity_id = @pid2", new { pid2 = pid2.ToString() }));
+        Assert.Equal(200, (await buyer.Post("/api/gift-cards/balance", new { code = code3 })).Status);
     }
 
     [Fact]

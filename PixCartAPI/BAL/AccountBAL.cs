@@ -44,7 +44,22 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
         };
     }
 
-    public async Task DeleteAsync(UserModel user)
+    private async Task<(bool Clear, long Balance)> DeletePolicyAsync(Guid uid)
+    {
+        var saved = JsonHelper.Object(await db.ExecuteScalarAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'"));
+        var policy = (string?)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["loyalty"]!["on_account_delete"] ?? "keep";
+        var bal = await db.ExecuteScalarAsync<long>("SELECT COALESCE(SUM(points), 0) FROM loyalty_ledger WHERE user_id = @uid", new { uid });
+        return (policy == "zero" && bal > 0, Math.Max(0, bal));
+    }
+
+    /// <summary>What deleting the account will do to loyalty points, so the shopper is told before confirming.</summary>
+    public async Task<object> DeleteInfoAsync(UserModel user)
+    {
+        var (clear, bal) = await DeletePolicyAsync(user.Id);
+        return new { loyalty_points = bal, points_will_be_cleared = clear };
+    }
+
+    public async Task<int> DeleteAsync(UserModel user)
     {
         if (user.IsAdmin) throw new ConflictException("Staff accounts are removed by the owner", "staff_account");
         var seller = await accounts.GetSellerByUserAsync(user.Id);
@@ -53,7 +68,11 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
         if (await customers.OpenPackagesAsync(user.Id) > 0)
             throw new ConflictException("You have orders on the way. You can delete your account after they are delivered or cancelled.", "open_orders");
         var now = DateTimeFunctions.UtcNow();
+        var (clearPoints, balance) = await DeletePolicyAsync(user.Id);
         await using var uow = await db.BeginAsync();
+        if (clearPoints)
+            await uow.ExecuteAsync("INSERT INTO loyalty_ledger (id, user_id, sub_order_id, kind, points, note, created_at) VALUES (@id, @uid, NULL, 'adjust', @pts, 'Account deleted: points cleared', @now)",
+                new { id = Guid.NewGuid(), uid = user.Id, pts = -(int)balance, now });
         await addresses.AnonymiseAllAsync(user.Id, uow.Transaction);
         await accounts.RevokeAllSessionsAsync(user.Id, now, uow.Transaction);
         var before = user.Copy();
@@ -65,7 +84,8 @@ public class AccountBAL(AccountDAL accounts, AddressDAL addresses, CustomerAccou
         user.DeletedAt = now;
         user.MarketingOptIn = false;
         await accounts.SaveUserChangesAsync(before, user, now, uow.Transaction);
-        await audit.AuditAsync(null, "account.deleted", "user", user.Id, uow: uow);
+        await audit.AuditAsync(null, "account.deleted", "user", user.Id, clearPoints ? $"{balance} loyalty points cleared" : "", uow);
         await uow.CommitAsync();
+        return clearPoints ? (int)balance : 0;
     }
 }

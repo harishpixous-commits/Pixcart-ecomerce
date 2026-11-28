@@ -192,6 +192,26 @@ public class CustomerAccountTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Deleting_an_account_keeps_or_clears_loyalty_points_by_the_owner_setting()
+    {
+        var admin = await Admin(); var keep = await LoginPhone("9500000071"); var zero = await LoginPhone("9500000072");
+        foreach (var u in new[] { keep, zero })
+            await ApiFactory.DbExecAsync("INSERT INTO loyalty_ledger (id, user_id, kind, points, note, created_at) VALUES (UUID(), @uid, 'earn', 120, 'test', UTC_TIMESTAMP(6))", new { uid = u.Id });
+        var info = (await keep.Get("/api/account/delete-info")).Json;
+        Assert.Equal(120, info["loyalty_points"]!.GetValue<int>()); Assert.False(info["points_will_be_cleared"]!.GetValue<bool>());
+        Assert.Equal(400, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { on_account_delete = "burn" } })).Status);
+        var r1 = await keep.Delete("/api/account");
+        Assert.Equal(200, r1.Status); Assert.Equal(0, r1.Json["points_cleared"]!.GetValue<int>());
+        Assert.Equal(120, await ApiFactory.DbScalarAsync<int>("SELECT SUM(points) FROM loyalty_ledger WHERE user_id = @id", new { id = keep.Id }));
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { loyalty = new { on_account_delete = "zero" } })).Status);
+        Assert.True((await zero.Get("/api/account/delete-info")).Json["points_will_be_cleared"]!.GetValue<bool>());
+        var r2 = await zero.Delete("/api/account");
+        Assert.Equal(120, r2.Json["points_cleared"]!.GetValue<int>());
+        Assert.Equal(0, await ApiFactory.DbScalarAsync<int>("SELECT SUM(points) FROM loyalty_ledger WHERE user_id = @id", new { id = zero.Id }));
+        Assert.Equal("adjust", await ApiFactory.DbScalarAsync<string>("SELECT kind FROM loyalty_ledger WHERE user_id = @id AND points < 0", new { id = zero.Id }));
+    }
+
+    [Fact]
     public async Task Admin_preferences_are_personal()
     {
         var admin = await Admin();

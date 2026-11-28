@@ -231,10 +231,11 @@ export class SavedCards {
       </label>
       <div class="mt-4 flex flex-wrap gap-2">
         <button pcButton variant="secondary" size="sm" (click)="download()">Download my data</button>
-        <button pcButton variant="danger" size="sm" (click)="confirm.set(true)">Delete my account</button>
+        <button pcButton variant="danger" size="sm" (click)="openDelete()">Delete my account</button>
       </div>
       <pc-modal [open]="confirm()" (close)="confirm.set(false)" title="Delete your account?">
         <p class="mb-3 text-ink-soft">Your profile, addresses and wishlist are erased and you are signed out everywhere. Invoices and order records are kept for the period the GST law requires, without your name or contact details on your account.</p>
+        @if (info(); as i) { @if (i.points_will_be_cleared) { <p class="mb-3 rounded-lg bg-amber-50 p-3 text-sm" data-testid="delete-points-warning">You have {{ i.loyalty_points }} loyalty points. They will be cleared when you delete your account.</p> } }
         <pc-error-note [message]="error()" />
         <pc-text-field label='Type "DELETE" to confirm' [(value)]="typed" />
         <button pcButton class="mt-3" variant="buy" [disabled]="typed() !== 'DELETE'" (click)="remove()">Delete my account</button>
@@ -249,6 +250,12 @@ export class PrivacySection {
   private readonly session = inject(SessionService);
   protected readonly confirm = signal(false);
   protected readonly typed = signal("");
+  protected readonly info = signal<{ loyalty_points: number; points_will_be_cleared: boolean } | null>(null);
+
+  protected async openDelete(): Promise<void> {
+    this.info.set(await api<{ loyalty_points: number; points_will_be_cleared: boolean }>("/api/account/delete-info").catch(() => null));
+    this.confirm.set(true);
+  }
   protected readonly error = signal<string | null>(null);
 
   protected async consent(e: Event): Promise<void> {

@@ -165,7 +165,10 @@ public class CustomerAccountController(
     [HttpDelete("/api/account"), SignedIn]
     public async Task<object> DeleteAccount()
     {
-        await account.DeleteAsync(await me.RequireAsync());
-        return new { ok = true };
+        var cleared = await account.DeleteAsync(await me.RequireAsync());
+        return new { ok = true, points_cleared = cleared };
     }
+
+    [HttpGet("/api/account/delete-info"), SignedIn]
+    public async Task<object> DeleteInfo() => await account.DeleteInfoAsync(await me.RequireAsync());
 }

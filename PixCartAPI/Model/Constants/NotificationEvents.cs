@@ -52,6 +52,11 @@ public static class NotificationEvents
             {
                 ["inapp"] = ("New for your search: {{query}}", "{{item}}{{more}} just arrived."),
             },
+            ["gift_card_refunded"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("Gift card refunded", "Your gift card purchase of {{amount}} was refunded (reference {{reference}})."),
+                ["email"] = ("Your gift card was refunded", "Hi {{name}},\n\nYour gift card purchase of {{amount}} was refunded. Payment reference: {{reference}}.\n\nThe card can no longer be used."),
+            },
             ["gift_card_bought"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["email"] = ("Your {{brand}} gift card", "Hi {{name}},\n\nThank you. Your gift card for {{amount}} is ready.\n\nCode: {{code}}\nValid until {{expires}}\n\nUse it at checkout, or see the balance here: {{link}}"),

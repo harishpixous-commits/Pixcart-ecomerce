@@ -14,7 +14,7 @@ type Section = Record<string, Val>;
 type Settings = Record<string, Section>;
 type CampaignPreview = { opted_in: number; recipients: number; capped: boolean };
 type CampaignRow = { id: string; segment: string; title: string; message: string; link: string; recipients: number; at: string; status?: string; send_at?: string | null };
-type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string };
+type Purchase = { id: string; user: string; phone: string | null; amount_paise: number; gateway: string; status: string; error: string; created_at: string; refund_reference?: string };
 type Card = { id: string; code: string; note: string; balance_paise: number; initial_paise: number; expires_at: string; status: string };
 type LoyaltyView = { enabled: boolean; members_with_points: number; points_held: number; value_held_paise: number; earned_30d: number; redeemed_30d: number; expired_30d: number };
 type Reminder = { id: string; customer: string; contact: string | null; stage: number; cart_paise: number; sent_at: string; ordered_after: boolean };
@@ -107,7 +107,7 @@ const label = (k: string): string => {
               <tbody>
                 @for (p of purchases(); track p.id) {
                   <tr class="border-b border-line/50"><td class="p-3">{{ p.user }} {{ p.phone }}</td><td class="p-3">{{ rupees(p.amount_paise) }}</td><td class="p-3">{{ p.gateway }}</td><td class="p-3">{{ p.status }}</td><td class="p-3">{{ date(p.created_at) }}</td><td class="p-3 text-ink-soft">{{ p.status === "created" ? "Waiting for payment, or paid and not yet checked" : p.error }}</td>
-                    <td class="p-3">@if (p.status === "created") {<button type="button" class="font-semibold text-peacock" (click)="checkPurchase(p)">Check payment</button>}</td></tr>
+                    <td class="p-3">@if (p.status === "created") {<button type="button" class="font-semibold text-peacock" (click)="checkPurchase(p)">Check payment</button>}@if (p.status === "issued") {<button type="button" class="font-semibold text-red-700" (click)="refundPurchase(p)">Refund</button>}</td></tr>
                 }
               </tbody>
             </table>
@@ -261,6 +261,10 @@ const label = (k: string): string => {
             @for (k of keys(sec); track k) {
               @if (kind(sec, k) === "bool") {
                 <label class="flex items-center gap-3 rounded-lg border border-line p-3"><input type="checkbox" class="h-4 w-4 accent-peacock" [checked]="s()![sec][k]" (change)="set(sec, k, $any($event.target).checked)" /> <span class="font-semibold">{{ label(k === 'enabled' ? 'Switched on' : k) }}</span></label>
+              } @else if (kind(sec, k) === "choice") {
+                <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">{{ label(k) }}</span>
+                  <select class="rounded-lg border border-line px-3 py-2" [value]="s()![sec][k]" (change)="set(sec, k, $any($event.target).value)" [attr.aria-label]="titles[sec].title + ' ' + label(k)">
+                    <option value="keep">Keep the points (default)</option><option value="zero">Clear the points</option></select></label>
               } @else {
                 <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">{{ label(k) }}</span>
                   <input class="rounded-lg border border-line px-3 py-2" [value]="show(sec, k)" (input)="edit(sec, k, $any($event.target).value)" [attr.aria-label]="titles[sec].title + ' ' + label(k)" /></label>
@@ -387,6 +391,18 @@ export class AdminGrowthPage {
     }
   }
 
+  protected async refundPurchase(p: Purchase): Promise<void> {
+    const reference = (window.prompt("Refund this gift card purchase. Send the money back yourself first, then enter the payment reference. The card is voided. This cannot be undone.") ?? "").trim();
+    if (!reference) return;
+    try {
+      await api(`/api/admin/growth/gift-card-purchases/${p.id}/refund`, { method: "POST", body: { reference } });
+      this.toast.show("Refunded. The card is void and the buyer was told.");
+      this.loadCards();
+    } catch (x) {
+      this.toast.show(x instanceof ApiError ? x.message : "Could not refund");
+    }
+  }
+
   protected async issue(e: Event): Promise<void> {
     e.preventDefault();
     this.busy.set(true);
@@ -424,7 +440,7 @@ export class AdminGrowthPage {
 
   protected sections = (): string[] => Object.keys(this.s() ?? {}).filter((k) => TITLES[k]);
   protected keys = (sec: string): string[] => Object.keys(this.s()![sec]).sort((a, b) => (a === "enabled" ? -1 : b === "enabled" ? 1 : 0));
-  protected kind = (sec: string, k: string): string => { const v = this.s()![sec][k]; return typeof v === "boolean" ? "bool" : typeof v === "number" ? "num" : Array.isArray(v) ? "list" : "text"; };
+  protected kind = (sec: string, k: string): string => { const v = this.s()![sec][k]; return k === "on_account_delete" ? "choice" : typeof v === "boolean" ? "bool" : typeof v === "number" ? "num" : Array.isArray(v) ? "list" : "text"; };
   protected levelText = (l: string): string => ({ ok: "Good", warning: "Warning", critical: "Critical", not_enough_orders: "Not enough orders" } as Record<string, string>)[l] ?? l;
 
   protected show(sec: string, k: string): string {
