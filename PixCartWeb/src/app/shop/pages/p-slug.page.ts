@@ -11,6 +11,7 @@ import { ProductRail } from "../../shared/product/product";
 import { PcLink } from "../../shared/ui/link";
 import { ProductPageSkeleton } from "../../shared/ui/skeletons";
 import { BoughtTogether } from "../browse/bought-together";
+import { BundleSet } from "../browse/bundle-set";
 import { BrowsingHistory, ProductMain } from "../browse/buy-box";
 import { keepPageTitle } from "../browse/page-title";
 import { SponsoredRail } from "../browse/pdp";
@@ -19,7 +20,7 @@ import { ProductReviews } from "../browse/reviews";
 
 @Component({
   selector: "pc-shop-p-slug-page",
-  imports: [PcLink, ShopNotFound, ProductPageSkeleton, ProductMain, ProductRail, BoughtTogether, SponsoredRail, ProductQuestions, ProductReviews, BrowsingHistory],
+  imports: [PcLink, ShopNotFound, ProductPageSkeleton, ProductMain, ProductRail, BoughtTogether, BundleSet, SponsoredRail, ProductQuestions, ProductReviews, BrowsingHistory],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -99,6 +100,7 @@ import { ProductReviews } from "../browse/reviews";
             </section>
           }
 
+          <pc-bundle-set [slug]="p.slug" />
           <pc-bought-together [slug]="p.slug" />
           <pc-product-reviews [slug]="p.slug" />
           <pc-product-questions [slug]="p.slug" [title]="p.title" />

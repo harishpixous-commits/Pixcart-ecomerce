@@ -289,6 +289,13 @@ public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
             "ORDER BY ends_at IS NULL, ends_at ASC, created_at DESC LIMIT @limit",
             new { now, sellerId, pid = productId.ToString(), chain = categoryChain.ToList(), limit });
 
+    /// <summary>Live bundle coupons (listed or automatic) whose set includes the product, newest first.</summary>
+    public Task<IEnumerable<CouponModel>> BundleCouponsForProductAsync(Guid productId, DateTime now) =>
+        db.QueryAsync<CouponModel>(
+            "SELECT * FROM coupons WHERE kind = 'bundle' AND is_active = 1 AND (show_on_checkout = 1 OR is_automatic = 1) AND (starts_at IS NULL OR starts_at <= @now) " +
+            "AND (ends_at IS NULL OR ends_at >= @now) AND (usage_limit IS NULL OR used_count < usage_limit) AND JSON_CONTAINS(product_ids, JSON_QUOTE(@pid)) " +
+            "ORDER BY created_at DESC LIMIT 5", new { now, pid = productId.ToString() });
+
     /// <summary>Products most often in the same order as this one (last 180 days, live packages), still on sale and in stock.</summary>
     public Task<IEnumerable<ProductModel>> BoughtTogetherAsync(Guid productId, DateTime since, int limit) =>
         db.QueryAsync<ProductModel>(

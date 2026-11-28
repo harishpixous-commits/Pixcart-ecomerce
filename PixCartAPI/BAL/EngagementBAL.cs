@@ -241,6 +241,29 @@ public class EngagementBAL(
         return new JsonObject { ["items"] = CatalogBAL.Arr(await cards.ProductCardsAsync([p, .. others])) }; // the product itself first
     }
 
+    /// <summary>Bundle offers that include this product, for the "Buy the set" block: the set, its price and the saving.</summary>
+    public async Task<JsonObject> BundlesAsync(string slug)
+    {
+        var p = await ProductAsync(slug);
+        var outp = new JsonArray();
+        foreach (var c in await catalog.BundleCouponsForProductAsync(p.Id, DateTimeFunctions.UtcNow()))
+        {
+            var ids = JsonHelper.Array(c.ProductIds).Select(x => Guid.Parse(x!.GetValue<string>())).ToList();
+            var found = (await catalog.PublicProductsByIdsAsync(ids, inStockOnly: true)).ToDictionary(x => x.Id);
+            if (found.Count != ids.Count) continue;   // a member is gone or sold out: the set cannot be bought
+            var items = await cards.ProductCardsAsync(ids.Select(i => found[i]).ToList());
+            var total = items.Sum(i => (long)i["price"]!.GetValue<long>());
+            var saving = Money.ApplyBps(total, c.Value * 100);
+            if (c.MaxDiscountPaise is > 0) saving = Math.Min(saving, c.MaxDiscountPaise.Value);
+            outp.Add(new JsonObject
+            {
+                ["code"] = c.Code, ["automatic"] = c.IsAutomatic, ["percent"] = c.Value, ["items"] = CatalogBAL.Arr(items),
+                ["total"] = total, ["saving"] = saving, ["set_price"] = total - saving,
+            });
+        }
+        return new JsonObject { ["bundles"] = outp };
+    }
+
     // ------------------------------------------------------------------------- seller
 
     public async Task<JsonObject> SellerQuestionsAsync(SellerModel seller, bool unanswered, int page)

@@ -23,6 +23,7 @@ public interface IEngagementBAL
 
     Task<JsonObject> CompareAsync(string ids);
     Task<JsonObject> BoughtTogetherAsync(string slug);
+    Task<JsonObject> BundlesAsync(string slug);
 
     Task<JsonObject> SellerQuestionsAsync(SellerModel seller, bool unanswered, int page);
     Task<JsonObject> SellerBadgesAsync(SellerModel seller);

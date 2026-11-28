@@ -931,6 +931,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Bundle_block_lists_the_set_with_price_and_saving()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000421", "block-shirt-a");
+        var (varB, prodB, _) = await ShirtInStock("9400000422", "block-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "SETBLOCK", description = "", kind = "bundle", value = 10, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = true, product_slugs = new[] { "block-shirt-a", "block-shirt-b" } })).Status);
+        var pa = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varA });
+        var pb = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varB });
+        var v = Factory.CreateClient();
+        foreach (var slug in new[] { "block-shirt-a", "block-shirt-b" })
+        {
+            var b = (await v.GetFromJsonAsync<JsonObject>($"/api/catalog/products/{slug}/bundles"))!["bundles"]!.AsArray();
+            Assert.Single(b);
+            Assert.Equal("SETBLOCK", b[0]!["code"]!.GetValue<string>());
+            Assert.Equal(new[] { "block-shirt-a", "block-shirt-b" }, b[0]!["items"]!.AsArray().Select(i => i!["slug"]!.GetValue<string>()).ToArray());
+            var total = pa + pb;
+            Assert.Equal(total, b[0]!["total"]!.GetValue<long>()); Assert.Equal(total / 10, b[0]!["saving"]!.GetValue<long>()); Assert.Equal(total - total / 10, b[0]!["set_price"]!.GetValue<long>());
+        }
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "QUIETSET", description = "", kind = "bundle", value = 20, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, product_slugs = new[] { "block-shirt-a", "block-shirt-b" } })).Status);
+        Assert.Single((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products/block-shirt-a/bundles"))!["bundles"]!.AsArray());
+        await ApiFactory.DbExecAsync("UPDATE products SET in_stock = 0 WHERE id = @id", new { id = prodB });
+        Assert.Empty((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products/block-shirt-a/bundles"))!["bundles"]!.AsArray());
+    }
+
+    [Fact]
     public async Task A_coupon_for_chosen_products_is_offered_only_on_those_pages()
     {
         var admin = await Admin();

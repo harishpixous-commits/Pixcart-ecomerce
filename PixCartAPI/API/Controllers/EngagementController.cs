@@ -57,6 +57,9 @@ public class EngagementController(IEngagementBAL engagement, ICurrentUser me) : 
     [HttpGet("/api/catalog/products/{slug}/bought-together")]
     public Task<JsonObject> BoughtTogether(string slug) => engagement.BoughtTogetherAsync(slug);
 
+    [HttpGet("/api/catalog/products/{slug}/bundles")]
+    public Task<JsonObject> Bundles(string slug) => engagement.BundlesAsync(slug);
+
     // ------------------------------------------------------------------------- seller
 
     [HttpGet("/api/seller/questions"), Seller]
