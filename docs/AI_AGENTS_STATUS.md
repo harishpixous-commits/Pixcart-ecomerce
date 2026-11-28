@@ -37,3 +37,6 @@ Same behaviour as the Python version: listing approves clean pending products or
 
 ## Test status (28 Nov, after Push 145)
 Full .NET suite: 392 tests, 391 passed on the first full run; the one failure was a real gap, the route-guard test found the agents routes and account/delete-info had no guard rule. Fixed (agents routes need the assistant_actions permission, same as the Python version); route-guard and agent tests then passed (12/12). A second complete full run is not yet done. Python full suite: 323 passed.
+
+## Business assistant (.NET: working and tested)
+Same as the Python version: weekly digest proposal (sales vs the week before, low stock, unanswered tickets, pending listings); approving sends it in-app and by email to the approver. Counts only. Test passed. Angular type-check pending after the sandbox reset (node_modules reinstall).

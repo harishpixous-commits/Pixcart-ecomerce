@@ -42,6 +42,10 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             "Finds open tickets that nobody has answered after a few hours and drafts a first acknowledging reply for staff to approve.",
             "Only the first acknowledgement. It does not decide refunds or replacements, read attachments or answer follow-up questions. Staff still resolve the ticket.",
             SupportScanAsync),
+        new("assistant", "Business assistant",
+            "Once a week adds up sales against the week before, items nearly out of stock, unanswered tickets and listings waiting for review, and proposes a short digest. Approving sends it to you.",
+            "Counts only. It does not explain why sales moved, forecast, or send the digest to anyone but the person who approved it.",
+            AssistantScanAsync),
     ];
 
     private async Task<JsonObject> CfgAsync() => (JsonObject)(await growth.GetAsync())["agents"]!;
@@ -196,6 +200,28 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
                 new() { ["ticket_id"] = t.Id.ToString(), ["messages"] = msgs.Count.ToString(), ["body"] = body }, "support"));
         }
         return outp;
+    }
+
+    // ---------- business assistant ----------
+    private async Task<List<Draft>> AssistantScanAsync(JsonObject cfg)
+    {
+        var now = DateTime.UtcNow; var week = cfg.Int("assistant_window_days"); var lowAt = cfg.Int("assistant_low_stock"); var hours = cfg.Int("assistant_ticket_hours");
+        const string live = "status NOT IN ('pending_payment','cancelled')";
+        var cur = await db.QueryFirstOrDefaultAsync<(long N, long Total)>($"SELECT COUNT(*) AS N, COALESCE(SUM(total), 0) AS Total FROM sub_orders WHERE created_at >= @a AND created_at < @b AND {live}", new { a = now.AddDays(-week), b = now });
+        var prev = await db.QueryFirstOrDefaultAsync<(long N, long Total)>($"SELECT COUNT(*) AS N, COALESCE(SUM(total), 0) AS Total FROM sub_orders WHERE created_at >= @a AND created_at < @b AND {live}", new { a = now.AddDays(-2 * week), b = now.AddDays(-week) });
+        var low = await db.ExecuteScalarAsync<long>("SELECT COUNT(DISTINCT v.id) FROM variants v JOIN products p ON p.id = v.product_id WHERE v.is_active = 1 AND p.status = 'approved' AND v.stock <= @lowAt", new { lowAt });
+        var stuck = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM support_tickets WHERE status = 'open' AND acknowledged_at IS NULL AND created_at <= @before", new { before = now.AddHours(-hours) });
+        var pending = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM products WHERE status = 'pending'");
+        static string Rs(long paise) => $"Rs {paise / 100.0:N0}";
+        var change = prev.N == 0 ? "no orders the week before" : $"{(cur.Total - prev.Total) * 100 / Math.Max(prev.Total, 1):+0;-0;+0}% against the week before";
+        string[][] rows =
+        [
+            [$"Sales, last {week} days", $"{cur.N} orders, {Rs(cur.Total)} ({change})"], [$"Items with {lowAt} or fewer left", low.ToString()],
+            [$"Tickets nobody has answered for {hours} hours", stuck.ToString()], ["Listings waiting for review", pending.ToString()],
+        ];
+        var digest = string.Join("\n", rows.Select(r => $"{r[0]}: {r[1]}"));
+        var week_key = System.Globalization.ISOWeek.GetYear(now) + "-W" + System.Globalization.ISOWeek.GetWeekOfYear(now).ToString("00");
+        return [new("send_digest", week_key, $"Weekly digest: {cur.N} orders, {Rs(cur.Total)}, {low} low stock, {stuck} unanswered tickets, {pending} listings waiting", rows, new() { ["digest"] = digest }, "assistant_actions")];
     }
 
     // ---------- core ----------
@@ -381,6 +407,11 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM ticket_messages WHERE ticket_id = @tid AND is_internal = 0", new { tid }) != long.Parse(p["messages"]!.GetValue<string>()))
                 throw new Stale("The ticket has new messages since this draft, so nothing was sent.");
             await desk.ReplyAsync(admin, tid, p["body"]!.GetValue<string>(), false, null, null, null);
+            return;
+        }
+        if (row.Kind == "send_digest")
+        {
+            await notify.NotifyUserAsync(admin.Id, "assistant_digest", new Dictionary<string, string> { ["digest"] = p["digest"]!.GetValue<string>() }, "/admin/agents");
             return;
         }
         if (row.Kind == "delay_notice")

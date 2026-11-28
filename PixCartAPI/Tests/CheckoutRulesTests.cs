@@ -1094,6 +1094,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Assistant_agent_proposes_a_weekly_digest_and_approval_sends_it_to_the_approver()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000318", "agent-assistant-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000208", "Digest Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.Equal(201, (await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") })).Status);
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true })).Status);
+        Assert.Equal(0, (await Run())["assistant"]!.GetValue<int>());
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { assistant_enabled = true })).Status);
+        Assert.Equal(1, (await Run())["assistant"]!.GetValue<int>());
+        Assert.Equal(0, (await Run())["assistant"]!.GetValue<int>()); // one per week
+        var p = (await admin.Get("/api/admin/agents/proposals?agent=assistant")).Json["items"]![0]!;
+        Assert.Equal("send_digest", p["kind"]!.GetValue<string>()); Assert.Contains("1 orders", p["summary"]!.GetValue<string>());
+        Task<long> Heard() => ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'assistant_digest' AND channel = 'inapp' AND body LIKE '%Sales, last 7 days: 1 orders%'");
+        Assert.Equal(0, await Heard());
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{p["id"]!.GetValue<string>()}/approve", new { })).Status);
+        Assert.Equal(1, await Heard());
+    }
+
+    [Fact]
     public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
     {
         var admin = await Admin();
