@@ -490,3 +490,6 @@ Not wired: automatic gateway refund call.
 
 ## Push 150: Customer list finds staff tags (Python and .NET done)
 - Admin, Customers: the search box also matches staff tags, and the list API takes ?tag= for an exact tag (any letter case). Each row carries its tags. Tests: tests/test_customer_notes.py, .NET Customer_list_filters_and_searches_by_staff_tag. Full suites at this point: Python 328 passed; .NET 397 passed, 0 failed (single full runs).
+
+## Push 151: Coupon limited to chosen products (Python and .NET done)
+- Admin, Coupons: "Only these products" takes product link names (last part of the product page address), comma separated. Only those products count towards the discount and the minimum; empty means the whole cart. An unknown name is refused. Platform coupons only (seller coupons are unchanged). Column coupons.product_ids (Alembic 0056; .NET V033). Tests: tests/test_coupon_products.py and the .NET Coupon_limited test. Not wired: a product picker (names are typed). Forms type-checked only.

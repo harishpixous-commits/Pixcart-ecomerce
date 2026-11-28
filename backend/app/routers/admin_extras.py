@@ -97,6 +97,7 @@ class AdminCouponIn(SellerCouponIn):
     kind: Literal["percent", "flat", "bxgy"]  # "bxgy" = buy X get Y: buy_qty, get_qty, value = percent off those get_qty units (100 = free)
     buy_qty: int = Field(default=0, ge=0, le=20)
     get_qty: int = Field(default=0, ge=0, le=20)
+    product_slugs: list[str] = Field(default_factory=list, max_length=30)  # only these products count; empty = the whole cart
     category_id: uuid.UUID | None = None
     first_order_only: bool = False
     show_on_checkout: bool = True
@@ -110,9 +111,33 @@ def _check_bxgy(body: AdminCouponIn) -> None:
         body.buy_qty = body.get_qty = 0
 
 
+async def _product_ids(session, slugs: list[str]) -> list[str]:
+    """Product slugs typed by staff to product ids; an unknown slug is an error, not silently ignored."""
+    clean = list(dict.fromkeys(s.strip().lower().rsplit("/", 1)[-1] for s in slugs if s.strip()))
+    if not clean:
+        return []
+    rows = dict((await session.execute(select(Product.slug, Product.id).where(func.lower(Product.slug).in_(clean)))).all())
+    rows = {k.lower(): v for k, v in rows.items()}
+    missing = [s for s in clean if s not in rows]
+    if missing:
+        raise ApiError(f"No product with the link name: {', '.join(missing)}", "product_not_found")
+    return [str(rows[s]) for s in clean]
+
+
+async def _coupon_outs(session, items: list[Coupon]) -> list[dict]:
+    ids = {uuid.UUID(i) for c in items for i in (c.product_ids or [])}
+    slugs = {str(i): s for i, s in (await session.execute(select(Product.id, Product.slug).where(Product.id.in_(ids)))).all()} if ids else {}
+    out = []
+    for c in items:
+        o = coupon_admin_out(c)
+        o["product_slugs"] = [slugs[i] for i in (c.product_ids or []) if i in slugs]
+        out.append(o)
+    return out
+
+
 @router.get("/coupons")
 async def coupons(admin: Perm("marketing"), session: SessionDep) -> list[dict]:
-    return [coupon_admin_out(c) for c in (await session.execute(select(Coupon).order_by(Coupon.created_at.desc()))).scalars()]
+    return await _coupon_outs(session, list((await session.execute(select(Coupon).order_by(Coupon.created_at.desc()))).scalars()))
 
 
 @router.post("/coupons", status_code=201)
@@ -121,11 +146,11 @@ async def create_coupon(body: AdminCouponIn, admin: Perm("marketing"), session: 
     _check_bxgy(body)
     if (await session.execute(select(Coupon.id).where(func.upper(Coupon.code) == body.code.upper()))).first():
         raise Conflict("This code is already used", "code_taken")
-    c = Coupon(**body.model_dump(exclude={"code"}), code=body.code.upper(), funded_by="platform")
+    c = Coupon(**body.model_dump(exclude={"code", "product_slugs"}), product_ids=await _product_ids(session, body.product_slugs), code=body.code.upper(), funded_by="platform")
     session.add(c)
     audit(session, admin, "coupon.create", "coupon", c.code)
     await session.commit()
-    return coupon_admin_out(c)
+    return (await _coupon_outs(session, [c]))[0]
 
 
 class CouponBatchIn(BaseModel):
@@ -154,7 +179,7 @@ async def generate_coupons(coupon_id: uuid.UUID, body: CouponBatchIn, admin: Per
         codes += sorted(want - taken - set(codes))
     for code in codes:
         session.add(Coupon(
-            code=code, description=base.description, kind=base.kind, value=base.value, buy_qty=base.buy_qty, get_qty=base.get_qty, max_discount_paise=base.max_discount_paise,
+            code=code, description=base.description, kind=base.kind, value=base.value, product_ids=list(base.product_ids or []), buy_qty=base.buy_qty, get_qty=base.get_qty, max_discount_paise=base.max_discount_paise,
             min_order_paise=base.min_order_paise, starts_at=base.starts_at, ends_at=base.ends_at,
             usage_limit=1 if body.single_use else base.usage_limit, per_user_limit=1, funded_by="platform", category_id=base.category_id,
             first_order_only=base.first_order_only, is_active=base.is_active, show_on_checkout=False,
@@ -171,13 +196,15 @@ async def update_coupon(coupon_id: uuid.UUID, body: AdminCouponIn, admin: Perm("
         raise NotFound("Coupon")
     _check_coupon_values(body.kind, body.value)
     _check_bxgy(body)
-    for k, v in body.model_dump(exclude={"code"}).items():
+    for k, v in body.model_dump(exclude={"code", "product_slugs"}).items():
         if c.funded_by == "seller" and k == "category_id":
             continue
         setattr(c, k, v)
+    if c.funded_by != "seller":
+        c.product_ids = await _product_ids(session, body.product_slugs)
     audit(session, admin, "coupon.update", "coupon", c.code)
     await session.commit()
-    return coupon_admin_out(c)
+    return (await _coupon_outs(session, [c]))[0]
 
 
 # ----------------------------------------------------------------------------- reviews

@@ -78,6 +78,7 @@ async def evaluate(session: AsyncSession, code: str, user_id: uuid.UUID, lines: 
         if not line.problem
         and (c.seller_id is None or line.seller.id == c.seller_id)
         and (allowed_categories is None or line.product.category_id in allowed_categories)
+        and (not c.product_ids or str(line.product.id) in c.product_ids)
     }
     base = sum(eligible.values())
     if c.kind == "bxgy":  # buy X get Y: the cheapest Y of every X+Y units get `value` percent off

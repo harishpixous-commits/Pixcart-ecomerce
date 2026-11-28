@@ -241,6 +241,7 @@ class Coupon(IdMixin, TimestampMixin, Base):
     show_on_checkout: Mapped[bool] = mapped_column(Boolean, default=True)
     buy_qty: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # "bxgy" coupons: units the customer buys ...
     get_qty: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # ... then this many units get `value` percent off
+    product_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # platform coupons: only these products count (empty = all)
     is_automatic: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # applied at checkout with no code (Admin → Growth → Automatic discounts)
 
     __table_args__ = (
