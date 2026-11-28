@@ -29,6 +29,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
+  return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
   segments: { title: "Customer segments", hint: "VIP, new and lapsed customers for targeted offers." },
 };

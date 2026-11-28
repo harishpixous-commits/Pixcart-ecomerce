@@ -3,7 +3,7 @@
 import { FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, ErrorNote, Field, Modal, ProductImage, Select, StatusPill, Textarea, TextField, useToast } from "@/components/ui";
-import { api, ApiError, downloadBlob, quietly } from "@/lib/api";
+import { api, ApiError, downloadBlob, quietly, uploadWithProgress } from "@/lib/api";
 import { date, rupees } from "@/lib/format";
 import type { ReturnableItem, ReturnView } from "@/lib/types";
 
@@ -45,11 +45,14 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
   const [upi, setUpi] = useState("");
+  const [photoCfg, setPhotoCfg] = useState<{ enabled: boolean; required_for_defects: boolean; max: number }>({ enabled: false, required_for_defects: false, max: 3 });
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   useEffect(() => {
-    if (open) api<{ reasons: { code: string; label: string; defect: boolean }[] }>("/api/returns/reasons").then((r) => setReasons(r.reasons)).catch(quietly);
+    if (open) api<{ reasons: { code: string; label: string; defect: boolean }[]; photos?: { enabled: boolean; required_for_defects: boolean; max: number } }>("/api/returns/reasons").then((r) => { setReasons(r.reasons); if (r.photos) setPhotoCfg(r.photos); }).catch(quietly);
   }, [open]);
   const chosen = items.filter((i) => (qty[i.order_item_id] ?? 0) > 0);
   const refund = chosen.reduce((n, i) => n + i.unit_refund * (qty[i.order_item_id] ?? 0), 0);
@@ -57,11 +60,26 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
   const defectsOnly = chosen.some((i) => i.defects_only);
   const allowed = defectsOnly ? reasons.filter((r) => r.defect) : reasons;
   const why = allowed.some((r) => r.code === reason) ? reason : "";
+  const showPhotos = !staff && photoCfg.enabled;
+  const photoNeeded = showPhotos && photoCfg.required_for_defects && !!allowed.find((r) => r.code === why)?.defect && photos.length === 0;
+  async function addPhoto(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const up = await uploadWithProgress<{ url: string }>("/api/returns/photos", file, () => {});
+      setPhotos((p) => [...p, up.url]);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not upload the photo");
+    } finally {
+      setUploading(false);
+    }
+  }
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      await api(copy.path, { method: "POST", body: { sub_order_id: subId, items: chosen.map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: why, comment, refund_upi: upi } });
+      await api(copy.path, { method: "POST", body: { sub_order_id: subId, items: chosen.map((i) => ({ order_item_id: i.order_item_id, qty: qty[i.order_item_id] })), reason: why, comment, refund_upi: upi, ...(showPhotos ? { photos } : {}) } });
       toast(copy.done);
       onDone();
     } catch (e) {
@@ -98,10 +116,26 @@ export function ReturnRequestModal({ subId, items, needsUpi, open, onClose, onDo
           </Select>
         </Field>
         <Field label="More details (optional)" htmlFor="rc"><Textarea id="rc" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={3} /></Field>
+        {showPhotos && (
+          <Field label={photoCfg.required_for_defects ? "Photos of the problem (needed for damaged or faulty items)" : "Photos (optional)"} htmlFor="rp" hint={`Up to ${photoCfg.max} photos`}>
+            <div className="flex flex-wrap items-center gap-2" data-testid="return-photos">
+              {photos.map((u) => (
+                <span key={u} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={u} alt="Return photo" className="h-16 w-16 rounded-lg border border-line object-cover" />
+                  <button type="button" aria-label="Remove photo" className="absolute -right-1 -top-1 rounded-full bg-white px-1 text-xs shadow" onClick={() => setPhotos(photos.filter((x) => x !== u))}>×</button>
+                </span>
+              ))}
+              {photos.length < photoCfg.max && (
+                <input id="rp" type="file" accept="image/*" disabled={uploading} onChange={(e) => { void addPhoto(e.target.files?.[0]); e.target.value = ""; }} className="text-sm" />
+              )}
+            </div>
+          </Field>
+        )}
         {needsUpi && <TextField label={copy.upi} value={upi} onChange={(e) => setUpi(e.target.value.trim())} placeholder="yourname@okbank" hint={copy.upiHint} />}
         <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
           <p>Refund: <span className="font-display text-lg font-bold">{rupees(refund)}</span></p>
-          <Button onClick={submit} loading={busy} disabled={!chosen.length || !why || (needsUpi && !upi)}>{copy.submit}</Button>
+          <Button onClick={submit} loading={busy} disabled={!chosen.length || !why || (needsUpi && !upi) || photoNeeded || uploading}>{copy.submit}</Button>
         </div>
       </div>
     </Modal>

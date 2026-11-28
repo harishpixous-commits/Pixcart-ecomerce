@@ -67,6 +67,16 @@ export default function SellerReturns() {
                 </div>
               ))}
               <p className="mt-2 text-ink-soft"><strong>{r.reason_label}.</strong> {r.comment}</p>
+              {(r.photos ?? []).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2" data-testid="return-photos">
+                  {(r.photos ?? []).map((u) => (
+                    <a key={u} href={u} target="_blank" rel="noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt="Photo from the customer" className="h-16 w-16 rounded-lg border border-line object-cover" />
+                    </a>
+                  ))}
+                </div>
+              )}
               <p className="text-sm text-ink-faint">Requested {dateTime(r.created_at)}</p>
               {r.fleet_pickup?.requested && (
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-peacock-light/50 p-3 text-sm ring-1 ring-peacock/15" data-testid="seller-return-pickup">
