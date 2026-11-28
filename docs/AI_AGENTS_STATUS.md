@@ -15,7 +15,7 @@ Both versions get every agent: Python (`instinct/python-advanced`) and .NET/Angu
 
 | Agent | Python | .NET + Angular | What it does |
 |---|---|---|---|
-| Order update | yes (`tests/test_agents.py`) | not yet | Finds packages on their way that are past the promised delivery date and proposes a plain delay message to the customer (in-app and email). Says only what is true: it was due, it has not arrived. No new date promised. |
+| Order update | yes (`tests/test_agents.py`) | yes (`Order_update_agent...` in CheckoutRulesTests; Angular type-checked only) | Finds packages on their way that are past the promised delivery date and proposes a plain delay message to the customer (in-app and email). Says only what is true: it was due, it has not arrived. No new date promised. |
 | Delivery and shipping | yes (`tests/test_agents.py`) | yes (`Delivery_agent_writes_proposals...` in CheckoutRulesTests; Angular type-checked only, never run in a browser) | Finds confirmed packages not shipped after N hours: proposes a seller reminder. Much later: proposes cancel and refund. Shipped with no tracking: proposes asking the seller for it. |
 
 Also working from before (not part of the proposal queue): admin business assistant (26 read tools, 20 Confirm-gated actions), customer shop assistant, AI task library (listing writer, listing check, review summary, support reply, customer message, review reply, business brief), seller and order risk scores. All answer from real queries or templates in sandbox mode.
