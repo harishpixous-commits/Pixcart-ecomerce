@@ -29,6 +29,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
+  promo_popup: { title: "Welcome popup", hint: "A one-time popup a few seconds after a shopper arrives. It shows again only if you change its words. The link must start with / (a page on this shop); other links are dropped." },
   newsletter: { title: "Newsletter box", hint: "Shows an email box above the shop footer. Addresses are collected on the Newsletter tab. Nothing is emailed from here: use the list yourself or with your email tool." },
   wishlist_share: { title: "Share wishlist", hint: "Shoppers can make a private link to their wishlist. Anyone with the link sees the saved products and the shopper's first name. Shoppers can stop sharing, which kills the link. Switching this off stops every link." },
   return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },

@@ -197,3 +197,17 @@ async def test_product_size_guide_beats_category_guide(client, admin, categories
     assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["size_guide"] == [["Size", "Chest"], ["M", "40"]]
     mine = (await seller.get(f"/api/seller/products/{shirt['id']}")).json()
     assert mine["size_guide"] == "Size | Chest\nM | 40"
+
+
+async def test_promo_popup_is_off_until_switched_on_and_keeps_links_on_site(client, admin):
+    assert (await client.get("/api/promo-popup")).json() == {"enabled": False}
+    r = await admin.put("/api/admin/growth/settings", {"promo_popup": {"enabled": True, "title": "Diwali sale", "body": "Up to 40% off", "button_label": "See deals", "link": "/search?sort=discount", "delay_seconds": 3}})
+    assert r.status_code == 200, r.text
+    got = (await client.get("/api/promo-popup")).json()
+    assert got == {"enabled": True, "title": "Diwali sale", "body": "Up to 40% off", "button_label": "See deals", "link": "/search?sort=discount", "delay_seconds": 3}
+    await admin.put("/api/admin/growth/settings", {"promo_popup": {"link": "https://evil.example/x"}})
+    got = (await client.get("/api/promo-popup")).json()
+    assert got["link"] == "" and got["button_label"] == ""  # an outside link is never offered
+    await admin.put("/api/admin/growth/settings", {"promo_popup": {"link": "//evil.example"}})
+    assert (await client.get("/api/promo-popup")).json()["link"] == ""
+    assert (await admin.put("/api/admin/growth/settings", {"promo_popup": {"delay_seconds": 99}})).status_code == 400

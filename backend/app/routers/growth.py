@@ -166,6 +166,17 @@ async def newsletter_box(session: SessionDep) -> dict:
     return {"enabled": cfg["enabled"], "title": cfg["title"]}
 
 
+@me_router.get("/promo-popup")
+async def promo_popup(session: SessionDep) -> dict:
+    """The one-time welcome popup the storefront opens, when Admin → Growth → Promo popup is on. The link must stay on this site."""
+    cfg = (await growth.get(session))["promo_popup"]
+    link = cfg["link"].strip()
+    if not link.startswith("/") or link.startswith("//") or "\\" in link:
+        link = ""
+    on = bool(cfg["enabled"] and (cfg["title"].strip() or cfg["body"].strip()))
+    return {"enabled": on, "title": cfg["title"], "body": cfg["body"], "button_label": cfg["button_label"] if link else "", "link": link, "delay_seconds": cfg["delay_seconds"]} if on else {"enabled": False}
+
+
 @me_router.post("/newsletter", status_code=201)
 async def newsletter_join(body: NewsletterIn, request: Request, session: SessionDep) -> dict:
     if not (await newsletter.config(session))["enabled"]:

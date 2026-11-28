@@ -6,6 +6,7 @@
  */
 
 import { NewsletterBox } from "@/components/newsletter";
+import { PromoPopup } from "@/components/promo-popup";
 import { Construction, Eye, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -123,6 +124,7 @@ function OpenShop({ maintenance, children }: { maintenance: boolean; children: R
       <BackToTop />
       <RegionStrip />
       <NewsletterBox />
+      <PromoPopup />
       <Footer />
       {MobileNav && <MobileNav />}
       <ShopAssistant />

@@ -46,6 +46,8 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "return_photos": {"enabled": (False, "bool", 0, 0), "required_for_defects": (False, "bool", 0, 0), "max_photos": (3, "int", 1, 6)},
     "newsletter": {"enabled": (False, "bool", 0, 0), "title": ("Get offers in your inbox", "label", 0, 60)},
     "wishlist_share": {"enabled": (False, "bool", 0, 0)},
+    "promo_popup": {"enabled": (False, "bool", 0, 0), "title": ("Welcome", "label", 0, 60), "body": ("Today's best deals are live.", "label", 0, 200),
+                    "button_label": ("Shop now", "label", 0, 30), "link": ("/search?sort=discount", "label", 0, 200), "delay_seconds": (5, "int", 0, 60)},
     "bulk_edit": {"enabled": (True, "bool", 0, 0), "max_rows": (500, "int", 1, 5000)},
     "campaigns": {"enabled": (False, "bool", 0, 0), "max_recipients": (500, "int", 1, 5000), "max_per_day": (3, "int", 1, 20)},
     "shipping_zones": {"enabled": (False, "bool", 0, 0), "remote_prefixes": ("", "text", 0, 300), "remote_surcharge_paise": (6000, "int", 0, 100000), "state_fees": ("", "text", 0, 400), "state_free_above": ("", "text", 0, 400), "waive_when_free": (True, "bool", 0, 0)},
