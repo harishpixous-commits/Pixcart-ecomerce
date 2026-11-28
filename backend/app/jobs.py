@@ -45,6 +45,7 @@ _LOCK_POINTS_EXPIRY = 7_201_030
 _LOCK_CAMPAIGNS = 7_201_018
 _LOCK_SHIP_REMINDERS = 7_201_020
 _LOCK_AGENTS = 7_201_031
+_LOCK_PRODUCT_LIVE = 7_201_032
 
 
 async def _with_lock(lock_id: int, fn) -> None:
@@ -273,6 +274,23 @@ async def low_stock_job() -> None:
     await _with_lock(_LOCK_LOWSTOCK, run)
 
 
+async def product_live_job() -> None:
+    """Tells a seller once when an approved product with a go-live time has gone live."""
+    from sqlalchemy import func, select
+
+    from app.models import Product
+
+    async def run(session):
+        rows = (await session.execute(select(Product).where(Product.status == "approved", Product.publish_at.is_not(None), Product.publish_at <= func.now(),
+                                                              Product.publish_notified_at.is_(None)).limit(500))).scalars().all()
+        for p in rows:
+            p.publish_notified_at = utcnow()
+            await notify_seller(session, p.seller_id, "product_live", {"item": p.title}, link=f"/p/{p.slug}")
+        await session.commit()
+
+    await _with_lock(_LOCK_PRODUCT_LIVE, run)
+
+
 async def deals_job() -> None:
     """Starts and ends deals on time (the selling price switches to and from the deal price)."""
     from app.services import deals
@@ -366,6 +384,7 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(payouts_job, "cron", hour=PAYOUT_RUN_IST.hour, minute=PAYOUT_RUN_IST.minute, timezone=IST, id="payouts", max_instances=1, coalesce=True)
     scheduler.add_job(review_summary_job, "interval", hours=1, id="review_summaries", max_instances=1, coalesce=True)
     scheduler.add_job(low_stock_job, "cron", hour=3, minute=0, id="low_stock", max_instances=1, coalesce=True)  # 08:30 IST
+    scheduler.add_job(product_live_job, "interval", minutes=5, id="product_live", max_instances=1, coalesce=True)
     scheduler.add_job(deals_job, "interval", minutes=1, id="deals", max_instances=1, coalesce=True)
     scheduler.add_job(ads_billing_job, "interval", hours=1, id="ads_billing", max_instances=1, coalesce=True)
     scheduler.add_job(alerts_job, "interval", minutes=10, id="alerts", max_instances=1, coalesce=True)

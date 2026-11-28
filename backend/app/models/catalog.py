@@ -79,6 +79,7 @@ class Product(IdMixin, TimestampMixin, Base):
     rejection_reason: Mapped[str] = mapped_column(Text, default="")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    publish_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # the seller was told the scheduled product went live
     publish_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # an approved product shows to shoppers only from this moment; empty: right away
 
     # Denormalised from active variants so listing pages sort/filter without joins.

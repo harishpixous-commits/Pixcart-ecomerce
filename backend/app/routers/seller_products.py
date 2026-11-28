@@ -497,6 +497,8 @@ async def update_product(product_id: uuid.UUID, body: ProductIn, seller: SellerA
         setattr(p, f, dumped[f])
     p.title, p.brand = body.title.strip(), body.brand.strip()
     p.seo_title, p.seo_description = body.seo_title, body.seo_description  # search listing text: no re-approval
+    if p.publish_at != body.publish_at:
+        p.publish_notified_at = None  # a new go-live time gets its own "it is live" note
     p.publish_at = body.publish_at  # a go-live time never sends a live product back for approval
     p.tags = body.tags  # labels only: changing them never sends a live product back for approval
     content_changed = (any(before[f] != getattr(p, f) for f in CONTENT_FIELDS) or before_images != body.images

@@ -114,6 +114,13 @@ async def test_scheduled_publish_hides_an_approved_product_until_its_time(client
     assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).status_code == 200
     assert shirt["slug"] in [p["slug"] for p in (await client.get("/api/catalog/products")).json()["items"]]
     assert (await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})).status_code in (200, 201)
+    # the seller is told once that it is live
+    from app import jobs
+
+    await jobs.product_live_job()
+    await jobs.product_live_job()
+    notes = (await tn.get("/api/notifications")).json()["items"]
+    assert len([x for x in notes if x["title"] == "Your product is live" and shirt["title"] in x["body"]]) == 1
     # too far ahead is refused, and an empty value clears it
     far = (datetime.now(timezone.utc) + timedelta(days=400)).isoformat()
     assert (await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"publish_at": far})).status_code == 422
