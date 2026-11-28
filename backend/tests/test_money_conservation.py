@@ -105,3 +105,27 @@ async def test_paid_order_one_part_cancelled_the_other_returned_refunds_exactly_
         ledger_total = (await s.execute(select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.seller_id == uuid.UUID(tn.seller_id)))).scalar_one()
     assert refunded == order["grand_total"], (refunded, order["grand_total"])
     assert ledger_total == 0, ledger_total
+
+
+async def test_returning_an_order_with_a_seller_funded_coupon_refunds_what_was_paid_and_zeroes_the_ledger(client, admin, categories):
+    from app.models import Refund
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    assert (await tn.post("/api/seller/coupons", {"code": "KOVAI100", "kind": "flat", "value": 10000, "min_order_paise": 50000})).status_code == 201
+    buyer = await login_phone(client, "9500000324", name="Seller Coupon Returner")
+    addr = await add_address(buyer, state="33")
+    await buyer.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 2})
+    r = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key(), "coupon_code": "KOVAI100"})
+    assert r.status_code == 201, r.text
+    order = r.json()["order"]
+    sub = order["sub_orders"][0]
+    await ship_and_deliver(tn, sub["id"], marketplace_courier=True)
+    line = (await buyer.get(f"/api/orders/{order['id']}/returnable")).json()["items"][sub["id"]]
+    r = await buyer.post("/api/returns", {"sub_order_id": sub["id"], "items": [{"order_item_id": i["order_item_id"], "qty": i["qty_left"]} for i in line], "reason": "size_fit", "refund_upi": "priya@okaxis"})
+    assert r.status_code == 201, r.text
+    rid = r.json()["id"]
+    assert (await tn.post(f"/api/seller/returns/{rid}", {"action": "approve"})).status_code == 200
+    assert (await tn.post(f"/api/seller/returns/{rid}", {"action": "received"})).status_code == 200
+    assert r.json()["refund_amount"] == order["grand_total"] - order.get("shipping_total", 0) - order.get("cod_fee", 0)
+    async with SessionLocal() as s:
+        total = (await s.execute(select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.seller_id == uuid.UUID(tn.seller_id)))).scalar_one()
+    assert total == 0, total
