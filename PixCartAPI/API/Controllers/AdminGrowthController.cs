@@ -168,3 +168,10 @@ public class NewsletterController(IMySqlDapperHelper db, IRateLimitBAL rateLimit
         return StatusCode(201, new { ok = true });
     }
 }
+
+/// <summary>The storefront's one-time welcome popup.</summary>
+[ApiController, Route("/api/promo-popup")]
+public class PromoPopupController(IMySqlDapperHelper db) : ControllerBase
+{
+    [HttpGet(""), RouteGuard("public")] public async Task<object> Box() => await BAL.PromoPopup.BoxAsync(db);
+}

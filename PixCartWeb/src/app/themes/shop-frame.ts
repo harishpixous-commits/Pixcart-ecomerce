@@ -16,6 +16,7 @@ import { AppBanner } from "../shared/chrome/app-banner";
 import { ShopBackBar } from "../shared/chrome/back-button";
 import { CompareTray } from "../shared/chrome/compare";
 import { NewsletterBox } from "../shared/chrome/newsletter";
+import { PromoPopup } from "../shared/chrome/promo-popup";
 import { RegionStrip } from "../shared/chrome/region-picker";
 import { Logo } from "../shared/shop/shop-chrome";
 import { Icon } from "../shared/ui/icon";
@@ -163,7 +164,7 @@ export class ShopAssistantLauncher {
 
 @Component({
   selector: "pc-shop-frame",
-  imports: [NgComponentOutlet, RouterOutlet, MaintenancePage, MaintenanceBar, AppBanner, PreviewBar, ShopBackBar, BackToTop, RegionStrip, NewsletterBox, ShopAssistantLauncher, CompareTray, ShopRouteSkeleton],
+  imports: [NgComponentOutlet, RouterOutlet, MaintenancePage, MaintenanceBar, AppBanner, PreviewBar, ShopBackBar, BackToTop, RegionStrip, NewsletterBox, PromoPopup, ShopAssistantLauncher, CompareTray, ShopRouteSkeleton],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -182,6 +183,7 @@ export class ShopAssistantLauncher {
         <pc-back-to-top />
         <pc-region-strip />
         <pc-newsletter-box />
+        <pc-promo-popup />
         <ng-container *ngComponentOutlet="slots().Footer" />
         @if (slots().MobileNav) {<ng-container *ngComponentOutlet="slots().MobileNav" />}
         <pc-shop-assistant />

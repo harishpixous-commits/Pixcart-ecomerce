@@ -1319,6 +1319,24 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Promo_popup_is_off_until_switched_on_and_keeps_links_on_site()
+    {
+        var admin = await Admin();
+        var anon = Factory.Browser();
+        Assert.False((await anon.Get("/api/promo-popup")).Json["enabled"]!.GetValue<bool>());
+        var r = await admin.Put("/api/admin/growth/settings", new { promo_popup = new { enabled = true, title = "Diwali sale", body = "Up to 40% off", button_label = "See deals", link = "/search?sort=discount", delay_seconds = 3 } });
+        Assert.True(r.Status == 200, r.ToString());
+        var got = (await anon.Get("/api/promo-popup")).Json;
+        Assert.Equal("Diwali sale", got["title"]!.GetValue<string>()); Assert.Equal("/search?sort=discount", got["link"]!.GetValue<string>()); Assert.Equal(3, got["delay_seconds"]!.GetValue<int>());
+        await admin.Put("/api/admin/growth/settings", new { promo_popup = new { link = "https://evil.example/x" } });
+        got = (await anon.Get("/api/promo-popup")).Json;
+        Assert.Equal("", got["link"]!.GetValue<string>()); Assert.Equal("", got["button_label"]!.GetValue<string>());
+        await admin.Put("/api/admin/growth/settings", new { promo_popup = new { link = "//evil.example" } });
+        Assert.Equal("", (await anon.Get("/api/promo-popup")).Json["link"]!.GetValue<string>());
+        Assert.Equal(400, (await admin.Put("/api/admin/growth/settings", new { promo_popup = new { delay_seconds = 99 } })).Status);
+    }
+
+    [Fact]
     public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
     {
         var admin = await Admin();

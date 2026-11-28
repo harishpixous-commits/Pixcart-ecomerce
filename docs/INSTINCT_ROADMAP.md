@@ -410,3 +410,7 @@ Admin → Checkout → Checkout options: "Preferred delivery time" (off) with 2 
 ## Push 135: delivery time reaches the delivery partner
 
 Wiring for Push 134. The delivery partner trip screen (and admin trip view) now leads the drop instructions with "Customer would like delivery: <time>." when the customer picked one, only while the partner is allowed to see customer details. No UI change, no migration. Still a request: assignment, routing and ETAs do not use it. Unit tests in both versions (drop_note / DropNote); not run against a live trip in a browser.
+
+## Push 136: welcome popup
+
+Admin → Growth → Settings → "Welcome popup" (off): title, text, button label, link, delay (0 to 60 seconds). The storefront opens it once per browser after the delay (stored in the browser, so it shows again only when the title or text changes). Close by button, Escape or clicking outside. The link is only offered when it starts with / (a page on this shop); outside links are dropped by the public endpoint `GET /api/promo-popup`. No migration. Tests in both versions, tsc and ngc clean. Not run in a browser, so timing and focus handling are unchecked. Not wired: no targeting by page, device or new/returning shopper.
