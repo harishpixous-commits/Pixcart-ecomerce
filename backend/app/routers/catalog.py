@@ -220,14 +220,20 @@ async def search(
         conds.append(Product.seller_id.in_(select(Seller.id).where(Seller.slug == seller)))
     text = q.strip()
     if text:
-        tsq = _prefix_tsquery(text)
-        text_conds = [literal(text).op("<%")(Product.title), Product.brand.ilike(text)]
-        if tsq:
-            query = func.to_tsquery("simple", tsq)
-            text_conds.insert(0, Product.search_vector.op("@@")(query))
-            rank = func.ts_rank(Product.search_vector, query) + func.word_similarity(text, Product.title)
-        else:
-            rank = func.word_similarity(text, Product.title)
+        from app.services.search_synonyms import parse_groups, variants
+
+        text_conds = []
+        ranks = []
+        for variant in variants(text, parse_groups((await get_settings(session))["search_synonyms"])):
+            tsq = _prefix_tsquery(variant)
+            text_conds += [literal(variant).op("<%")(Product.title), Product.brand.ilike(variant)]
+            if tsq:
+                query = func.to_tsquery("simple", tsq)
+                text_conds.insert(0, Product.search_vector.op("@@")(query))
+                ranks.append(func.ts_rank(Product.search_vector, query) + func.word_similarity(variant, Product.title))
+            else:
+                ranks.append(func.word_similarity(variant, Product.title))
+        rank = ranks[0] if len(ranks) == 1 else func.greatest(*ranks)
         conds.append(or_(*text_conds))
 
     # Facets are computed before brand/price filters so the user can widen them again.

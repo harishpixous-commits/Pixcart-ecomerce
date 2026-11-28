@@ -17,7 +17,7 @@ type S = {
   gallery_zoom: boolean; gallery_zoom_level: number; feature_product_videos: boolean; max_video_mb: number; max_videos_per_listing: number;
   defect_return_days: number;
   admin_layout_default: string;
-  maintenance_mode: boolean; maintenance_message: string;
+  maintenance_mode: boolean; maintenance_message: string; search_synonyms: string;
   shop_app_banner: boolean; shop_android_apk_url: string; shop_play_store_url: string; shop_app_store_url: string; shop_app_version: string; payment_window_minutes: number; customer_cancel_until: "placed" | "confirmed" | "packed"; payment_return_mode: "return" | "window";
 } & Record<(typeof LIST_FIELDS)[number][0], number> & Record<(typeof PAGE_TEXTS)[number][0], string> & Record<(typeof PAGE_SWITCHES)[number][0], boolean>;
 
@@ -91,7 +91,7 @@ export default function AdminSettings() {
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
         payWindow: String(x.payment_window_minutes ?? 30), cancelUntil: x.customer_cancel_until ?? "packed", payReturn: x.payment_return_mode ?? "return",
         adminLayout: x.admin_layout_default ?? "sidebar", maintenanceMessage: x.maintenance_message ?? "",
-        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, x[k] ?? ""])),
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, x[k] ?? ""])), search_synonyms: x.search_synonyms ?? "",
         ...Object.fromEntries(LIST_FIELDS.map(([k, , , d]) => [k, String(x[k] ?? d)])),
       });
     }).catch(quietly);
@@ -113,7 +113,7 @@ export default function AdminSettings() {
         payment_window_minutes: Number(f.payWindow), customer_cancel_until: f.cancelUntil || "packed", payment_return_mode: f.payReturn || "return",
         admin_layout_default: f.adminLayout || "sidebar",
         maintenance_mode: maintenance, maintenance_message: f.maintenanceMessage ?? "",
-        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), ...pageFlags, ...apps,
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), search_synonyms: f.search_synonyms ?? "", ...pageFlags, ...apps,
         ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, Number(f[k])])),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");
@@ -246,6 +246,16 @@ export default function AdminSettings() {
         {LIST_FIELDS.map(([k, label, hint, d]) => (
           <TextField key={k} label={label} inputMode="numeric" hint={`${hint}. Default ${d}.`} {...bind(k)} />
         ))}
+      </section>
+      <section className="grid gap-3 rounded-xl bg-white p-5" data-testid="search-synonyms">
+        <div>
+          <h2 className="text-lg font-semibold">Search synonyms</h2>
+          <p className="text-sm text-ink-soft">Words that mean the same to a shopper. A search for one also finds products that use the others. Write each group on its own line or split with semicolons, for example: tee = t-shirt = tshirt</p>
+        </div>
+        <Field label="Synonym groups" htmlFor="search-synonyms" hint={`Single words only. Leave empty to turn off. ${(f.search_synonyms ?? "").length}/1000`}>
+          <textarea id="search-synonyms" rows={4} maxLength={1000} value={f.search_synonyms ?? ""} onChange={(e) => setF({ ...f, search_synonyms: e.target.value })}
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-[15px] focus:border-peacock focus:outline-none focus:ring-2 focus:ring-peacock/20" />
+        </Field>
       </section>
       <section className="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2" data-testid="error-page-settings">
         <div className="sm:col-span-2">

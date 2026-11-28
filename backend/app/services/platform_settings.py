@@ -112,6 +112,7 @@ DEFAULTS: dict[str, Any] = {
     "feature_bought_together": True,   # "Frequently bought together" from real orders
     # Lists and results (Admin → Marketplace settings): how many results each shopper-facing list shows
     "search_page_size": 24,        # products per search or category page
+    "search_synonyms": "",         # words that mean the same: "tee = t-shirt; sneakers = shoes"
     "search_suggestions": 8,       # suggestions while typing in the search box
     "recent_searches_max": 8,      # recent searches the browser remembers (0: off)
     "brand_filter_max": 30,        # brands listed in the search filters
@@ -170,6 +171,7 @@ TEXTS: dict[str, tuple[int, int]] = {
     "not_found_message": (10, 300),
     "error_title": (3, 80),
     "error_message": (10, 300),
+    "search_synonyms": (0, 1000),
 }
 
 # the list sizes the storefront needs (sent with /api/site)
@@ -343,7 +345,11 @@ def validate_updates(updates: dict[str, Any]) -> dict[str, Any]:
             lo, hi = TEXTS[key]
             if not isinstance(value, str) or not lo <= len(" ".join(value.split())) <= hi:
                 raise ValueError(f"{key} must be text of {lo} to {hi} characters")
-            clean[key] = " ".join(value.split())
+            clean[key] = " ".join(value.split()) if key != "search_synonyms" else "; ".join(p.strip() for p in value.replace("\n", ";").split(";") if p.strip())
+            if key == "search_synonyms":
+                from app.services.search_synonyms import check_groups
+
+                check_groups(clean[key])
             continue
         if key not in LIMITS:
             raise ValueError(f"Unknown setting: {key}")

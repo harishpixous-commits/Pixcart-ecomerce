@@ -380,3 +380,5 @@ Gap: nobody on the support desk was notified of a new request, a customer reply,
 
 ## Push 122: staff alerts for seller and listing review
 New staff event `staff_review` (in-app, no setting, always on). Fires when a seller submits onboarding (sellers permission) and when a seller submits a listing (catalog permission), with a link to the admin page. Both versions. Tests: Python test_support, .NET SellerOnboarding and SellerProducts assertions. Not run: email/push delivery, browser.
+## Push 123: search synonyms (admin setting)
+New setting `search_synonyms` (off when empty): groups like "tee = t-shirt; sneakers = shoes", single words only, in Admin Settings. A search for one word also finds products using the others (up to 6 query variants; relevance is the best match). Both versions plus admin screens. Applies to the product search page; the typing suggestions do not use it yet. Full-suite re-run after Push 122/123: Python 301 passed; .NET all groups green (A 87, C-E 122, G-T 187, S 144). Flipped deliberately: AdminFeedbackTests notification counts ignore `staff_review`. Not run: browser.
