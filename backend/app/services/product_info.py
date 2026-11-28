@@ -69,7 +69,6 @@ class ProductDetails(BaseModel):
     length_cm: float | None = Field(default=None, gt=0, le=10_000)
     width_cm: float | None = Field(default=None, gt=0, le=10_000)
     height_cm: float | None = Field(default=None, gt=0, le=10_000)
-    size_chart: str = Field(default="", max_length=1500)  # a size guide: one row per line, cells separated by commas, the first line is the header
     key_specs: list[str] = Field(default_factory=list, max_length=6)  # specification names shown beside the price
 
     @field_validator("generic_name", "model_number", "manufacturer", "packer", "importer", "customer_care", "ingredients",
@@ -92,18 +91,6 @@ class ProductDetails(BaseModel):
             raise ValueError("A pre-order date can be at most a year ahead")
         return d.isoformat()
 
-    @field_validator("size_chart")
-    @classmethod
-    def _size_chart(cls, v: str) -> str:
-        rows = _chart_rows(v)
-        if not rows:
-            return ""
-        if len(rows) > 21 or len(rows[0]) > 8 or len(rows[0]) < 2:
-            raise ValueError("A size chart takes a header line and up to 20 rows, with 2 to 8 columns")
-        if any(len(r) != len(rows[0]) or any(len(c) > 20 for c in r) for r in rows):
-            raise ValueError("Every size chart line needs the same number of cells as the first line (each up to 20 characters)")
-        return "\n".join(", ".join(r) for r in rows)
-
     @field_validator("fssai_license")
     @classmethod
     def _fssai(cls, v: str) -> str:
@@ -121,15 +108,6 @@ class ProductDetails(BaseModel):
             if x and x not in out:
                 out.append(x)
         return out
-
-
-def _chart_rows(text: str) -> list[list[str]]:
-    return [cells for line in _clean(text).splitlines() if (cells := [c.strip() for c in re.split(r"[,\t]", line)]) and any(cells)]
-
-
-def size_chart_rows(details: "ProductDetails") -> list[list[str]]:
-    """The size guide as a table: the header row first. Empty when the seller gave none."""
-    return _chart_rows(details.size_chart)
 
 
 def preorder_date(details: "ProductDetails") -> str:
