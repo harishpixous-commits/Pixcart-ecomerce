@@ -34,3 +34,6 @@ Key `marketing`. Finds categories with live stock but few recent sales and propo
 
 ## Listing review agent and Support agent (Python: working and tested)
 Listing (`listing`): runs the listing rules on pending products; proposes approve for clean ones and send-back with exact reasons for the rest; approval uses the normal admin approve/reject. Support (`support`): drafts a first acknowledging reply for open tickets unanswered for N hours; approval sends it as staff. Both rule based, no AI model, tested (7 green). Not done: photos, brand checks, refund decisions, follow-up answers. .NET versions pending.
+
+## Test status (28 Nov, after Push 145)
+Full Python suite: 323 passed. .NET full suite: see the instinct/continue copy of this file.
