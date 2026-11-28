@@ -1239,4 +1239,27 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         foreach (var bad in new[] { "Size|Chest", "Size|Chest\nS" })
             Assert.Equal(400, (await admin.Put($"/api/admin/categories/{child}", Body("Formal", bad))).Status);
     }
+
+    [Fact]
+    public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
+    {
+        var admin = await Admin();
+        Assert.False((await admin.Get("/api/newsletter")).Json["enabled"]!.GetValue<bool>());
+        var r = await admin.Post("/api/newsletter", new { email = "a@example.com" });
+        Assert.Equal(400, r.Status); Assert.Equal("newsletter_off", r.Json["error"]!["code"]!.GetValue<string>());
+        r = await admin.Put("/api/admin/growth/settings", new { newsletter = new { enabled = true, title = "Join us" } });
+        Assert.True(r.Status == 200, r.ToString());
+        var box = (await admin.Get("/api/newsletter")).Json;
+        Assert.True(box["enabled"]!.GetValue<bool>()); Assert.Equal("Join us", box["title"]!.GetValue<string>());
+        r = await admin.Post("/api/newsletter", new { email = "not-an-email" });
+        Assert.Equal(400, r.Status); Assert.Equal("invalid_email", r.Json["error"]!["code"]!.GetValue<string>());
+        Assert.Equal(201, (await admin.Post("/api/newsletter", new { email = "  Meena@Example.com " })).Status);
+        Assert.Equal(201, (await admin.Post("/api/newsletter", new { email = "meena@example.com" })).Status);
+        var list = (await admin.Get("/api/admin/growth/newsletter")).Json;
+        Assert.Equal(1, list["total"]!.GetValue<long>()); Assert.Equal("meena@example.com", list["items"]![0]!["email"]!.GetValue<string>());
+        var shopper = await LoginPhone("9620000613", "Not Staff");
+        Assert.Equal(403, (await shopper.Get("/api/admin/growth/newsletter")).Status);
+        Assert.Equal(200, (await admin.Delete($"/api/admin/growth/newsletter/{list["items"]![0]!["id"]!.GetValue<string>()}")).Status);
+        Assert.Equal(0, (await admin.Get("/api/admin/growth/newsletter")).Json["total"]!.GetValue<long>());
+    }
 }

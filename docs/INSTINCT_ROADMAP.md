@@ -386,3 +386,7 @@ Admin → Checkout has a "Gift message" switch (off) and a longest length (20 to
 ## Push 128: size guide per category
 
 Admin → Categories has a "Size guide" box: one line per size, columns split with "|", first line is the heading (up to 30 lines, 8 columns). Product pages show it as an expandable table above the size choices. A sub-category uses the nearest parent guide when it has none. Empty means no guide. Bad tables (one line, uneven columns) are refused. Alembic 0047, .NET V024. Tests in both versions; tsc and ngc clean. Not run in a browser. Not built: a guide per product, or size recommendations.
+
+## Push 129: newsletter box
+
+Admin → Growth → Settings has "Newsletter box" (off, with a heading). When on, the shop shows an email box above the footer (all themes). The address is checked, lower-cased and kept once; asking again gives the same answer. 10 sign-ups per hour per visitor address. Admin → Growth → Newsletter lists the latest 200 and lets staff remove an address. Alembic 0048, .NET V025. Tests in both versions; tsc and ngc clean. Not run in a browser. NOT wired: nothing is emailed, no unsubscribe link, campaigns do not use this list (they send in-app notes to customers). Open question for Harish: should this list feed real email once an email provider is approved.

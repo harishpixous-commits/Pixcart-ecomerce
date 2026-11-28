@@ -31,6 +31,7 @@ const TITLES: Record<string, { title: string; hint: string }> = {
   scorecard: { title: "Seller scorecard", hint: "Late shipping, seller cancellations and returns, with warning and critical levels." },
   cod_risk: { title: "Cash on delivery risk", hint: "Limits and blocked pincodes for cash orders." },
   seo: { title: "Search engines", hint: "Sitemap for Google and other search engines." },
+  newsletter: { title: "Newsletter box", hint: "Shows an email box above the shop footer. Addresses are collected on the Newsletter tab. Nothing is emailed from here: use the list yourself or with your email tool." },
   return_photos: { title: "Return photos", hint: "Let customers attach photos to a return request. Optionally require one for damaged, faulty, wrong or incomplete items." },
   bulk_edit: { title: "Bulk product edit", hint: "Change price, stock or status of many listings at once." },
   return_reasons: { title: "Return reasons", hint: "Rename a reason shown to customers (label_...) or switch it off (off_...). Leave a label empty to keep the built-in text. Damaged, faulty, wrong or incomplete items keep their special rule." },
@@ -135,6 +136,23 @@ const label = (k: string): string => {
                 @for (r of rl.items; track r.id) {
                   <tr class="border-b border-line/50"><td class="p-3 font-semibold">{{ r.customer }}</td><td class="p-3">{{ r.contact }}</td><td class="p-3">#{{ r.stage }}</td><td class="p-3">{{ rupees(r.cart_paise) }}</td><td class="p-3">{{ date(r.sent_at) }}</td><td class="p-3">{{ r.ordered_after ? "Yes" : "No" }}</td></tr>
                 } @empty { <tr><td class="p-4 text-ink-soft" colspan="6">No reminders sent yet.</td></tr> }
+              </tbody>
+            </table>
+          </div>
+        } @else { <pc-page-loader /> }
+      </div>
+    } @else if (tab() === "newsletter") {
+      <div class="flex flex-col gap-4">
+        @if (newsletter(); as nl) {
+          <p class="rounded-lg bg-white p-4 text-sm" data-testid="newsletter-summary">{{ nl.total }} addresses.@if (!nl.enabled) { The newsletter box is switched off in Settings.}</p>
+          <div class="overflow-x-auto rounded-xl bg-white">
+            <table class="w-full text-left text-sm" data-testid="newsletter-list">
+              <thead><tr class="border-b border-line"><th class="p-3">Email</th><th class="p-3">Joined</th><th class="p-3"><span class="sr-only">Remove</span></th></tr></thead>
+              <tbody>
+                @for (r of nl.items; track r.id) {
+                  <tr class="border-b border-line/50"><td class="p-3 font-semibold">{{ r.email }}</td><td class="p-3">{{ date(r.created_at) }}</td>
+                    <td class="p-3 text-right"><button type="button" class="text-sm font-semibold text-red-600 hover:underline" (click)="removeSubscriber(r.id)">Remove</button></td></tr>
+                } @empty { <tr><td class="p-4 text-ink-soft" colspan="3">Nobody has signed up yet.</td></tr> }
               </tbody>
             </table>
           </div>
@@ -257,11 +275,12 @@ export class AdminGrowthPage {
   protected readonly titles = TITLES;
   protected readonly label = label;
   protected readonly tab = signal("settings");
-  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }, { value: "referrals", label: "Referrals" }];
+  protected readonly tabs = [{ value: "settings", label: "Settings" }, { value: "scorecard-view", label: "Seller scorecard" }, { value: "gift-cards", label: "Gift cards" }, { value: "segments", label: "Segments" }, { value: "campaigns", label: "Campaigns" }, { value: "loyalty", label: "Loyalty" }, { value: "cart-reminders", label: "Cart reminders" }, { value: "referrals", label: "Referrals" }, { value: "newsletter", label: "Newsletter" }];
   protected readonly rupees = rupees;
   protected readonly date = date;
   protected readonly cards = signal<Card[]>([]);
   protected readonly purchases = signal<Purchase[]>([]);
+  protected readonly newsletter = signal<{ enabled: boolean; total: number; items: { id: string; email: string; created_at: string }[] } | null>(null);
   protected readonly referrals = signal<{ referrer: string; friend: string; status: string; reward_paise: number; at: string }[] | null>(null);
   protected rewardedCount(): number { return (this.referrals() ?? []).filter((r) => r.status === "rewarded").length; }
   protected readonly reminders = signal<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] } | null>(null);
@@ -290,12 +309,22 @@ export class AdminGrowthPage {
   protected readonly loyaltyView = signal<LoyaltyView | null>(null);
   private readonly text = new Map<string, string>();
 
+  private loadNewsletter(): void {
+    api<{ enabled: boolean; total: number; items: { id: string; email: string; created_at: string }[] }>("/api/admin/growth/newsletter").then((x) => this.newsletter.set(x)).catch(quietly);
+  }
+
+  protected async removeSubscriber(id: string): Promise<void> {
+    await api(`/api/admin/growth/newsletter/${id}`, { method: "DELETE" }).catch(quietly);
+    this.loadNewsletter();
+  }
+
   constructor() {
     api<{ settings: Settings }>("/api/admin/growth/settings").then((x) => this.s.set(x.settings)).catch(quietly);
     this.loadCards();
     this.loadCampaigns();
     api<LoyaltyView>("/api/admin/growth/loyalty").then((x) => this.loyaltyView.set(x)).catch(quietly);
     api<{ enabled: boolean; sent_30d: number; ordered_after: number; items: Reminder[] }>("/api/admin/growth/cart-reminders").then((x) => this.reminders.set(x)).catch(quietly);
+    this.loadNewsletter();
     api<{ items: { referrer: string; friend: string; status: string; reward_paise: number; at: string }[] }>("/api/admin/growth/referrals").then((x) => this.referrals.set(x.items)).catch(quietly);
     api<{ segments: Seg[] }>("/api/admin/growth/segments").then((x) => this.segs.set(x.segments)).catch((e) => this.segError.set(e instanceof ApiError ? e.message : null));
     api<{ enabled: boolean; items: Score[] }>("/api/admin/growth/scorecard").then((x) => { this.score.set(x.items); this.scoreOn.set(x.enabled); }).catch(quietly);

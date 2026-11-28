@@ -10,6 +10,8 @@ namespace API.Controllers;
 [ApiController, SignedIn, Route("/api/admin/growth")]
 public class AdminGrowthController(IGrowthBAL bal, ICurrentUser me, IMySqlDapperHelper db, ICatalogNotifyBAL notify) : ControllerBase
 {
+    [HttpGet("newsletter"), RouteGuard("perm:marketing")] public async Task<object> NewsletterList() { await me.RequireAsync(); return await BAL.Newsletter.ListAsync(db); }
+    [HttpDelete("newsletter/{id:guid}"), RouteGuard("perm:marketing")] public async Task<object> NewsletterRemove(Guid id) { await me.RequireAsync(); return await BAL.Newsletter.RemoveAsync(db, id) ? new { ok = true } : throw new Utils.NotFoundException("Subscriber"); }
     [HttpGet("cart-reminders"), RouteGuard("perm:marketing")] public async Task<object> CartReminderLog() { await me.RequireAsync(); return await BAL.CartReminders.RecentAsync(db); }
     [HttpGet("loyalty"), RouteGuard("perm:marketing")] public async Task<object> LoyaltyOverview() { await me.RequireAsync(); return await BAL.LoyaltyPoints.OverviewAsync(db); }
     [HttpGet("loyalty/{userId:guid}"), RouteGuard("perm:marketing")] public async Task<object> MemberLoyalty(Guid userId) { await me.RequireAsync(); return await bal.LoyaltyAsync(userId); }
@@ -149,4 +151,20 @@ public class OrderNotesController(Utils.Interface.IMySqlDapperHelper db, ICurren
     public record NoteIn { public string Note { get; init; } = ""; }
     [HttpGet("/api/admin/orders/{id:guid}/notes"), RouteGuard("perm:orders")] public async Task<object> List(Guid id) { await me.RequireAsync(); return await BAL.OrderNotes.ListAsync(db, id); }
     [HttpPost("/api/admin/orders/{id:guid}/notes"), RouteGuard("perm:orders")] public async Task<IActionResult> Add(Guid id, NoteIn b) => StatusCode(201, await BAL.OrderNotes.AddAsync(db, await me.RequireAsync(), id, b.Note));
+}
+
+/// <summary>The footer newsletter box: its heading, and joining the list.</summary>
+[ApiController, Route("/api/newsletter")]
+public class NewsletterController(IMySqlDapperHelper db, IRateLimitBAL rateLimit, Utils.AppSettings settings) : ControllerBase
+{
+    public record JoinIn { [System.ComponentModel.DataAnnotations.MaxLength(254)] public string Email { get; init; } = ""; }
+    [HttpGet(""), RouteGuard("public")] public async Task<object> Box() => await BAL.Newsletter.BoxAsync(db);
+    [HttpPost(""), RouteGuard("public")]
+    public async Task<IActionResult> Join(JoinIn body)
+    {
+        if (!(await BAL.Newsletter.ConfigAsync(db)).Bool("enabled")) throw new Utils.AppException("The newsletter is not open", "newsletter_off");
+        await rateLimit.RateLimitAsync($"newsletter:ip:{API.Helpers.ClientIpHelper.Get(HttpContext, settings)}", 10, 3600);
+        await BAL.Newsletter.JoinAsync(db, body.Email);
+        return StatusCode(201, new { ok = true });
+    }
 }

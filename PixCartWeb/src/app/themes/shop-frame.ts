@@ -15,6 +15,7 @@ import { SiteService } from "../core/site";
 import { AppBanner } from "../shared/chrome/app-banner";
 import { ShopBackBar } from "../shared/chrome/back-button";
 import { CompareTray } from "../shared/chrome/compare";
+import { NewsletterBox } from "../shared/chrome/newsletter";
 import { RegionStrip } from "../shared/chrome/region-picker";
 import { Logo } from "../shared/shop/shop-chrome";
 import { Icon } from "../shared/ui/icon";
@@ -162,7 +163,7 @@ export class ShopAssistantLauncher {
 
 @Component({
   selector: "pc-shop-frame",
-  imports: [NgComponentOutlet, RouterOutlet, MaintenancePage, MaintenanceBar, AppBanner, PreviewBar, ShopBackBar, BackToTop, RegionStrip, ShopAssistantLauncher, CompareTray, ShopRouteSkeleton],
+  imports: [NgComponentOutlet, RouterOutlet, MaintenancePage, MaintenanceBar, AppBanner, PreviewBar, ShopBackBar, BackToTop, RegionStrip, NewsletterBox, ShopAssistantLauncher, CompareTray, ShopRouteSkeleton],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -180,6 +181,7 @@ export class ShopAssistantLauncher {
         <main class="mx-auto w-full min-h-[60vh] max-w-shop flex-1 px-3 py-4 sm:px-4 sm:py-6"><router-outlet /></main>
         <pc-back-to-top />
         <pc-region-strip />
+        <pc-newsletter-box />
         <ng-container *ngComponentOutlet="slots().Footer" />
         @if (slots().MobileNav) {<ng-container *ngComponentOutlet="slots().MobileNav" />}
         <pc-shop-assistant />
