@@ -185,3 +185,16 @@ async def test_staff_can_set_the_go_live_time_and_approval_says_when_it_goes_liv
     assert (await admin.post(f"/api/admin/products/{shirt['id']}/approve")).status_code == 200
     notes = (await tn.get("/api/notifications")).json()["items"]
     assert any("goes live on the store on" in n["body"] for n in notes)
+
+
+async def test_staff_can_set_the_unit_limit_without_a_new_approval_round(client, admin, categories):
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    path = f"/api/admin/products/{shirt['id']}/unit-limit"
+    r = await admin.put(path, {"max_qty": 3})
+    assert r.status_code == 200 and r.json()["status"] == "approved" and r.json()["details"]["max_qty"] == 3
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["max_qty"] == 3
+    assert (await admin.put(path, {"max_qty": 101})).status_code == 422
+    assert (await admin.put(path, {"max_qty": -1})).status_code == 422
+    assert (await client.put(path, json={"max_qty": 2})).status_code in (401, 403)
+    r = await admin.put(path, {"max_qty": 0})
+    assert r.status_code == 200 and (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["max_qty"] is None

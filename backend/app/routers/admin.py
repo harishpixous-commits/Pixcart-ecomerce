@@ -431,6 +431,27 @@ async def set_publish_at(product_id: uuid.UUID, body: PublishAtIn, admin: Perm("
     return await product_detail(session, p)
 
 
+class UnitLimitIn(BaseModel):
+    max_qty: int = Field(ge=0, le=100)  # 0 removes the product limit
+
+
+@router.put("/products/{product_id}/unit-limit")
+async def set_unit_limit(product_id: uuid.UUID, body: UnitLimitIn, admin: Perm("catalog"), session: SessionDep) -> dict:
+    """Staff sets the most units of one option an order may hold. No new approval round: staff are the approvers."""
+    from app.services.product_info import details_of
+
+    p = await _product(session, product_id, lock=True)
+    if p.status == "archived":
+        raise Conflict("Restore this product before changing it", "invalid_status")
+    det = details_of(p.details)
+    if body.max_qty and det.min_qty > body.max_qty:
+        raise ApiError(f"The most per order cannot be below the minimum of {det.min_qty}", "invalid_value", fields={"max_qty": "Below the minimum order quantity"})
+    p.details = {**(p.details or {}), "max_qty": body.max_qty}
+    audit(session, admin, "product.unit_limit", "product", p.id, str(body.max_qty))
+    await session.commit()
+    return await product_detail(session, p)
+
+
 @router.post("/products/{product_id}/approve")
 async def approve_product(product_id: uuid.UUID, admin: Perm("catalog"), session: SessionDep) -> dict:
     p = await _product(session, product_id, lock=True)

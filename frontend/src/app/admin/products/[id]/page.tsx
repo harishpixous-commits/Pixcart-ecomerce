@@ -30,6 +30,7 @@ export default function AdminProductReview() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [goLive, setGoLive] = useState("");
+  const [unitLimit, setUnitLimit] = useState<string | null>(null);
   const site = useSite();
   const [check, setCheck] = useState<{ risk: "low" | "medium" | "high"; issues: string[]; suggested_reason: string } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -98,6 +99,19 @@ export default function AdminProductReview() {
           } catch (e) { toast(e instanceof ApiError ? e.message : "Could not save"); } finally { setBusy(false); }
         }}>Save go-live time</Button>
         <span className="text-sm text-ink/60">Leave empty to go live as soon as approved.</span>
+      </section>
+      <section className="flex flex-wrap items-end gap-3 rounded-xl bg-white p-5">
+        <label className="text-sm font-semibold">Most per order (each option)
+          <input type="number" min={0} max={100} className="ml-3 h-10 w-24 rounded-lg border border-black/15 px-3 font-normal" value={unitLimit ?? String(p.details?.max_qty ?? 0)} onChange={(e) => setUnitLimit(e.target.value)} data-testid="admin-unit-limit" />
+        </label>
+        <Button size="sm" loading={busy} onClick={async () => {
+          setBusy(true);
+          try {
+            const next = await api<SellerProduct>(`/api/admin/products/${id}/unit-limit`, { method: "PUT", body: { max_qty: Number(unitLimit ?? p.details?.max_qty ?? 0) } });
+            setP(next); setUnitLimit(null); toast("Limit saved");
+          } catch (e) { toast(e instanceof ApiError ? e.message : "Could not save"); } finally { setBusy(false); }
+        }}>Save limit</Button>
+        <span className="text-sm text-ink/60">0 means no limit for this product. The store-wide limit still applies.</span>
       </section>
       <div className="flex items-center gap-3"><StatusPill status={p.status} />{p.rejection_reason && <span className="text-vermilion">{p.rejection_reason}</span>}</div>
       <section className="rounded-xl bg-white p-5">
