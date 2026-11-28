@@ -2305,5 +2305,23 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(0, await ApiFactory.DbScalarAsync<int>("SELECT COUNT(*) FROM coupons WHERE code LIKE 'HUGE%'"));
     }
 
+    [Fact]
+    public async Task Wrong_coupon_codes_at_checkout_are_limited_to_thirty_an_hour_and_the_quote_still_works()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000511", "guess-shirt");
+        await Refresh(productId);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "REALCODE", description = "", kind = "flat", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = false })).Status);
+        var buyer = await LoginPhone("9620000511", "Guesser");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Task<Res> Quote(string code) => buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = code });
+        Assert.Null((await Quote("REALCODE")).Json["coupon"]!["error"]);   // a right code costs nothing
+        for (var i = 0; i < 30; i++) Assert.NotNull((await Quote($"WRONG{i:000}")).Json["coupon"]!["error"]);
+        var blocked = await Quote("REALCODE");
+        Assert.Equal(200, blocked.Status);                                // the bill still shows, only the typed code is refused
+        Assert.Contains("Too many", blocked.Json["coupon"]!["error"]!.GetValue<string>());
+    }
+
     private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }

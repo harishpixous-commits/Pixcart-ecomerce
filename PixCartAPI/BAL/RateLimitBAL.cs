@@ -16,5 +16,10 @@ public class RateLimitBAL(RateLimitDAL dal) : IRateLimitBAL
         await dal.InsertAsync(key, now, uow?.Transaction);
     }
 
+    public async Task<bool> IsOverAsync(string key, int limit, int windowSeconds) =>
+        await dal.CountSinceAsync(key, DateTimeFunctions.UtcNow().AddSeconds(-windowSeconds), null) >= limit;
+
+    public Task CountAsync(string key) => dal.InsertAsync(key, DateTimeFunctions.UtcNow(), null);
+
     public Task PruneRateLimitsAsync() => dal.DeleteBeforeAsync(DateTimeFunctions.UtcNow().AddDays(-1));
 }

@@ -16,7 +16,7 @@ namespace API.Controllers;
 [ApiController]
 [Route("/api/checkout")]
 [SignedIn]
-public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupons, IPlatformSettingsBAL platform, AddressDAL addresses, ICurrentUser current) : ControllerBase
+public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupons, IRateLimitBAL limits, IPlatformSettingsBAL platform, AddressDAL addresses, ICurrentUser current) : ControllerBase
 {
     public sealed record QuoteIn(
         [param: Required] Guid AddressId,
@@ -37,8 +37,13 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
         BAL.CouponsBAL.Result? typedRes = null; string? typedErr = null;
         if (!string.IsNullOrWhiteSpace(body.CouponCode))
         {
-            try { typedRes = await coupons.EvaluateAsync(body.CouponCode, user.Id, await cart.LoadCartAsync(user.Id)); }
-            catch (AppException exc) { typedErr = exc.Message; }
+            var missKey = $"coupon-miss:{user.Id}";   // wrong codes are counted so a code cannot be brute-forced: 30 an hour
+            if (await limits.IsOverAsync(missKey, 30, 3600)) typedErr = "Too many wrong coupon codes. Please try again in a while.";
+            else
+            {
+                try { typedRes = await coupons.EvaluateAsync(body.CouponCode, user.Id, await cart.LoadCartAsync(user.Id)); }
+                catch (AppException exc) { typedErr = exc.Message; await limits.CountAsync(missKey); }
+            }
         }
         var view = await cart.ViewAsync(user.Id, address.Pincode, address.StateCode, typedRes?.FreeShipping ?? false);
         var summary = view["summary"]!.AsObject();

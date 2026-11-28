@@ -17,6 +17,12 @@ public interface IRateLimitBAL
     /// </summary>
     Task RateLimitAsync(string key, int limit, int windowSeconds, IUnitOfWork? uow = null);
 
+    /// <summary>True when <paramref name="limit"/> attempts are already counted for the key in the window. Counts nothing.</summary>
+    Task<bool> IsOverAsync(string key, int limit, int windowSeconds);
+
+    /// <summary>Counts one attempt for the key without ever refusing.</summary>
+    Task CountAsync(string key);
+
     /// <summary>Deletes attempts older than a day (cleanup job).</summary>
     Task PruneRateLimitsAsync();
 }
