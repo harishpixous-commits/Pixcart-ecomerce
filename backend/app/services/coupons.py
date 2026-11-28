@@ -92,6 +92,20 @@ async def evaluate(session: AsyncSession, code: str, user_id: uuid.UUID, lines: 
             discount = min(discount, c.max_discount_paise)
         discount = min(discount, base)
         return CouponResult(c, discount, _allocate(discount, eligible))
+    if c.kind == "bundle":  # every product of the set in the cart: value percent off one of each, for every complete set
+        need = [str(x) for x in (c.product_ids or [])]
+        by_product: dict[str, list[int]] = {}
+        for line in lines:
+            if line.variant.id in eligible:
+                by_product.setdefault(str(line.product.id), []).extend([line.line_total // line.qty] * line.qty)
+        if not need or any(pid not in by_product for pid in need):
+            raise ApiError("Add every item of this bundle to your cart to get the offer", "coupon_not_applicable")
+        sets = min(len(by_product[pid]) for pid in need)
+        discount = apply_bps(sum(sum(sorted(by_product[pid])[:sets]) for pid in need), c.value * 100)
+        if c.max_discount_paise:
+            discount = min(discount, c.max_discount_paise)
+        discount = min(discount, base)
+        return CouponResult(c, discount, _allocate(discount, eligible))
     if base == 0:
         raise ApiError("This coupon does not apply to the items in your cart", "coupon_not_applicable")
     if base < c.min_order_paise:

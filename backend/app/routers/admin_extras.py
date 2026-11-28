@@ -94,7 +94,7 @@ async def analytics(admin: Perm("dashboard"), session: SessionDep, days: int = Q
 
 
 class AdminCouponIn(SellerCouponIn):
-    kind: Literal["percent", "flat", "bxgy"]  # "bxgy" = buy X get Y: buy_qty, get_qty, value = percent off those get_qty units (100 = free)
+    kind: Literal["percent", "flat", "bxgy", "bundle"]  # "bundle" = every product in product_slugs (2 to 10) in the cart: value percent off one of each, per complete set; "bxgy" = buy X get Y: buy_qty, get_qty, value = percent off those get_qty units (100 = free)
     buy_qty: int = Field(default=0, ge=0, le=20)
     get_qty: int = Field(default=0, ge=0, le=20)
     product_slugs: list[str] = Field(default_factory=list, max_length=30)  # only these products count; empty = the whole cart
@@ -107,6 +107,8 @@ class AdminCouponIn(SellerCouponIn):
 def _check_bxgy(body: AdminCouponIn) -> None:
     if body.kind == "bxgy" and (body.buy_qty < 1 or body.get_qty < 1):
         raise ApiError("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value")
+    if body.kind == "bundle" and not 2 <= len(dict.fromkeys(s.strip().lower() for s in body.product_slugs if s.strip())) <= 10:
+        raise ApiError("A bundle needs between 2 and 10 products", "invalid_value")
     if body.kind != "bxgy":
         body.buy_qty = body.get_qty = 0
 

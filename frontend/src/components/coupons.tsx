@@ -7,12 +7,13 @@ import { api, ApiError, quietly } from "@/lib/api";
 import { date, paiseToInput, rupees, toLocalInput, toPaise } from "@/lib/format";
 
 export type CouponRow = {
-  id: string; code: string; description: string; kind: "percent" | "flat" | "bxgy"; value: number; buy_qty?: number; get_qty?: number; product_slugs?: string[]; max_discount_paise: number | null; min_order_paise: number;
+  id: string; code: string; description: string; kind: "percent" | "flat" | "bxgy" | "bundle"; value: number; buy_qty?: number; get_qty?: number; product_slugs?: string[]; max_discount_paise: number | null; min_order_paise: number;
   starts_at: string | null; ends_at: string | null; usage_limit: number | null; per_user_limit: number; used_count: number; funded_by: string;
   category_id: string | null; first_order_only: boolean; is_active: boolean; show_on_checkout: boolean; is_automatic?: boolean;
 };
 
 export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discount_paise" | "min_order_paise" | "buy_qty" | "get_qty">) {
+  if (c.kind === "bundle") return `Bundle: ${c.value}% off when all items are bought together`;
   if (c.kind === "bxgy") return `Buy ${c.buy_qty}, get ${c.get_qty} ${c.value === 100 ? "free" : `at ${c.value}% off`}`;
   const off = c.kind === "percent" ? `${c.value / 100}% off` : `${rupees(c.value)} off`;
   const cap = c.kind === "percent" && c.max_discount_paise ? ` up to ${rupees(c.max_discount_paise)}` : "";
@@ -46,7 +47,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
     setEdit(c);
     if (c === "new") setF({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, buy_qty: "2", get_qty: "1", product_slugs: "", is_active: true });
     else setF({
-      code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : c.kind === "bxgy" ? String(c.value) : paiseToInput(c.value),
+      code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : c.kind === "bxgy" || c.kind === "bundle" ? String(c.value) : paiseToInput(c.value),
       max: c.max_discount_paise ? paiseToInput(c.max_discount_paise) : "", min: c.min_order_paise ? paiseToInput(c.min_order_paise) : "",
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
       category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, buy_qty: String(c.buy_qty || 2), get_qty: String(c.get_qty || 1), product_slugs: (c.product_slugs ?? []).join(", "), is_active: c.is_active,
@@ -67,7 +68,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const value = f.kind === "percent" ? Math.round(Number(f.value) * 100) : f.kind === "bxgy" ? Math.round(Number(f.value)) : toPaise(f.value);
+    const value = f.kind === "percent" ? Math.round(Number(f.value) * 100) : f.kind === "bxgy" || f.kind === "bundle" ? Math.round(Number(f.value)) : toPaise(f.value);
     if (!value || value <= 0) return setError("Enter the discount");
     const body: Record<string, unknown> = {
       code: f.code, description: f.description, kind: f.kind, value,
@@ -124,10 +125,10 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
             <TextField label="Code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} required minLength={4} maxLength={30} disabled={edit !== "new"} hint="Letters and numbers, e.g. DIWALI20" />
             <TextField label="Short description" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={200} hint="Shown to customers at checkout" />
             <Field label="Discount type" htmlFor="ck">
-              <Select id="ck" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Percentage</option><option value="flat">Fixed amount</option>{admin && <option value="bxgy">Buy X get Y</option>}</Select>
+              <Select id="ck" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Percentage</option><option value="flat">Fixed amount</option>{admin && <><option value="bxgy">Buy X get Y</option><option value="bundle">Bundle (buy all, save)</option></>}</Select>
             </Field>
             {f.kind === "bxgy" && <><TextField label="Customer buys (items)" inputMode="numeric" value={f.buy_qty} onChange={(e) => setF({ ...f, buy_qty: e.target.value })} required /><TextField label="Customer gets (items)" inputMode="numeric" value={f.get_qty} onChange={(e) => setF({ ...f, get_qty: e.target.value })} required /></>}
-            <TextField label={f.kind === "percent" ? "Percentage off (1 to 90)" : f.kind === "bxgy" ? "Percent off the extra items (100 = free)" : "Amount off (₹)"} inputMode="decimal" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} required />
+            <TextField label={f.kind === "percent" ? "Percentage off (1 to 90)" : f.kind === "bxgy" ? "Percent off the extra items (100 = free)" : f.kind === "bundle" ? "Percent off the bundle (1 to 90). Put the 2 to 10 products in \"Only these products\" below" : "Amount off (₹)"} inputMode="decimal" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} required />
             {f.kind === "percent" && <TextField label="Maximum discount (₹, optional)" inputMode="decimal" value={f.max} onChange={(e) => setF({ ...f, max: e.target.value })} />}
             <TextField label="Minimum order (₹, optional)" inputMode="decimal" value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} hint={admin ? "Counted on the whole cart" : "Counted on your items in the cart"} />
             <TextField label="Starts" type="datetime-local" value={f.starts} onChange={(e) => setF({ ...f, starts: e.target.value })} />

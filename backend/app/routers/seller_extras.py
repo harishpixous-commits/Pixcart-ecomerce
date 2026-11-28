@@ -455,6 +455,8 @@ def coupon_admin_out(c: Coupon) -> dict:
 def _check_coupon_values(kind: str, value: int) -> None:
     if kind == "percent" and not 100 <= value <= 9000:
         raise ApiError("A percentage coupon must be between 1% and 90%", "invalid_value")
+    if kind == "bundle" and not 1 <= value <= 90:
+        raise ApiError("A bundle takes between 1% and 90% off", "invalid_value")
     if kind == "bxgy" and not 1 <= value <= 100:
         raise ApiError("A buy X get Y offer takes between 1% and 100% off the extra items", "invalid_value")
 

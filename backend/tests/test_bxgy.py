@@ -21,3 +21,21 @@ async def test_buy_two_get_one_free(client, admin, categories):
     unit = shirt["variants"][0]["price_paise"]
     c = (await q()).json()["coupon"]
     assert c["error"] is None and c["discount"] == unit
+
+
+async def test_bundle_discount_needs_every_product_of_the_set(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    body = {"code": "SETDEAL", "kind": "bundle", "value": 10, "show_on_checkout": False}
+    assert (await admin.post("/api/admin/coupons", body | {"product_slugs": [shirt["slug"]]})).status_code == 400   # one product is not a bundle
+    assert (await admin.post("/api/admin/coupons", body | {"product_slugs": [shirt["slug"], phone_p["slug"]], "value": 95})).status_code in (400, 422)
+    r = await admin.post("/api/admin/coupons", body | {"product_slugs": [shirt["slug"], phone_p["slug"]]})
+    assert r.status_code == 201, r.text
+    a = await login_phone(client, "9770000402", name="Bundle Buyer")
+    addr = await add_address(a, state="33")
+    sv, pv = shirt["variants"][0], phone_p["variants"][0]
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 2})
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod", "coupon_code": "SETDEAL"})
+    assert (await q()).json()["coupon"]["discount"] == 0          # the phone is missing: no offer
+    await a.post("/api/cart/items", {"variant_id": pv["id"], "qty": 1})
+    c = (await q()).json()["coupon"]
+    assert c["error"] is None and c["discount"] == (sv["price_paise"] + pv["price_paise"]) // 10   # one complete set, 10% off (the second shirt is not part of it)
