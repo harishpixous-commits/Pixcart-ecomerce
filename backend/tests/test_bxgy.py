@@ -131,3 +131,12 @@ async def test_returning_one_unit_of_a_volume_offer_refunds_its_share_of_the_dis
     async with SessionLocal() as s:
         refund = (await s.execute(select(Refund))).scalar_one()
         assert refund.amount_paise == paid // 2          # one of two units: half of what was paid, discount share included
+
+
+async def test_a_coupon_for_chosen_products_is_offered_only_on_those_pages(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.post("/api/admin/coupons", {"code": "SHIRTVOL", "kind": "volume", "value": 10, "buy_qty": 2, "product_slugs": [shirt["slug"]]})).status_code == 201
+    assert (await admin.post("/api/admin/coupons", {"code": "ALLVOL", "kind": "volume", "value": 5, "buy_qty": 3})).status_code == 201
+    on_shirt = {o["code"] for o in (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["offers"]}
+    on_phone = {o["code"] for o in (await client.get(f"/api/catalog/products/{phone_p['slug']}")).json()["offers"]}
+    assert "SHIRTVOL" in on_shirt and "ALLVOL" in on_shirt and "ALLVOL" in on_phone and "SHIRTVOL" not in on_phone

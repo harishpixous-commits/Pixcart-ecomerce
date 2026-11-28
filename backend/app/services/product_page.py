@@ -143,6 +143,7 @@ async def offers_for(session, p: Product, seller: Seller, limit: int) -> list[di
                 (Coupon.usage_limit.is_(None)) | (Coupon.used_count < Coupon.usage_limit),
                 (Coupon.seller_id.is_(None)) | (Coupon.seller_id == p.seller_id),
                 (Coupon.category_id.is_(None)) | (Coupon.category_id.in_(chain)),
+                (func.jsonb_array_length(Coupon.product_ids) == 0) | Coupon.product_ids.contains([str(p.id)]),  # a coupon for chosen products is offered only on those
             ).order_by(Coupon.ends_at.asc().nullslast(), Coupon.created_at.desc()).limit(limit)
         )
     ).scalars()
