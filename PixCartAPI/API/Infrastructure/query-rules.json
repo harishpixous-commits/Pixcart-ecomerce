@@ -1565,6 +1565,14 @@
 "type": "string"
 }
 ],
+"GET /api/catalog/products/{}/bundles": [
+{
+"in": "path",
+"name": "slug",
+"required": true,
+"type": "string"
+}
+],
 "GET /api/catalog/products/{}/media": [
 {
 "in": "path",

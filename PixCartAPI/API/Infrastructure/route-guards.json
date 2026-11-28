@@ -1291,6 +1291,11 @@
 },
 {
 "method": "GET",
+"path": "/api/catalog/products/{slug}/bundles",
+"guard": "public"
+},
+{
+"method": "GET",
 "path": "/api/catalog/products/{slug}/media",
 "guard": "optional"
 },
