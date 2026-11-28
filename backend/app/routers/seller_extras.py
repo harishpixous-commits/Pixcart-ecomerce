@@ -448,13 +448,15 @@ def coupon_admin_out(c: Coupon) -> dict:
         "min_order_paise": c.min_order_paise, "starts_at": c.starts_at.isoformat() if c.starts_at else None, "ends_at": c.ends_at.isoformat() if c.ends_at else None,
         "usage_limit": c.usage_limit, "per_user_limit": c.per_user_limit, "used_count": c.used_count, "funded_by": c.funded_by,
         "seller_id": str(c.seller_id) if c.seller_id else None, "category_id": str(c.category_id) if c.category_id else None,
-        "first_order_only": c.first_order_only, "is_active": c.is_active, "show_on_checkout": c.show_on_checkout, "is_automatic": c.is_automatic,
+        "first_order_only": c.first_order_only, "is_active": c.is_active, "show_on_checkout": c.show_on_checkout, "is_automatic": c.is_automatic, "buy_qty": c.buy_qty, "get_qty": c.get_qty,
     }
 
 
 def _check_coupon_values(kind: str, value: int) -> None:
     if kind == "percent" and not 100 <= value <= 9000:
         raise ApiError("A percentage coupon must be between 1% and 90%", "invalid_value")
+    if kind == "bxgy" and not 1 <= value <= 100:
+        raise ApiError("A buy X get Y offer takes between 1% and 100% off the extra items", "invalid_value")
 
 
 @router.get("/coupons")

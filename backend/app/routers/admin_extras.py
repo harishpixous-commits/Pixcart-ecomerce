@@ -94,10 +94,20 @@ async def analytics(admin: Perm("dashboard"), session: SessionDep, days: int = Q
 
 
 class AdminCouponIn(SellerCouponIn):
+    kind: Literal["percent", "flat", "bxgy"]  # "bxgy" = buy X get Y: buy_qty, get_qty, value = percent off those get_qty units (100 = free)
+    buy_qty: int = Field(default=0, ge=0, le=20)
+    get_qty: int = Field(default=0, ge=0, le=20)
     category_id: uuid.UUID | None = None
     first_order_only: bool = False
     show_on_checkout: bool = True
     is_automatic: bool = False
+
+
+def _check_bxgy(body: AdminCouponIn) -> None:
+    if body.kind == "bxgy" and (body.buy_qty < 1 or body.get_qty < 1):
+        raise ApiError("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value")
+    if body.kind != "bxgy":
+        body.buy_qty = body.get_qty = 0
 
 
 @router.get("/coupons")
@@ -108,6 +118,7 @@ async def coupons(admin: Perm("marketing"), session: SessionDep) -> list[dict]:
 @router.post("/coupons", status_code=201)
 async def create_coupon(body: AdminCouponIn, admin: Perm("marketing"), session: SessionDep) -> dict:
     _check_coupon_values(body.kind, body.value)
+    _check_bxgy(body)
     if (await session.execute(select(Coupon.id).where(func.upper(Coupon.code) == body.code.upper()))).first():
         raise Conflict("This code is already used", "code_taken")
     c = Coupon(**body.model_dump(exclude={"code"}), code=body.code.upper(), funded_by="platform")
@@ -143,7 +154,7 @@ async def generate_coupons(coupon_id: uuid.UUID, body: CouponBatchIn, admin: Per
         codes += sorted(want - taken - set(codes))
     for code in codes:
         session.add(Coupon(
-            code=code, description=base.description, kind=base.kind, value=base.value, max_discount_paise=base.max_discount_paise,
+            code=code, description=base.description, kind=base.kind, value=base.value, buy_qty=base.buy_qty, get_qty=base.get_qty, max_discount_paise=base.max_discount_paise,
             min_order_paise=base.min_order_paise, starts_at=base.starts_at, ends_at=base.ends_at,
             usage_limit=1 if body.single_use else base.usage_limit, per_user_limit=1, funded_by="platform", category_id=base.category_id,
             first_order_only=base.first_order_only, is_active=base.is_active, show_on_checkout=False,
@@ -159,6 +170,7 @@ async def update_coupon(coupon_id: uuid.UUID, body: AdminCouponIn, admin: Perm("
     if c is None:
         raise NotFound("Coupon")
     _check_coupon_values(body.kind, body.value)
+    _check_bxgy(body)
     for k, v in body.model_dump(exclude={"code"}).items():
         if c.funded_by == "seller" and k == "category_id":
             continue

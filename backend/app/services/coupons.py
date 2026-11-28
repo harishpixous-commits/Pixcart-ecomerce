@@ -80,6 +80,17 @@ async def evaluate(session: AsyncSession, code: str, user_id: uuid.UUID, lines: 
         and (allowed_categories is None or line.product.category_id in allowed_categories)
     }
     base = sum(eligible.values())
+    if c.kind == "bxgy":  # buy X get Y: the cheapest Y of every X+Y units get `value` percent off
+        units = sorted((line.line_total // line.qty for line in lines if line.variant.id in eligible for _ in range(line.qty)), reverse=True)
+        group = c.buy_qty + c.get_qty
+        free = len(units) // group * c.get_qty if group else 0
+        if free == 0:
+            raise ApiError(f"Add {group - len(units)} more item(s) to get this offer" if group > len(units) else "This coupon does not apply to the items in your cart", "coupon_not_applicable")
+        discount = apply_bps(sum(units[len(units) - free:]), c.value * 100)
+        if c.max_discount_paise:
+            discount = min(discount, c.max_discount_paise)
+        discount = min(discount, base)
+        return CouponResult(c, discount, _allocate(discount, eligible))
     if base == 0:
         raise ApiError("This coupon does not apply to the items in your cart", "coupon_not_applicable")
     if base < c.min_order_paise:

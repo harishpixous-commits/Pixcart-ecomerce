@@ -478,6 +478,9 @@ Not wired: automatic gateway refund call.
 ## Push 143: Sourcing and reorder agent (Python)
 - `app/agents/reorder.py`: stock versus recent sales rate; proposes asking the seller to restock with a suggested quantity (event `seller_restock`). Settings `reorder_*`. Stale check if stock was topped up. Test added. .NET port next.
 
-## Push 147: Automatic discounts (Python done; .NET/Angular pending)
+## Push 147: Automatic discounts (Python and .NET/Angular done)
 - Admin, Coupons: a platform coupon can be marked "Apply automatically". Admin, Growth, "Automatic discounts" (off by default) switches the feature on. With it on, a cart with no typed code gets the automatic coupon that saves the most; every normal coupon rule still applies, a typed code replaces it. Reuses the existing coupon engine (no new price maths), so the redemption, limits and seller payout rules are the same. The checkout quote shows `coupon.automatic = true`.
 - New column `coupons.is_automatic` (Alembic 0053; .NET V030 pending). Test: `tests/test_auto_discounts.py` (setting off, on, bigger saving wins, typed code wins, one redemption recorded). Next.js type-check clean; not run in a browser.
+
+## Push 148: Buy X get Y discount (Python done; .NET/Angular pending)
+- Admin, Coupons: new type "Buy X get Y" (platform coupons only): customer buys X, the cheapest Y of every X+Y items get N% off (100 = free). Columns coupons.buy_qty, get_qty (Alembic 0054, kind check widened). Works with codes and with Automatic discounts. Test: tests/test_bxgy.py. Not covered: limiting it to chosen products (category limit works). Alembic 0054 not run against a real upgrade, only the test schema. Next.js type-check only.

@@ -7,12 +7,13 @@ import { api, ApiError, quietly } from "@/lib/api";
 import { date, paiseToInput, rupees, toLocalInput, toPaise } from "@/lib/format";
 
 export type CouponRow = {
-  id: string; code: string; description: string; kind: "percent" | "flat"; value: number; max_discount_paise: number | null; min_order_paise: number;
+  id: string; code: string; description: string; kind: "percent" | "flat" | "bxgy"; value: number; buy_qty?: number; get_qty?: number; max_discount_paise: number | null; min_order_paise: number;
   starts_at: string | null; ends_at: string | null; usage_limit: number | null; per_user_limit: number; used_count: number; funded_by: string;
   category_id: string | null; first_order_only: boolean; is_active: boolean; show_on_checkout: boolean; is_automatic?: boolean;
 };
 
-export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discount_paise" | "min_order_paise">) {
+export function couponSummary(c: Pick<CouponRow, "kind" | "value" | "max_discount_paise" | "min_order_paise" | "buy_qty" | "get_qty">) {
+  if (c.kind === "bxgy") return `Buy ${c.buy_qty}, get ${c.get_qty} ${c.value === 100 ? "free" : `at ${c.value}% off`}`;
   const off = c.kind === "percent" ? `${c.value / 100}% off` : `${rupees(c.value)} off`;
   const cap = c.kind === "percent" && c.max_discount_paise ? ` up to ${rupees(c.max_discount_paise)}` : "";
   const min = c.min_order_paise ? ` on ${rupees(c.min_order_paise)} or more` : "";
@@ -31,7 +32,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   const [batch, setBatch] = useState({ count: "10", prefix: "", single: true });
   const [batchCodes, setBatchCodes] = useState("");
   const [cats, setCats] = useState<{ id: string; path?: string; name?: string }[]>([]);
-  const [f, setF] = useState({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, is_active: true });
+  const [f, setF] = useState({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, buy_qty: "2", get_qty: "1", is_active: true });
   const [error, setError] = useState<string | null>(null);
   const load = () => api<CouponRow[]>(base).then(setRows).catch(quietly);
   useEffect(() => {
@@ -43,12 +44,12 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   function open(c: CouponRow | "new") {
     setError(null);
     setEdit(c);
-    if (c === "new") setF({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, is_active: true });
+    if (c === "new") setF({ code: "", description: "", kind: "percent", value: "10", max: "", min: "", starts: "", ends: "", limit: "", per_user: "1", category_id: "", first_order_only: false, show_on_checkout: true, is_automatic: false, buy_qty: "2", get_qty: "1", is_active: true });
     else setF({
-      code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : paiseToInput(c.value),
+      code: c.code, description: c.description, kind: c.kind, value: c.kind === "percent" ? String(c.value / 100) : c.kind === "bxgy" ? String(c.value) : paiseToInput(c.value),
       max: c.max_discount_paise ? paiseToInput(c.max_discount_paise) : "", min: c.min_order_paise ? paiseToInput(c.min_order_paise) : "",
       starts: toLocal(c.starts_at), ends: toLocal(c.ends_at), limit: c.usage_limit ? String(c.usage_limit) : "", per_user: String(c.per_user_limit),
-      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, is_active: c.is_active,
+      category_id: c.category_id ?? "", first_order_only: c.first_order_only, show_on_checkout: c.show_on_checkout, is_automatic: !!c.is_automatic, buy_qty: String(c.buy_qty || 2), get_qty: String(c.get_qty || 1), is_active: c.is_active,
     });
   }
 
@@ -66,7 +67,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const value = f.kind === "percent" ? Math.round(Number(f.value) * 100) : toPaise(f.value);
+    const value = f.kind === "percent" ? Math.round(Number(f.value) * 100) : f.kind === "bxgy" ? Math.round(Number(f.value)) : toPaise(f.value);
     if (!value || value <= 0) return setError("Enter the discount");
     const body: Record<string, unknown> = {
       code: f.code, description: f.description, kind: f.kind, value,
@@ -74,7 +75,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
       starts_at: f.starts ? new Date(f.starts).toISOString() : null, ends_at: f.ends ? new Date(f.ends).toISOString() : null,
       usage_limit: f.limit ? Number(f.limit) : null, per_user_limit: Number(f.per_user) || 1, is_active: f.is_active,
     };
-    if (admin) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic });
+    if (admin) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic, buy_qty: f.kind === "bxgy" ? Number(f.buy_qty) || 0 : 0, get_qty: f.kind === "bxgy" ? Number(f.get_qty) || 0 : 0 });
     try {
       if (edit === "new") await api(base, { method: "POST", body });
       else await api(`${base}/${(edit as CouponRow).id}`, { method: "PUT", body });
@@ -123,9 +124,10 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
             <TextField label="Code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} required minLength={4} maxLength={30} disabled={edit !== "new"} hint="Letters and numbers, e.g. DIWALI20" />
             <TextField label="Short description" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={200} hint="Shown to customers at checkout" />
             <Field label="Discount type" htmlFor="ck">
-              <Select id="ck" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Percentage</option><option value="flat">Fixed amount</option></Select>
+              <Select id="ck" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="percent">Percentage</option><option value="flat">Fixed amount</option>{admin && <option value="bxgy">Buy X get Y</option>}</Select>
             </Field>
-            <TextField label={f.kind === "percent" ? "Percentage off (1 to 90)" : "Amount off (₹)"} inputMode="decimal" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} required />
+            {f.kind === "bxgy" && <><TextField label="Customer buys (items)" inputMode="numeric" value={f.buy_qty} onChange={(e) => setF({ ...f, buy_qty: e.target.value })} required /><TextField label="Customer gets (items)" inputMode="numeric" value={f.get_qty} onChange={(e) => setF({ ...f, get_qty: e.target.value })} required /></>}
+            <TextField label={f.kind === "percent" ? "Percentage off (1 to 90)" : f.kind === "bxgy" ? "Percent off the extra items (100 = free)" : "Amount off (₹)"} inputMode="decimal" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} required />
             {f.kind === "percent" && <TextField label="Maximum discount (₹, optional)" inputMode="decimal" value={f.max} onChange={(e) => setF({ ...f, max: e.target.value })} />}
             <TextField label="Minimum order (₹, optional)" inputMode="decimal" value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} hint={admin ? "Counted on the whole cart" : "Counted on your items in the cart"} />
             <TextField label="Starts" type="datetime-local" value={f.starts} onChange={(e) => setF({ ...f, starts: e.target.value })} />

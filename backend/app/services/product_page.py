@@ -112,6 +112,8 @@ def offer_text(c: Coupon) -> dict:
         title = f"{c.value / 100:g}% off"
         if c.max_discount_paise:
             title += f" up to {_rupees(c.max_discount_paise)}"
+    elif c.kind == "bxgy":
+        title = f"Buy {c.buy_qty}, get {c.get_qty} " + ("free" if c.value == 100 else f"at {c.value}% off")
     else:
         title = f"{_rupees(c.value)} off"
     terms = []
