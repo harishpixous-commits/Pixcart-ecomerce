@@ -243,6 +243,17 @@ export class DiscountFilter {
         <pc-brand-filter [fp]="fp()" />
       </fieldset>
     }
+    @if ((fp().data.facets.tags?.length ?? 0) > 0) {
+      <fieldset class="min-w-0">
+        <legend class="mb-2 font-semibold">Tags</legend>
+        <div class="flex flex-wrap gap-1.5">
+          @for (t of fp().data.facets.tags; track t.name) {
+            <button type="button" class="rounded-full border px-2.5 py-1 text-sm" [class.border-peacock]="fp().params.get('tag') === t.name" [attr.aria-pressed]="fp().params.get('tag') === t.name"
+              (click)="fp().set({ tag: fp().params.get('tag') === t.name ? null : t.name })">{{ t.name }} <span class="text-ink-faint">({{ t.count }})</span></button>
+          }
+        </div>
+      </fieldset>
+    }
     <fieldset class="min-w-0">
       <legend class="mb-2 font-semibold">Price</legend>
       <pc-price-filter [fp]="fp()" />

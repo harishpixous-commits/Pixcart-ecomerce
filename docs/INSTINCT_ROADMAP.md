@@ -487,3 +487,4 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
   - Push 166 (tests only): an automatic volume offer competes with other automatic coupons: the plain one wins with one unit, the volume one wins with two (Python and .NET).
   - Push 167 (tests only): odd flat discounts (3333 platform, 3331 seller) on multi-line orders, inside and outside the state (CGST+SGST and IGST): discounts, tax split and sub-order totals add up to the paise (Python and .NET). No bug found.
   - Push 168: search response now lists the top 20 product tags with counts (facets.tags), counted over the same scope as the brand list. API and tests only; the search page does not show them yet.
+  - Push 169: the search page filter column shows a Tags block (top tags with counts, tap to filter, tap again to clear) in Next.js and Angular. Type-checked only, not run in a browser; the mobile filter bar does not have it.
