@@ -450,3 +450,6 @@ Signed in as admin, opened every admin route in headless Chrome on the seeded de
 
 ## Browser check, Growth settings save (28 Nov)
 In headless Chrome as admin: switched on Share wishlist, set New badge days to 21, saved. Values persisted (confirmed through the API). A value of 1421 was rejected with "new_badge.days must be a whole number between 1 and 90", correct behaviour.
+
+## Browser check, seller order handling (28 Nov)
+As the seller (Chennai Silks & Co): 11 seller pages loaded clean. Confirmed, packed, shipped (courier plus tracking) and delivered the demo COD order; the invoice number was issued on shipping. No errors. Not covered: returns and refunds, delivery partner app screens, online payment.
