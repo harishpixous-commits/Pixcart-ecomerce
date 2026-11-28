@@ -270,6 +270,7 @@ async def place_order(
     buyer_business: str = "",
     instructions: str | None = None,
     no_bag: bool = False,
+    gift_message: str = "",
     currency: str | None = None,
 ) -> tuple[Order, Payment | None]:
     existing = (
@@ -368,6 +369,11 @@ async def place_order(
         except ValueError as exc:
             raise ApiError(str(exc), "invalid_gstin", fields={"buyer_gstin": "Invalid"}) from exc
     note = " ".join((instructions if instructions is not None else address.instructions or "").split())[:300] if ck["instructions_enabled"] else ""
+    gift_text = " ".join((gift_message or "").split())
+    if gift_text and not ck["gift_message_enabled"]:
+        raise ApiError("Gift messages are switched off", "gift_off")
+    if len(gift_text) > ck["gift_message_max"]:
+        raise ApiError(f"Keep the gift message to {ck['gift_message_max']} characters", "gift_too_long", fields={"gift_message": "Too long"})
     grand_total = items_total + shipping_total + cod_fee + fees_total + tip - discount_total
 
     if payment_method == "cod":
@@ -397,6 +403,7 @@ async def place_order(
             "state": STATES.get(address.state_code, ""), "pincode": address.pincode, "label": address.label, "kind": address.kind,
             "lat": float(address.lat) if address.lat is not None else None, "lng": float(address.lng) if address.lng is not None else None,
             "instructions": note, "no_bag": bool(no_bag and ck["no_bag_enabled"]),
+            "gift_message": gift_text,
         },
         items_total=items_total,
         shipping_total=shipping_total,

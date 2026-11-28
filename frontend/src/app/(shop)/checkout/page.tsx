@@ -16,7 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BillDetails } from "@/components/bill";
 import { AddressSection } from "@/components/checkout/address";
 import { CARD } from "@/components/checkout/card";
-import { BusinessSection, businessErrors, InstructionsSection, NoBagSection, TipSection } from "@/components/checkout/extras";
+import { BusinessSection, businessErrors, GiftMessageSection, InstructionsSection, NoBagSection, TipSection } from "@/components/checkout/extras";
 import { CouponSection, type OfferCoupon } from "@/components/checkout/offers";
 import { CancellationNote, PayBar, PaymentMethods, type PayMethod } from "@/components/checkout/payment";
 import { BillSkeleton, ItemsReview, ReviewSkeleton } from "@/components/checkout/review";
@@ -88,6 +88,7 @@ export default function CheckoutPage() {
   const [bizChecked, setBizChecked] = useState(false);
   const [bizServerError, setBizServerError] = useState<string | null>(null);
   const [noBag, setNoBag] = useState(false);
+  const [gift, setGift] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
@@ -254,6 +255,7 @@ export default function CheckoutPage() {
           buyer_business: withBiz ? business.trim() : "",
           instructions,
           no_bag: !!opts?.no_bag_enabled && noBag,
+          gift_message: opts?.gift_message_enabled ? gift.trim() : "",
           currency: currency !== "INR" ? currency : undefined, // Admin → Languages and currencies: may be charged in it
         },
       });
@@ -366,6 +368,8 @@ export default function CheckoutPage() {
               serverError={bizServerError}
             />
           )}
+
+          {opts?.gift_message_enabled && <GiftMessageSection text={gift} onText={setGift} max={opts.gift_message_max ?? 150} />}
 
           {opts?.no_bag_enabled && <NoBagSection on={noBag} onChange={setNoBag} />}
         </div>

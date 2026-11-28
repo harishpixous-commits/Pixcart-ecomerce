@@ -182,3 +182,31 @@ async def test_address_label_instructions_and_map_pin(client):
     assert (await other.patch(f"/api/addresses/{plain}/location", {"lat": 13.0, "lng": 80.0})).status_code == 404
     cleared = await buyer.patch(f"/api/addresses/{plain}/location", {"lat": None, "lng": None})
     assert cleared.json()["lat"] is None
+
+
+async def test_gift_message_is_off_until_admin_allows_it(client, admin, categories):
+    tn, ka, shirt, phone = await setup(client, admin, categories)
+    buyer = await login_phone(client, "9600000611", name="Gift Buyer")
+    addr = await add_address(buyer, state="33")
+    vid = shirt["variants"][0]["id"]
+
+    async def order(msg: str):
+        await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+        return await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key(), "gift_message": msg})
+
+    assert (await buyer.get("/api/cart")).json()["checkout"]["gift_message_enabled"] is False
+    r = await order("Happy birthday!")
+    assert r.status_code == 400 and r.json()["error"]["code"] == "gift_off"
+    assert (await admin.put("/api/admin/checkout", {"fees": {"gift_message_enabled": True, "gift_message_max": 30}})).status_code == 200
+    chk = (await buyer.get("/api/cart")).json()["checkout"]
+    assert chk["gift_message_enabled"] is True and chk["gift_message_max"] == 30
+    r = await order("x" * 31)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "gift_too_long"
+    r = await order("  Happy   birthday, Meena!  ")
+    assert r.status_code == 201, r.text
+    o = r.json()["order"]
+    assert o["ship_to"]["gift_message"] == "Happy birthday, Meena!"
+    sub_id = o["sub_orders"][0]["id"]
+    seller_view = (await tn.get(f"/api/seller/orders/{sub_id}")).json()
+    assert seller_view["ship_to"]["gift_message"] == "Happy birthday, Meena!"
+    assert (await admin.put("/api/admin/checkout", {"fees": {"gift_message_max": 10}})).status_code == 400

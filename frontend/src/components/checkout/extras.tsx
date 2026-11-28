@@ -6,7 +6,7 @@
  */
 
 import clsx from "clsx";
-import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-react";
+import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, Gift, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-react";
 import { useId, useState } from "react";
 import { Button, Input, TextField, Textarea } from "@/components/ui";
 import { currencySymbol, paiseToShown, rupees, shownToPaise } from "@/lib/format";
@@ -312,5 +312,19 @@ export function NoBagSection({ on, onChange }: { on: boolean; onChange: (on: boo
         )}
       />
     </label>
+  );
+}
+
+/* ---------------------------------------------------------------- gift message */
+
+export function GiftMessageSection({ text, onText, max }: { text: string; onText: (text: string) => void; max: number }) {
+  const id = useId();
+  return (
+    <Card labelledBy="co-gift-h" testId="checkout-gift">
+      <CardHeading id="co-gift-h" icon={Gift} title="Gift message" sub="The seller packs it with your order. The price is not shown." />
+      <label htmlFor={id} className="sr-only">Gift message</label>
+      <Textarea id={id} value={text} maxLength={max} rows={3} onChange={(e) => onText(e.target.value)} placeholder="E.g. Happy birthday! Hope you like it." />
+      <p className="mt-1 text-right text-xs text-ink-soft" aria-live="polite">{text.length}/{max}</p>
+    </Card>
   );
 }

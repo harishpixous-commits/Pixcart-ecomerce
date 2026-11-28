@@ -63,7 +63,7 @@ export default function AdminOrderDetail() {
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Customer</h2><p>{o.customer?.name}</p><p className="text-ink-soft">{o.customer?.phone} {o.customer?.email}</p></section>
-        <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Ship to</h2><p className="text-ink-soft">{a.full_name}, {a.phone}, {a.line1}, {a.city}, {a.state} {a.pincode}</p></section>
+        <section className="rounded-xl bg-white p-4"><h2 className="mb-1 font-semibold">Ship to</h2><p className="text-ink-soft">{a.full_name}, {a.phone}, {a.line1}, {a.city}, {a.state} {a.pincode}</p>{a.gift_message && <p className="mt-1 text-sm"><strong>Gift message:</strong> {a.gift_message}</p>}</section>
         <section className="rounded-xl bg-white p-4">
           <h2 className="mb-1 font-semibold">Totals</h2><p>Order {rupeesExact(o.grand_total)}</p>{o.refunded_total > 0 && <p className="text-leaf">Refunded {rupeesExact(o.refunded_total)}</p>}
           {o.fee_invoice_number && (

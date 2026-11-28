@@ -78,12 +78,14 @@ DEFAULTS: dict[str, Any] = {
     "gstin_enabled": True,           # "Add GSTIN" for business purchases (the GSTIN goes on the tax invoices)
     "instructions_enabled": True,    # delivery instructions for the delivery partner or courier
     "no_bag_enabled": False,         # "I don't need a bag"
+    "gift_message_enabled": False,   # a gift message the seller packs with the order
+    "gift_message_max": 150,         # its longest length
     "cancellation_note": "You can cancel until your order is shipped. After delivery, use returns if the product allows them.",
 }
 
 _INTS = {"handling_paise": (0, 100_000), "handling_list_paise": (0, 100_000), "handling_free_above_paise": (0, 100_000_000),
          "small_cart_paise": (0, 100_000), "small_cart_below_paise": (0, 10_000_000), "platform_paise": (0, 100_000),
-         "fees_gst_bps": (0, 2800), "tip_max_paise": (0, 500_000), "surge_paise": (0, 100_000), "late_night_paise": (0, 100_000)}
+         "fees_gst_bps": (0, 2800), "tip_max_paise": (0, 500_000), "surge_paise": (0, 100_000), "late_night_paise": (0, 100_000), "gift_message_max": (20, 300)}
 _TEXTS = {"delivery_label": 40, "delivery_info": 300, "handling_label": 40, "handling_info": 300, "small_cart_label": 40, "small_cart_info": 300,
           "platform_label": 40, "platform_info": 300, "surge_label": 40, "surge_info": 300, "late_night_label": 40, "late_night_info": 300,
           "cancellation_note": 600}
@@ -290,7 +292,7 @@ def public(ck: dict) -> dict:
     """Options the checkout screen needs."""
     return {
         "tip_enabled": ck["tip_enabled"], "tip_presets": ck["tip_presets"], "tip_max_paise": ck["tip_max_paise"], "gstin_enabled": ck["gstin_enabled"],
-        "instructions_enabled": ck["instructions_enabled"], "no_bag_enabled": ck["no_bag_enabled"], "cancellation_note": ck["cancellation_note"],
+        "instructions_enabled": ck["instructions_enabled"], "no_bag_enabled": ck["no_bag_enabled"], "gift_message_enabled": ck["gift_message_enabled"], "gift_message_max": ck["gift_message_max"], "cancellation_note": ck["cancellation_note"],
         "delivery_label": ck["delivery_label"], "delivery_info": ck["delivery_info"],
     }
 

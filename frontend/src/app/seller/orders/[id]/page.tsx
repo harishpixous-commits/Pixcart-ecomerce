@@ -147,7 +147,10 @@ export default function SellerOrderDetail() {
             <section className="rounded-xl bg-white p-4">
               <h2 className="mb-2 text-lg font-semibold">Ship to</h2>
               {a ? (
+                <>
                 <p className="text-ink-soft">{a.full_name}, {a.phone}<br />{[a.line1, a.line2, a.landmark].filter(Boolean).join(", ")}<br />{a.city}, {a.state} {a.pincode}</p>
+                {a.gift_message && <p className="mt-2 rounded-lg bg-peacock-light/60 px-3 py-2 text-sm" data-testid="gift-message"><strong>Gift message:</strong> {a.gift_message}. Pack it in with the order and leave the price out.</p>}
+                </>
               ) : <p className="text-ink-faint">Address shown once the order is placed.</p>}
             </section>
             {b && (
@@ -184,6 +187,7 @@ export default function SellerOrderDetail() {
         <p>Order {o.number} ({o.order_number}), {dateTime(o.created_at)}, {o.payment_method === "cod" ? `COD: collect ${rupeesExact(o.cod_to_collect ?? o.total)}` : "Prepaid"}</p>
         <p className="mt-2"><strong>Sold by:</strong> {user?.seller?.display_name}</p>
         {a && <p><strong>Ship to:</strong> {a.full_name}, {a.phone}, {[a.line1, a.line2, a.landmark, a.city, a.state, a.pincode].filter(Boolean).join(", ")}</p>}
+        {a?.gift_message && <p><strong>Gift message:</strong> {a.gift_message}</p>}
         <table className="mt-3 w-full border-collapse text-sm">
           <thead><tr>{["Item", "SKU", "HSN", "Qty", "Taxable", "GST", "CGST", "SGST", "IGST", "Total"].map((h) => <th key={h} className="border border-ink p-1 text-left">{h}</th>)}</tr></thead>
           <tbody>

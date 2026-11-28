@@ -38,6 +38,7 @@ function shipTo(raw: Record<string, unknown>) {
     label: text("label") || (raw.kind === "home" ? "Home" : raw.kind === "work" ? "Work" : ""),
     instructions: text("instructions"),
     noBag: raw.no_bag === true,
+    gift: text("gift_message"),
   };
 }
 
@@ -255,6 +256,11 @@ function OrderView() {
               {a.street && a.place && <br />}
               {a.place}
             </p>
+            {a.gift && (
+              <p className="mt-3 w-full break-words rounded-xl bg-peacock-light/60 px-3 py-2 text-sm text-ink-soft" data-testid="order-gift-message">
+                <span className="font-semibold text-ink">Gift message:</span> {a.gift}
+              </p>
+            )}
             {(a.instructions || a.noBag) && (
               <div className="mt-3 flex flex-col items-start gap-2">
                 {a.instructions && (
