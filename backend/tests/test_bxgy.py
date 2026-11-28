@@ -164,3 +164,35 @@ async def test_bundle_block_lists_the_set_with_price_and_saving(client, admin, c
         await s.execute(update(Product).where(Product.slug == phone_p["slug"]).values(in_stock=False))
         await s.commit()
     assert (await client.get(f"/api/catalog/products/{shirt['slug']}/bundles")).json()["bundles"] == []
+
+
+async def test_bundle_block_hides_expired_used_up_and_switched_off_bundles(client, admin, categories):
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import Coupon
+
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.post("/api/admin/coupons", {"code": "EDGESET", "kind": "bundle", "value": 10, "product_slugs": [shirt["slug"], phone_p["slug"]]})).status_code == 201
+
+    async def shown() -> bool:
+        return bool((await client.get(f"/api/catalog/products/{shirt['slug']}/bundles")).json()["bundles"])
+
+    async def change(**vals):
+        async with SessionLocal() as s:
+            await s.execute(update(Coupon).where(Coupon.code == "EDGESET").values(**vals))
+            await s.commit()
+
+    assert await shown()
+    await change(ends_at=utcnow() - timedelta(minutes=1))
+    assert not await shown()
+    await change(ends_at=None, starts_at=utcnow() + timedelta(days=1))
+    assert not await shown()
+    await change(starts_at=None, usage_limit=1, used_count=1)
+    assert not await shown()
+    await change(usage_limit=None, is_active=False)
+    assert not await shown()
+    await change(is_active=True)
+    assert await shown()
