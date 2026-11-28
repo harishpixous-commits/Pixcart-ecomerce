@@ -31,6 +31,17 @@ async def run(session: AsyncSession, user: User, row: AgentProposal, bg: Backgro
         event = "seller_tracking_reminder" if k == "nudge_tracking" else "seller_ship_reminder"
         await notify_seller(session, sub.seller_id, event, {"order_number": sub.number, "hours": str(hours)}, link=f"/seller/orders/{sub.id}")
         return {"ok": True, "told_seller": True}
+    if k == "request_restock":
+        from app.models import Variant
+
+        v = await session.get(Variant, uuid.UUID(p["variant_id"]))
+        if v is None or not v.is_active:
+            raise Stale("This item is no longer for sale, so nothing was sent.")
+        if v.stock > p["stock"]:
+            raise Stale(f"Stock was already topped up ({v.stock} now), so nothing was sent.")
+        await notify_seller(session, v.seller_id, "seller_restock", {"item": p["item"], "stock": str(v.stock), "sold": str(p["sold"]), "days": str(p["days"]),
+                                                                      "left": str(p["left"]), "suggest": str(p["suggest"])}, link="/seller/inventory?low_stock=1")
+        return {"ok": True, "told_seller": True}
     if k == "delay_notice":
         from app.models import Order
         from app.services.notify import notify

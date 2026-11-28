@@ -474,3 +474,6 @@ Not wired: automatic gateway refund call.
 
 ## Push 142: Order update agent (Python)
 - `app/agents/orderupdate.py`: shipped packages past the promised delivery date by N hours get a proposal to tell the customer (event `order_delay`, in-app and email). Approve sends it; a package delivered meanwhile is skipped. Settings `orderupdate_*`. Test added to `tests/test_agents.py`. .NET port next.
+
+## Push 143: Sourcing and reorder agent (Python)
+- `app/agents/reorder.py`: stock versus recent sales rate; proposes asking the seller to restock with a suggested quantity (event `seller_restock`). Settings `reorder_*`. Stale check if stock was topped up. Test added. .NET port next.

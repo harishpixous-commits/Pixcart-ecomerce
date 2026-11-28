@@ -132,3 +132,48 @@ async def test_order_update_agent_proposes_delay_notice_and_customer_hears_only_
     pid = (await admin.get("/api/admin/agents/proposals")).json()["items"][0]["id"]
     assert (await admin.post(f"/api/admin/agents/proposals/{pid}/approve")).status_code == 409
     assert len(delay_notes((await buyer.get("/api/notifications")).json()["items"])) == 1
+
+
+async def test_reorder_agent_asks_seller_to_restock_fast_sellers_only(client, admin, categories):
+    tn, buyer, sid = await _place(client, admin, categories, "9770000204")
+    async with SessionLocal() as s:
+        from app.models import OrderItem, Variant
+
+        item = (await s.execute(select(OrderItem).where(OrderItem.sub_order_id == uuid.UUID(sid)))).scalars().first()
+        v = await s.get(Variant, item.variant_id)
+        v.stock = 4
+        vid = str(v.id)
+        await s.commit()
+    await admin.put("/api/admin/agents/settings", {"enabled": True, "reorder_cover_days": 180, "reorder_min_sold": 1})
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await core.run_agent(s, "reorder")
+            await s.commit()
+            return n
+
+    assert await run() == 0  # its switch is off
+    assert (await admin.put("/api/admin/agents/settings", {"reorder_enabled": True})).status_code == 200
+    assert await run() == 1 and await run() == 0
+    p = (await admin.get("/api/admin/agents/proposals?agent=reorder")).json()["items"][0]
+    assert p["kind"] == "request_restock" and "4 left" in p["summary"]
+    notes = lambda items: [n for n in items if n["title"].startswith("Restock")]
+    assert notes((await tn.get("/api/notifications")).json()["items"]) == []
+    assert (await admin.post(f"/api/admin/agents/proposals/{p['id']}/approve")).json()["status"] == "done"
+    assert len(notes((await tn.get("/api/notifications")).json()["items"])) == 1
+    # stock topped up before approval: nothing is sent
+    async with SessionLocal() as s:
+        s.add(AgentProposal(agent="reorder", kind="request_restock", dedupe_key="request_restock:manual", summary="x", details=[],
+                            params={"variant_id": vid, "item": "Shirt", "stock": 4, "sold": 12, "days": 30, "left": 10, "suggest": 5}, permission="orders", status="pending", result={}, created_at=utcnow()))
+        from app.models import Variant as V
+
+        (await s.get(V, uuid.UUID(vid))).stock = 50
+        await s.commit()
+    pid = (await admin.get("/api/admin/agents/proposals")).json()["items"][0]["id"]
+    assert (await admin.post(f"/api/admin/agents/proposals/{pid}/approve")).status_code == 409
+    assert len(notes((await tn.get("/api/notifications")).json()["items"])) == 1
+    # a slow seller is not asked: plenty of stock for the cover period
+    async with SessionLocal() as s:
+        (await s.get(V, uuid.UUID(vid))).stock = 400
+        await s.commit()
+    assert await run() == 0
