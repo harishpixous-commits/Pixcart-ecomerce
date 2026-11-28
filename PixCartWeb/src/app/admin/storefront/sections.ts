@@ -58,8 +58,8 @@ const STARTER: Record<string, Record<string, any>> = {
 };
 
 const ICONS = [["badge", "Verified badge"], ["wallet", "Wallet"], ["truck", "Delivery truck"], ["return", "Return arrow"], ["shield", "Shield"], ["gift", "Gift"], ["support", "Headset"], ["check", "Tick"]];
-const SOURCES = [["deals", "Biggest discounts"], ["deals_live", "Running deals (with timers)"], ["bestsellers", "Bestsellers"], ["new", "Newest"], ["top_rated", "Top rated"], ["category", "From one category"], ["manual", "Products I pick"]];
-const CARD_SOURCES = SOURCES.filter(([v]) => v !== "manual");
+const SOURCES = [["deals", "Biggest discounts"], ["deals_live", "Running deals (with timers)"], ["bestsellers", "Bestsellers"], ["new", "Newest"], ["top_rated", "Top rated"], ["category", "From one category"], ["collection", "One of your collections"], ["manual", "Products I pick"]];
+const CARD_SOURCES = SOURCES.filter(([v]) => v !== "manual" && v !== "collection");
 const CARD_MODES = [["tiles", "4 picture tiles"], ["products", "4 products"], ["recent", "Recently viewed (the shopper's own)"], ["buy_again", "Buy it again (the shopper's own)"]];
 const DEAL_KIND_LABEL = [["", "All kinds"], ["lightning", "Lightning deals"], ["deal_of_day", "Deal of the Day"], ["limited", "Limited time deals"]];
 
@@ -268,8 +268,31 @@ export class ProductPicker {
 /* ------------------------------------------------------------------ each kind's settings */
 
 @Component({
+  selector: "pc-collection-select",
+  imports: [Field, Select],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: "contents" },
+  template: `
+    <pc-field label="Collection" for="pcol">
+      <select pcSelect id="pcol" (change)="slugChange.emit($any($event.target).value)">
+        <option value="" [selected]="!slug()">Choose</option>
+        @for (x of cols(); track x.slug) {<option [value]="x.slug" [selected]="x.slug === slug()">{{ x.title }}</option>}
+      </select>
+    </pc-field>
+  `,
+})
+export class CollectionSelect {
+  readonly slug = input<string>("");
+  readonly slugChange = output<string>();
+  protected readonly cols = signal<{ slug: string; title: string }[]>([]);
+  constructor() {
+    api<{ items: { slug: string; title: string }[] }>("/api/catalog/collections").then((r) => this.cols.set(r.items)).catch(() => this.cols.set([]));
+  }
+}
+
+@Component({
   selector: "pc-section-config",
-  imports: [SectionSlide, SectionCard, ProductPicker, ImageField, MediaField, TextField, Field, Select, Input, Textarea, Button, Icon, Markdown],
+  imports: [SectionSlide, SectionCard, ProductPicker, CollectionSelect, ImageField, MediaField, TextField, Field, Select, Input, Textarea, Button, Icon, Markdown],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -351,6 +374,7 @@ export class ProductPicker {
           @if (c().source === "category") {
             <pc-field label="Category" for="pcat"><select pcSelect id="pcat" (change)="patch({ category_slug: $any($event.target).value })"><option value="" [selected]="!c().category_slug">Choose</option>@for (x of cats(); track x.slug) {<option [value]="x.slug" [selected]="x.slug === c().category_slug">{{ x.label }}</option>}</select></pc-field>
           }
+          @if (c().source === "collection") {<pc-collection-select [slug]="c().collection_slug ?? ''" (slugChange)="patch({ collection_slug: $event })" />}
           @if (c().source === "manual") {<pc-product-picker [ids]="c().product_ids ?? []" (idsChange)="patch({ product_ids: $event })" />}
         </div>
       }

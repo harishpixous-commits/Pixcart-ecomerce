@@ -121,10 +121,9 @@ public static class ProductCollections
         return new JsonObject { ["items"] = new JsonArray(rows.Select(c => (JsonNode)new JsonObject { ["slug"] = c.Slug, ["title"] = c.Title, ["description"] = c.Description, ["image_url"] = c.ImageUrl }).ToArray()) };
     }
 
-    public static async Task<JsonObject> PublicPageAsync(IMySqlDapperHelper db, ICatalogBAL catalog, CatalogDAL dal, string slug)
+    /// <summary>The products a collection shows (also used by home page rows set to "a collection").</summary>
+    static async Task<List<ProductModel>> ProductsOfAsync(IMySqlDapperHelper db, ICatalogBAL catalog, CatalogDAL dal, Row c)
     {
-        var c = await db.QueryFirstOrDefaultAsync<Row>($"SELECT {Cols} FROM product_collections WHERE slug = @slug AND is_active = 1", new { slug = (slug ?? "").ToLowerInvariant() }) ?? throw new NotFoundException("Collection");
-        JsonObject Page(List<JsonObject> cards) => new() { ["slug"] = c.Slug, ["title"] = c.Title, ["description"] = c.Description, ["image_url"] = c.ImageUrl, ["products"] = new JsonArray(cards.Select(x => (JsonNode)x).ToArray()) };
         var ids = Ids(c.ProductIds);
         List<ProductModel> products;
         if (ids.Count > 0)
@@ -138,7 +137,7 @@ public static class ProductCollections
             if (c.CategorySlug.Length > 0)
             {
                 var cat = await dal.CategoryBySlugAsync(c.CategorySlug, activeOnly: false);
-                if (cat is null) return Page([]);
+                if (cat is null) return [];
                 sql += " AND p.category_id IN @cats"; args["cats"] = await catalog.CategoryDescendantIdsAsync(cat.Id);
             }
             if (c.Brand.Length > 0) { sql += " AND LOWER(p.brand) = LOWER(@brand)"; args["brand"] = c.Brand; }
@@ -146,6 +145,21 @@ public static class ProductCollections
             if (c.MaxPricePaise is not null) { sql += " AND p.price_from <= @max"; args["max"] = c.MaxPricePaise; }
             products = (await db.QueryAsync<ProductModel>(sql + " ORDER BY p.sold_count DESC, p.id LIMIT 60", args)).ToList();
         }
+        return products;
+    }
+
+    /// <summary>Products of an active collection by link name; empty when it is missing or hidden.</summary>
+    public static async Task<List<ProductModel>> ProductsBySlugAsync(IMySqlDapperHelper db, ICatalogBAL catalog, CatalogDAL dal, string slug)
+    {
+        var c = await db.QueryFirstOrDefaultAsync<Row>($"SELECT {Cols} FROM product_collections WHERE slug = @slug AND is_active = 1", new { slug = (slug ?? "").ToLowerInvariant() });
+        return c is null ? [] : await ProductsOfAsync(db, catalog, dal, c);
+    }
+
+    public static async Task<JsonObject> PublicPageAsync(IMySqlDapperHelper db, ICatalogBAL catalog, CatalogDAL dal, string slug)
+    {
+        var c = await db.QueryFirstOrDefaultAsync<Row>($"SELECT {Cols} FROM product_collections WHERE slug = @slug AND is_active = 1", new { slug = (slug ?? "").ToLowerInvariant() }) ?? throw new NotFoundException("Collection");
+        JsonObject Page(List<JsonObject> cards) => new() { ["slug"] = c.Slug, ["title"] = c.Title, ["description"] = c.Description, ["image_url"] = c.ImageUrl, ["products"] = new JsonArray(cards.Select(x => (JsonNode)x).ToArray()) };
+        var products = await ProductsOfAsync(db, catalog, dal, c);
         return Page(await catalog.ProductCardsAsync(products));
     }
 }

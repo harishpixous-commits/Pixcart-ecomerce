@@ -679,6 +679,12 @@ public class CatalogBAL(
                 rows = await catalog.RailAsync("category", limit, await CategoryDescendantIdsAsync(cat.Id));
                 break;
             }
+            case "collection":
+            {
+                var slug = CatalogText.Str(CatalogText.Get(config, "collection_slug"));
+                var inCollection = await ProductCollections.ProductsBySlugAsync(sellerDb, this, catalog, slug);
+                return await ProductCardsAsync(inCollection.Take(limit).ToList());
+            }
             case "manual":
             {
                 var ids = new List<Guid>();

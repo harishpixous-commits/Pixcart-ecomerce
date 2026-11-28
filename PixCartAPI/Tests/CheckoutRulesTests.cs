@@ -172,6 +172,13 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("Gifts for him", page["title"]!.GetValue<string>()); Assert.Equal(shirtSlug, page["products"]![0]!["slug"]!.GetValue<string>());
         Assert.Equal("gifts-for-him", (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections"))!["items"]![0]!["slug"]!.GetValue<string>());
         Assert.Contains("/collections/gifts-for-him</loc>", await (await visitor.GetAsync("/api/seo/sitemap.xml")).Content.ReadAsStringAsync());
+        // a home page row can show a collection; it needs one chosen, and disappears once the collection is hidden
+        Assert.Equal(400, (await admin.Post("/api/admin/storefront/sections", new { kind = "products", title = "Picked", config = new { source = "collection" } })).Status);
+        var rowRes = await admin.Post("/api/admin/storefront/sections", new { kind = "products", title = "Gifts row", config = new { source = "collection", collection_slug = "gifts-for-him" } });
+        Assert.Equal(201, rowRes.Status); var rowId = rowRes.Json["id"]!.GetValue<string>();
+        JsonNode? HomeRow(JsonObject home) => home["sections"]!.AsArray().FirstOrDefault(x => x!["id"]!.GetValue<string>() == rowId);
+        var rowNow = HomeRow((await visitor.GetFromJsonAsync<JsonObject>("/api/home"))!);
+        Assert.Equal(shirtSlug, rowNow!["products"]![0]!["slug"]!.GetValue<string>());
         var c2 = (await admin.Post("/api/admin/collections", new { title = "Gifts for him", min_price_paise = 1, max_price_paise = 100000000 })).Json;
         Assert.Equal("gifts-for-him-2", c2["slug"]!.GetValue<string>());
         var byRule = (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections/gifts-for-him-2"))!;
@@ -182,6 +189,7 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         await admin.Put($"/api/admin/collections/{col["id"]!.GetValue<string>()}", new { title = "Gifts for him", product_slugs = new[] { shirtSlug }, is_active = false });
         Assert.Equal(404, (int)(await visitor.GetAsync("/api/catalog/collections/gifts-for-him")).StatusCode);
         Assert.DoesNotContain("/collections/gifts-for-him</loc>", await (await visitor.GetAsync("/api/seo/sitemap.xml")).Content.ReadAsStringAsync());
+        Assert.Null(HomeRow((await visitor.GetFromJsonAsync<JsonObject>("/api/home"))!));   // an empty row is left out
         Assert.Equal(200, (await admin.Delete($"/api/admin/collections/{col["id"]!.GetValue<string>()}")).Status);
         Assert.Single((await admin.Get("/api/admin/collections")).Json["items"]!.AsArray());
         var buyer = await LoginPhone("9620000415", "Collection Buyer");

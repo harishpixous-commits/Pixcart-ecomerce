@@ -563,7 +563,7 @@ public static partial class Cms
         ["inspired"] = "Inspired by your browsing history", ["buy_again"] = "Buy it again (signed-in shoppers)",
     };
 
-    public static readonly string[] ProductSources = ["deals", "deals_live", "bestsellers", "new", "top_rated", "category", "manual"];
+    public static readonly string[] ProductSources = ["deals", "deals_live", "bestsellers", "new", "top_rated", "category", "manual", "collection"];
     public static readonly string[] CardModes = ["tiles", "products", "recent", "buy_again"];
     public static readonly string[] Tones = ["accent", "primary", "dark", "buy"];
     /// <summary>"auto" follows the theme's own category style; "tiles" (older versions) means "auto".</summary>
@@ -791,6 +791,12 @@ public static partial class Cms
                     var slug = CatalogText.Cut(StrGet(c, "category_slug"), 90);
                     outp["category_slug"] = slug;
                     if (slug.Length == 0) throw new ArgumentException("Choose a category");
+                }
+                if (sourceText == "collection")
+                {
+                    var slug = CatalogText.Cut(StrGet(c, "collection_slug"), 90);
+                    outp["collection_slug"] = slug;
+                    if (slug.Length == 0) throw new ArgumentException("Choose a collection");
                 }
                 if (sourceText == "manual")
                     outp["product_ids"] = new JsonArray((CatalogText.Get(c, "product_ids") as JsonArray ?? []).Select(x => (JsonNode)CatalogText.Str(x)).Take(24).ToArray());
