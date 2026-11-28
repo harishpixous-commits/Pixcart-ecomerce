@@ -453,3 +453,4 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 - Push 147: Automatic discounts. A coupon marked automatic applies at checkout with no code (Growth, Automatic discounts, off by default). Best saving wins; a typed code wins over it. .NET and Python.
 - Push 148: Buy X get Y discount. Admin coupon type "Buy X get Y": buy X, the cheapest Y of every X+Y items get N% off (100 = free). Works with codes and Automatic discounts. .NET V031. Python and .NET.
 - Push 149: Customer staff notes and tags (private, on the customer page; V032). Python and .NET.
+- Push 150: Customer list search finds staff tags, plus a tag filter (?tag=). Python and .NET.

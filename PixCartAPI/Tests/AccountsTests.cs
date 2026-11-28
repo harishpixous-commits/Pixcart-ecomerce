@@ -125,6 +125,20 @@ public class AccountsTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Customer_list_filters_and_searches_by_staff_tag()
+    {
+        var admin = await Admin();
+        var a = await LoginPhone("9630000092", "Tag Alpha");
+        var b = await LoginPhone("9630000093", "Tag Beta");
+        await admin.Patch($"/api/admin/customers/{a.Id}", new { staff_tags = new[] { "VIP" } });
+        await admin.Patch($"/api/admin/customers/{b.Id}", new { staff_tags = new[] { "Wholesale" } });
+        string[] Names(Res r) => r.Json["items"]!.AsArray().Select(x => x!["name"]!.GetValue<string>()).ToArray();
+        Assert.Equal(new[] { "Tag Alpha" }, Names(await admin.Get("/api/admin/customers?tag=vip")));
+        Assert.Equal(new[] { "Tag Beta" }, Names(await admin.Get("/api/admin/customers?q=wholesal")));
+        Assert.Equal(0, (await admin.Get("/api/admin/customers?tag=nothing")).Json["total"]!.GetValue<int>());
+    }
+
+    [Fact]
     public async Task Admin_manages_customer_accounts()
     {
         var admin = await Admin();
