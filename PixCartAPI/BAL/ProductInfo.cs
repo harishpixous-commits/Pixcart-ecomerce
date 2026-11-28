@@ -53,6 +53,15 @@ public static partial class ProductInfo
         public string NetUnit { get; init; } = "";
         /// <summary>The fewest units one order may hold (0 or 1 means no minimum).</summary>
         public int MinQty { get; init; }
+        /// <summary>Pre-order: the date (yyyy-MM-dd) the seller starts shipping; empty for in-stock items.</summary>
+        public string ShipsOn { get; init; } = "";
+        /// <summary>The ship date while it is still ahead (India time), else empty.</summary>
+        public string PreorderDate()
+        {
+            if (ShipsOn.Length == 0) return "";
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5.5));
+            return DateOnly.ParseExact(ShipsOn, "yyyy-MM-dd", CultureInfo.InvariantCulture) > today ? ShipsOn : "";
+        }
         public string GenericName { get; init; } = "";
         public string ModelNumber { get; init; } = "";
         public string Manufacturer { get; init; } = "";
@@ -126,6 +135,13 @@ public static partial class ProductInfo
             {
                 if (mq.GetValueKind() != JsonValueKind.Number || !int.TryParse(mq.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out minQty) || minQty is < 0 or > 100) throw new Invalid();
             }
+            var shipsOn = Text("ships_on", 10, strip: false).Trim();
+            if (shipsOn.Length > 0)
+            {
+                if (!DateOnly.TryParseExact(shipsOn, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var sd)
+                    || sd > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5.5)).AddDays(365)) throw new Invalid();
+                shipsOn = sd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
             var fssai = Regex.Replace(Text("fssai_license", 14, strip: false), @"\s+", "");
             if (fssai.Length > 0 && !FssaiRx().IsMatch(fssai))
             {
@@ -135,7 +151,7 @@ public static partial class ProductInfo
             }
             return new Details
             {
-                NetUnit = unit, MinQty = minQty,
+                NetUnit = unit, MinQty = minQty, ShipsOn = shipsOn,
                 GenericName = Text("generic_name", 120), ModelNumber = Text("model_number", 60), Manufacturer = Text("manufacturer", 400),
                 Packer = Text("packer", 400), Importer = Text("importer", 400), CustomerCare = Text("customer_care", 300), FssaiLicense = fssai,
                 Ingredients = Text("ingredients", 2000), Directions = Text("directions", 2000), SafetyInfo = Text("safety_info", 2000),

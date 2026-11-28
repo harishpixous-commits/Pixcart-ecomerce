@@ -28,7 +28,7 @@ public class ProductModerationBAL(
     /// <summary>Reference: product_info.ProductDetails.model_dump() — every field, in model order.</summary>
     internal static JsonObject DetailsDump(ProductInfo.Details d) => new()
     {
-        ["net_unit"] = d.NetUnit, ["min_qty"] = d.MinQty, ["generic_name"] = d.GenericName, ["model_number"] = d.ModelNumber,
+        ["net_unit"] = d.NetUnit, ["min_qty"] = d.MinQty, ["ships_on"] = d.ShipsOn, ["generic_name"] = d.GenericName, ["model_number"] = d.ModelNumber,
         ["manufacturer"] = d.Manufacturer, ["packer"] = d.Packer, ["importer"] = d.Importer,
         ["customer_care"] = d.CustomerCare, ["fssai_license"] = d.FssaiLicense, ["ingredients"] = d.Ingredients,
         ["directions"] = d.Directions, ["safety_info"] = d.SafetyInfo, ["legal_disclaimer"] = d.LegalDisclaimer,

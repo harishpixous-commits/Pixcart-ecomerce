@@ -3,6 +3,7 @@
  * the bottom bars and "Saved for later". Port of the local components in frontend/src/app/(shop)/cart/page.tsx.
  */
 
+import { DatePipe } from "@angular/common";
 import { ChangeDetectionStrategy, Component, DestroyRef, booleanAttribute, computed, effect, inject, input, output, signal } from "@angular/core";
 import { BadgePercent, Bookmark, Minus, Plus, Store, Trash2, Truck } from "lucide-angular";
 import { rupees } from "../../core/format";
@@ -192,7 +193,7 @@ export class FreeDeliveryProgress {
 
 @Component({
   selector: "pc-cart-line-row",
-  imports: [Icon, PcLink, Price, ProductImage, Qty],
+  imports: [DatePipe, Icon, PcLink, Price, ProductImage, Qty],
   changeDetection: ChangeDetectionStrategy.OnPush,
   // the host is the row itself: the list's divide-y draws the line between rows
   host: { "[class]": "l().problem ? 'block p-4 sm:p-5 bg-vermilion-light/40' : 'block p-4 sm:p-5'", "data-testid": "cart-line" },
@@ -205,6 +206,7 @@ export class FreeDeliveryProgress {
           <a [pcLink]="'/p/' + l().product_slug" class="line-clamp-2 font-medium leading-snug hover:text-peacock">{{ l().title }}</a>
           @if (l().variant_label) {<p class="text-sm text-ink-faint">{{ l().variant_label }}</p>}
           <pc-price [price]="l().price" [mrp]="l().mrp" />
+          @if (l().ships_on) {<p class="text-sm text-ink-soft">Pre-order: ships from {{ l().ships_on | date: "d MMM y" }}</p>}
           @if (l().problem) {<p class="text-sm font-semibold text-vermilion">{{ l().problem }}</p>}
         </div>
       </div>

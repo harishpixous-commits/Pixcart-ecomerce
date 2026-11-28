@@ -21,6 +21,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     public sealed record CartLine(CartItemModel Item, VariantModel Variant, ProductModel Product, SellerModel Seller, string Image)
     {
         public string Problem { get; set; } = ""; // why this line cannot be bought right now
+        public string ShipsOn { get; set; } = "";  // pre-order: when this item starts shipping
         public int MinQty { get; set; } = 1;      // the seller's minimum order quantity for this item
         public int MaxQty { get; set; }           // the most this line can hold now
         public long LineTotal => Variant.PricePaise * Item.Qty;
@@ -48,7 +49,9 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
             var line = new CartLine(item, variant, product, seller, imgs.GetValueOrDefault(product.Id)?.FirstOrDefault() ?? "");
             var dealLeft = atDeal.GetValueOrDefault(variant.Id);
             line.MaxQty = Math.Max(0, Math.Min(Math.Min(variant.Stock, perItem), dealLeft > 0 ? dealLeft : perItem));
-            line.MinQty = Math.Max(1, Math.Min(ProductInfo.DetailsOf(product.Details).MinQty, perItem));
+            var det = ProductInfo.DetailsOf(product.Details);
+            line.MinQty = Math.Max(1, Math.Min(det.MinQty, perItem));
+            line.ShipsOn = det.PreorderDate();
             if (product.Status != "approved" || seller.Status != "approved" || !variant.IsActive)
                 line.Problem = "This item is no longer available";
             else if (seller.HolidayMode)
@@ -121,6 +124,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
                 ["stock_left"] = line.Variant.Stock,
                 ["max_qty"] = line.MaxQty,
                 ["min_qty"] = line.MinQty,
+                ["ships_on"] = line.ShipsOn,
                 ["problem"] = line.Problem,
             }).ToArray()),
         }).ToArray());

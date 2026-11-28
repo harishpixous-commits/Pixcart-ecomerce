@@ -131,6 +131,22 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task A_preorder_date_shows_on_the_cart_line_until_it_passes()
+    {
+        var (variantId, productId, _) = await ShirtInStock("9400000412", "preorder-shirt");
+        var ahead = DateTime.UtcNow.AddDays(20).ToString("yyyy-MM-dd");
+        await ApiFactory.DbExecAsync("UPDATE products SET details = CAST(@d AS JSON) WHERE id = @productId", new { d = "{\"ships_on\": \"" + ahead + "\"}", productId });
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000412", "Preorder Buyer");
+        var r = await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Equal(ahead, r.Json["groups"]![0]!["lines"]![0]!["ships_on"]!.GetValue<string>());
+        await ApiFactory.DbExecAsync("UPDATE products SET details = CAST('{\"ships_on\": \"2020-01-01\"}' AS JSON) WHERE id = @productId", new { productId });
+        await Refresh(productId);
+        Assert.Equal("", (await buyer.Get("/api/cart")).Json["groups"]![0]!["lines"]![0]!["ships_on"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Abandoned_cart_reminders_follow_the_settings_and_stop_after_an_order()
     {
         var admin = await Admin();

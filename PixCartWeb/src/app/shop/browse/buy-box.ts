@@ -4,6 +4,7 @@
  * Port of frontend/src/app/(shop)/p/[slug]/buy-box.tsx.
  */
 
+import { DatePipe } from "@angular/common";
 import {
   ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, signal, untracked, viewChild,
 } from "@angular/core";
@@ -232,7 +233,7 @@ export class Delivery {
 
 @Component({
   selector: "pc-product-main",
-  imports: [
+  imports: [DatePipe, 
     Icon, PcLink, Button, Gallery, GalleryGrid, CustomerMediaStrip, Stars, AskAboutProduct, DealBadge, UnitPrice, OffersBlock, ServiceIcons, KeySpecs,
     AboutThisItem, SellerSnapshotCard, Delivery, NotifyMe, WishlistHeart, ShareButton, CompareToggle, ReportProduct, StickyBuyBar,
   ],
@@ -380,6 +381,7 @@ export class Delivery {
           <dl class="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1 text-[13px]">
             <dt class="text-ink-faint">Ships from</dt><dd>{{ p().seller.city }}{{ p().seller.state ? ", " + p().seller.state : "" }}</dd>
             <dt class="text-ink-faint">Sold by</dt><dd><a [pcLink]="'/store/' + p().seller.slug" class="text-peacock hover:underline">{{ p().seller.name }}</a></dd>
+            @if (p().ships_on) {<dt class="text-ink-faint">Pre-order</dt><dd>Ships from {{ p().ships_on | date: "d MMM y" }}</dd>}
             <dt class="text-ink-faint">Returns</dt><dd>{{ p().return_window_days > 0 ? p().return_window_days + "-day return after delivery" : "Not returnable" }}</dd>
             <dt class="text-ink-faint">Payment</dt><dd>{{ site().online_payments === false ? "Cash on delivery" : site().cod_enabled ? "Secure online payment or cash on delivery" : "Secure online payment" }}</dd>
           </dl>

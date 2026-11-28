@@ -432,3 +432,6 @@ Proposal, not built: void sets balance to 0 and writes an audit row; a refund is
 
 ## Push 138: Minimum order quantity per product
 Seller or admin sets "Minimum order quantity" (0 to 100, 0/1 = none) in the product info editor, stored in `products.details.min_qty` (no migration). Cart add/update lifts the quantity to the minimum with a notice, refuses if stock is below it; checkout flags a line under the minimum. Product page shows "Minimum order: N" and the picker starts there. Same in the Python version (instinct/python-advanced). Checked: .NET `CheckoutRulesTests` 49 pass including the new test; Angular type-checked with `ngc` (not run in a browser).
+
+## Push 139: Pre-order ship date per product
+Same as the Python version: "Pre-order: ships from" date in the product info editor (`products.details.ships_on`, no migration); product page and cart line show it while it is ahead. Not wired: no change to the seller's dispatch deadline, no email. Checked: .NET `CheckoutRulesTests` 50 pass; Angular type-checked with `ngc` only.

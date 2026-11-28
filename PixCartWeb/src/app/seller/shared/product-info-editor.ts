@@ -14,7 +14,7 @@ import { Icon } from "../../shared/ui/icon";
 import { Field, Input, Select, Textarea } from "../../shared/ui/ui";
 
 export const EMPTY_DETAILS: ProductDetails = {
-  net_unit: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
+  net_unit: "", ships_on: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
   ingredients: "", directions: "", safety_info: "", legal_disclaimer: "", shelf_life: "", warranty: "", in_the_box: [],
   length_cm: null, width_cm: null, height_cm: null, key_specs: [],
 };
@@ -64,6 +64,9 @@ type DimKey = "length_cm" | "width_cm" | "height_cm";
             <option value="" [selected]="details().net_unit === ''">Not applicable</option>
             @for (u of units; track u[0]) {<option [value]="u[0]" [selected]="details().net_unit === u[0]">{{ u[1] }}</option>}
           </select>
+        </pc-field>
+        <pc-field label="Pre-order: ships from" hint="Leave empty for items in stock. Shoppers see the date on the product and in the cart. Once it passes, the listing is normal again.">
+          <input pcInput type="date" [value]="details().ships_on ?? ''" (input)="set('ships_on', $any($event.target).value)" aria-label="Pre-order ship date" />
         </pc-field>
         <pc-field label="Minimum order quantity" hint="The fewest units one order can hold. 0 or 1 means no minimum.">
           <input pcInput type="number" min="0" max="100" [value]="details().min_qty ?? 0" (input)="set('min_qty', Math.max(0, Math.min(100, +$any($event.target).value || 0)))" aria-label="Minimum order quantity" />
