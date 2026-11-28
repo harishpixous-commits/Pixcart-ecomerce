@@ -10,9 +10,9 @@ import { GST_RATES, pct } from "@/lib/format";
 
 type Cat = {
   id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean; required_details: string[];
-  return_window_days: number; min_return_window_days: number;
+  return_window_days: number; min_return_window_days: number; size_guide?: string;
 };
-const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[], returnDays: "7", minReturnDays: "0" };
+const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[], returnDays: "7", minReturnDays: "0", sizeGuide: "" };
 
 function returnPolicy(c: Cat): string {
   const days = c.return_window_days ? `${c.return_window_days} days` : "Not returnable";
@@ -53,14 +53,14 @@ export default function AdminCategories() {
     setError(null);
     setEditing(c);
     setF(c === "new" ? EMPTY : { name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active, image_url: c.image_url, required: c.required_details ?? [],
-      returnDays: String(c.return_window_days), minReturnDays: String(c.min_return_window_days) });
+      returnDays: String(c.return_window_days), minReturnDays: String(c.min_return_window_days), sizeGuide: c.size_guide ?? "" });
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     const body = { name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0, is_active: f.is_active, image_url: f.image_url, required_details: f.required,
-      return_window_days: Number(f.returnDays), min_return_window_days: Number(f.minReturnDays) };
+      return_window_days: Number(f.returnDays), min_return_window_days: Number(f.minReturnDays), size_guide: f.sizeGuide };
     try {
       if (editing === "new") await api("/api/admin/categories", { method: "POST", body });
       else if (editing) await api(`/api/admin/categories/${editing.id}`, { method: "PUT", body });
@@ -115,6 +115,12 @@ export default function AdminCategories() {
             <TextField label="Return window (days)" inputMode="numeric" value={f.returnDays} onChange={(e) => setF({ ...f, returnDays: e.target.value })} hint="New listings start with this. 0 means not returnable." required />
             <TextField label="Shortest window sellers may set" inputMode="numeric" value={f.minReturnDays} onChange={(e) => setF({ ...f, minReturnDays: e.target.value })} hint="Days. Listings below it move up to it when you save." required />
             <p className="text-xs text-ink-faint sm:col-span-2">Up to 30 days. Damaged, faulty or wrong items can always be returned for the period set in Settings.</p>
+          </fieldset>
+          <fieldset className="rounded-lg border border-line p-3">
+            <legend className="px-1 text-sm font-semibold">Size guide</legend>
+            <textarea rows={5} maxLength={2000} value={f.sizeGuide} onChange={(e) => setF({ ...f, sizeGuide: e.target.value })} aria-label="Size guide table"
+              placeholder={"Size | Chest (in) | Length (in)\nS | 38 | 27\nM | 40 | 28"} className="w-full rounded-lg border border-line p-2 font-mono text-sm" data-testid="size-guide-input" />
+            <p className="text-xs text-ink-faint">One line per size, columns split with |. The first line is the heading. Shown on the product page, also for the sub-categories. Leave empty for none.</p>
           </fieldset>
           <fieldset className="rounded-lg border border-line p-3">
             <legend className="px-1 text-sm font-semibold">Product information sellers must give</legend>

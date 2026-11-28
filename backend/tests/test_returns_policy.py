@@ -274,3 +274,30 @@ async def test_return_photos_are_off_until_admin_switches_them_on(client, admin,
     assert r.json()["photos"] == urls[:2]
     # The seller and staff see the same photos.
     assert (await tn.get("/api/seller/returns")).json()["items"][0]["photos"] == urls[:2]
+
+
+async def test_category_size_guide_shows_on_product_page_and_is_inherited(client, admin, categories):
+    _tn, _ka, shirt, phone = await setup(client, admin, categories)
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["size_guide"] is None
+    cats = {c["id"]: c for c in (await admin.get("/api/admin/categories")).json()}
+    assert cats[categories["shirts"]]["size_guide"] == ""
+
+    # a guide on the parent ("Fashion") reaches the shirt listing; messy spacing is tidied
+    root = cats[categories["fashion"]]
+    guide = "Size|Chest (in)|Length (in)\n S |  38 | 27\nM|40|28\n\n"
+    r = await admin.put(f"/api/admin/categories/{categories['fashion']}", root | {"size_guide": guide})
+    assert r.status_code == 200, r.text
+    assert r.json()["size_guide"] == "Size | Chest (in) | Length (in)\nS | 38 | 27\nM | 40 | 28"
+    got = (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["size_guide"]
+    assert got == [["Size", "Chest (in)", "Length (in)"], ["S", "38", "27"], ["M", "40", "28"]]
+    assert (await client.get(f"/api/catalog/products/{phone['slug']}")).json()["size_guide"] is None  # another branch
+
+    # the shirt category's own guide wins over the parent's
+    own = cats[categories["shirts"]] | {"size_guide": "Size|Waist\nL|34"}
+    assert (await admin.put(f"/api/admin/categories/{categories['shirts']}", own)).status_code == 200
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["size_guide"] == [["Size", "Waist"], ["L", "34"]]
+
+    # a table that cannot be shown is refused
+    for bad in ("Size|Chest", "Size|Chest\nS", "A|B\n" + "\n".join(f"{i}|x" for i in range(40))):
+        r = await admin.put(f"/api/admin/categories/{categories['shirts']}", own | {"size_guide": bad})
+        assert r.status_code in (400, 422), bad

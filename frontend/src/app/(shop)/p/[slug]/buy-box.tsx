@@ -323,6 +323,18 @@ export function ProductMain({ p }: { p: ProductPage }) {
           {pdp.offers && (p.offers?.length ?? 0) > 0 && <OffersBlock offers={p.offers!} />}
           {pdp.service_icons && shown && <div className="border-y border-line py-2"><ServiceIcons p={p} price={shown.price} /></div>}
 
+          {p.size_guide && (
+            <details className="rounded-lg border border-line bg-white px-3 py-2 text-sm" data-testid="size-guide">
+              <summary className="cursor-pointer font-semibold text-peacock">Size guide</summary>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead><tr>{p.size_guide[0].map((h, i) => <th key={i} scope="col" className="border-b border-line px-2 py-1 font-semibold">{h}</th>)}</tr></thead>
+                  <tbody>{p.size_guide.slice(1).map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className="border-b border-line/60 px-2 py-1">{c}</td>)}</tr>)}</tbody>
+                </table>
+              </div>
+            </details>
+          )}
+
           {axes.map(([axis, values]) => (
             <fieldset key={axis}>
               <legend className="mb-2 text-sm font-semibold">{axis}: <span className="font-normal text-ink-soft">{chosen[axis]}</span></legend>

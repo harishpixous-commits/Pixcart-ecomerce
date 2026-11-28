@@ -45,6 +45,8 @@ class Category(IdMixin, TimestampMixin, Base):
     # Return policy: the window a new listing starts with, and the shortest window a seller may set.
     return_window_days: Mapped[int] = mapped_column(Integer, default=7, server_default="7")
     min_return_window_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # A size guide table, one row per line with cells split by "|"; the first line is the header. Sub-categories inherit it.
+    size_guide: Mapped[str] = mapped_column(Text, default="", server_default="")
 
     __table_args__ = (
         CheckConstraint("commission_bps BETWEEN 0 AND 5000", name="commission"),

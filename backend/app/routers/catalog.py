@@ -13,6 +13,7 @@ from app.core.validators import STATES
 from app.db import utcnow
 from app.integrations import get as get_integrations
 from app.models import Category, Product, Seller, Variant
+from app.services import size_guide as size_guide_svc
 from app.services import growth as growth_svc
 from app.services import product_page as pp
 from app.services.orders import free_threshold
@@ -358,6 +359,11 @@ async def product_page(slug: str, session: SessionDep) -> dict:
     while cur is not None:
         breadcrumbs.insert(0, {"name": cur.name, "slug": cur.slug})
         cur = await session.get(Category, cur.parent_id) if cur.parent_id else None
+    size_guide_rows = None
+    cur = cat
+    while cur is not None and size_guide_rows is None:  # the nearest category with a guide, this one or a parent
+        size_guide_rows = size_guide_svc.rows(cur.size_guide)
+        cur = await session.get(Category, cur.parent_id) if cur.parent_id else None
     details = details_of(p.details)
     unit = details.net_unit
     # option axes, e.g. {"Size": ["S","M","L"], "Colour": ["Red","Blue"]}
@@ -410,6 +416,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "discount_pct": discount_pct(p.price_from, p.mrp_from),
         "in_stock": p.in_stock,
         "breadcrumbs": breadcrumbs,
+        "size_guide": size_guide_rows,
         "option_axes": axes,
         "variants": [
             {

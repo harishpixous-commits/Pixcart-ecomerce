@@ -87,6 +87,14 @@ class CategoryIn(BaseModel):
     required_details: list[str] = Field(default_factory=list, max_length=20)
     return_window_days: int = Field(default=7, ge=0, le=30)  # what new listings start with
     min_return_window_days: int = Field(default=0, ge=0, le=30)  # sellers cannot set less
+    size_guide: str = Field(default="", max_length=2000)
+
+    @field_validator("size_guide")
+    @classmethod
+    def _size_guide(cls, v: str) -> str:
+        from app.services.size_guide import clean
+
+        return clean(v)
 
     @field_validator("required_details")
     @classmethod
@@ -444,6 +452,7 @@ def _cat_out(c: Category) -> dict:
         "required_details": list(c.required_details or []),
         "return_window_days": c.return_window_days,
         "min_return_window_days": c.min_return_window_days,
+        "size_guide": c.size_guide or "",
     }
 
 

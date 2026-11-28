@@ -391,3 +391,7 @@ Customer return form: photo picker when enabled (up to the admin max, thumbnails
 ## Push 127: gift message on orders
 
 Admin → Checkout has a "Gift message" switch (off) and a longest length (20 to 300, default 150). When on, checkout shows a gift message box. The text is kept on the order address (`ship_to.gift_message`, no migration) and shown to the customer, the seller (with a pack-it-without-the-price note, and on the packing slip in .NET/Angular and Python web) and staff. Refused with `gift_off` when switched off and `gift_too_long` over the limit. Tests in both versions; tsc and ngc clean. Not run in a browser. Open question for Harish: may guests buy gift cards, or signed-in users only.
+
+## Push 128: size guide per category
+
+Admin → Categories has a "Size guide" box: one line per size, columns split with "|", first line is the heading (up to 30 lines, 8 columns). Product pages show it as an expandable table above the size choices. A sub-category uses the nearest parent guide when it has none. Empty means no guide. Bad tables (one line, uneven columns) are refused. Alembic 0047, .NET V024. Tests in both versions; tsc and ngc clean. Not run in a browser. Not built: a guide per product, or size recommendations.
