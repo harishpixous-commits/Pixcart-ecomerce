@@ -173,6 +173,20 @@ function Filters(p: FilterProps) {
           <BrandFilter {...p} />
         </fieldset>
       )}
+      {(data.facets.tags?.length ?? 0) > 0 && (
+        <fieldset className="min-w-0">
+          <legend className="mb-2 font-semibold">Tags</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {data.facets.tags!.map((t) => (
+              <button key={t.name} type="button" aria-pressed={params.get("tag") === t.name}
+                className={`rounded-full border px-2.5 py-1 text-sm ${params.get("tag") === t.name ? "border-peacock" : ""}`}
+                onClick={() => p.set({ tag: params.get("tag") === t.name ? null : t.name })}>
+                {t.name} <span className="text-ink-faint">({t.count})</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <fieldset className="min-w-0">
         <legend className="mb-2 font-semibold">Price</legend>
         <PriceFilter {...p} />

@@ -95,7 +95,7 @@ export interface SearchResult {
   page_size: number;
   category: { id: string; name: string; slug: string } | null;
   breadcrumbs: { name: string; slug: string }[];
-  facets: { brands: { name: string; count: number }[]; price_min: Paise; price_max: Paise };
+  facets: { brands: { name: string; count: number }[]; tags?: { name: string; count: number }[]; price_min: Paise; price_max: Paise };
 }
 
 export interface PublicVariant {
