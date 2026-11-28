@@ -1256,6 +1256,28 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Minimum_order_blocks_small_orders_and_nudges_in_the_cart()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000614", "minorder-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000614", "Min Order Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        var price = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @variantId", new { variantId });
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.Equal(0, (await buyer.Get("/api/cart")).Json["checkout"]!["min_order_paise"]!.GetValue<long>());
+        var r = await admin.Put("/api/admin/checkout", new { fees = new { min_order_paise = price + 5000 } });
+        Assert.True(r.Status == 200, r.ToString());
+        var hints = (await buyer.Get("/api/cart")).Json["hints"]!.AsArray().Select(h => h!.GetValue<string>()).ToList();
+        Assert.Contains(hints, h => h.StartsWith("Minimum order is"));
+        r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.Equal(400, r.Status); Assert.Equal("min_order", r.Json["error"]!["code"]!.GetValue<string>());
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(r.Status == 201, r.ToString());
+    }
+
+    [Fact]
     public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
     {
         var admin = await Admin();

@@ -62,6 +62,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
         ["no_bag_enabled"] = false,         // "I don't need a bag"
         ["gift_message_enabled"] = false,   // a gift message the seller packs with the order
         ["gift_message_max"] = 150,         // its longest length
+        ["min_order_paise"] = 0,            // the lowest item total the shop takes an order for; 0 means no minimum
         ["cancellation_note"] = "You can cancel until your order is shipped. After delivery, use returns if the product allows them.",
     };
 
@@ -69,7 +70,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
     {
         ["handling_paise"] = (0, 100_000), ["handling_list_paise"] = (0, 100_000), ["handling_free_above_paise"] = (0, 100_000_000),
         ["small_cart_paise"] = (0, 100_000), ["small_cart_below_paise"] = (0, 10_000_000), ["platform_paise"] = (0, 100_000),
-        ["fees_gst_bps"] = (0, 2800), ["tip_max_paise"] = (0, 500_000), ["surge_paise"] = (0, 100_000), ["late_night_paise"] = (0, 100_000), ["gift_message_max"] = (20, 300),
+        ["fees_gst_bps"] = (0, 2800), ["tip_max_paise"] = (0, 500_000), ["surge_paise"] = (0, 100_000), ["late_night_paise"] = (0, 100_000), ["gift_message_max"] = (20, 300), ["min_order_paise"] = (0, 10_000_000),
     };
     private static readonly IReadOnlyDictionary<string, int> Texts = new Dictionary<string, int>
     {
@@ -109,7 +110,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
         return hours == 0 ? "" : ((now ?? DateTimeOffset.UtcNow) + TimeSpan.FromHours(hours)).ToString("o");
     }
 
-    private static string Rupees(long paise) => "₹" + (paise / 100m).ToString(paise % 100 == 0 ? "#,0" : "#,0.00", System.Globalization.CultureInfo.InvariantCulture);
+    public static string Rupees(long paise) => "₹" + (paise / 100m).ToString(paise % 100 == 0 ? "#,0" : "#,0.00", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>(taxable value, GST) inside a GST-inclusive amount.</summary>
     public static (long Taxable, long Gst) GstSplit(long amount, int bps)
@@ -211,6 +212,8 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
     public static JsonArray Hints(JsonObject ck, JsonObject cfg, long itemsTotal, JsonArray groups)
     {
         var outp = new List<string>();
+        if (ck.Int("min_order_paise") > 0 && itemsTotal > 0 && itemsTotal < ck.Int("min_order_paise"))
+            outp.Add($"Minimum order is {Rupees(ck.Int("min_order_paise"))}. Add items worth {Rupees(ck.Int("min_order_paise") - itemsTotal)} to place your order");
         if (ck.Bool("small_cart_enabled") && ck.Int("small_cart_paise") > 0 && itemsTotal > 0 && itemsTotal < ck.Int("small_cart_below_paise"))
             outp.Add($"Add items worth {Rupees(ck.Int("small_cart_below_paise") - itemsTotal)} to avoid the small cart fee");
         foreach (var g in groups.OfType<JsonObject>())
@@ -229,7 +232,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
     {
         ["tip_enabled"] = ck.Bool("tip_enabled"), ["tip_presets"] = ck["tip_presets"]?.DeepClone(), ["tip_max_paise"] = ck.Int("tip_max_paise"),
         ["gstin_enabled"] = ck.Bool("gstin_enabled"), ["instructions_enabled"] = ck.Bool("instructions_enabled"),
-        ["no_bag_enabled"] = ck.Bool("no_bag_enabled"), ["gift_message_enabled"] = ck.Bool("gift_message_enabled"), ["gift_message_max"] = ck.Int("gift_message_max"), ["cancellation_note"] = ck.Str("cancellation_note"),
+        ["no_bag_enabled"] = ck.Bool("no_bag_enabled"), ["gift_message_enabled"] = ck.Bool("gift_message_enabled"), ["gift_message_max"] = ck.Int("gift_message_max"), ["min_order_paise"] = ck.Int("min_order_paise"), ["cancellation_note"] = ck.Str("cancellation_note"),
         ["delivery_label"] = ck.Str("delivery_label"), ["delivery_info"] = ck.Str("delivery_info"),
     };
 

@@ -195,6 +195,8 @@ public class OrdersBAL(
         var shippingTotal = plans.Sum(p => p.Shipping);
         var codFee = paymentMethod == "cod" ? (long)cfg.Int("cod_fee_paise") : 0;
         var discountTotal = coupon?.Discount ?? 0;
+        if (ck.Int("min_order_paise") > 0 && itemsTotal < ck.Int("min_order_paise"))
+            throw new AppException($"The minimum order is {BAL.FeesBAL.Rupees(ck.Int("min_order_paise"))}. Add items worth {BAL.FeesBAL.Rupees(ck.Int("min_order_paise") - itemsTotal)} more.", "min_order");
         var feeLines = BAL.FeesBAL.OrderFees(ck, itemsTotal);
         var feesTotal = feeLines.OfType<JsonObject>().Sum(f => f["amount"]!.GetValue<long>());
         long tip;

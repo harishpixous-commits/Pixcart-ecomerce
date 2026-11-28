@@ -398,3 +398,7 @@ Admin → Growth → Settings has "Share wishlist" (off). When on, the wishlist 
 ## Push 132: size guide per product
 
 A seller can type a size guide on one product (seller product form, "Size guide (optional)"). It shows on that product page ahead of the category guide. Empty means the category guide (nearest parent) as before. Same "a | b" table rules, cleaned and refused when it cannot be shown. Editing it counts as a content change, so an approved listing goes back to review like other content. Alembic 0050, .NET V027 (products.size_guide). Tests in both versions, tsc and ngc clean. Not run in a browser. Checked first: product compare, recently viewed, order notes and bulk coupons already exist.
+
+## Push 133: minimum order value
+
+Admin → Checkout has "Minimum order" (fees key `min_order_paise`, 0 means none, default 0). A cart below it shows a note ("Minimum order is ₹X. Add items worth ₹Y to place your order") and the order is refused with error code `min_order`. It tests the item total before shipping, fees and coupons. No migration (fees live in the settings store). Tests in both versions, tsc and ngc clean. Not run in a browser. Dead-settings scan: every Growth and Fees setting is read somewhere; none dead.
