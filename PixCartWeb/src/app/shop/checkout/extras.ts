@@ -4,7 +4,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from "@angular/core";
-import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, Gift, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-angular";
+import { BellOff, Building2, Check, ChevronDown, CircleCheck, DoorOpen, Gift, Clock, HandHeart, Leaf, NotebookPen, PawPrint, PhoneCall, ShieldCheck } from "lucide-angular";
 import { currencySymbol, paiseToShown, rupees, shownToPaise } from "../../core/format";
 import { Icon } from "../../shared/ui/icon";
 import { Autofocus, Button, Input, TextField, Textarea, uid } from "../../shared/ui/ui";
@@ -295,4 +295,32 @@ export class GiftMessageSection {
   protected readonly id = uid();
   protected readonly CARD = CARD;
   protected readonly Gift = Gift;
+}
+
+/* ---------------------------------------------------------------- delivery time choice */
+
+@Component({
+  selector: "pc-delivery-slot-section",
+  imports: [CardHeading],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: "contents" },
+  template: `
+    <section aria-labelledby="co-slot-h" data-testid="checkout-slot" [class]="CARD">
+      <div pcCardHeading headingId="co-slot-h" [icon]="Clock" title="Preferred delivery time" sub="Optional. We pass it to the seller and the delivery team as a request. It is not a promise."></div>
+      <div role="radiogroup" aria-labelledby="co-slot-h" class="flex flex-wrap gap-2">
+        @for (s of choices(); track s) {
+          <button type="button" role="radio" [attr.aria-checked]="value() === s" (click)="valueChange.emit(s)"
+            class="rounded-full border px-3 py-1.5 text-sm" [class]="value() === s ? 'border-peacock bg-peacock-light/60 font-semibold' : 'border-line'">{{ s || "No preference" }}</button>
+        }
+      </div>
+    </section>
+  `,
+})
+export class DeliverySlotSection {
+  readonly slots = input.required<string[]>();
+  readonly value = input("");
+  readonly valueChange = output<string>();
+  protected readonly choices = computed(() => ["", ...this.slots()]);
+  protected readonly CARD = CARD;
+  protected readonly Clock = Clock;
 }

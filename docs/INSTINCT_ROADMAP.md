@@ -402,3 +402,7 @@ A seller can type a size guide on one product (seller product form, "Size guide 
 ## Push 133: minimum order value
 
 Admin → Checkout has "Minimum order" (fees key `min_order_paise`, 0 means none, default 0). A cart below it shows a note ("Minimum order is ₹X. Add items worth ₹Y to place your order") and the order is refused with error code `min_order`. It tests the item total before shipping, fees and coupons. No migration (fees live in the settings store). Tests in both versions, tsc and ngc clean. Not run in a browser. Dead-settings scan: every Growth and Fees setting is read somewhere; none dead.
+
+## Push 134: preferred delivery time
+
+Admin → Checkout → Checkout options: "Preferred delivery time" (off) with 2 to 6 choices split with ; (default Morning, Afternoon, Evening). When on, checkout shows the choices plus "No preference". The pick is stored in `ship_to.delivery_slot` (no migration) and shown to the customer, seller and admin as a request. Plainly NOT wired: nothing in couriers, delivery partner assignment or shipping rules reads it, so it is not a promise and the screens say so. Error codes `slot_off`, `slot_unknown`. Tests in both versions, tsc and ngc clean. Not run in a browser. Open question for Harish: should the delivery partner app show it on the task.

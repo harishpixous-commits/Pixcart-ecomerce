@@ -62,6 +62,8 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
         ["no_bag_enabled"] = false,         // "I don't need a bag"
         ["gift_message_enabled"] = false,   // a gift message the seller packs with the order
         ["gift_message_max"] = 150,         // its longest length
+        ["delivery_slots_enabled"] = false, // the shopper may pick a preferred delivery time; shown to the seller and delivery team as a request, not a promise
+        ["delivery_slots"] = "Morning (9am to 12pm); Afternoon (12pm to 4pm); Evening (4pm to 8pm)", // the choices, split with ;
         ["min_order_paise"] = 0,            // the lowest item total the shop takes an order for; 0 means no minimum
         ["cancellation_note"] = "You can cancel until your order is shipped. After delivery, use returns if the product allows them.",
     };
@@ -108,6 +110,19 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
         if (hours < 0 || hours > SurgeHoursMax)
             throw new AppException($"Charge the bad weather fee for 1 to {SurgeHoursMax} hours, or until you switch it off", "invalid_setting");
         return hours == 0 ? "" : ((now ?? DateTimeOffset.UtcNow) + TimeSpan.FromHours(hours)).ToString("o");
+    }
+
+    /// <summary>The delivery time choices from "a; b; c": tidy, no repeats, each up to 40 characters.</summary>
+    public static List<string> SlotList(string? text)
+    {
+        var o = new List<string>();
+        foreach (var part in (text ?? "").Split(';'))
+        {
+            var s = string.Join(' ', part.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            if (s.Length > 40) s = s[..40];
+            if (s.Length > 0 && !o.Contains(s)) o.Add(s);
+        }
+        return o;
     }
 
     public static string Rupees(long paise) => "₹" + (paise / 100m).ToString(paise % 100 == 0 ? "#,0" : "#,0.00", System.Globalization.CultureInfo.InvariantCulture);
@@ -232,7 +247,7 @@ public partial class FeesBAL(SettingsDAL settings) : Interface.IFeesBAL
     {
         ["tip_enabled"] = ck.Bool("tip_enabled"), ["tip_presets"] = ck["tip_presets"]?.DeepClone(), ["tip_max_paise"] = ck.Int("tip_max_paise"),
         ["gstin_enabled"] = ck.Bool("gstin_enabled"), ["instructions_enabled"] = ck.Bool("instructions_enabled"),
-        ["no_bag_enabled"] = ck.Bool("no_bag_enabled"), ["gift_message_enabled"] = ck.Bool("gift_message_enabled"), ["gift_message_max"] = ck.Int("gift_message_max"), ["min_order_paise"] = ck.Int("min_order_paise"), ["cancellation_note"] = ck.Str("cancellation_note"),
+        ["no_bag_enabled"] = ck.Bool("no_bag_enabled"), ["gift_message_enabled"] = ck.Bool("gift_message_enabled"), ["gift_message_max"] = ck.Int("gift_message_max"), ["min_order_paise"] = ck.Int("min_order_paise"), ["delivery_slots_enabled"] = ck.Bool("delivery_slots_enabled"), ["delivery_slots"] = new JsonArray((ck.Bool("delivery_slots_enabled") ? SlotList(ck.Str("delivery_slots")) : new List<string>()).Select(x => (JsonNode)JsonValue.Create(x)!).ToArray()), ["cancellation_note"] = ck.Str("cancellation_note"),
         ["delivery_label"] = ck.Str("delivery_label"), ["delivery_info"] = ck.Str("delivery_info"),
     };
 

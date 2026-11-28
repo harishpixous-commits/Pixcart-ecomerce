@@ -46,6 +46,7 @@ function shipTo(raw: Record<string, unknown>) {
     instructions: text("instructions"),
     noBag: raw["no_bag"] === true,
     gift: text("gift_message"),
+    slot: text("delivery_slot"),
   };
 }
 
@@ -186,6 +187,9 @@ export class Progress {
               </div>
               <p class="mt-2 break-words font-semibold" translate="no">{{ a.name }}@if (a.phone) {<span class="font-normal text-ink-soft">, {{ a.phone }}</span>}</p>
               <p class="break-words text-ink-soft" translate="no">{{ a.street }}@if (a.street && a.place) {<br />}{{ a.place }}</p>
+              @if (a.slot) {
+                <p class="mt-3 w-full break-words rounded-xl bg-peacock-light/60 px-3 py-2 text-sm text-ink-soft" data-testid="order-delivery-slot"><span class="font-semibold text-ink">Preferred delivery time:</span> {{ a.slot }}</p>
+              }
               @if (a.gift) {
                 <p class="mt-3 w-full break-words rounded-xl bg-peacock-light/60 px-3 py-2 text-sm text-ink-soft" data-testid="order-gift-message"><span class="font-semibold text-ink">Gift message:</span> {{ a.gift }}</p>
               }

@@ -1278,6 +1278,38 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Delivery_time_choice_is_off_until_admin_offers_it()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000615", "slot-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9620000615", "Slot Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        async Task<Res> Place(string slot)
+        {
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            return await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), delivery_slot = slot });
+        }
+        var chk = (await buyer.Get("/api/cart")).Json["checkout"]!;
+        Assert.False(chk["delivery_slots_enabled"]!.GetValue<bool>()); Assert.Empty(chk["delivery_slots"]!.AsArray());
+        var r = await Place("Evening");
+        Assert.Equal(400, r.Status); Assert.Equal("slot_off", r.Json["error"]!["code"]!.GetValue<string>());
+        r = await admin.Put("/api/admin/checkout", new { fees = new { delivery_slots_enabled = true, delivery_slots = " Morning ;  Evening ; Morning;; " } });
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Equal(400, (await admin.Put("/api/admin/checkout", new { fees = new { delivery_slots = "Only one" } })).Status);
+        var slots = (await buyer.Get("/api/cart")).Json["checkout"]!["delivery_slots"]!.AsArray().Select(x => x!.GetValue<string>()).ToList();
+        Assert.Equal(new[] { "Morning", "Evening" }, slots);
+        r = await Place("Night");
+        Assert.Equal(400, r.Status); Assert.Equal("slot_unknown", r.Json["error"]!["code"]!.GetValue<string>());
+        r = await Place("Evening");
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal("Evening", r.Json["order"]!["ship_to"]!["delivery_slot"]!.GetValue<string>());
+        r = await Place("");
+        Assert.True(r.Status == 201, r.ToString());
+        Assert.Equal("", r.Json["order"]!["ship_to"]!["delivery_slot"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Newsletter_box_is_off_until_admin_opens_it_and_collects_clean_addresses_once()
     {
         var admin = await Admin();

@@ -166,6 +166,9 @@ export class SellerFleetCard {
                 <h2 class="mb-2 text-lg font-semibold">Ship to</h2>
                 @if (o.ship_to; as a) {
                   <p class="text-ink-soft">{{ a["full_name"] }}, {{ a["phone"] }}<br />{{ join([a["line1"], a["line2"], a["landmark"]]) }}<br />{{ a["city"] }}, {{ a["state"] }} {{ a["pincode"] }}</p>
+                @if (a["delivery_slot"]) {
+                  <p class="mt-2 rounded-lg bg-peacock-light/60 px-3 py-2 text-sm" data-testid="delivery-slot"><strong>Preferred delivery time:</strong> {{ a["delivery_slot"] }}. A request from the customer, not a promise.</p>
+                }
                 @if (a["gift_message"]) {
                   <p class="mt-2 rounded-lg bg-peacock-light/60 px-3 py-2 text-sm" data-testid="gift-message"><strong>Gift message:</strong> {{ a["gift_message"] }}. Pack it in with the order and leave the price out.</p>
                 }
@@ -208,6 +211,7 @@ export class SellerFleetCard {
           <p class="mt-2"><strong>Sold by:</strong> {{ session.user()?.seller?.display_name }}</p>
           @if (o.ship_to; as a) {
             <p><strong>Ship to:</strong> {{ a["full_name"] }}, {{ a["phone"] }}, {{ join([a["line1"], a["line2"], a["landmark"], a["city"], a["state"], a["pincode"]]) }}</p>
+            @if (a["delivery_slot"]) {<p><strong>Preferred delivery time:</strong> {{ a["delivery_slot"] }}</p>}
             @if (a["gift_message"]) {<p><strong>Gift message:</strong> {{ a["gift_message"] }}</p>}
           }
           <table class="mt-3 w-full border-collapse text-sm">
