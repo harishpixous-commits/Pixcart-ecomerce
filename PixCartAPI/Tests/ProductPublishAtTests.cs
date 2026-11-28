@@ -44,6 +44,7 @@ public class ProductPublishAtTests(ApiFactory f) : ApiTest(f)
         }
         var notes = (await seller.Get("/api/notifications")).Json["items"]!.AsArray();
         Assert.Single(notes, x => x!["title"]!.GetValue<string>() == "Your product is live" && x["body"]!.GetValue<string>().Contains("Scheduled Cotton Shirt"));
+        Assert.Equal(422, (await seller.Put($"/api/seller/products/{pid}", new { category_id = cat, title = "Scheduled Cotton Shirt", hsn_code = "6205", gst_bps = 500, details = new { min_qty = 3, max_qty = 2 }, variants = new[] { new { id = vid, sku = "PUB-SKU", mrp_paise = 20000, price_paise = 10000, stock = 5 } } })).Status);   // the limit cannot be below the minimum
         Assert.Equal(422, (await seller.Put($"/api/seller/products/{pid}", Body(DateTime.UtcNow.AddDays(400).ToString("o"), vid))).Status);
         Assert.Null((await seller.Put($"/api/seller/products/{pid}", Body(null, vid))).Json["publish_at"]);
         var dup = await seller.Post($"/api/seller/products/{pid}/duplicate", new { });

@@ -459,7 +459,7 @@ export class ProductMain {
   private readonly maxQty = computed(() => {
     const variant = this.variant();
     const dealLeft = this.dealHere() && variant && this.p().deal!.units_left ? this.p().deal!.units_left! : null;
-    return Math.max(this.minQty(), Math.min(this.site().max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
+    return Math.max(this.minQty(), Math.min(this.site().max_qty_per_item ?? 10, this.p().max_qty ?? Infinity, variant?.stock_left ?? 10, dealLeft ?? Infinity));
   });
   protected readonly qtyOptions = computed(() => Array.from({ length: Math.max(1, this.maxQty() - this.minQty() + 1) }, (_, i) => i + this.minQty()));
   protected readonly netRow = computed(() => (this.shown()?.net_quantity ? [{ label: "Net quantity", value: this.shown()!.net_quantity! }] : []));

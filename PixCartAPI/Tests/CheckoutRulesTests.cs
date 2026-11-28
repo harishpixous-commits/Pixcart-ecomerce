@@ -912,6 +912,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Most_units_per_order_limits_the_cart_and_blocks_the_order()
+    {
+        var (variantId, productId, _) = await ShirtInStock("9400000492", "maxqty-shirt");
+        await Refresh(productId);
+        var slug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id = @productId", new { productId });
+        await ApiFactory.DbExecAsync("UPDATE products SET details = JSON_SET(COALESCE(details, JSON_OBJECT()), '$.max_qty', 2) WHERE id = @productId", new { productId });
+        var buyer = await LoginPhone("9620000492", "Limit Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        var page = (await Factory.CreateClient().GetFromJsonAsync<JsonObject>($"/api/catalog/products/{slug}"))!;
+        Assert.Equal(2, page["max_qty"]!.GetValue<int>());
+        var r = await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 5 });
+        Assert.Equal(200, r.Status);
+        Assert.Contains("limited to 2", r.Json["notice"]!.GetValue<string>());
+        Assert.Equal(2, r.Json["groups"]![0]!["lines"]![0]!["qty"]!.GetValue<int>());
+        await ApiFactory.DbExecAsync("UPDATE products SET details = JSON_SET(details, '$.max_qty', 1) WHERE id = @productId", new { productId });   // the seller lowers it later
+        var cart = await buyer.Get("/api/cart");
+        Assert.Contains("limited to 1", cart.Json["groups"]![0]!["lines"]![0]!["problem"]!.GetValue<string>());
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), expected_total = cart.Json["summary"]!["grand_total"]!.GetValue<long>() });
+        Assert.True(o.Status >= 400, o.ToString());
+        await ApiFactory.DbExecAsync("UPDATE products SET details = JSON_SET(details, '$.max_qty', 0) WHERE id = @productId", new { productId });
+        Assert.Null((await Factory.CreateClient().GetFromJsonAsync<JsonObject>($"/api/catalog/products/{slug}"))!["max_qty"]);
+    }
+
+    [Fact]
     public async Task Cart_hint_also_covers_an_automatic_buy_x_get_y_offer()
     {
         var admin = await Admin();

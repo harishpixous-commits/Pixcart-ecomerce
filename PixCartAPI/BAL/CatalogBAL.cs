@@ -613,6 +613,7 @@ public class CatalogBAL(
             ["seller_snapshot"] = cfg.Bool("pdp_seller_snapshot") ? await SellerSnapshotAsync(seller, cfg) : null,
             ["returnable"] = p.ReturnWindowDays > 0,
             ["min_qty"] = Math.Max(1, ProductInfo.DetailsOf(p.Details).MinQty),
+            ["max_qty"] = ProductInfo.DetailsOf(p.Details).MaxQty is > 0 and var pmax ? pmax : null,
             ["ships_on"] = ProductInfo.DetailsOf(p.Details).PreorderDate(),
             ["deal"] = deal,
             // Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.

@@ -53,6 +53,7 @@ public static partial class ProductInfo
         public string NetUnit { get; init; } = "";
         /// <summary>The fewest units one order may hold (0 or 1 means no minimum).</summary>
         public int MinQty { get; init; }
+        public int MaxQty { get; init; }
         /// <summary>Pre-order: the date (yyyy-MM-dd) the seller starts shipping; empty for in-stock items.</summary>
         public string ShipsOn { get; init; } = "";
         /// <summary>The ship date while it is still ahead (India time), else empty.</summary>
@@ -135,6 +136,12 @@ public static partial class ProductInfo
             {
                 if (mq.GetValueKind() != JsonValueKind.Number || !int.TryParse(mq.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out minQty) || minQty is < 0 or > 100) throw new Invalid();
             }
+            int maxQty = 0;
+            if (o.TryGetPropertyValue("max_qty", out var xq) && xq is not null)
+            {
+                if (xq.GetValueKind() != JsonValueKind.Number || !int.TryParse(xq.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out maxQty) || maxQty is < 0 or > 100) throw new Invalid();
+                if (maxQty > 0 && minQty > maxQty) throw new Invalid();
+            }
             var shipsOn = Text("ships_on", 10, strip: false).Trim();
             if (shipsOn.Length > 0)
             {
@@ -151,7 +158,7 @@ public static partial class ProductInfo
             }
             return new Details
             {
-                NetUnit = unit, MinQty = minQty, ShipsOn = shipsOn,
+                NetUnit = unit, MinQty = minQty, MaxQty = maxQty, ShipsOn = shipsOn,
                 GenericName = Text("generic_name", 120), ModelNumber = Text("model_number", 60), Manufacturer = Text("manufacturer", 400),
                 Packer = Text("packer", 400), Importer = Text("importer", 400), CustomerCare = Text("customer_care", 300), FssaiLicense = fssai,
                 Ingredients = Text("ingredients", 2000), Directions = Text("directions", 2000), SafetyInfo = Text("safety_info", 2000),
