@@ -2323,5 +2323,27 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Contains("Too many", blocked.Json["coupon"]!["error"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task The_last_use_of_a_coupon_goes_to_one_order_when_five_customers_order_at_once()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000521", "race-shirt");
+        await Refresh(productId);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "ONLYONE", description = "", kind = "flat", value = 1000, min_order_paise = 0, usage_limit = 1, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = false })).Status);
+        var buyers = new List<(Api Who, string Addr)>();
+        for (var i = 0; i < 5; i++)
+        {
+            var b = await LoginPhone($"96200006{i:00}", $"Racer {i}");
+            var addr = await AddAddress(b, state: "33");
+            Assert.Equal(200, (await b.Post("/api/cart/items", new { variant_id = variantId, qty = 1 })).Status);
+            buyers.Add((b, addr));
+        }
+        var results = await Task.WhenAll(buyers.Select(x => x.Who.Post("/api/orders", new { address_id = x.Addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = "ONLYONE" })));
+        var codes = results.Select(r => r.Status).ToList();
+        Assert.True(codes.Count(c => c == 201) == 1, string.Join(",", codes));
+        Assert.All(codes.Where(c => c != 201), c => Assert.True(c is 400 or 409, string.Join(",", codes)));
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = 'ONLYONE'"));
+    }
+
     private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }
