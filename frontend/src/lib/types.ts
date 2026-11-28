@@ -158,6 +158,7 @@ export interface CustomerMediaItem extends ReviewMedia {
 
 export interface ProductDetails {
   net_unit: "" | "g" | "kg" | "ml" | "l" | "m" | "pcs" | "pair";
+  ships_on: string;
   min_qty: number;
   generic_name: string;
   model_number: string;
@@ -232,6 +233,7 @@ export interface ProductPage {
   seller_snapshot?: SellerSnapshot | null;
   returnable?: boolean;
   min_qty?: number;
+  ships_on?: string;
 }
 
 export interface CartLine {
@@ -249,6 +251,8 @@ export interface CartLine {
   stock_left: number;
   /** the most this line can hold now (stock, the per-item limit, units left at a deal price) */
   max_qty?: number;
+  /** pre-order: the date this item starts shipping */
+  ships_on?: string;
   problem: string;
 }
 

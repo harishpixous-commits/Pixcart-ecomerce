@@ -26,7 +26,7 @@ from app.services.catalog import (
     videos_for,
 )
 from app.services.platform_settings import get_settings
-from app.services.product_info import details_of, fmt_qty, important_info, info_rows, unit_price
+from app.services.product_info import details_of, preorder_date, fmt_qty, important_info, info_rows, unit_price
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
@@ -448,6 +448,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "seller_snapshot": await pp.seller_snapshot(session, seller, cfg) if cfg["pdp_seller_snapshot"] else None,
         "returnable": p.return_window_days > 0,
         "min_qty": max(1, details.min_qty),
+        "ships_on": preorder_date(details),
         "deal": (await deals_svc.active_for_products(session, [p.id])).get(p.id) if cfg["feature_deals"] else None,
         # Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.
         "seller": {

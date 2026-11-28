@@ -9,6 +9,7 @@ Admins choose per category which of these a listing must have before it can be s
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta, datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -49,6 +50,7 @@ class ProductDetails(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     net_unit: Literal["", "g", "kg", "ml", "l", "m", "pcs", "pair"] = ""
+    ships_on: str = ""  # pre-order: the date (YYYY-MM-DD) the seller starts shipping; shown while it is still ahead
     min_qty: int = Field(default=0, ge=0, le=100)  # the fewest units one order may hold; 0 or 1 means no minimum
     generic_name: str = Field(default="", max_length=120)
     model_number: str = Field(default="", max_length=60)
@@ -75,6 +77,20 @@ class ProductDetails(BaseModel):
     def _strip(cls, v: str) -> str:
         return _clean(v)
 
+    @field_validator("ships_on")
+    @classmethod
+    def _ships_on(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            return ""
+        try:
+            d = date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("Use a date like 2026-12-15") from None
+        if d > date.today() + timedelta(days=365):
+            raise ValueError("A pre-order date can be at most a year ahead")
+        return d.isoformat()
+
     @field_validator("fssai_license")
     @classmethod
     def _fssai(cls, v: str) -> str:
@@ -92,6 +108,14 @@ class ProductDetails(BaseModel):
             if x and x not in out:
                 out.append(x)
         return out
+
+
+def preorder_date(details: "ProductDetails") -> str:
+    """The pre-order ship date while it is still ahead (India time), else empty: a past date is a normal listing."""
+    if not details.ships_on:
+        return ""
+    today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+    return details.ships_on if date.fromisoformat(details.ships_on) > today else ""
 
 
 def details_of(raw: dict | None) -> ProductDetails:

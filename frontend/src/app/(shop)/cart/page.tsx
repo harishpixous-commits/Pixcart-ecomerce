@@ -148,6 +148,7 @@ function CartLineRow({ line: l, busy, onQty, onSave }: { line: CartLine; busy: b
           <Link href={`/p/${l.product_slug}`} className="line-clamp-2 font-medium leading-snug hover:text-peacock">{l.title}</Link>
           {l.variant_label && <p className="text-sm text-ink-faint">{l.variant_label}</p>}
           <Price price={l.price} mrp={l.mrp} />
+          {l.ships_on && <p className="text-sm text-ink-soft">Pre-order: ships from {new Date(l.ships_on + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>}
           {l.problem && <p className="text-sm font-semibold text-vermilion">{l.problem}</p>}
         </div>
       </div>

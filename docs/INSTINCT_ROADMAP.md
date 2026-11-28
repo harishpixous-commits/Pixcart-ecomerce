@@ -459,3 +459,6 @@ Customer requested a return on the delivered COD order, seller approved and mark
 
 ## Push 138: Minimum order quantity per product (Python done, .NET/Angular pending)
 Seller or admin sets "Minimum order quantity" (0 to 100, 0/1 = none) in the product info editor. Stored in `Product.details.min_qty`, so no migration. Adding to cart raises the quantity to the minimum with a notice; it fails if stock is below the minimum. Checkout flags a line under the minimum as a cart problem. The product page shows "Minimum order: N" and the quantity picker starts there. Test: `tests/test_cart_limits.py`. Not wired: .NET `ProductInfo.cs`/cart and Angular UI (pending, see state doc).
+
+## Push 139: Pre-order ship date per product
+Seller/admin can set "Pre-order: ships from" (a date up to a year ahead) in the product info editor, stored in `Product.details.ships_on` (no migration). While the date is ahead, the product page and cart line show "Ships from <date>"; once it passes the listing is normal. Not wired: it does not move the seller's dispatch deadline or tell the buyer by email; the order itself is placed as usual (COD or simulator payment). Test: `tests/test_cart_limits.py`.

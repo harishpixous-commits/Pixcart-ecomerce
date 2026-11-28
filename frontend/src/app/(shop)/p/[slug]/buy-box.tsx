@@ -396,6 +396,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
             <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1 text-[13px]">
               <dt className="text-ink-faint">Ships from</dt><dd>{p.seller.city}{p.seller.state ? `, ${p.seller.state}` : ""}</dd>
               <dt className="text-ink-faint">Sold by</dt><dd><Link href={`/store/${p.seller.slug}`} className="text-peacock hover:underline">{p.seller.name}</Link></dd>
+              {p.ships_on && <><dt className="text-ink-faint">Pre-order</dt><dd>Ships from {new Date(p.ships_on + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</dd></>}
               <dt className="text-ink-faint">Returns</dt><dd>{p.return_window_days > 0 ? `${p.return_window_days}-day return after delivery` : "Not returnable"}</dd>
               <dt className="text-ink-faint">Payment</dt><dd>{site.online_payments === false ? "Cash on delivery" : site.cod_enabled ? "Secure online payment or cash on delivery" : "Secure online payment"}</dd>
             </dl>

@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.product_info import details_of
+from app.services.product_info import details_of, preorder_date
 from app.config import Settings
 from app.core.errors import ApiError, Conflict
 from app.core.money import apply_bps, compute_settlement, split_inclusive_gst
@@ -92,6 +92,7 @@ class CartLine:
     qty: int
     image: str
     problem: str = ""  # why this line cannot be bought right now
+    ships_on: str = ""  # pre-order: when this item starts shipping
     min_qty: int = 1  # the fewest units of this item one order may hold (the seller's minimum order quantity)
     max_qty: int = 0  # the most this line can hold now: stock, the per-item limit and units left at a deal price
 
@@ -145,7 +146,9 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
         line = CartLine(item.id, variant, product, seller, item.qty, (imgs.get(product.id) or [""])[0])
         deal_left = at_deal.get(variant.id)
         line.max_qty = max(0, min(variant.stock, per_item, deal_left if deal_left else per_item))
-        line.min_qty = max(1, min(details_of(product.details).min_qty, per_item))
+        det = details_of(product.details)
+        line.min_qty = max(1, min(det.min_qty, per_item))
+        line.ships_on = preorder_date(det)
         if product.status != "approved" or seller.status != "approved" or not variant.is_active:
             line.problem = "This item is no longer available"
         elif seller.holiday_mode:
@@ -215,6 +218,7 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, c
                         "stock_left": line.variant.stock,
                         "max_qty": line.max_qty,
                         "min_qty": line.min_qty,
+                        "ships_on": line.ships_on,
                         "problem": line.problem,
                     }
                     for line in g.lines

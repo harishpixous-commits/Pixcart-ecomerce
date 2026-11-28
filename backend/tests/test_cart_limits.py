@@ -133,3 +133,25 @@ async def test_minimum_order_quantity_lifts_the_cart_and_shows_on_the_product_pa
     addr = await add_address(buyer, state="33")
     ok = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})
     assert ok.status_code == 201, ok.text
+
+
+async def test_preorder_date_shows_on_the_product_page_and_cart_until_it_passes(client, admin, categories):
+    from datetime import date, timedelta
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    vid = shirt["variants"][0]["id"]
+    ahead = (date.today() + timedelta(days=20)).isoformat()
+    async with SessionLocal() as s:
+        v = await s.get(Variant, uuid.UUID(vid))
+        p = await s.get(Product, v.product_id)
+        p.details = {**(p.details or {}), "ships_on": ahead}
+        await s.commit()
+        slug = p.slug
+    buyer = await login_phone(client, "9600000822", name="Preorder Buyer")
+    assert (await buyer.get(f"/api/catalog/products/{slug}")).json()["ships_on"] == ahead
+    cart = (await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})).json()
+    assert cart["groups"][0]["lines"][0]["ships_on"] == ahead
+    async with SessionLocal() as s:
+        p = await s.get(Product, (await s.get(Variant, uuid.UUID(vid))).product_id)
+        p.details = {**p.details, "ships_on": "2020-01-01"}
+        await s.commit()
+    assert (await buyer.get(f"/api/catalog/products/{slug}")).json()["ships_on"] == ""

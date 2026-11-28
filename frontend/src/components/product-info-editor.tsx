@@ -13,7 +13,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui";
 import type { ProductDetails } from "@/lib/types";
 
 export const EMPTY_DETAILS: ProductDetails = {
-  net_unit: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
+  net_unit: "", ships_on: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
   ingredients: "", directions: "", safety_info: "", legal_disclaimer: "", shelf_life: "", warranty: "", in_the_box: [],
   length_cm: null, width_cm: null, height_cm: null, key_specs: [],
 };
@@ -61,6 +61,9 @@ export function ProductInfoSection({ details, onChange, required, countryOfOrigi
             <option value="">Not applicable</option>
             {Object.entries(UNIT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
+        </Field>
+        <Field label="Pre-order: ships from" hint="Leave empty for items in stock. Shoppers see the date on the product and in the cart. Once it passes, the listing is normal again.">
+          <input type="date" value={details.ships_on ?? ""} onChange={(e) => set("ships_on", e.target.value as never)} aria-label="Pre-order ship date" className="h-10 w-full rounded-lg border border-line bg-mist px-3" />
         </Field>
         <Field label="Minimum order quantity" hint="The fewest units one order can hold. 0 or 1 means no minimum.">
           <input type="number" min={0} max={100} value={details.min_qty ?? 0} onChange={(e) => set("min_qty", Math.max(0, Math.min(100, Number(e.target.value) || 0)) as never)} aria-label="Minimum order quantity" className="h-10 w-full rounded-lg border border-line bg-mist px-3" />
