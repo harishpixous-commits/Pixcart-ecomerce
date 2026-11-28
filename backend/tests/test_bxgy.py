@@ -140,3 +140,27 @@ async def test_a_coupon_for_chosen_products_is_offered_only_on_those_pages(clien
     on_shirt = {o["code"] for o in (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["offers"]}
     on_phone = {o["code"] for o in (await client.get(f"/api/catalog/products/{phone_p['slug']}")).json()["offers"]}
     assert "SHIRTVOL" in on_shirt and "ALLVOL" in on_shirt and "ALLVOL" in on_phone and "SHIRTVOL" not in on_phone
+
+
+async def test_bundle_block_lists_the_set_with_price_and_saving(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.post("/api/admin/coupons", {"code": "SETBLOCK", "kind": "bundle", "value": 10, "show_on_checkout": True,
+                                                   "product_slugs": [shirt["slug"], phone_p["slug"]]})).status_code == 201
+    for slug in (shirt["slug"], phone_p["slug"]):
+        b = (await client.get(f"/api/catalog/products/{slug}/bundles")).json()["bundles"]
+        assert len(b) == 1 and b[0]["code"] == "SETBLOCK" and b[0]["percent"] == 10
+        assert [i["slug"] for i in b[0]["items"]] == [shirt["slug"], phone_p["slug"]]
+        total = shirt["variants"][0]["price_paise"] + phone_p["variants"][0]["price_paise"]
+        assert b[0]["total"] == total and b[0]["saving"] == total // 10 and b[0]["set_price"] == total - total // 10
+    # a hidden (not listed) bundle code is not advertised, and a sold-out member hides the block
+    assert (await admin.post("/api/admin/coupons", {"code": "QUIETSET", "kind": "bundle", "value": 20, "show_on_checkout": False,
+                                                   "product_slugs": [shirt["slug"], phone_p["slug"]]})).status_code == 201
+    assert [x["code"] for x in (await client.get(f"/api/catalog/products/{shirt['slug']}/bundles")).json()["bundles"]] == ["SETBLOCK"]
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models import Product
+    async with SessionLocal() as s:
+        await s.execute(update(Product).where(Product.slug == phone_p["slug"]).values(in_stock=False))
+        await s.commit()
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}/bundles")).json()["bundles"] == []

@@ -316,6 +316,34 @@ async def bought_together(slug: str, session: SessionDep) -> dict:
     return {"items": await product_cards(session, [p, *others])}  # the product itself first
 
 
+@router.get("/api/catalog/products/{slug}/bundles")
+async def product_bundles(slug: str, session: SessionDep) -> dict:
+    """Bundle offers (a set of products at a percent off) that include this product, for the "Buy the set" block."""
+    from app.models import Coupon
+    from app.core.money import apply_bps
+
+    p = await _product(session, slug)
+    now = utcnow()
+    rows = (await session.execute(select(Coupon).where(
+        Coupon.kind == "bundle", Coupon.is_active.is_(True), (Coupon.show_on_checkout.is_(True)) | (Coupon.is_automatic.is_(True)),
+        (Coupon.starts_at.is_(None)) | (Coupon.starts_at <= now), (Coupon.ends_at.is_(None)) | (Coupon.ends_at >= now),
+        (Coupon.usage_limit.is_(None)) | (Coupon.used_count < Coupon.usage_limit), Coupon.product_ids.contains([str(p.id)]),
+    ).order_by(Coupon.created_at.desc()).limit(5))).scalars().all()
+    out = []
+    for c in rows:
+        ids = [uuid.UUID(x) for x in c.product_ids]
+        found = {x.id: x for x in (await session.execute(select(Product).where(Product.id.in_(ids), *public_product_filter(), Product.in_stock.is_(True)))).scalars()}
+        if len(found) != len(ids):
+            continue  # a member is gone or sold out: the set cannot be bought
+        cards = await product_cards(session, [found[i] for i in ids])
+        total = sum(card["price"] for card in cards)
+        saving = apply_bps(total, c.value * 100)
+        if c.max_discount_paise:
+            saving = min(saving, c.max_discount_paise)
+        out.append({"code": c.code, "automatic": c.is_automatic, "percent": c.value, "items": cards, "total": total, "saving": saving, "set_price": total - saving})
+    return {"bundles": out}
+
+
 # ============================================================================ seller
 
 

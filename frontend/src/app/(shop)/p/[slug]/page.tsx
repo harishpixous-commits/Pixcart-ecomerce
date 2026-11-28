@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductRail } from "@/components/product";
 import { BoughtTogether } from "@/components/bought-together";
+import { BundleSet } from "@/components/bundle-set";
 import { SponsoredRail } from "@/components/pdp";
 import { ProductQuestions } from "@/components/qa";
 import { ProductReviews } from "@/components/reviews";
@@ -141,6 +142,7 @@ export default async function ProductPageView({ params }: { params: Promise<{ sl
         </section>
       )}
 
+      <BundleSet slug={p.slug} />
       <BoughtTogether slug={p.slug} />
       <ProductReviews slug={p.slug} />
       <ProductQuestions slug={p.slug} title={p.title} />
