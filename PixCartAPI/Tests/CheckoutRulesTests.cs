@@ -968,6 +968,38 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Cancelling_a_paid_order_refunds_the_weight_surcharge_too()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000495", "weight-refund-shirt");
+        await Refresh(productId);
+        await ApiFactory.DbExecAsync("UPDATE variants SET weight_grams = 500 WHERE id = @variantId", new { variantId });
+        Assert.Equal(200, (await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 5_000_000 } })).Status);
+        try
+        {
+            Assert.Equal(200, (await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 1000, shipping_free_grams = 1000 })).Status);
+            var buyer = await LoginPhone("9620000495", "Refund Weight Buyer");
+            var addr = await AddAddress(buyer, state: "33");
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 5 });
+            var q = (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["summary"]!;
+            var total = q["grand_total"]!.GetValue<long>();
+            var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), expected_total = total });   // placed as COD, then marked as paid online below: no gateway in tests
+            Assert.True(r.Status == 201, r.ToString());
+            var orderId = r.Json["order"]!["id"]!.GetValue<string>();
+            await ApiFactory.DbExecAsync("UPDATE orders SET payment_method = 'online', payment_status = 'paid' WHERE id = @orderId", new { orderId });
+            await ApiFactory.DbExecAsync("INSERT INTO payments (id, order_id, provider, provider_order_id, provider_payment_id, amount_paise, currency, status, method, error) VALUES (UUID(), @orderId, 'razorpay', 'order_SYNTH_W', 'pay_SYNTH_WEIGHT', @total, 'INR', 'captured', '', '')", new { orderId, total });
+            var c = await buyer.Post($"/api/orders/{orderId}/cancel", new { reason = "Changed my mind" });
+            Assert.True(c.Status == 200, c.ToString());
+            Assert.Equal(total, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(amount_paise), 0) FROM refunds WHERE order_id = @orderId", new { orderId }));   // goods, delivery and the surcharge all go back
+        }
+        finally
+        {
+            await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 0 });
+            await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 49900 } });
+        }
+    }
+
+    [Fact]
     public async Task Weight_surcharge_adds_per_started_kg_above_the_free_weight()
     {
         var admin = await Admin();

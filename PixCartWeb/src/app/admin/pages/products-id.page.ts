@@ -207,6 +207,13 @@ type Check = { risk: "low" | "medium" | "high"; issues: string[]; suggested_reas
           @if (p.status === "approved") {<a actions [pcLink]="'/p/' + p.slug" target="_blank" class="inline-flex h-10 items-center px-3 font-semibold text-peacock">View on store</a>}
         </pc-page-header>
         <pc-error-note [message]="error()" />
+        <section class="flex flex-wrap items-end gap-3 rounded-xl bg-white p-5">
+          <label class="text-sm font-semibold">Go live at
+            <input type="datetime-local" class="ml-3 h-10 rounded-lg border border-black/15 px-3 font-normal" [value]="goLiveValue()" (input)="goLive.set($any($event.target).value)" data-testid="admin-publish-at" />
+          </label>
+          <button pcButton size="sm" [loading]="busy()" (click)="saveGoLive()">Save go-live time</button>
+          <span class="text-sm text-ink-faint">Leave empty to go live as soon as approved.</span>
+        </section>
         @if (check(); as c) {
           <section [class]="'rounded-xl border p-4 ' + (c.risk === 'high' ? 'border-vermilion bg-vermilion/5' : c.risk === 'medium' ? 'border-marigold bg-marigold-light' : 'border-leaf bg-leaf-light')">
             <div class="mb-1 flex items-center gap-2"><svg [pcIcon]="Sparkles" class="h-4 w-4" /><p class="font-semibold">AI check</p><pc-pill [tone]="c.risk === 'high' ? 'red' : c.risk === 'medium' ? 'blue' : 'green'">{{ c.risk }} risk</pc-pill></div>
@@ -316,6 +323,32 @@ export class AdminProductsIdPage {
       this.error.set(e instanceof ApiError ? e.message : "The AI check is not available");
     } finally {
       this.checking.set(false);
+    }
+  }
+
+  protected readonly goLive = signal<string | null>(null);
+
+  protected goLiveValue(): string {
+    const typed = this.goLive();
+    if (typed !== null) return typed;
+    const v = this.product()?.publish_at;
+    if (!v) return "";
+    const d = new Date(v);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  protected async saveGoLive(): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const v = this.goLiveValue();
+      this.product.set(await api<SellerProduct>(`/api/admin/products/${this.id()}/publish-at`, { method: "PUT", body: { publish_at: v ? new Date(v).toISOString() : null } }));
+      this.goLive.set(null);
+      this.toast.show("Go-live time saved");
+    } catch (e) {
+      this.error.set(e instanceof ApiError ? e.message : "Failed");
+    } finally {
+      this.busy.set(false);
     }
   }
 
