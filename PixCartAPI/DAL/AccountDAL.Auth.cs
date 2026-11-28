@@ -62,6 +62,8 @@ public partial class AccountDAL
         Column("totp_secret_enc", before.TotpSecretEnc, after.TotpSecretEnc);
         Column("totp_enabled", before.TotpEnabled, after.TotpEnabled);
         Column("marketing_opt_in", before.MarketingOptIn, after.MarketingOptIn);
+        Column("staff_note", before.StaffNote, after.StaffNote);
+        Column("staff_tags", before.StaffTags, after.StaffTags, "CAST(@staff_tags AS JSON)");
         Column("terms_accepted_at", before.TermsAcceptedAt, after.TermsAcceptedAt);
         Column("deleted_at", before.DeletedAt, after.DeletedAt);
         Column("ui_prefs", before.UiPrefs, after.UiPrefs, "CAST(@ui_prefs AS JSON)");

@@ -24,6 +24,10 @@ public partial class UserModel
     public string? TotpSecretEnc { get; set; }
     /// <summary>users.totp_enabled</summary>
     public bool TotpEnabled { get; set; }
+    /// <summary>users.staff_note: private note staff keep on a customer</summary>
+    public string StaffNote { get; set; } = "";
+    /// <summary>users.staff_tags: JSON list of private labels</summary>
+    public string StaffTags { get; set; } = "[]";
     /// <summary>users.marketing_opt_in</summary>
     public bool MarketingOptIn { get; set; }
     /// <summary>users.terms_accepted_at</summary>

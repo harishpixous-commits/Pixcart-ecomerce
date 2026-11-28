@@ -228,7 +228,7 @@ public class AccountAdminBAL(
         return new Dictionary<string, object?>
         {
             ["id"] = u.Id.ToString(), ["name"] = u.Name, ["phone"] = u.Phone, ["email"] = u.Email, ["is_active"] = u.IsActive, ["is_admin"] = u.IsAdmin,
-            ["marketing_opt_in"] = u.MarketingOptIn, ["created_at"] = DateTimeFunctions.Iso(u.CreatedAt), ["last_login_at"] = DateTimeFunctions.Iso(u.LastLoginAt),
+            ["marketing_opt_in"] = u.MarketingOptIn, ["staff_note"] = u.StaffNote, ["staff_tags"] = System.Text.Json.Nodes.JsonNode.Parse(string.IsNullOrEmpty(u.StaffTags) ? "[]" : u.StaffTags), ["created_at"] = DateTimeFunctions.Iso(u.CreatedAt), ["last_login_at"] = DateTimeFunctions.Iso(u.LastLoginAt),
             ["terms_accepted_at"] = DateTimeFunctions.Iso(u.TermsAcceptedAt),
             ["seller"] = seller is null ? null : new Dictionary<string, object?> { ["id"] = seller.Id.ToString(), ["name"] = seller.DisplayName, ["status"] = seller.Status },
             ["stats"] = new Dictionary<string, object?>
@@ -310,6 +310,18 @@ public class AccountAdminBAL(
         {
             u.MarketingOptIn = m;
             changes.Add($"marketing {(m ? "on" : "off")}");
+        }
+        if (body.StaffNote is { } sn && sn.Trim() != u.StaffNote)
+        {
+            u.StaffNote = sn.Trim();
+            changes.Add("staff note");
+        }
+        if (body.StaffTags is { } st)
+        {
+            var tags = st.Select(t => string.Join(" ", t.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))).Where(t => t.Length > 0)
+                .Select(t => t.Length > 30 ? t[..30] : t).Distinct().ToList();
+            var json = System.Text.Json.JsonSerializer.Serialize(tags);
+            if (json != u.StaffTags) { u.StaffTags = json; changes.Add("tags"); }
         }
         await accounts.SaveUserChangesAsync(before, u, now, uow.Transaction);
         await audit.AuditAsync(admin, "user.edit", "user", u.Id, changes.Count > 0 ? string.Join(", ", changes) : "no change", uow);

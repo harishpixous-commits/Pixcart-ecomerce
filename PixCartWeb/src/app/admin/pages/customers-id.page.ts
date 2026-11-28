@@ -12,7 +12,7 @@ import { PageLoader } from "../../shared/ui/page-loader";
 import { Button, EmptyState, ErrorNote, Modal, Pill, StatusPill, Textarea, TextField, Toast } from "../../shared/ui/ui";
 
 type Detail = {
-  id: string; name: string; phone: string | null; email: string | null; is_active: boolean; is_admin: boolean; marketing_opt_in: boolean;
+  id: string; name: string; phone: string | null; email: string | null; is_active: boolean; is_admin: boolean; marketing_opt_in: boolean; staff_note?: string; staff_tags?: string[];
   created_at: string; last_login_at: string | null; terms_accepted_at: string | null;
   seller: { id: string; name: string; status: string } | null;
   stats: { orders: number; spent: number; returns: number; tickets: number; open_tickets: number; wishlist: number; reviews: number };
@@ -84,6 +84,8 @@ export class CustomerCard {
               <dt class="text-ink-faint">Joined</dt><dd>{{ date(d()!.created_at) }}</dd>
               <dt class="text-ink-faint">Last sign-in</dt><dd>{{ d()!.last_login_at ? date(d()!.last_login_at) : "Never" }}</dd>
               <dt class="text-ink-faint">Terms accepted</dt><dd>{{ d()!.terms_accepted_at ? date(d()!.terms_accepted_at) : "Not yet (account made by staff)" }}</dd>
+              <dt class="text-ink-faint">Staff tags</dt><dd>{{ d()!.staff_tags?.length ? d()!.staff_tags!.join(", ") : "None" }}</dd>
+              <dt class="text-ink-faint">Staff note (private)</dt><dd>{{ d()!.staff_note || "None" }}</dd>
               <dt class="text-ink-faint">Offers by message</dt><dd>{{ d()!.marketing_opt_in ? "Yes, opted in" : "No" }}</dd>
             </dl>
           </section>
@@ -184,6 +186,8 @@ export class CustomerCard {
             <pc-text-field label="Mobile number" type="tel" [value]="f().phone" (valueChange)="setF({ phone: $event })" [error]="fieldErrors()['phone']"
               hint="Changing it signs the customer out; they sign in again with a code sent to the new number." [required]="true" />
             <pc-text-field label="Email" type="email" [value]="f().email" (valueChange)="setF({ email: $event })" [error]="fieldErrors()['email']" hint="Leave empty to remove" />
+            <pc-text-field label="Tags (private, comma separated)" [value]="f().tags" (valueChange)="setF({ tags: $event })" hint="Up to 10, for example VIP, wholesale. Customers never see these." />
+            <pc-text-field label="Staff note (private)" [value]="f().note" (valueChange)="setF({ note: $event })" hint="Up to 1000 characters. Customers never see this." />
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="h-4 w-4 accent-peacock" [checked]="f().marketing" (change)="setF({ marketing: $any($event.target).checked })" />Agrees to receive offers</label>
             <button pcButton type="submit" [loading]="busy()">Save</button>
           </form>
@@ -219,7 +223,7 @@ export class AdminCustomersIdPage {
   protected readonly d = signal<Detail | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly editing = signal(false);
-  protected readonly f = signal({ name: "", phone: "", email: "", marketing: false });
+  protected readonly f = signal({ name: "", phone: "", email: "", marketing: false, note: "", tags: "" });
   protected readonly fieldErrors = signal<Record<string, string>>({});
   protected readonly blocking = signal(false);
   protected readonly reason = signal("");
@@ -258,14 +262,14 @@ export class AdminCustomersIdPage {
     api<Detail>(`/api/admin/customers/${this.id()}`).then((d) => this.d.set(d)).catch((e) => this.error.set(e instanceof ApiError ? e.message : "Could not load"));
   }
 
-  protected setF(x: Partial<{ name: string; phone: string; email: string; marketing: boolean }>): void {
+  protected setF(x: Partial<{ name: string; phone: string; email: string; marketing: boolean; note: string; tags: string }>): void {
     this.f.update((f) => ({ ...f, ...x }));
   }
 
   protected openEdit(): void {
     const d = this.d();
     if (!d) return;
-    this.f.set({ name: d.name, phone: d.phone ?? "", email: d.email ?? "", marketing: d.marketing_opt_in });
+    this.f.set({ name: d.name, phone: d.phone ?? "", email: d.email ?? "", marketing: d.marketing_opt_in, note: d.staff_note ?? "", tags: (d.staff_tags ?? []).join(", ") });
     this.fieldErrors.set({});
     this.error.set(null);
     this.editing.set(true);
@@ -279,7 +283,7 @@ export class AdminCustomersIdPage {
     this.busy.set(true);
     this.error.set(null);
     try {
-      const body: Record<string, unknown> = { name: f.name, phone: f.phone, marketing_opt_in: f.marketing };
+      const body: Record<string, unknown> = { name: f.name, phone: f.phone, marketing_opt_in: f.marketing, staff_note: f.note, staff_tags: f.tags.split(",").map((t) => t.trim()).filter(Boolean) };
       if (f.email.trim()) body["email"] = f.email.trim();
       else if (d.email) body["clear_email"] = true;
       this.d.set(await api<Detail>(`/api/admin/customers/${this.id()}`, { method: "PATCH", body }));

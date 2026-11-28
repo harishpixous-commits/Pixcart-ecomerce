@@ -105,6 +105,26 @@ public class AccountsTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Staff_note_and_tags_are_saved_and_stay_private()
+    {
+        var admin = await Admin();
+        var buyer = await LoginPhone("9630000091", "Noted Buyer");
+        var url = $"/api/admin/customers/{buyer.Id}";
+        var r = await admin.Patch(url, new { staff_note = "  Calls before delivery  ", staff_tags = new[] { "VIP", " vip ", "Wholesale", "VIP", "" } });
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Equal("Calls before delivery", r.Json["staff_note"]!.GetValue<string>());
+        Assert.Equal(new[] { "VIP", "vip", "Wholesale" }, r.Json["staff_tags"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray());
+        Assert.Equal("Calls before delivery", (await admin.Get(url)).Json["staff_note"]!.GetValue<string>());
+        r = await admin.Patch(url, new { name = "Noted Buyer" });
+        Assert.Equal(3, r.Json["staff_tags"]!.AsArray().Count);
+        r = await admin.Patch(url, new { staff_tags = Array.Empty<string>() });
+        Assert.Empty(r.Json["staff_tags"]!.AsArray());
+        var me = (await buyer.Get("/api/auth/me")).ToString();
+        Assert.DoesNotContain("staff_note", me); Assert.DoesNotContain("Calls before", me);
+        Assert.Equal(422, (await admin.Patch(url, new { staff_note = new string('x', 1001) })).Status);
+    }
+
+    [Fact]
     public async Task Admin_manages_customer_accounts()
     {
         var admin = await Admin();

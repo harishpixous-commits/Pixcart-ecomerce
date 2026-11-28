@@ -48,6 +48,8 @@ public record CustomerPatchIn
     [Email] public string? Email { get; init; }
     public bool ClearEmail { get; init; }
     public bool? MarketingOptIn { get; init; }
+    [Len(0, 1000)] public string? StaffNote { get; init; }
+    [Len(0, 10)] public List<string>? StaffTags { get; init; }
 }
 
 /// <summary>POST /api/admin/sellers: a seller account opened by staff (starts as a draft).</summary>
