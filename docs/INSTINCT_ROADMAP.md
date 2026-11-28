@@ -533,3 +533,4 @@ Grepped both repos: neither exists. Written designs only, nothing built, for Har
 - Push 196: tests only. Double payment confirm and double cancel at the same moment (payment counted once, refund once, coupon use and stock given back once). Held in both stacks, no bug found.
 - Push 197: tests only. A two-seller coupon order returned in full: each seller's ledger nets to zero (the cash held by a seller's own courier shows as its own entry) and refunds equal the amount paid. Held in both stacks, no bug found.
 - Push 198: tests only. A two-unit line returned one unit at a time: the refunds add up to the discounted amount paid, and the seller's ledger nets to zero. Held in both stacks, no bug found.
+- Push 199: tests only. A paid two-seller order with a coupon, one part cancelled and the other delivered and returned: refunds add up to exactly what was paid and the seller's ledger nets to zero. Held in both stacks, no bug found.
