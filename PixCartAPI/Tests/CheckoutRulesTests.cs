@@ -2286,5 +2286,24 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(404, (await Anon($"/api/wishlist/shared/{next}")).Status);
     }
 
+    [Fact]
+    public async Task Coupon_with_a_huge_or_odd_money_value_is_refused_not_a_server_error()
+    {
+        var admin = await Admin();
+        object Body(string code, string kind, long value, long min = 0, long? max = null, long? usage = null) =>
+            new { code, description = "", kind, value, min_order_paise = min, max_discount_paise = max, usage_limit = usage, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = false };
+        foreach (var (code, kind, value, min, max, usage) in new (string, string, long, long, long?, long?)[]
+        {
+            ("HUGE1", "flat", 1_000_000_000_000, 0, null, null), ("HUGE2", "flat", -5, 0, null, null), ("HUGE3", "flat", 0, 0, null, null),
+            ("HUGE4", "percent", 9001, 0, null, null), ("HUGE5", "flat", 500, 1_000_000_000_000_000, null, null),
+            ("HUGE6", "flat", 500, 0, 1_000_000_000_000_000, null), ("HUGE7", "flat", 500, -1, null, null), ("HUGE8", "flat", 500, 0, null, 5_000_000_000),
+        })
+        {
+            var r = await admin.Post("/api/admin/coupons", Body(code, kind, value, min, max, usage));
+            Assert.True(r.Status is >= 400 and < 500, $"{code} gave {r.Status}");
+        }
+        Assert.Equal(0, await ApiFactory.DbScalarAsync<int>("SELECT COUNT(*) FROM coupons WHERE code LIKE 'HUGE%'"));
+    }
+
     private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }
