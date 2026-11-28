@@ -16,6 +16,7 @@ const NUMBERS: Record<string, string> = {
   expire_hours: "Proposals expire after (hours)", max_per_run: "Most new proposals per run",
   delivery_nudge_hours: "Remind seller after (hours unshipped)", delivery_tracking_hours: "Ask for tracking after (hours since shipped)",
   delivery_cancel_hours: "Propose cancel and refund after (hours unshipped)", delivery_max_age_days: "Ignore packages older than (days)",
+  orderupdate_late_hours: "Tell customer after (hours past the promised date)", orderupdate_max_age_days: "Ignore packages more than (days) past due",
 };
 
 export default function AgentsPage() {
