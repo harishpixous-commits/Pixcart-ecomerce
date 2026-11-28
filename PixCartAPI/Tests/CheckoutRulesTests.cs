@@ -987,6 +987,48 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(price * 2 * 20 / 100, q.Json["coupon"]!["discount"]!.GetValue<long>());
     }
 
+    private sealed record RoundItem(long LineTotal, long SellerDiscount, long PlatformDiscount, long Taxable, long Cgst, long Sgst, long Igst);
+
+    private static async Task CheckRounding(string orderId, long expectPlatform, long expectSeller)
+    {
+        Assert.Equal(expectPlatform, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(platform_discount), 0) FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+        Assert.Equal(expectSeller, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(seller_discount), 0) FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+        var subs = await ApiFactory.DbQueryAsync<(Guid Id, long Total, long Platform, long Seller)>("SELECT id AS Id, total AS Total, platform_discount AS Platform, seller_discount AS Seller FROM sub_orders WHERE order_id = @orderId", new { orderId });
+        foreach (var sub in subs)
+        {
+            var items = (await ApiFactory.DbQueryAsync<RoundItem>("SELECT line_total AS LineTotal, seller_discount AS SellerDiscount, platform_discount AS PlatformDiscount, taxable_value AS Taxable, cgst AS Cgst, sgst AS Sgst, igst AS Igst FROM order_items WHERE sub_order_id = @id", new { id = sub.Id })).ToList();
+            Assert.Equal(sub.Platform, items.Sum(i => i.PlatformDiscount));
+            Assert.Equal(sub.Seller, items.Sum(i => i.SellerDiscount));
+            Assert.All(items, i => Assert.Equal(i.LineTotal - i.SellerDiscount, i.Taxable + i.Cgst + i.Sgst + i.Igst));   // tax splits exactly
+            Assert.Equal(sub.Total, items.Sum(i => i.LineTotal - i.SellerDiscount));
+        }
+    }
+
+    [Fact]
+    public async Task Odd_discounts_on_a_multi_line_order_add_up_exactly()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000451", "round-shirt-a", "33KOVAI1234K1Z");
+        var (varB, prodB, _) = await ShirtInStock("9400000452", "round-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "ODD3333", description = "", kind = "flat", value = 3333, min_order_paise = 0, per_user_limit = 5, is_active = true, show_on_checkout = false })).Status);
+        var owner = await LoginPhone("9400000451", "Round Owner");
+        Assert.Equal(201, (await owner.Post("/api/seller/coupons", new { code = "ODD3331", kind = "flat", value = 3331, per_user_limit = 5 })).Status);
+        var buyer = await LoginPhone("9620000451", "Rounding Buyer");
+        foreach (var (state, pin, city) in new[] { ("33", "600028", "Chennai"), ("29", "570002", "Mysuru") })     // inside the state (CGST+SGST) and outside (IGST)
+        {
+            var addr = await AddAddress(buyer, state, pin, city);
+            foreach (var (code, plat, sell) in new[] { ("ODD3333", 3333L, 0L), ("ODD3331", 0L, 3331L) })
+            {
+                await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 2 });
+                await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 1 });
+                var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = code });
+                Assert.True(r.Status == 201, r.ToString());
+                await CheckRounding(r.Json["order"]!["id"]!.GetValue<string>(), plat, sell);
+            }
+        }
+    }
+
     [Fact]
     public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
     {
