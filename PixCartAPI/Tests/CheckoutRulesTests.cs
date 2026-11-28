@@ -936,6 +936,38 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Weight_surcharge_is_waived_by_free_shipping_coupon_and_by_threshold()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000494", "weight-combo-shirt");
+        await Refresh(productId);
+        await ApiFactory.DbExecAsync("UPDATE variants SET weight_grams = 500 WHERE id = @variantId", new { variantId });
+        Assert.Equal(200, (await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 5_000_000 } })).Status);
+        try
+        {
+            Assert.Equal(200, (await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 1000, shipping_free_grams = 1000 })).Status);
+            Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "SHIPFREE2", description = "", kind = "freeship", value = 1, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = false })).Status);
+            var buyer = await LoginPhone("9620000494", "Combo Buyer");
+            var addr = await AddAddress(buyer, state: "33");
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 5 });          // 2500 g: two started kg over
+            Task<Res> Quote(string? code = null) => buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = code });
+            var plain = (await Quote()).Json["summary"]!;
+            var ship = plain["shipping_total"]!.GetValue<long>();
+            Assert.True(ship > 2000);
+            var q = (await Quote("SHIPFREE2")).Json["summary"]!;
+            Assert.Equal(0, q["shipping_total"]!.GetValue<long>());                                  // the coupon waives delivery and the surcharge
+            Assert.Equal(plain["grand_total"]!.GetValue<long>() - ship, q["grand_total"]!.GetValue<long>());
+            Assert.Equal(200, (await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 1 } })).Status);
+            Assert.Equal(0, (await Quote()).Json["summary"]!["shipping_total"]!.GetValue<long>());   // the threshold waives it too
+        }
+        finally
+        {
+            await admin.Put("/api/admin/settings", new { shipping_per_kg_paise = 0 });
+            await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 49900 } });
+        }
+    }
+
+    [Fact]
     public async Task Weight_surcharge_adds_per_started_kg_above_the_free_weight()
     {
         var admin = await Admin();

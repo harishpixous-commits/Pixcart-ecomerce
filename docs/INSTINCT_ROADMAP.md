@@ -519,3 +519,4 @@ Grepped both repos: neither exists. Written designs only, nothing built, for Har
 
 - Push 183: The product page delivery estimate (one unit) now includes the Push 182 weight surcharge, so it agrees with the cart for a single unit. Test: extended weight test in each stack (a 2500 g option adds two started kg). The estimate is for one unit, so a bigger quantity can still cost more in the cart.
 - Push 184: Staff can set or clear a product go-live time (PUT /api/admin/products/{id}/publish-at, catalog permission, audited, within 365 days; changing it re-arms the seller note). Approving a product that has a future go-live time tells the seller the date. Test: one new test per stack. API only: no admin screen field yet.
+- Push 185: Test only. A free-shipping coupon and the free-shipping threshold both waive the Push 182 weight surcharge, in both stacks.
