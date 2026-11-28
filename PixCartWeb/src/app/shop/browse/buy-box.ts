@@ -364,6 +364,7 @@ export class Delivery {
           }
           <div class="flex items-center gap-3">
             <label for="qty" class="text-sm font-semibold">Quantity</label>
+            @if (minQty() > 1) {<span class="text-xs text-ink-faint">Minimum order: {{ minQty() }}</span>}
             <select id="qty" (change)="qty.set(+$any($event.target).value)" class="h-10 rounded-lg border border-line bg-mist px-3" [disabled]="!variant()?.in_stock">
               @for (n of qtyOptions(); track n) {<option [value]="n" [selected]="n === qty()">{{ n }}</option>}
             </select>
@@ -428,6 +429,7 @@ export class ProductMain {
   private readonly firstAvailable = computed(() => this.p().variants.find((v) => v.in_stock) ?? this.p().variants[0]);
   protected readonly chosen = signal<Record<string, string>>({});
   protected readonly qty = signal(1);
+  protected readonly minQty = computed(() => Math.max(1, this.p().min_qty ?? 1));
   protected readonly busy = signal<"cart" | "buy" | null>(null);
   private claimed = false;
 
@@ -455,9 +457,9 @@ export class ProductMain {
   private readonly maxQty = computed(() => {
     const variant = this.variant();
     const dealLeft = this.dealHere() && variant && this.p().deal!.units_left ? this.p().deal!.units_left! : null;
-    return Math.max(1, Math.min(this.site().max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
+    return Math.max(this.minQty(), Math.min(this.site().max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
   });
-  protected readonly qtyOptions = computed(() => Array.from({ length: Math.max(1, this.maxQty()) }, (_, i) => i + 1));
+  protected readonly qtyOptions = computed(() => Array.from({ length: Math.max(1, this.maxQty() - this.minQty() + 1) }, (_, i) => i + this.minQty()));
   protected readonly netRow = computed(() => (this.shown()?.net_quantity ? [{ label: "Net quantity", value: this.shown()!.net_quantity! }] : []));
   protected readonly bestsellerBadge = computed(() => Boolean(this.p().bestseller && this.p().bestseller!.rank <= this.lists().bestseller_badge_top));
 
@@ -467,7 +469,7 @@ export class ProductMain {
       const first = this.firstAvailable();
       untracked(() => {
         this.chosen.set(first?.options ?? {});
-        this.qty.set(1);
+        this.qty.set(Math.max(1, this.p().min_qty ?? 1));
       });
     });
     effect(() => {

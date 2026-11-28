@@ -14,7 +14,7 @@ import { Icon } from "../../shared/ui/icon";
 import { Field, Input, Select, Textarea } from "../../shared/ui/ui";
 
 export const EMPTY_DETAILS: ProductDetails = {
-  net_unit: "", generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
+  net_unit: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
   ingredients: "", directions: "", safety_info: "", legal_disclaimer: "", shelf_life: "", warranty: "", in_the_box: [],
   length_cm: null, width_cm: null, height_cm: null, key_specs: [],
 };
@@ -64,6 +64,9 @@ type DimKey = "length_cm" | "width_cm" | "height_cm";
             <option value="" [selected]="details().net_unit === ''">Not applicable</option>
             @for (u of units; track u[0]) {<option [value]="u[0]" [selected]="details().net_unit === u[0]">{{ u[1] }}</option>}
           </select>
+        </pc-field>
+        <pc-field label="Minimum order quantity" hint="The fewest units one order can hold. 0 or 1 means no minimum.">
+          <input pcInput type="number" min="0" max="100" [value]="details().min_qty ?? 0" (input)="set('min_qty', Math.max(0, Math.min(100, +$any($event.target).value || 0)))" aria-label="Minimum order quantity" />
         </pc-field>
         <ng-container [ngTemplateOutlet]="text" [ngTemplateOutletContext]="{ $implicit: { key: 'fssai_license', label: 'FSSAI licence number', max: 14, hint: '14 digits, for food and supplements', placeholder: 'e.g. 10012345000123' } }" />
       </div>
@@ -133,6 +136,7 @@ export class ProductInfoSection {
     return this.required().includes(k);
   }
 
+  protected readonly Math = Math;
   protected set<K extends keyof ProductDetails>(k: K, v: ProductDetails[K]): void {
     this.detailsChange.emit({ ...this.details(), [k]: v });
   }
