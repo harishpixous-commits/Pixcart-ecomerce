@@ -499,7 +499,7 @@ public class CatalogBAL(
     {
         var chain = (await catalog.CategoryChainAsync(p.CategoryId)).Select(c => c.Id).ToList();
         var outp = new JsonArray();
-        foreach (var c in await catalog.OffersAsync(p.SellerId, chain, limit, DateTimeFunctions.UtcNow()))
+        foreach (var c in await catalog.OffersAsync(p.Id, p.SellerId, chain, limit, DateTimeFunctions.UtcNow()))
         {
             var (title, terms) = OfferText(c);
             outp.Add(new JsonObject

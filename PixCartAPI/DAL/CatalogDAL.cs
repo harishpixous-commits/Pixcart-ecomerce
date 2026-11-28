@@ -280,13 +280,14 @@ public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
     }
 
     /// <summary>Coupons shown on the product page: active, in their dates, not used up, platform-wide or this seller's, store-wide or for the category chain.</summary>
-    public Task<IEnumerable<CouponModel>> OffersAsync(Guid sellerId, IEnumerable<Guid> categoryChain, int limit, DateTime now) =>
+    public Task<IEnumerable<CouponModel>> OffersAsync(Guid productId, Guid sellerId, IEnumerable<Guid> categoryChain, int limit, DateTime now) =>
         db.QueryAsync<CouponModel>(
             "SELECT * FROM coupons WHERE is_active = 1 AND show_on_checkout = 1 AND (starts_at IS NULL OR starts_at <= @now) " +
             "AND (ends_at IS NULL OR ends_at >= @now) AND (usage_limit IS NULL OR used_count < usage_limit) " +
             "AND (seller_id IS NULL OR seller_id = @sellerId) AND (category_id IS NULL OR category_id IN @chain) " +
+            "AND (JSON_LENGTH(product_ids) = 0 OR JSON_CONTAINS(product_ids, JSON_QUOTE(@pid))) " +   // a coupon for chosen products is offered only on those
             "ORDER BY ends_at IS NULL, ends_at ASC, created_at DESC LIMIT @limit",
-            new { now, sellerId, chain = categoryChain.ToList(), limit });
+            new { now, sellerId, pid = productId.ToString(), chain = categoryChain.ToList(), limit });
 
     /// <summary>Products most often in the same order as this one (last 180 days, live packages), still on sale and in stock.</summary>
     public Task<IEnumerable<ProductModel>> BoughtTogetherAsync(Guid productId, DateTime since, int limit) =>

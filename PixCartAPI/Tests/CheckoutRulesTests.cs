@@ -931,6 +931,21 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task A_coupon_for_chosen_products_is_offered_only_on_those_pages()
+    {
+        var admin = await Admin();
+        var (_, prodA, _) = await ShirtInStock("9400000411", "offer-shirt-a");
+        var (_, prodB, _) = await ShirtInStock("9400000412", "offer-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "SHIRTVOL", description = "", kind = "volume", value = 10, buy_qty = 2, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = true, product_slugs = new[] { "offer-shirt-a" } })).Status);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "ALLVOL", description = "", kind = "volume", value = 5, buy_qty = 3, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = true })).Status);
+        var v = Factory.CreateClient();
+        async Task<List<string>> Codes(string slug) => ((await v.GetFromJsonAsync<System.Text.Json.Nodes.JsonObject>($"/api/catalog/products/{slug}"))!["offers"]!.AsArray()).Select(o => o!["code"]!.GetValue<string>()).ToList();
+        var onA = await Codes("offer-shirt-a"); var onB = await Codes("offer-shirt-b");
+        Assert.Contains("SHIRTVOL", onA); Assert.Contains("ALLVOL", onA); Assert.Contains("ALLVOL", onB); Assert.DoesNotContain("SHIRTVOL", onB);
+    }
+
+    [Fact]
     public async Task Bundle_and_volume_offers_flow_into_the_order_and_come_back_on_cancel()
     {
         var admin = await Admin();
