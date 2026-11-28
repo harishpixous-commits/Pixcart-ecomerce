@@ -77,7 +77,7 @@ export function CouponManager({ base, admin }: { base: string; admin?: boolean }
       starts_at: f.starts ? new Date(f.starts).toISOString() : null, ends_at: f.ends ? new Date(f.ends).toISOString() : null,
       usage_limit: f.limit ? Number(f.limit) : null, per_user_limit: Number(f.per_user) || 1, is_active: f.is_active,
     };
-    if (admin) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic, product_slugs: f.product_slugs.split(",").map((t) => t.trim()).filter(Boolean), buy_qty: f.kind === "bxgy" ? Number(f.buy_qty) || 0 : 0, get_qty: f.kind === "bxgy" ? Number(f.get_qty) || 0 : 0 });
+    if (admin) Object.assign(body, { category_id: f.category_id || null, first_order_only: f.first_order_only, show_on_checkout: f.show_on_checkout, is_automatic: f.is_automatic, product_slugs: f.product_slugs.split(",").map((t) => t.trim()).filter(Boolean), buy_qty: f.kind === "bxgy" || f.kind === "volume" ? Number(f.buy_qty) || 0 : 0, get_qty: f.kind === "bxgy" ? Number(f.get_qty) || 0 : 0 });
     try {
       if (edit === "new") await api(base, { method: "POST", body });
       else await api(`${base}/${(edit as CouponRow).id}`, { method: "PUT", body });
