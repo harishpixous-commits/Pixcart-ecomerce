@@ -38,6 +38,8 @@ public class CouponModel
     public Guid? OnlyUserId { get; set; }
     /// <summary>coupons.is_active</summary>
     public bool IsActive { get; set; }
+    /// <summary>coupons.is_automatic: applied at checkout with no code</summary>
+    public bool IsAutomatic { get; set; }
     /// <summary>coupons.show_on_checkout</summary>
     public bool ShowOnCheckout { get; set; }
     /// <summary>coupons.id</summary>

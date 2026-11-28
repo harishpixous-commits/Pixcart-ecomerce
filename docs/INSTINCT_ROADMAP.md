@@ -450,3 +450,4 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 
 ## Push 143: Sourcing and reorder agent (.NET and Angular)
 - Same agent in `AgentsBAL` (event `seller_restock`, settings `reorder_*`). Test `Reorder_agent_asks_the_seller_to_restock...` passes. ngc clean.
+- Push 147: Automatic discounts. A coupon marked automatic applies at checkout with no code (Growth, Automatic discounts, off by default). Best saving wins; a typed code wins over it. .NET and Python.

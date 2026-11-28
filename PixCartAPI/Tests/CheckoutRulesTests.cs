@@ -740,6 +740,32 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Automatic_coupon_applies_without_a_code_only_when_switched_on()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000391", "auto-shirt");
+        await Refresh(productId);
+        var made = await admin.Post("/api/admin/coupons", new { code = "AUTO10", description = "", kind = "percent", value = 1000, max_discount_paise = 100000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = true });
+        Assert.True(made.Status == 201 && made.Json["is_automatic"]!.GetValue<bool>(), made.ToString());
+        await admin.Post("/api/admin/coupons", new { code = "SMALLAUTO", description = "", kind = "flat", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = true });
+        var buyer = await LoginPhone("9620000391", "Auto Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.Null((await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" })).Json["coupon"]);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { auto_discounts = new { enabled = true } })).Status);
+        var q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" });
+        var c = q.Json["coupon"]!;
+        Assert.Equal("AUTO10", c["code"]!.GetValue<string>());
+        Assert.True(c["automatic"]!.GetValue<bool>());
+        var typed = (await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "SMALLAUTO" })).Json["coupon"]!;
+        Assert.Equal("SMALLAUTO", typed["code"]!.GetValue<string>());
+        Assert.Null(typed["automatic"]);
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM coupon_redemptions"));
+    }
+
+    [Fact]
     public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
     {
         var admin = await Admin();

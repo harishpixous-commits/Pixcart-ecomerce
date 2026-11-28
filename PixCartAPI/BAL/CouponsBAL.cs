@@ -55,6 +55,22 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         return new Result(c, discount, Money.Allocate(discount, eligible));
     }
 
+    /// <summary>The automatic coupon that saves the customer the most on this cart, or null. Every normal rule still applies: a coupon that fails is skipped.</summary>
+    public async Task<Result?> BestAutomaticAsync(Guid userId, IReadOnlyList<CartBAL.CartLine> lines)
+    {
+        var saved = JsonHelper.Object(await coupons.GrowthJsonAsync());
+        if (!((JsonObject)DAL.SettingsDAL.Merge(GrowthBAL.Defaults(), saved)["auto_discounts"]!).Bool("enabled")) return null;
+        Result? best = null;
+        foreach (var c in await coupons.AutomaticAsync())
+        {
+            Result res;
+            try { res = await EvaluateAsync(c.Code, userId, lines); }
+            catch (AppException) { continue; }
+            if (best is null || res.Discount > best.Discount) best = res;
+        }
+        return best;
+    }
+
     /// <summary>The coupons shown at checkout.</summary>
     public async Task<List<JsonObject>> ListForCheckoutAsync()
     {

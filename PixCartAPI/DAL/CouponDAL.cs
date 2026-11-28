@@ -10,6 +10,14 @@ public class CouponDAL(IMySqlDapperHelper db)
     public Task<CouponModel?> ByCodeAsync(string code) =>
         db.QueryFirstOrDefaultAsync<CouponModel>("SELECT * FROM coupons WHERE UPPER(code) = @code", new { code });
 
+    /// <summary>The saved Growth settings JSON (platform_settings.growth), or null when nothing was saved.</summary>
+    public Task<string?> GrowthJsonAsync() =>
+        db.QueryFirstOrDefaultAsync<string>("SELECT CAST(`value` AS CHAR) FROM platform_settings WHERE `key` = 'growth'");
+
+    /// <summary>Active platform coupons marked automatic.</summary>
+    public Task<IEnumerable<CouponModel>> AutomaticAsync() =>
+        db.QueryAsync<CouponModel>("SELECT * FROM coupons WHERE is_automatic = 1 AND is_active = 1 AND funded_by = 'platform' AND only_user_id IS NULL LIMIT 50");
+
     /// <summary>Redemptions in use by this shopper (not released).</summary>
     public async Task<long> RedemptionsAsync(Guid couponId, Guid userId) =>
         await db.ExecuteScalarAsync<long>(

@@ -139,6 +139,15 @@ public class OrdersBAL(
             if (locked is not null && locked.UsageLimit is not null && locked.UsedCount >= locked.UsageLimit)
                 throw new AppException("This coupon has been fully used", "coupon_exhausted");
         }
+        else if (cfg.Bool("feature_coupons"))
+        {
+            coupon = await coupons.BestAutomaticAsync(user.Id, lines); // no code typed: the best automatic discount, if any
+            if (coupon is not null)
+            {
+                var locked = await orders.CouponForUpdateAsync(coupon.Coupon.Id, uow);
+                if (locked is not null && locked.UsageLimit is not null && locked.UsedCount >= locked.UsageLimit) coupon = null;
+            }
+        }
 
         cfg = await ShippingZones.WithStateThresholdAsync(db, cfg, address.StateCode);
         var groups = CartBAL.GroupBySeller(lines, cfg, await ShippingZones.SurchargeAsync(db, address.Pincode), await ShippingZones.SellerFreeBoundsAsync(db), await ShippingZones.StateFeeAsync(db, address.StateCode), await LoyaltyPoints.FreeDeliveryAsync(db, user.Id));

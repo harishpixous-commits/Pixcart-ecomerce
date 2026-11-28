@@ -65,6 +65,16 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
                 view["coupon"] = new JsonObject { ["code"] = body.CouponCode.Trim().ToUpperInvariant(), ["discount"] = 0, ["error"] = exc.Message };
             }
         }
+        else if (cfg.Bool("feature_coupons"))
+        {
+            var auto = await coupons.BestAutomaticAsync(user.Id, await cart.LoadCartAsync(user.Id));
+            if (auto is not null)
+            {
+                view["coupon"] = new JsonObject { ["code"] = auto.Coupon.Code, ["discount"] = auto.Discount, ["description"] = auto.Coupon.Description, ["error"] = null, ["automatic"] = true };
+                summary["grand_total"] = summary["grand_total"]!.GetValue<long>() - auto.Discount;
+                summary["coupon_discount"] = auto.Discount;
+            }
+        }
         view["cod_allowed"] = cfg.Bool("cod_enabled") && summary["grand_total"]!.GetValue<long>() <= cfg.Int("cod_max_order_paise");
         view["address_id"] = address.Id.ToString();
         return view;
