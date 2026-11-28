@@ -28,12 +28,22 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
         {
             await Write(ctx, e.StatusCode, "bad_request", "The request could not be read", null);
         }
+        catch (Exception) when (!ctx.Request.HasFormContentType && TakesAFile(ctx))
+        {
+            // an upload route was sent something other than a file form: the caller's mistake, not a server fault
+            await Write(ctx, 415, "unsupported_media_type", "Send the file as a form upload", null);
+        }
         catch (Exception e)
         {
             log.LogError(e, "Unhandled error on {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
             await Write(ctx, 500, "server_error", "Something went wrong. Please try again.", null);
         }
     }
+
+    /// <summary>True for a file-upload route (it has an IFormFile parameter).</summary>
+    private static bool TakesAFile(HttpContext ctx) =>
+        ctx.GetEndpoint()?.Metadata.GetMetadata<Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor>()?.Parameters
+            .Any(p => p.ParameterType == typeof(IFormFile)) == true;
 
     public static async Task Write(HttpContext ctx, int status, string code, string message, IDictionary<string, string>? fields)
     {
