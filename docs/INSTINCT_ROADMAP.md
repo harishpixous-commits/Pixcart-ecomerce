@@ -447,3 +447,6 @@ Scripted headless Chrome on seeded demo: sign-in by OTP, add to cart, cart, addr
 
 ## Browser load check, all Python admin pages (28 Nov)
 Signed in as admin, opened every admin route in headless Chrome on the seeded demo. No page errors, console errors or failing requests. Loading only, controls were not exercised.
+
+## Browser check, Growth settings save (28 Nov)
+In headless Chrome as admin: switched on Share wishlist, set New badge days to 21, saved. Values persisted (confirmed through the API). A value of 1421 was rejected with "new_badge.days must be a whole number between 1 and 90", correct behaviour.
