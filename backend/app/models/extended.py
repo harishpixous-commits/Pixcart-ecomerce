@@ -245,7 +245,7 @@ class Coupon(IdMixin, TimestampMixin, Base):
     is_automatic: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # applied at checkout with no code (Admin → Growth → Automatic discounts)
 
     __table_args__ = (
-        CheckConstraint("kind IN ('percent','flat','bxgy','bundle','volume')", name="kind"),
+        CheckConstraint("kind IN ('percent','flat','bxgy','bundle','volume','freeship')", name="kind"),
         CheckConstraint("value > 0", name="value"),
         CheckConstraint("funded_by IN ('platform','seller')", name="funded_by"),
         CheckConstraint("funded_by = 'platform' OR seller_id IS NOT NULL", name="seller_funded_has_seller"),

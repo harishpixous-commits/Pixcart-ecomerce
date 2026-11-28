@@ -26,6 +26,7 @@ class CouponResult:
     discount: int
     # per cart line key (variant id) -> discount paise
     per_line: dict[uuid.UUID, int] = field(default_factory=dict)
+    free_shipping: bool = False  # a free delivery code: no discount, but delivery costs nothing for the order
 
 
 def _allocate(total_discount: int, weights: dict[uuid.UUID, int]) -> dict[uuid.UUID, int]:
@@ -116,6 +117,12 @@ async def evaluate(session: AsyncSession, code: str, user_id: uuid.UUID, lines: 
             discount = min(discount, c.max_discount_paise)
         discount = min(discount, base)
         return CouponResult(c, discount, _allocate(discount, eligible))
+    if c.kind == "freeship":
+        if base == 0:
+            raise ApiError("This coupon does not apply to the items in your cart", "coupon_not_applicable")
+        if base < c.min_order_paise:
+            raise ApiError(f"Add items worth ₹{(c.min_order_paise - base) / 100:,.0f} more to use this coupon", "coupon_min_order")
+        return CouponResult(c, 0, {k: 0 for k in eligible}, free_shipping=True)
     if base == 0:
         raise ApiError("This coupon does not apply to the items in your cart", "coupon_not_applicable")
     if base < c.min_order_paise:

@@ -223,3 +223,49 @@ async def test_volume_offer_counts_units_across_variants_of_the_product(client, 
     await a.post("/api/cart/items", {"variant_id": v1["id"], "qty": 1})                         # a second shirt variant does
     c = (await q()).json()["coupon"]
     assert c["error"] is None and c["discount"] == (v0["price_paise"] + v1["price_paise"]) // 10
+
+
+async def test_free_delivery_code_zeroes_the_delivery_fee_in_the_quote_and_the_order(client, admin, categories):
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import SubOrder
+    from tests.test_phase2_money import key
+
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    sv = shirt["variants"][0]
+    assert (await admin.put("/api/admin/settings", {"free_shipping_threshold_paise": 10_000_000})).status_code == 200   # nothing is free by the threshold
+    body = {"code": "SHIPFREE", "kind": "freeship", "value": 1, "show_on_checkout": False}
+    assert (await admin.post("/api/admin/coupons", body | {"is_automatic": True})).status_code == 400            # has to be typed
+    assert (await admin.post("/api/admin/coupons", body | {"min_order_paise": sv["price_paise"] * 5})).status_code == 201
+    a = await login_phone(client, "9770000441", name="Free Ship Buyer")
+    addr = await add_address(a, state="33")
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 1})
+    quote = lambda code=None: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"} | ({"coupon_code": code} if code else {}))
+    plain = (await quote()).json()
+    assert plain["summary"]["shipping_total"] > 0
+    low = (await quote("SHIPFREE")).json()
+    assert low["coupon"]["error"] is not None and low["summary"]["shipping_total"] == plain["summary"]["shipping_total"]   # minimum order not met: nothing changes
+    # lower the minimum so the cart qualifies
+    from sqlalchemy import update
+
+    from app.models import Coupon
+    async with SessionLocal() as s:
+        await s.execute(update(Coupon).where(Coupon.code == "SHIPFREE").values(min_order_paise=0))
+        await s.commit()
+    q = (await quote("SHIPFREE")).json()
+    assert q["coupon"]["error"] is None and q["coupon"]["free_shipping"] is True and q["coupon"]["discount"] == 0
+    assert q["summary"]["shipping_total"] == 0 and q["summary"]["grand_total"] == plain["summary"]["grand_total"] - plain["summary"]["shipping_total"]
+    r = await a.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key(), "coupon_code": "SHIPFREE", "expected_total": q["summary"]["grand_total"]})
+    assert r.status_code == 201, r.text
+    o = r.json()["order"]
+    assert o["grand_total"] == q["summary"]["grand_total"]
+    async with SessionLocal() as s:
+        subs = list((await s.execute(select(SubOrder).where(SubOrder.order_id == uuid.UUID(o["id"])))).scalars())
+        assert all(x.shipping_fee == 0 for x in subs)
+    used = lambda rows: next(c for c in rows if c["code"] == "SHIPFREE")["used_count"]
+    assert used((await admin.get("/api/admin/coupons")).json()) == 1
+    await a.post(f"/api/orders/{o['id']}/cancel", {"reason": "Ordered by mistake"})
+    assert used((await admin.get("/api/admin/coupons")).json()) == 0

@@ -94,7 +94,7 @@ async def analytics(admin: Perm("dashboard"), session: SessionDep, days: int = Q
 
 
 class AdminCouponIn(SellerCouponIn):
-    kind: Literal["percent", "flat", "bxgy", "bundle", "volume"]  # "volume" = buy_qty or more units of the chosen products (or the whole cart): value percent off all of them; "bundle" = every product in product_slugs (2 to 10) in the cart: value percent off one of each, per complete set; "bxgy" = buy X get Y: buy_qty, get_qty, value = percent off those get_qty units (100 = free)
+    kind: Literal["percent", "flat", "bxgy", "bundle", "volume", "freeship"]  # "volume" = buy_qty or more units of the chosen products (or the whole cart): value percent off all of them; "bundle" = every product in product_slugs (2 to 10) in the cart: value percent off one of each, per complete set; "freeship" = delivery is free for the order when the code is typed (value is ignored, min_order_paise applies, never automatic); "bxgy" = buy X get Y: buy_qty, get_qty, value = percent off those get_qty units (100 = free)
     buy_qty: int = Field(default=0, ge=0, le=20)
     get_qty: int = Field(default=0, ge=0, le=20)
     product_slugs: list[str] = Field(default_factory=list, max_length=30)  # only these products count; empty = the whole cart
@@ -111,6 +111,8 @@ def _check_bxgy(body: AdminCouponIn) -> None:
         raise ApiError("A bundle needs between 2 and 10 products", "invalid_value")
     if body.kind == "volume" and body.buy_qty < 2:
         raise ApiError("A volume offer needs a minimum of at least 2 items", "invalid_value")
+    if body.kind == "freeship" and body.is_automatic:
+        raise ApiError("A free delivery code has to be typed by the customer, it cannot be automatic", "invalid_value")
     if body.kind != "volume" and body.kind != "bxgy":
         body.buy_qty = 0
     if body.kind != "bxgy":

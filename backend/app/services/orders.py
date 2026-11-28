@@ -332,7 +332,7 @@ async def place_order(
     cfg = await growth_svc.with_state_threshold(session, cfg, address.state_code)
     from app.services import loyalty as loyalty_svc
 
-    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode), await growth_svc.seller_free_bounds(session), await growth_svc.state_fee(session, address.state_code), await loyalty_svc.free_delivery(session, user.id))
+    groups = group_by_seller(lines, cfg, await growth_svc.remote_surcharge(session, address.pincode), await growth_svc.seller_free_bounds(session), await growth_svc.state_fee(session, address.state_code), bool(coupon and coupon.free_shipping) or await loyalty_svc.free_delivery(session, user.id))
     now = utcnow()
     is_online = payment_method == "online"
     categories = {c.id: c for c in (await session.execute(select(Category))).scalars()}

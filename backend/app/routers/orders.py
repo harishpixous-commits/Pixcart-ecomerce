@@ -250,7 +250,14 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     ck = await fees_svc.get(session)
     bounds = await growth_svc.seller_free_bounds(session)
     cfg = await growth_svc.with_state_threshold(session, cfg, address.state_code)
-    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode), bounds, await growth_svc.state_fee(session, address.state_code), await loyalty_svc.free_delivery(session, user.id)), cfg, (await get_integrations(session)).online_payments, ck, bounds)
+    typed_res = typed_err = None   # a typed code is checked first: a free delivery code changes the delivery fee in the bill below
+    if body.coupon_code and body.coupon_code.strip():
+        try:
+            typed_res = await evaluate(session, body.coupon_code, user.id, await load_cart(session, user.id))
+        except ApiError as exc:
+            typed_err = exc
+    free_ship = bool(typed_res and typed_res.free_shipping)
+    view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode), bounds, await growth_svc.state_fee(session, address.state_code), free_ship or await loyalty_svc.free_delivery(session, user.id)), cfg, (await get_integrations(session)).online_payments, ck, bounds)
     cod_fee = cfg["cod_fee_paise"] if body.payment_method == "cod" else 0
     view["summary"]["cod_fee"] = cod_fee
     view["summary"]["grand_total"] += cod_fee
@@ -264,14 +271,14 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
                        "lng": float(address.lng) if address.lng is not None else None}
     view["coupon"] = None
     if body.coupon_code and body.coupon_code.strip():
-        lines = await load_cart(session, user.id)
-        try:
-            res = await evaluate(session, body.coupon_code, user.id, lines)
-            view["coupon"] = {"code": res.coupon.code, "discount": res.discount, "description": res.coupon.description, "error": None}
-            view["summary"]["grand_total"] -= res.discount
-            view["summary"]["coupon_discount"] = res.discount
-        except ApiError as exc:
-            view["coupon"] = {"code": body.coupon_code.strip().upper(), "discount": 0, "error": exc.message}
+        if typed_res is not None:
+            view["coupon"] = {"code": typed_res.coupon.code, "discount": typed_res.discount, "description": typed_res.coupon.description, "error": None}
+            if typed_res.free_shipping:
+                view["coupon"]["free_shipping"] = True
+            view["summary"]["grand_total"] -= typed_res.discount
+            view["summary"]["coupon_discount"] = typed_res.discount
+        else:
+            view["coupon"] = {"code": body.coupon_code.strip().upper(), "discount": 0, "error": typed_err.message}
     elif cfg["feature_coupons"]:
         from app.services.coupons import best_automatic
 
