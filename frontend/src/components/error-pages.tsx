@@ -69,6 +69,13 @@ export function NotFoundView({ area = "shop" }: { area?: Area }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const shop = area === "shop";
+  // an old address staff pointed somewhere new (Admin → Redirects): follow it instead of showing "not found"
+  useEffect(() => {
+    if (!shop) return;
+    api<{ to: string }>(`/api/catalog/redirect?path=${encodeURIComponent(window.location.pathname)}`)
+      .then((r) => { if (r.to.startsWith("/")) router.replace(r.to); else window.location.replace(r.to); })
+      .catch(() => undefined);
+  }, [shop, router]);
   return (
     <div className="flex flex-col gap-4">
       <Frame icon={<SearchX className="h-8 w-8" aria-hidden />} tone="info" title={shop ? cfg.not_found_title : "Page not found"} testId="not-found">

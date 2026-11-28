@@ -13,6 +13,7 @@ from app.models.engagement import AnswerReport, AnswerVote, ProductAnswer, Produ
 from app.models.growth import CartReminder, GiftCard, GiftCardPurchase, GiftCardUse, LoyaltyEntry, NewsletterSubscriber, OrderNote, Referral, SavedSearch, SegmentCampaign
 from app.models.extended import (
     ProductCollection,
+    UrlRedirect,
     AdminRole,
     AiRun,
     AgentProposal,
@@ -78,7 +79,7 @@ __all__ = [
     "AnswerReport", "AnswerVote", "ProductAnswer", "ProductQuestion", "QuestionReport", "StockAlert",
     "AdminRole", "AgentProposal", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
     "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle", "ProductVideo",
-    "ProductCollection", "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",
+    "ProductCollection", "UrlRedirect", "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",
     "CartReminder", "GiftCard", "GiftCardPurchase", "GiftCardUse", "LoyaltyEntry", "Referral", "PaymentGatewayEvent", "LedgerEntry", "MediaAsset", "Notification", "NotificationTemplate", "Payout", "ProductDailyStat", "ReturnItem",
     "ReturnRequest", "Review", "ReviewReport", "ReviewVote", "ProductReport", "StockMovement", "SupportTicket", "TicketMessage", "Warehouse", "WishlistItem",
     "Address",

@@ -636,3 +636,15 @@ class ProductCollection(IdMixin, TimestampMixin, Base):
     brand: Mapped[str] = mapped_column(String(80), default="", server_default="")
     min_price_paise: Mapped[int | None] = mapped_column(BigInteger)
     max_price_paise: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class UrlRedirect(IdMixin, TimestampMixin, Base):
+    """Old address -> new address. Used when a page is not found (changed link names, removed pages), so old links and search results keep working."""
+
+    __tablename__ = "url_redirects"
+
+    from_path: Mapped[str] = mapped_column(String(300), unique=True)
+    to_path: Mapped[str] = mapped_column(String(500))
+    status_code: Mapped[int] = mapped_column(Integer, default=301, server_default="301")  # 301 permanent | 302 temporary
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    hits: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
