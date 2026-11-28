@@ -40,3 +40,15 @@ Full .NET suite: 392 tests, 391 passed on the first full run; the one failure wa
 
 ## Business assistant (.NET: working and tested)
 Same as the Python version: weekly digest proposal (sales vs the week before, low stock, unanswered tickets, pending listings); approving sends it in-app and by email to the approver. Counts only. Test passed. Angular type-check pending after the sandbox reset (node_modules reinstall).
+
+## Summary for claims (28 Nov, after Push 146)
+Seven agents, in both versions, each with an on/off switch in Admin, AI agents, a master switch, and staff approval before anything happens. All rule based: no AI model is called, nothing paid. Each has an automated test in both versions.
+- Delivery and shipping: reminds sellers, asks for tracking, proposes cancel and refund for packages not shipped. No live courier tracking.
+- Order update: proposes a delay message to customers for late packages. No live tracking, no new date promised.
+- Sourcing and reorder: asks sellers to restock fast-selling items, with a suggested quantity. Does not buy stock.
+- Marketing: proposes a limited-time category coupon for slow categories. No emails or ads, does not measure results.
+- Listing review: approves clean pending listings, sends back the rest with reasons. Text and price rules only, no photo checks.
+- Support: drafts a first acknowledging reply for unanswered tickets. Does not decide refunds or answer follow-ups.
+- Business assistant: weekly digest of sales, low stock, unanswered tickets, pending listings. Counts only.
+Not run anywhere: a real browser (Angular and Next.js are type-checked only), live couriers, live AI model, live payments.
+Test counts, single full runs (28 Nov, 2:10 PM): Python 324 passed; .NET 393 passed, 0 failed.
