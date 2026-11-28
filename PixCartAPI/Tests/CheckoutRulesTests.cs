@@ -1210,4 +1210,33 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal("Happy birthday, Meena!", r.Json["order"]!["ship_to"]!["gift_message"]!.GetValue<string>());
         Assert.Equal(400, (await admin.Put("/api/admin/checkout", new { fees = new { gift_message_max = 10 } })).Status);
     }
+
+    [Fact]
+    public async Task Category_size_guide_shows_on_the_product_page_and_is_inherited()
+    {
+        var admin = await Admin();
+        var (_, productId, _) = await ShirtInStock("9400000612", "sizeguide-shirt");
+        await Refresh(productId);
+        var slug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id = @productId", new { productId });
+        var parent = await ApiFactory.DbScalarAsync<Guid>("SELECT category_id FROM products WHERE id = @productId", new { productId });
+        Assert.Null((await admin.Get($"/api/catalog/products/{slug}")).Json["size_guide"]);
+        object Body(string name, string guide) => new { name, commission_bps = 1000, default_gst_bps = 500, size_guide = guide, return_window_days = 7 };
+
+        var r = await admin.Put($"/api/admin/categories/{parent}", Body("Shirts", "Size|Chest (in)\n S |  38\nM|40\n\n"));
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Equal("Size | Chest (in)\nS | 38\nM | 40", r.Json["size_guide"]!.GetValue<string>());
+        var guide = (await admin.Get($"/api/catalog/products/{slug}")).Json["size_guide"]!.AsArray();
+        Assert.Equal(3, guide.Count); Assert.Equal("Chest (in)", guide[0]![1]!.GetValue<string>()); Assert.Equal("40", guide[2]![1]!.GetValue<string>());
+
+        // the product moves to a sub-category without its own guide: the parent's guide still shows
+        var child = Guid.NewGuid();
+        await ApiFactory.DbExecAsync("INSERT INTO categories (id, parent_id, name, slug, image_url, commission_bps, default_gst_bps, position, is_active, required_details, return_window_days, min_return_window_days, created_at, updated_at) VALUES (@child, @parent, 'Formal', 'formal-sg', '', 1000, 500, 0, 1, CAST('[]' AS JSON), 7, 0, @now, @now)", new { child, parent, now = Now });
+        await ApiFactory.DbExecAsync("UPDATE products SET category_id = @child WHERE id = @productId", new { child, productId });
+        Assert.Equal(3, (await admin.Get($"/api/catalog/products/{slug}")).Json["size_guide"]!.AsArray().Count);
+        Assert.Equal(200, (await admin.Put($"/api/admin/categories/{child}", Body("Formal", "Size|Waist\nL|34"))).Status);
+        Assert.Equal("Waist", (await admin.Get($"/api/catalog/products/{slug}")).Json["size_guide"]![0]![1]!.GetValue<string>());
+
+        foreach (var bad in new[] { "Size|Chest", "Size|Chest\nS" })
+            Assert.Equal(400, (await admin.Put($"/api/admin/categories/{child}", Body("Formal", bad))).Status);
+    }
 }

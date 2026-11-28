@@ -20,7 +20,8 @@ public class AdminCategoriesController(IAdminCategoriesBAL bal,ICurrentUser me):
         [MaxLength(20)]public string[] RequiredDetails{get;init;}=[];
         [Range(0,30)]public int ReturnWindowDays{get;init;}=7;
         [Range(0,30)]public int MinReturnWindowDays{get;init;}
-        public CategoryModel Model()=>new(){Name=Name,ParentId=ParentId,ImageUrl=ImageUrl,CommissionBps=CommissionBps!.Value,DefaultGstBps=DefaultGstBps!.Value,Position=Position,IsActive=IsActive,RequiredDetails=new JsonArray(RequiredDetails.Select(x=>(JsonNode)JsonValue.Create(x)).ToArray()).ToJsonString(),ReturnWindowDays=ReturnWindowDays,MinReturnWindowDays=MinReturnWindowDays};
+        [StringLength(2000)]public string SizeGuide{get;init;}="";
+        public CategoryModel Model()=>new(){Name=Name,ParentId=ParentId,ImageUrl=ImageUrl,CommissionBps=CommissionBps!.Value,DefaultGstBps=DefaultGstBps!.Value,Position=Position,IsActive=IsActive,RequiredDetails=new JsonArray(RequiredDetails.Select(x=>(JsonNode)JsonValue.Create(x)).ToArray()).ToJsonString(),ReturnWindowDays=ReturnWindowDays,MinReturnWindowDays=MinReturnWindowDays,SizeGuide=SizeGuide??""};
     }
     [HttpGet("requirements")]public async Task<object> Requirements()=>await bal.RequirementsAsync(await me.RequireAsync());
     [HttpGet("")]public async Task<object> List()=>await bal.ListAsync(await me.RequireAsync());

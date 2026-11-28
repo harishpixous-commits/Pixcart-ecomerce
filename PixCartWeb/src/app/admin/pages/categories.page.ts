@@ -6,14 +6,14 @@ import { api, ApiError, quietly } from "../../core/api";
 import { GST_RATES, pct } from "../../core/format";
 import { PageHeader, Table } from "../../shared/portal-shell";
 import { PageLoader } from "../../shared/ui/page-loader";
-import { Button, ErrorNote, Field, Modal, Pill, Select, TextField, Toast } from "../../shared/ui/ui";
+import { Button, ErrorNote, Field, Modal, Pill, Select, TextField, Textarea, Toast } from "../../shared/ui/ui";
 import { ImageField } from "../shared/media-picker";
 
 type Cat = {
   id: string; name: string; slug: string; parent_id: string | null; image_url: string; commission_bps: number; default_gst_bps: number; position: number; is_active: boolean; required_details: string[];
-  return_window_days: number; min_return_window_days: number;
+  return_window_days: number; min_return_window_days: number; size_guide?: string;
 };
-const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[], returnDays: "7", minReturnDays: "0" };
+const EMPTY = { name: "", parent_id: "", commission: "10", gst: 1800, position: "0", is_active: true, image_url: "", required: [] as string[], returnDays: "7", minReturnDays: "0", sizeGuide: "" };
 type Form = typeof EMPTY;
 
 function returnPolicy(c: Cat): string {
@@ -23,7 +23,7 @@ function returnPolicy(c: Cat): string {
 
 @Component({
   selector: "pc-admin-categories-page",
-  imports: [PageHeader, Table, PageLoader, Button, ErrorNote, Field, Modal, Pill, Select, TextField, ImageField],
+  imports: [PageHeader, Table, PageLoader, Button, ErrorNote, Field, Modal, Pill, Select, TextField, ImageField, Textarea],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "block" },
   template: `
@@ -76,6 +76,12 @@ function returnPolicy(c: Cat): string {
               <pc-text-field label="Return window (days)" inputmode="numeric" [value]="f().returnDays" (valueChange)="set('returnDays', $event)" hint="New listings start with this. 0 means not returnable." [required]="true" />
               <pc-text-field label="Shortest window sellers may set" inputmode="numeric" [value]="f().minReturnDays" (valueChange)="set('minReturnDays', $event)" hint="Days. Listings below it move up to it when you save." [required]="true" />
               <p class="text-xs text-ink-faint sm:col-span-2">Up to 30 days. Damaged, faulty or wrong items can always be returned for the period set in Settings.</p>
+            </fieldset>
+            <fieldset class="rounded-lg border border-line p-3">
+              <legend class="px-1 text-sm font-semibold">Size guide</legend>
+              <textarea pcTextarea rows="5" maxlength="2000" [value]="f().sizeGuide" (input)="set('sizeGuide', $any($event.target).value)" aria-label="Size guide table"
+                placeholder="Size | Chest (in) | Length (in)&#10;S | 38 | 27&#10;M | 40 | 28" class="font-mono text-sm" data-testid="size-guide-input"></textarea>
+              <p class="text-xs text-ink-faint">One line per size, columns split with |. The first line is the heading. Shown on the product page, also for the sub-categories. Leave empty for none.</p>
             </fieldset>
             <fieldset class="rounded-lg border border-line p-3">
               <legend class="px-1 text-sm font-semibold">Product information sellers must give</legend>
@@ -158,7 +164,7 @@ export class AdminCategoriesPage {
     this.editing.set(c);
     this.f.set(c === "new" ? EMPTY : {
       name: c.name, parent_id: c.parent_id ?? "", commission: String(c.commission_bps / 100), gst: c.default_gst_bps, position: String(c.position), is_active: c.is_active,
-      image_url: c.image_url, required: c.required_details ?? [], returnDays: String(c.return_window_days), minReturnDays: String(c.min_return_window_days),
+      image_url: c.image_url, required: c.required_details ?? [], returnDays: String(c.return_window_days), minReturnDays: String(c.min_return_window_days), sizeGuide: c.size_guide ?? "",
     });
   }
 
@@ -169,7 +175,7 @@ export class AdminCategoriesPage {
     const editing = this.editing();
     const body = {
       name: f.name, parent_id: f.parent_id || null, commission_bps: Math.round(parseFloat(f.commission) * 100), default_gst_bps: f.gst, position: Number(f.position) || 0,
-      is_active: f.is_active, image_url: f.image_url, required_details: f.required, return_window_days: Number(f.returnDays), min_return_window_days: Number(f.minReturnDays),
+      is_active: f.is_active, image_url: f.image_url, required_details: f.required, return_window_days: Number(f.returnDays), min_return_window_days: Number(f.minReturnDays), size_guide: f.sizeGuide,
     };
     try {
       if (editing === "new") await api("/api/admin/categories", { method: "POST", body });

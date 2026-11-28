@@ -307,6 +307,18 @@ export class Delivery {
         @if (pdp().offers && (p().offers?.length ?? 0) > 0) {<pc-offers-block [offers]="p().offers!" />}
         @if (pdp().service_icons && shown()) {<div class="border-y border-line py-2"><pc-service-icons [p]="p()" [price]="shown()!.price" /></div>}
 
+        @if (p().size_guide; as guide) {
+          <details class="rounded-lg border border-line bg-white px-3 py-2 text-sm" data-testid="size-guide">
+            <summary class="cursor-pointer font-semibold text-peacock">Size guide</summary>
+            <div class="mt-2 overflow-x-auto">
+              <table class="w-full text-left">
+                <thead><tr>@for (h of guide[0]; track $index) {<th scope="col" class="border-b border-line px-2 py-1 font-semibold">{{ h }}</th>}</tr></thead>
+                <tbody>@for (r of guide.slice(1); track $index) {<tr>@for (c of r; track $index) {<td class="border-b border-line/60 px-2 py-1">{{ c }}</td>}</tr>}</tbody>
+              </table>
+            </div>
+          </details>
+        }
+
         @for (ax of axes(); track ax.axis) {
           <fieldset>
             <legend class="mb-2 text-sm font-semibold">{{ ax.axis }}: <span class="font-normal text-ink-soft">{{ chosen()[ax.axis] }}</span></legend>

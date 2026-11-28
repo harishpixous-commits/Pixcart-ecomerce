@@ -512,6 +512,8 @@ public class CatalogBAL(
         var breadcrumbs = new JsonArray();
         foreach (var c in Enumerable.Reverse(await catalog.CategoryChainAsync(p.CategoryId)))
             breadcrumbs.Add(new JsonObject { ["name"] = c.Name, ["slug"] = c.Slug });
+        JsonArray? sizeGuide = null;   // the nearest category with a guide, this one or a parent
+        foreach (var c in await catalog.CategoryChainAsync(p.CategoryId)) { sizeGuide = Utils.SizeGuide.Rows(c.SizeGuide); if (sizeGuide is not null) break; }
         var details = ProductInfo.DetailsOf(p.Details);
         var unit = details.NetUnit;
         // option axes, e.g. {"Size": ["S","M","L"], "Colour": ["Red","Blue"]}
@@ -581,6 +583,7 @@ public class CatalogBAL(
             ["discount_pct"] = ProductInfo.DiscountPct(p.PriceFrom, p.MrpFrom),
             ["in_stock"] = p.InStock,
             ["breadcrumbs"] = breadcrumbs,
+            ["size_guide"] = sizeGuide,
             ["option_axes"] = axes,
             ["variants"] = variantsOut,
             ["key_specs"] = keySpecs,

@@ -203,6 +203,7 @@ export interface ProductPage {
   discount_pct: number;
   in_stock: boolean;
   breadcrumbs: { name: string; slug: string }[];
+  size_guide?: string[][] | null;
   option_axes: Record<string, string[]>;
   variants: PublicVariant[];
   seller: {

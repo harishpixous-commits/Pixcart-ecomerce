@@ -26,6 +26,8 @@ public class CategoryModel
     public int ReturnWindowDays { get; set; }
     /// <summary>categories.min_return_window_days</summary>
     public int MinReturnWindowDays { get; set; }
+    /// <summary>categories.size_guide</summary>
+    public string SizeGuide { get; set; } = "";
     /// <summary>categories.id</summary>
     public Guid Id { get; set; }
     /// <summary>categories.created_at</summary>
