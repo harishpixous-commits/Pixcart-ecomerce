@@ -31,3 +31,6 @@ Also working from before (not part of the proposal queue): admin business assist
 
 ## Marketing agent (.NET: working and tested)
 Key `marketing`. Proposes a time-limited category coupon for categories with live stock but few recent sales; approving creates the coupon (audited). Test Marketing_agent_proposes_a_coupon... passed. Angular page type-checked only. Not built: emails or ads, customer targeting, measuring results.
+
+## Listing review agent and Support agent (.NET: working and tested)
+Same behaviour as the Python version: listing approves clean pending products or sends them back with reasons; support drafts a first acknowledging reply for unanswered tickets. Rule based, staff approve each. Both tests passed. Angular type-checked only.

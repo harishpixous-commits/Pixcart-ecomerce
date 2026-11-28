@@ -7,7 +7,7 @@ using Utils.Interface;
 namespace BAL;
 
 /// <inheritdoc cref="IAgentsBAL"/>
-public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL growth, IAdminOpsBAL adminOps, ICatalogNotifyBAL notify, IAuditBAL audit) : IAgentsBAL
+public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL growth, IAdminOpsBAL adminOps, ICatalogNotifyBAL notify, IAuditBAL audit, IProductModerationBAL moderation, ISupportDeskBAL desk) : IAgentsBAL
 {
     private sealed record Draft(string Kind, string Key, string Summary, string[][] Details, Dictionary<string, string> Args, string Permission);
     private sealed record AgentDef(string Key, string Label, string Job, string NotWired, Func<JsonObject, Task<List<Draft>>> Scan);
@@ -34,6 +34,14 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             "Finds categories with plenty of live stock but few recent sales and proposes a limited-time category coupon. Staff approve before any coupon exists.",
             "Only proposes category coupons. Does not send emails or ads, does not pick customers, and does not measure whether the coupon worked.",
             MarketingScanAsync),
+        new("listing", "Listing review agent",
+            "Runs the listing rules on every product waiting for review. Proposes approving the clean ones and sending the rest back to the seller with the exact reasons.",
+            "Checks text and price rules only. Does not look at photos, check the brand is genuine or compare against other sellers. Does not rewrite listings.",
+            ListingScanAsync),
+        new("support", "Support agent",
+            "Finds open tickets that nobody has answered after a few hours and drafts a first acknowledging reply for staff to approve.",
+            "Only the first acknowledgement. It does not decide refunds or replacements, read attachments or answer follow-up questions. Staff still resolve the ticket.",
+            SupportScanAsync),
     ];
 
     private async Task<JsonObject> CfgAsync() => (JsonObject)(await growth.GetAsync())["agents"]!;
@@ -131,6 +139,61 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             outp.Add(new("create_coupon", $"{r.Id}:{month}", $"Run {pct}% off {r.Name} for {days} days: {r.Items} items in stock but only {r.Sold} sold in {window} days",
                 [["Category", r.Name], ["Items in stock", r.Items.ToString()], [$"Sold in {window} days", r.Sold.ToString()], ["Coupon", $"{pct}% off, code {code}, {days} days"]],
                 new() { ["category_id"] = r.Id.ToString(), ["category"] = r.Name, ["code"] = code, ["percent"] = pct.ToString(), ["days"] = days.ToString() }, "marketing"));
+        }
+        return outp;
+    }
+
+    // ---------- listing review agent ----------
+    private async Task<List<Draft>> ListingScanAsync(JsonObject cfg)
+    {
+        var rows = await db.QueryAsync<(Guid Id, string Title, string Description, string Highlights, string Stamp)>(
+            "SELECT id AS Id, title AS Title, description AS Description, CAST(highlights AS CHAR) AS Highlights, DATE_FORMAT(updated_at, '%Y%m%d%H%i%s') AS Stamp FROM products WHERE status = 'pending' ORDER BY updated_at LIMIT 100");
+        var outp = new List<Draft>();
+        foreach (var r in rows)
+        {
+            var vs = await db.QueryAsync<(long Mrp, long Price)>("SELECT mrp_paise AS Mrp, price_paise AS Price FROM variants WHERE product_id = @id", new { id = r.Id });
+            var snap = new JsonObject
+            {
+                ["title"] = r.Title, ["description"] = r.Description, ["highlights"] = JsonNode.Parse(r.Highlights)?.DeepClone() ?? new JsonArray(),
+                ["variants"] = new JsonArray(vs.Select(v => (JsonNode)new JsonObject { ["mrp"] = v.Mrp / 100.0, ["price"] = v.Price / 100.0 }).ToArray()),
+            };
+            var res = AiTasks.RuleCheck(snap);
+            var issues = res["issues"]!.AsArray().Select(x => x!.GetValue<string>()).ToList();
+            var key = $"{r.Id}:{r.Stamp}";
+            if (res["risk"]!.GetValue<string>() == "low")
+                outp.Add(new("approve_listing", key, $"Approve \"{r.Title}\": passes every listing check",
+                    [["Listing", r.Title], ["Checks", "No restricted words, no contact details, discount looks normal, description is long enough"]],
+                    new() { ["product_id"] = r.Id.ToString(), ["title"] = r.Title }, "catalog"));
+            else
+            {
+                var reason = string.Join("; ", issues); if (reason.Length > 900) reason = reason[..900];
+                outp.Add(new("reject_listing", key, $"Send back \"{r.Title}\": {issues[0]}",
+                    new[] { new[] { "Listing", r.Title }, new[] { "Risk", res["risk"]!.GetValue<string>() } }.Concat(issues.Select(i => new[] { "Issue", i })).ToArray(),
+                    new() { ["product_id"] = r.Id.ToString(), ["title"] = r.Title, ["reason"] = reason }, "catalog"));
+            }
+        }
+        return outp;
+    }
+
+    // ---------- support agent ----------
+    private async Task<List<Draft>> SupportScanAsync(JsonObject cfg)
+    {
+        var now = DateTime.UtcNow; var cutoff = now.AddHours(-cfg.Int("support_wait_hours")); var oldest = now.AddDays(-cfg.Int("support_max_age_days"));
+        var tickets = await db.QueryAsync<(Guid Id, string Number, string Category, string Subject, string Priority, string Name)>(
+            "SELECT t.id AS Id, t.number AS Number, t.category AS Category, t.subject AS Subject, t.priority AS Priority, u.name AS Name FROM support_tickets t JOIN users u ON u.id = t.user_id " +
+            "WHERE t.status = 'open' AND t.acknowledged_at IS NULL AND t.created_at >= @oldest ORDER BY t.created_at LIMIT 100", new { oldest });
+        var outp = new List<Draft>();
+        foreach (var t in tickets)
+        {
+            var msgs = (await db.QueryAsync<(string Role, DateTime At)>("SELECT author_role AS Role, created_at AS At FROM ticket_messages WHERE ticket_id = @id AND is_internal = 0 ORDER BY created_at", new { id = t.Id })).ToList();
+            if (msgs.Count == 0 || msgs[^1].Role != "customer" || msgs[^1].At > cutoff) continue;
+            var first = (t.Name ?? "").Split(' ')[0]; var subject = t.Subject.Length > 80 ? t.Subject[..80] : t.Subject;
+            var body = $"Hi {(first == "" ? "there" : first)}, thank you for writing to us about \"{subject}\". We have your message and a member of our team is looking into it. " +
+                       "We will reply here as soon as we have checked. Please do not share OTPs, passwords or card details with anyone, including us.";
+            var hours = (int)(now - DateTime.SpecifyKind(msgs[^1].At, DateTimeKind.Utc)).TotalHours;
+            outp.Add(new("reply_ticket", $"{t.Id}:{msgs.Count}", $"Send a first reply on ticket {t.Number}: \"{subject}\" has waited {hours} hours",
+                [["Ticket", t.Number], ["Category", t.Category], ["Priority", t.Priority], ["Draft reply", body]],
+                new() { ["ticket_id"] = t.Id.ToString(), ["messages"] = msgs.Count.ToString(), ["body"] = body }, "support"));
         }
         return outp;
     }
@@ -300,6 +363,24 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
                 new { id = Guid.NewGuid(), code, d = $"{pct}% off {p["category"]!.GetValue<string>()}", v = pct * 100, s = now, e = now.AddDays(days), cat });
             await db.ExecuteAsync("INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, detail, created_at, id) VALUES (@by, 'coupon.create', 'coupon', @code, 'made by the marketing agent', UTC_TIMESTAMP(6), @id)",
                 new { by = admin.Id, code, id = Guid.NewGuid() });
+            return;
+        }
+        if (row.Kind is "approve_listing" or "reject_listing")
+        {
+            var pid = Guid.Parse(p["product_id"]!.GetValue<string>());
+            if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM products WHERE id = @pid AND status = 'pending'", new { pid }) == 0)
+                throw new Stale("This listing is no longer waiting for review, so nothing was changed.");
+            if (row.Kind == "approve_listing") await moderation.ApproveAsync(admin, pid); else await moderation.RejectAsync(admin, pid, p["reason"]!.GetValue<string>());
+            return;
+        }
+        if (row.Kind == "reply_ticket")
+        {
+            var tid = Guid.Parse(p["ticket_id"]!.GetValue<string>());
+            if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM support_tickets WHERE id = @tid AND status = 'open' AND acknowledged_at IS NULL", new { tid }) == 0)
+                throw new Stale("The ticket was already answered or closed, so nothing was sent.");
+            if (await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM ticket_messages WHERE ticket_id = @tid AND is_internal = 0", new { tid }) != long.Parse(p["messages"]!.GetValue<string>()))
+                throw new Stale("The ticket has new messages since this draft, so nothing was sent.");
+            await desk.ReplyAsync(admin, tid, p["body"]!.GetValue<string>(), false, null, null, null);
             return;
         }
         if (row.Kind == "delay_notice")

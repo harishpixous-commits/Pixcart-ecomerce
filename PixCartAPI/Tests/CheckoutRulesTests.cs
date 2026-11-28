@@ -1052,6 +1052,48 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Listing_agent_approves_clean_listings_and_sends_back_bad_ones()
+    {
+        var admin = await Admin();
+        var (_, p1, _) = await ShirtInStock("9400000316", "agent-listing-a");
+        var (_, p2, _) = await ShirtInStock("9400000317", "agent-listing-b", "33KOVAI1235K1Z");
+        await ApiFactory.DbExecAsync("UPDATE products SET status = 'pending'");
+        await ApiFactory.DbExecAsync("UPDATE products SET description = 'Call me on 9876543210 for a cheaper price' WHERE id = @p2", new { p2 });
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true })).Status);
+        Assert.Equal(0, (await Run())["listing"]!.GetValue<int>());
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { listing_enabled = true })).Status);
+        var made = (await Run())["listing"]!.GetValue<int>();
+        Assert.True(made >= 2); Assert.Equal(0, (await Run())["listing"]!.GetValue<int>());
+        var items = (await admin.Get("/api/admin/agents/proposals?agent=listing")).Json["items"]!.AsArray();
+        var bad = items.First(i => i!["kind"]!.GetValue<string>() == "reject_listing")!;
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{bad["id"]!.GetValue<string>()}/approve", new { })).Status);
+        Assert.True(await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM products WHERE status = 'rejected'") >= 1);
+    }
+
+    [Fact]
+    public async Task Support_agent_drafts_a_first_reply_and_staff_approval_sends_it()
+    {
+        var admin = await Admin();
+        var a = await LoginPhone("9770000207", "Ticket Buyer");
+        var r = await a.Post("/api/support/tickets", new { category = "order", subject = "Where is my parcel", message = "It has been a week with no update." });
+        Assert.Equal(201, r.Status);
+        await ApiFactory.DbExecAsync("UPDATE support_tickets SET created_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 10 HOUR)");
+        await ApiFactory.DbExecAsync("UPDATE ticket_messages SET created_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 10 HOUR)");
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true })).Status);
+        Assert.Equal(0, (await Run())["support"]!.GetValue<int>());
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { support_enabled = true })).Status);
+        Assert.Equal(1, (await Run())["support"]!.GetValue<int>());
+        Assert.Equal(0, (await Run())["support"]!.GetValue<int>());
+        var p = (await admin.Get("/api/admin/agents/proposals?agent=support")).Json["items"]![0]!;
+        Assert.Equal("reply_ticket", p["kind"]!.GetValue<string>());
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM ticket_messages"));
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{p["id"]!.GetValue<string>()}/approve", new { })).Status);
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM ticket_messages WHERE author_role = 'staff' AND body LIKE 'Hi Ticket,%'"));
+    }
+
+    [Fact]
     public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
     {
         var admin = await Admin();

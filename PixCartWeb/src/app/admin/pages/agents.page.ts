@@ -24,6 +24,8 @@ const NUMBERS: Record<string, string> = {
   marketing_min_items: "Only categories with at least (items in stock)",
   marketing_discount_percent: "Discount (%)",
   marketing_valid_days: "Coupon valid for (days)",
+  support_wait_hours: "Reply when a ticket waited (hours)",
+  support_max_age_days: "Ignore tickets older than (days)",
   reorder_min_sold: "Only items that sold at least (units)",
   orderupdate_late_hours: "Tell customer after (hours past the promised date)",
   orderupdate_max_age_days: "Ignore packages more than (days) past due",
