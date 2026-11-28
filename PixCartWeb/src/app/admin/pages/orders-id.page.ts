@@ -17,7 +17,7 @@ import { openPdf } from "../../shared/portal/helpers";
 import { Icon } from "../../shared/ui/icon";
 import { PcLink } from "../../shared/ui/link";
 import { PageLoader } from "../../shared/ui/page-loader";
-import { Button, ErrorNote, Modal, StatusPill, Textarea, TextField, Toast } from "../../shared/ui/ui";
+import { Button, ErrorNote, Input, Modal, StatusPill, Textarea, TextField, Toast } from "../../shared/ui/ui";
 import { RiskBrief } from "../shared/ai";
 import { ReturnRequestModal } from "../../shop/customer/order-returns";
 
@@ -167,6 +167,69 @@ export class StaffNotes {
   }
 }
 
+/** Private staff labels on this order (up to 10). Saved as a whole list; the customer and the seller never see them. */
+@Component({
+  selector: "pc-order-tags",
+  imports: [Button, ErrorNote, Input],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: "contents" },
+  template: `
+    @if (allowed()) {
+      <section class="rounded-xl bg-white p-4">
+        <h2 class="mb-1 font-semibold">Tags</h2>
+        <p class="mb-2 text-sm text-ink-soft">Only staff see these. Filter the order list by a tag.</p>
+        <div class="mb-2 flex flex-wrap gap-1">
+          @for (t of tags(); track t) {
+            <button type="button" [disabled]="busy()" (click)="remove(t)" class="rounded-full bg-mist px-2 py-0.5 text-sm" [attr.aria-label]="'Remove tag ' + t">{{ t }} ×</button>
+          } @empty {
+            <span class="text-sm text-ink-faint">No tags yet.</span>
+          }
+        </div>
+        <div class="flex gap-2">
+          <input pcInput [value]="text()" maxlength="30" (input)="text.set($any($event.target).value)" placeholder="Add a tag" aria-label="New tag" />
+          <button pcButton (click)="save([...tags(), text()])" [loading]="busy()" [disabled]="text().trim().length === 0 || tags().length >= 10">Add</button>
+        </div>
+        <pc-error-note [message]="error()" />
+      </section>
+    }
+  `,
+})
+export class OrderTags {
+  readonly orderId = input.required<string>();
+  readonly initial = input<string[]>([]);
+  private readonly admin = inject(AdminContext);
+  protected readonly allowed = computed(() => !!this.admin.me()?.permissions.includes("orders"));
+  protected readonly tags = signal<string[]>([]);
+  protected readonly text = signal("");
+  protected readonly error = signal<string | null>(null);
+  protected readonly busy = signal(false);
+
+  constructor() {
+    effect(() => {
+      const t = this.initial();
+      untracked(() => this.tags.set(t));
+    });
+  }
+
+  protected remove(t: string): void {
+    void this.save(this.tags().filter((x) => x !== t));
+  }
+
+  protected async save(next: string[]): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const r = await api<{ staff_tags: string[] }>(`/api/admin/orders/${this.orderId()}/tags`, { method: "PUT", body: { tags: next } });
+      this.tags.set(r.staff_tags);
+      this.text.set("");
+    } catch (e) {
+      this.error.set(e instanceof ApiError ? e.message : "Could not save the tags");
+    } finally {
+      this.busy.set(false);
+    }
+  }
+}
+
 /* ---------------------------------------------------------------- payment-check.tsx */
 
 type Attempt = { id: string; status: string; method: string; error: string };
@@ -291,7 +354,7 @@ export class FleetLine {
 
 @Component({
   selector: "pc-admin-orders-id-page",
-  imports: [PageHeader, PageLoader, Button, ErrorNote, Modal, StatusPill, Textarea, RiskBrief, ReturnRequestModal, CustomerMessage, StaffNotes, PaymentCheck, FleetLine],
+  imports: [PageHeader, PageLoader, Button, ErrorNote, Modal, StatusPill, Textarea, RiskBrief, ReturnRequestModal, CustomerMessage, StaffNotes, OrderTags, PaymentCheck, FleetLine],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: "contents" },
   template: `
@@ -304,6 +367,7 @@ export class FleetLine {
         <div class="grid gap-4 lg:grid-cols-2">
           <pc-risk-brief [path]="'/api/admin/ai/briefs/order/' + o()!.id" title="Order risk" />
           <pc-customer-message [orderId]="o()!.id" />
+          <pc-order-tags [orderId]="o()!.id" [initial]="o()!.staff_tags ?? []" />
           <pc-staff-notes [orderId]="o()!.id" />
         </div>
         <div class="grid gap-4 lg:grid-cols-3">

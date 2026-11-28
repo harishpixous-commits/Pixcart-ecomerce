@@ -24,6 +24,8 @@ public class OrderModel
     public long CodFee { get; set; }
     /// <summary>orders.discount_total</summary>
     public long DiscountTotal { get; set; }
+    /// <summary>orders.staff_tags: JSON list of private labels</summary>
+    public string StaffTags { get; set; } = "[]";
     /// <summary>orders.coupon_code</summary>
     public string CouponCode { get; set; } = "";
     /// <summary>orders.fees</summary>

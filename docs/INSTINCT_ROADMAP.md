@@ -457,3 +457,5 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 - Push 151: A platform coupon can be limited to chosen products (typed as product link names; unknown name is refused). Empty = whole cart. V033. Python and .NET.
 
 - Push 152 was withdrawn: a per-product size guide already existed (size_guide in the buy box). My duplicate size_chart was reverted by a new commit, nothing deleted from history.
+
+- Push 153: Order tags (Python and .NET/Angular done): up to 10 private staff tags per order (Admin > Order > Tags), shown under the order number in the list, filter ?tag= (exact, any letter case), the search box finds tags. Alembic 0057 / .NET V034. Test: Staff_tags_on_an_order_are_saved_filtered_and_private. Angular type-check clean; not run in a browser.

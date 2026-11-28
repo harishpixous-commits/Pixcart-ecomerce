@@ -131,6 +131,30 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Staff_tags_on_an_order_are_saved_filtered_and_private()
+    {
+        var (variantId, _, _) = await ShirtInStock("9400000414", "order-tag-shirt", "33ORDTG1234K1Z");
+        var buyer = await LoginPhone("9620000414", "Tag Order Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = (await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") })).Json["order"]!;
+        var id = o["id"]!.GetValue<string>(); var number = o["number"]!.GetValue<string>();
+        var admin = await Admin();
+        var r = await admin.Put($"/api/admin/orders/{id}/tags", new { tags = new[] { "  Fraud check ", "Gift", "fraud check", "Gift", "" } });
+        Assert.True(r.Status == 200, r.ToString());
+        Assert.Equal(new[] { "Fraud check", "Gift", "fraud check" }, r.Json["staff_tags"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray());
+        Assert.Equal(3, (await admin.Get($"/api/admin/orders/{id}")).Json["staff_tags"]!.AsArray().Count);
+        var list = (await admin.Get("/api/admin/orders?tag=GIFT")).Json;
+        Assert.Equal(number, list["items"]![0]!["number"]!.GetValue<string>()); Assert.Equal("Gift", list["items"]![0]!["staff_tags"]![1]!.GetValue<string>());
+        Assert.Equal(0, (await admin.Get("/api/admin/orders?tag=nothing")).Json["total"]!.GetValue<int>());
+        Assert.Equal(1, (await admin.Get("/api/admin/orders?q=fraud")).Json["total"]!.GetValue<int>());   // the search box finds tags
+        Assert.Equal(422, (await admin.Put($"/api/admin/orders/{id}/tags", new { tags = Enumerable.Range(0, 11).Select(i => i.ToString()).ToArray() })).Status);
+        Assert.DoesNotContain("Fraud", (await buyer.Get($"/api/orders/{id}")).ToString());
+        Assert.Equal(403, (await buyer.Put($"/api/admin/orders/{id}/tags", new { tags = new[] { "x" } })).Status);
+        Assert.Empty((await admin.Put($"/api/admin/orders/{id}/tags", new { tags = Array.Empty<string>() })).Json["staff_tags"]!.AsArray());
+    }
+
+    [Fact]
     public async Task A_preorder_date_shows_on_the_cart_line_until_it_passes()
     {
         var (variantId, productId, _) = await ShirtInStock("9400000412", "preorder-shirt");

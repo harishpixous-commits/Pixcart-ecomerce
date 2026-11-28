@@ -17,9 +17,9 @@ import { PcLink } from "../../shared/ui/link";
 import { PageLoader } from "../../shared/ui/page-loader";
 import { EmptyState, Input, Pagination, Select, StatusPill } from "../../shared/ui/ui";
 
-type Row = { id: string; number: string; customer: string; phone: string; status: string; payment_method: string; payment_status: string; grand_total: number; created_at: string; package_statuses: string[] };
-type Filters = { status: string; q: string; payment_method: string; payment_status: string; package_status: string; date_from: string; date_to: string; seller_id: string; customer_id: string; late: string };
-const KEYS: (keyof Filters)[] = ["status", "q", "payment_method", "payment_status", "package_status", "date_from", "date_to", "seller_id", "customer_id", "late"];
+type Row = { id: string; number: string; customer: string; phone: string; status: string; payment_method: string; payment_status: string; grand_total: number; created_at: string; package_statuses: string[]; staff_tags?: string[] };
+type Filters = { status: string; q: string; payment_method: string; payment_status: string; package_status: string; date_from: string; date_to: string; seller_id: string; customer_id: string; late: string; tag: string };
+const KEYS: (keyof Filters)[] = ["status", "q", "payment_method", "payment_status", "package_status", "date_from", "date_to", "seller_id", "customer_id", "late", "tag"];
 const PACKAGE_STATUSES = ["placed", "confirmed", "packed", "shipped", "delivered", "cancelled"];
 
 @Component({
@@ -38,6 +38,7 @@ const PACKAGE_STATUSES = ["placed", "confirmed", "packed", "shipped", "delivered
         <option value="" [selected]="f().package_status === ''">Any package status</option>
         @for (s of packageStatuses; track s) {<option [value]="s" [selected]="f().package_status === s">{{ s[0].toUpperCase() + s.slice(1) }}</option>}
       </select>
+      <input pcInput placeholder="Staff tag (exact)" maxlength="30" [value]="f().tag" (change)="set({ tag: $any($event.target).value.trim(), page: 1 })" aria-label="Staff tag" />
       <label class="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" [checked]="!!f().late" (change)="set({ late: $any($event.target).checked ? '1' : '', page: 1 })" />Late to ship only</label>
       <select pcSelect (change)="set({ payment_method: $any($event.target).value, page: 1 })" aria-label="Payment method">
         <option value="" [selected]="f().payment_method === ''">COD and online</option><option value="cod" [selected]="f().payment_method === 'cod'">Cash on delivery</option><option value="online" [selected]="f().payment_method === 'online'">Paid online</option>
@@ -63,7 +64,7 @@ const PACKAGE_STATUSES = ["placed", "confirmed", "packed", "shipped", "delivered
       <pc-table [head]="['Order', 'Customer', 'Placed', 'Payment', 'Total', 'Packages', 'Order status']">
         @for (o of d()!.items; track o.id) {
           <tr class="hover:bg-mist/60">
-            <td class="px-4 py-3"><a [pcLink]="'/admin/orders/' + o.id" class="font-semibold text-peacock hover:underline">{{ o.number }}</a></td>
+            <td class="px-4 py-3"><a [pcLink]="'/admin/orders/' + o.id" class="font-semibold text-peacock hover:underline">{{ o.number }}</a>@if (o.staff_tags?.length) {<span class="mt-1 flex flex-wrap gap-1">@for (t of o.staff_tags; track t) {<span class="rounded-full bg-mist px-2 text-xs text-ink-soft">{{ t }}</span>}</span>}</td>
             <td class="px-4 py-3">{{ o.customer }}<p class="text-sm text-ink-faint">{{ o.phone }}</p></td>
             <td class="px-4 py-3 text-sm">{{ dateTime(o.created_at) }}</td>
             <td class="px-4 py-3 text-sm">{{ o.payment_method === "cod" ? "COD" : "Online" }}, {{ payLabel[o.payment_status] }}</td>
