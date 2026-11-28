@@ -359,7 +359,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
     while cur is not None:
         breadcrumbs.insert(0, {"name": cur.name, "slug": cur.slug})
         cur = await session.get(Category, cur.parent_id) if cur.parent_id else None
-    size_guide_rows = None
+    size_guide_rows = size_guide_svc.rows(p.size_guide)  # the product's own table wins
     cur = cat
     while cur is not None and size_guide_rows is None:  # the nearest category with a guide, this one or a parent
         size_guide_rows = size_guide_svc.rows(cur.size_guide)

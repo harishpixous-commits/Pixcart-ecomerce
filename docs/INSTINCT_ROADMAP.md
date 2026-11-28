@@ -403,3 +403,7 @@ Admin → Growth → Settings has "Newsletter box" (off, with a heading). When o
 ## Push 131: share my wishlist
 
 Admin → Growth → Settings has "Share wishlist" (off). When on, the wishlist page has "Share my wishlist": it makes a private link (`/wishlist/shared/<secret>`), with Copy link and Stop sharing. Anyone with the link, signed in or not, sees the shopper first name and the saved products that are live. Stop sharing kills the link, and a new one is made next time. Switching the setting off stops every link. Alembic 0049, .NET V026 (users.wishlist_share_token). Tests in both versions; tsc and ngc clean. Not run in a browser. Python route order matters: the share routes sit before /api/wishlist/{product_id}.
+
+## Push 132: size guide per product
+
+A seller can type a size guide on one product (seller product form, "Size guide (optional)"). It shows on that product page ahead of the category guide. Empty means the category guide (nearest parent) as before. Same "a | b" table rules, cleaned and refused when it cannot be shown. Editing it counts as a content change, so an approved listing goes back to review like other content. Alembic 0050, .NET V027 (products.size_guide). Tests in both versions, tsc and ngc clean. Not run in a browser. Checked first: product compare, recently viewed, order notes and bulk coupons already exist.

@@ -70,6 +70,7 @@ class Product(IdMixin, TimestampMixin, Base):
     hsn_code: Mapped[str] = mapped_column(String(8), default="")
     gst_bps: Mapped[int] = mapped_column(Integer, default=1800)
     country_of_origin: Mapped[str] = mapped_column(String(60), default="India")
+    size_guide: Mapped[str] = mapped_column(Text, default="", server_default="")  # this product's own size table; empty: the category's
     return_window_days: Mapped[int] = mapped_column(Integer, default=7)
     status: Mapped[str] = mapped_column(String(10), default="draft", index=True)
     rejection_reason: Mapped[str] = mapped_column(Text, default="")

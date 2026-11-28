@@ -177,3 +177,23 @@ async def test_wishlist_share_link(client, admin, categories):
     assert new != token
     await admin.put("/api/admin/growth/settings", {"wishlist_share": {"enabled": False}})  # switched off: every link stops
     assert (await client.get(f"/api/wishlist/shared/{new}")).status_code == 404
+
+
+async def test_product_size_guide_beats_category_guide(client, admin, categories):
+    from sqlalchemy import update as sa_update
+
+    from app.db import SessionLocal
+    from app.models import Product
+
+    seller = await make_seller(client, admin, "9100000779", name="Own Guide", pan="OWNGD1234K")
+    shirt = await make_live_product(client, admin, seller, categories["shirts"], title="Own Guide Shirt", variants=SHIRT_VARIANTS)
+    cats = {c["id"]: c for c in (await admin.get("/api/admin/categories")).json()}
+    r = await admin.put(f"/api/admin/categories/{categories['shirts']}", cats[categories["shirts"]] | {"size_guide": "Size|Waist\nL|34"})
+    assert r.status_code == 200, r.text
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["size_guide"] == [["Size", "Waist"], ["L", "34"]]
+    async with SessionLocal() as s:  # the product's own table wins over its category's
+        await s.execute(sa_update(Product).where(Product.slug == shirt["slug"]).values(size_guide="Size | Chest\nM | 40"))
+        await s.commit()
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["size_guide"] == [["Size", "Chest"], ["M", "40"]]
+    mine = (await seller.get(f"/api/seller/products/{shirt['id']}")).json()
+    assert mine["size_guide"] == "Size | Chest\nM | 40"
