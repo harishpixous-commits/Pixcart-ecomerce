@@ -102,3 +102,18 @@ async def test_cart_hint_also_covers_an_automatic_buy_x_get_y_offer(client, admi
     await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
     r = (await q()).json()
     assert r["coupon"]["code"] == "AUTOB2G1" and not any("free" in h for h in r["hints"])
+
+
+async def test_cart_hint_names_the_missing_product_of_an_automatic_bundle(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": True}})).status_code == 200
+    assert (await admin.post("/api/admin/coupons", {"code": "AUTOSET", "kind": "bundle", "value": 10, "is_automatic": True, "show_on_checkout": False,
+                                                   "product_slugs": [shirt["slug"], phone_p["slug"]]})).status_code == 201
+    a = await login_phone(client, "9770000361", name="Set Nudge Buyer")
+    addr = await add_address(a, state="33")
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})
+    await a.post("/api/cart/items", {"variant_id": shirt["variants"][0]["id"], "qty": 1})
+    assert f"Add {phone_p['title']} to get 10% off the set" in (await q()).json()["hints"]
+    await a.post("/api/cart/items", {"variant_id": phone_p["variants"][0]["id"], "qty": 1})
+    r = (await q()).json()
+    assert r["coupon"]["code"] == "AUTOSET" and not any("the set" in h for h in r["hints"])

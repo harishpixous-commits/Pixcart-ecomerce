@@ -148,26 +148,38 @@ async def best_automatic(session: AsyncSession, user_id: uuid.UUID, lines: list)
 
 
 async def volume_nudge(session: AsyncSession, user_id: uuid.UUID, lines: list) -> str | None:
-    """A short cart hint for the closest automatic volume or buy-X-get-Y offer the cart is just short of ("Add 1 more item to get 10% off"), or None."""
+    """A short cart hint for the closest automatic offer the cart is just short of: "Add 1 more item to get 10% off" (volume),
+    "Add 1 more item to get 1 free" (buy X get Y), "Add <product> to get 10% off the set" (bundle missing one product). None if no offer is close."""
+    from app.models import Product
     from app.services import growth
+    from app.services.catalog import public_product_filter
 
     if not (await growth.get(session))["auto_discounts"]["enabled"]:
         return None
     rows = (await session.execute(select(Coupon).where(Coupon.is_automatic.is_(True), Coupon.is_active.is_(True), Coupon.funded_by == "platform",
-                                                       Coupon.only_user_id.is_(None), Coupon.kind.in_(("volume", "bxgy"))).limit(50))).scalars().all()
-    best: tuple[int, Coupon] | None = None
+                                                       Coupon.only_user_id.is_(None), Coupon.kind.in_(("volume", "bxgy", "bundle"))).limit(50))).scalars().all()
+    best: tuple[int, str] | None = None
+    in_cart = {str(line.product.id) for line in lines if not line.problem}
     for c in rows:
         try:
             await evaluate(session, c.code, user_id, lines)
         except ApiError as exc:
+            if exc.code != "coupon_not_applicable":
+                continue
+            if c.kind == "bundle":
+                missing = [x for x in (c.product_ids or []) if x not in in_cart]
+                if len(missing) != 1 or len(missing) == len(c.product_ids or []):
+                    continue  # only when the cart already holds the rest of the set
+                prod = (await session.execute(select(Product).where(Product.id == uuid.UUID(missing[0]), *public_product_filter(), Product.in_stock.is_(True)))).scalar_one_or_none()
+                if prod is not None and (best is None or 1 < best[0]):
+                    best = (1, f"Add {prod.title} to get {c.value}% off the set")
+                continue
             m = re.match(r"Add (\d+) more item", exc.message)
-            if exc.code == "coupon_not_applicable" and m and (best is None or int(m.group(1)) < best[0]):
-                best = (int(m.group(1)), c)
-    if best is None:
-        return None
-    n, c = best
-    reward = f"{c.value}% off" if c.kind == "volume" else (f"{c.get_qty} free" if c.value == 100 else f"{c.get_qty} at {c.value}% off")
-    return f"Add {n} more item{'s' if n > 1 else ''} to get {reward}"
+            if m and (best is None or int(m.group(1)) < best[0]):
+                n = int(m.group(1))
+                reward = f"{c.value}% off" if c.kind == "volume" else (f"{c.get_qty} free" if c.value == 100 else f"{c.get_qty} at {c.value}% off")
+                best = (n, f"Add {n} more item{'s' if n > 1 else ''} to get {reward}")
+    return best[1] if best else None
 
 
 async def list_for_checkout(session: AsyncSession) -> list[dict]:
