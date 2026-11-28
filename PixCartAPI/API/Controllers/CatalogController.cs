@@ -48,7 +48,8 @@ public partial class CatalogController(ICatalogBAL catalog, AppSettings settings
         [FromQuery(Name = "page_size"), Between(1, 60)] int? pageSize = null,
         [FromQuery, Pattern("^[1-9][0-9]{5}$", "use the 6-digit PIN code")] string? pincode = null,
         [FromQuery, Between(1, 7)] int? delivery = null,
-        [FromQuery] bool deal = false)
+        [FromQuery] bool deal = false,
+        [FromQuery, Len(0, 30)] string? tag = null)
     {
         // q, category and seller exactly as sent (model binding turns empty and blank values into null): an empty
         // category or seller means none, a blank one is looked up and found nowhere
@@ -56,7 +57,7 @@ public partial class CatalogController(ICatalogBAL catalog, AppSettings settings
         var vid = VisitorId();
         var (result, served) = await catalog.SearchAsync(
             new ProductSearch(Sent("q") ?? "", Sent("category"), brand, Sent("seller"), minPrice, maxPrice, minRating, minDiscount,
-                inStock, sort, page, pageSize, pincode, delivery, deal),
+                inStock, sort, page, pageSize, pincode, delivery, deal, tag),
             vid, ClientIpHelper.Get(HttpContext, settings));
         if (served)
             Response.Cookies.Append(VisitorCookie, vid, new CookieOptions

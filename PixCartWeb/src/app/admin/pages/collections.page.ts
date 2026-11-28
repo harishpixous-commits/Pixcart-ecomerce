@@ -9,10 +9,10 @@ import { inject } from "@angular/core";
 
 type Col = {
   id: string; slug: string; title: string; description: string; image_url: string; is_active: boolean; position: number;
-  product_slugs: string[]; category_slug: string; brand: string; min_price_paise: number | null; max_price_paise: number | null;
+  product_slugs: string[]; category_slug: string; brand: string; tag?: string; min_price_paise: number | null; max_price_paise: number | null;
 };
-type Form = { title: string; slug: string; description: string; image_url: string; is_active: boolean; products: string; category_slug: string; brand: string; min: string; max: string };
-const EMPTY: Form = { title: "", slug: "", description: "", image_url: "", is_active: true, products: "", category_slug: "", brand: "", min: "", max: "" };
+type Form = { title: string; slug: string; description: string; image_url: string; is_active: boolean; products: string; category_slug: string; brand: string; tag: string; min: string; max: string };
+const EMPTY: Form = { title: "", slug: "", description: "", image_url: "", is_active: true, products: "", category_slug: "", brand: "", tag: "", min: "", max: "" };
 const toPaise = (v: string) => (v.trim() ? Math.round(Number(v) * 100) : null);
 
 @Component({
@@ -58,6 +58,7 @@ const toPaise = (v: string) => (v.trim() ? Math.round(Number(v) * 100) : null);
           <div class="grid gap-3 sm:grid-cols-2">
             <pc-text-field label="Rule: category link name" [value]="f.category_slug" (valueChange)="set({ category_slug: $event })" />
             <pc-text-field label="Rule: brand" [value]="f.brand" (valueChange)="set({ brand: $event })" />
+            <pc-text-field label="Rule: product tag" [value]="f.tag" (valueChange)="set({ tag: $event })" />
             <pc-text-field label="Rule: lowest price (₹)" type="number" min="0" [value]="f.min" (valueChange)="set({ min: $event })" />
             <pc-text-field label="Rule: highest price (₹)" type="number" min="0" [value]="f.max" (valueChange)="set({ max: $event })" />
           </div>
@@ -97,7 +98,7 @@ export class AdminCollectionsPage {
     this.error.set(null);
     this.editId.set(c?.id ?? null);
     this.edit.set(c ? { title: c.title, slug: c.slug, description: c.description, image_url: c.image_url, is_active: c.is_active, products: c.product_slugs.join(", "),
-      category_slug: c.category_slug, brand: c.brand, min: c.min_price_paise == null ? "" : String(c.min_price_paise / 100), max: c.max_price_paise == null ? "" : String(c.max_price_paise / 100) } : EMPTY);
+      category_slug: c.category_slug, brand: c.brand, tag: c.tag ?? "", min: c.min_price_paise == null ? "" : String(c.min_price_paise / 100), max: c.max_price_paise == null ? "" : String(c.max_price_paise / 100) } : EMPTY);
   }
 
   protected async save(): Promise<void> {
@@ -106,7 +107,7 @@ export class AdminCollectionsPage {
     this.busy.set(true);
     this.error.set(null);
     const body = { title: f.title, slug: f.slug, description: f.description, image_url: f.image_url, is_active: f.is_active, position: 0,
-      product_slugs: f.products.split(",").map((s) => s.trim()).filter(Boolean), category_slug: f.category_slug, brand: f.brand, min_price_paise: toPaise(f.min), max_price_paise: toPaise(f.max) };
+      product_slugs: f.products.split(",").map((s) => s.trim()).filter(Boolean), category_slug: f.category_slug, brand: f.brand, tag: f.tag, min_price_paise: toPaise(f.min), max_price_paise: toPaise(f.max) };
     const id = this.editId();
     try {
       await api(id ? `/api/admin/collections/${id}` : "/api/admin/collections", { method: id ? "PUT" : "POST", body });

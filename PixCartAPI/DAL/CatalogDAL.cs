@@ -20,6 +20,7 @@ public sealed class ProductFilter
     /// </summary>
     public IReadOnlyList<(Guid Id, int Key)>? TextMatches { get; set; }
     public List<string>? Brands { get; set; }
+    public string? Tag { get; set; }
     public long? MinPrice { get; set; }
     public long? MaxPrice { get; set; }
     public double? MinRating { get; set; }
@@ -358,6 +359,7 @@ public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
             conds.Add("p.brand COLLATE utf8mb4_0900_bin IN @brands");
             p.Add("brands", f.Brands);
         }
+        if (f.Tag is { Length: > 0 }) { conds.Add("JSON_CONTAINS(p.tags, JSON_QUOTE(@tag))"); p.Add("tag", f.Tag); }
         if (f.MinPrice != null) { conds.Add("p.price_from >= @minPrice"); p.Add("minPrice", f.MinPrice); }
         if (f.MaxPrice != null) { conds.Add("p.price_from <= @maxPrice"); p.Add("maxPrice", f.MaxPrice); }
         if (f.MinRating != null) { conds.Add("p.rating_avg >= @minRating"); p.Add("minRating", f.MinRating); }

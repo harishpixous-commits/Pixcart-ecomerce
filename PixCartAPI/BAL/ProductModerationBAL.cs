@@ -90,6 +90,7 @@ public class ProductModerationBAL(
             ["gst_bps"] = p.GstBps,
             ["country_of_origin"] = p.CountryOfOrigin,
             ["size_guide"] = p.SizeGuide ?? "",
+            ["tags"] = JsonHelper.Node(p.Tags) ?? new JsonArray(),
             ["return_window_days"] = p.ReturnWindowDays,
             ["images"] = new JsonArray(imgs.Select(x => (JsonNode)JsonValue.Create(x)).ToArray()),
             ["videos"] = videosOut,

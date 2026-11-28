@@ -27,6 +27,8 @@ public class ProductModel
     /// <summary>products.country_of_origin</summary>
     public string CountryOfOrigin { get; set; } = "";
     public string SizeGuide { get; set; } = "";
+    /// <summary>products.tags (JSON array of short lower-case labels)</summary>
+    public string Tags { get; set; } = "[]";
     /// <summary>products.return_window_days</summary>
     public int ReturnWindowDays { get; set; }
     /// <summary>products.status</summary>

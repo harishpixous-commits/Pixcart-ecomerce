@@ -21,16 +21,19 @@ public static class ProductCollections
         public List<string>? ProductSlugs { get; init; }
         public string CategorySlug { get; init; } = "";
         public string Brand { get; init; } = "";
+        public string Tag { get; init; } = "";
         public long? MinPricePaise { get; init; }
         public long? MaxPricePaise { get; init; }
     }
     sealed class Row
     {
         public Guid Id { get; set; } public string Slug { get; set; } = ""; public string Title { get; set; } = ""; public string Description { get; set; } = ""; public string ImageUrl { get; set; } = "";
-        public bool IsActive { get; set; } public int Position { get; set; } public string ProductIds { get; set; } = "[]"; public string CategorySlug { get; set; } = ""; public string Brand { get; set; } = "";
+        public bool IsActive { get; set; } public int Position { get; set; } public string ProductIds { get; set; } = "[]"; public string CategorySlug { get; set; } = ""; public string Brand { get; set; } = ""; public string Tag { get; set; } = "";
         public long? MinPricePaise { get; set; } public long? MaxPricePaise { get; set; }
     }
-    const string Cols = "id AS Id, slug AS Slug, title AS Title, description AS Description, image_url AS ImageUrl, is_active AS IsActive, position AS Position, CAST(product_ids AS CHAR) AS ProductIds, category_slug AS CategorySlug, brand AS Brand, min_price_paise AS MinPricePaise, max_price_paise AS MaxPricePaise";
+    const string Cols = "id AS Id, slug AS Slug, title AS Title, description AS Description, image_url AS ImageUrl, is_active AS IsActive, position AS Position, CAST(product_ids AS CHAR) AS ProductIds, category_slug AS CategorySlug, brand AS Brand, tag AS Tag, min_price_paise AS MinPricePaise, max_price_paise AS MaxPricePaise";
+
+    static string NormTag(string? t) { var v = string.Join(' ', (t ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant(); return v.Length > 30 ? v[..30] : v; }
 
     static AppException Bad(string message, string field) => new(message, "validation_error", 422, new Dictionary<string, string> { [field] = message });
 
@@ -44,7 +47,7 @@ public static class ProductCollections
         {
             ["id"] = c.Id.ToString(), ["slug"] = c.Slug, ["title"] = c.Title, ["description"] = c.Description, ["image_url"] = c.ImageUrl, ["is_active"] = c.IsActive, ["position"] = c.Position,
             ["product_slugs"] = new JsonArray(ids.Where(names.ContainsKey).Select(i => (JsonNode)JsonValue.Create(names[i])).ToArray()),
-            ["category_slug"] = c.CategorySlug, ["brand"] = c.Brand, ["min_price_paise"] = c.MinPricePaise, ["max_price_paise"] = c.MaxPricePaise,
+            ["category_slug"] = c.CategorySlug, ["brand"] = c.Brand, ["tag"] = c.Tag, ["min_price_paise"] = c.MinPricePaise, ["max_price_paise"] = c.MaxPricePaise,
         };
     }
 
@@ -67,7 +70,7 @@ public static class ProductCollections
         if (b.MinPricePaise is < 0 or > 100_000_000 || b.MaxPricePaise is < 0 or > 100_000_000) throw Bad("A price is between 0 and 1,00,000 rupees", "min_price_paise");
         if (b.MinPricePaise is { } lo && b.MaxPricePaise is { } hi && lo > hi) throw Bad("The lowest price is above the highest price", "min_price_paise");
         var category = (b.CategorySlug ?? "").Trim(); var brand = (b.Brand ?? "").Trim();
-        if (slugs.Count == 0 && category.Length == 0 && brand.Length == 0 && b.MinPricePaise is null && b.MaxPricePaise is null) throw Bad("Pick products by link name, or give a category, brand or price range", "product_slugs");
+        if (slugs.Count == 0 && category.Length == 0 && brand.Length == 0 && NormTag(b.Tag).Length == 0 && b.MinPricePaise is null && b.MaxPricePaise is null) throw Bad("Pick products by link name, or give a category, brand or price range", "product_slugs");
         if (category.Length > 0 && !await db.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM categories WHERE slug = @category)", new { category })) throw new AppException($"No category with the link name: {category}", "category_not_found", 400);
         var found = slugs.Count == 0 ? [] : (await db.QueryAsync<(Guid Id, string Slug)>("SELECT id AS Id, slug AS Slug FROM products WHERE LOWER(slug) IN @slugs", new { slugs })).ToDictionary(r => r.Slug.ToLowerInvariant(), r => r.Id);
         var missing = slugs.Where(s => !found.ContainsKey(s)).ToList();
@@ -89,8 +92,8 @@ public static class ProductCollections
     {
         var (ids, category, brand, title, desc, image) = await CheckAsync(db, b);
         var id = Guid.NewGuid(); var slug = await UniqueSlugAsync(db, string.IsNullOrWhiteSpace(b.Slug) ? title : b.Slug, null);
-        await db.ExecuteAsync("INSERT INTO product_collections (id, slug, title, description, image_url, is_active, position, product_ids, category_slug, brand, min_price_paise, max_price_paise) VALUES (@id, @slug, @title, @desc, @image, @active, @pos, CAST(@ids AS JSON), @category, @brand, @min, @max)",
-            new { id, slug, title, desc, image, active = b.IsActive, pos = b.Position, ids, category, brand, min = b.MinPricePaise, max = b.MaxPricePaise });
+        await db.ExecuteAsync("INSERT INTO product_collections (id, slug, title, description, image_url, is_active, position, product_ids, category_slug, brand, tag, min_price_paise, max_price_paise) VALUES (@id, @slug, @title, @desc, @image, @active, @pos, CAST(@ids AS JSON), @category, @brand, @tag, @min, @max)",
+            new { id, slug, title, desc, image, active = b.IsActive, pos = b.Position, ids, category, brand, tag = NormTag(b.Tag), min = b.MinPricePaise, max = b.MaxPricePaise });
         await AuditAsync(db, admin, "collection.create", slug);
         return await OutAsync(db, (await db.QueryFirstOrDefaultAsync<Row>($"SELECT {Cols} FROM product_collections WHERE id = @id", new { id }))!);
     }
@@ -101,8 +104,8 @@ public static class ProductCollections
         var (ids, category, brand, title, desc, image) = await CheckAsync(db, b);
         var slug = cur.Slug;
         if (!string.IsNullOrWhiteSpace(b.Slug) && IndianFormats.Slugify(b.Slug, 70) != cur.Slug) slug = await UniqueSlugAsync(db, b.Slug, id);
-        await db.ExecuteAsync("UPDATE product_collections SET slug=@slug, title=@title, description=@desc, image_url=@image, is_active=@active, position=@pos, product_ids=CAST(@ids AS JSON), category_slug=@category, brand=@brand, min_price_paise=@min, max_price_paise=@max, updated_at=UTC_TIMESTAMP(6) WHERE id=@id",
-            new { id, slug, title, desc, image, active = b.IsActive, pos = b.Position, ids, category, brand, min = b.MinPricePaise, max = b.MaxPricePaise });
+        await db.ExecuteAsync("UPDATE product_collections SET slug=@slug, title=@title, description=@desc, image_url=@image, is_active=@active, position=@pos, product_ids=CAST(@ids AS JSON), category_slug=@category, brand=@brand, tag=@tag, min_price_paise=@min, max_price_paise=@max, updated_at=UTC_TIMESTAMP(6) WHERE id=@id",
+            new { id, slug, title, desc, image, active = b.IsActive, pos = b.Position, ids, category, brand, tag = NormTag(b.Tag), min = b.MinPricePaise, max = b.MaxPricePaise });
         await AuditAsync(db, admin, "collection.edit", slug);
         return await OutAsync(db, (await db.QueryFirstOrDefaultAsync<Row>($"SELECT {Cols} FROM product_collections WHERE id = @id", new { id }))!);
     }
@@ -140,6 +143,7 @@ public static class ProductCollections
                 if (cat is null) return [];
                 sql += " AND p.category_id IN @cats"; args["cats"] = await catalog.CategoryDescendantIdsAsync(cat.Id);
             }
+            if (c.Tag.Length > 0) { sql += " AND JSON_CONTAINS(p.tags, JSON_QUOTE(@tag))"; args["tag"] = c.Tag; }
             if (c.Brand.Length > 0) { sql += " AND LOWER(p.brand) = LOWER(@brand)"; args["brand"] = c.Brand; }
             if (c.MinPricePaise is not null) { sql += " AND p.price_from >= @min"; args["min"] = c.MinPricePaise; }
             if (c.MaxPricePaise is not null) { sql += " AND p.price_from <= @max"; args["max"] = c.MaxPricePaise; }

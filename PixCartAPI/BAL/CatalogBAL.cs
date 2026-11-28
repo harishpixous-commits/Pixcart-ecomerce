@@ -335,6 +335,7 @@ public class CatalogBAL(
         // Facets are computed before brand/price filters so the user can widen them again.
         var facet = filter.FacetScope();
         if (q.Brand is { Count: > 0 }) filter.Brands = q.Brand.ToList();
+        if (!string.IsNullOrWhiteSpace(q.Tag)) filter.Tag = string.Join(' ', q.Tag.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
         filter.MinPrice = q.MinPrice;
         filter.MaxPrice = q.MaxPrice;
         filter.MinRating = q.MinRating;

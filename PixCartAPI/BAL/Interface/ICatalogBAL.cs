@@ -8,7 +8,7 @@ namespace BAL.Interface;
 public sealed record ProductSearch(
     string Q = "", string? Category = null, IReadOnlyList<string>? Brand = null, string? Seller = null, long? MinPrice = null, long? MaxPrice = null,
     double? MinRating = null, int? MinDiscount = null, bool InStock = false, string Sort = "relevance", int Page = 1, int? PageSize = null,
-    string? Pincode = null, int? Delivery = null, bool Deal = false);
+    string? Pincode = null, int? Delivery = null, bool Deal = false, string? Tag = null);
 
 /// <summary>
 /// The storefront catalogue: categories, product cards, search with facets, suggestions, product pages, stores, delivery
