@@ -315,3 +315,21 @@ async def test_weight_surcharge_adds_per_started_kg_above_the_free_weight(client
     assert (await est()).json()["delivery_fee_paise"] == plain_est + 2000          # 2500 g: two started kg over the free 1000 g
     assert (await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 0})).status_code == 200
     assert (await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 100_001})).status_code == 400
+
+
+async def test_weight_surcharge_is_waived_by_free_shipping_coupon_and_by_threshold(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    sv = shirt["variants"][0]                                     # 500 g each
+    assert (await admin.put("/api/admin/settings", {"free_shipping_threshold_paise": 10_000_000, "shipping_per_kg_paise": 1000, "shipping_free_grams": 1000})).status_code == 200
+    assert (await admin.post("/api/admin/coupons", {"code": "SHIPFREE2", "kind": "freeship", "value": 1, "show_on_checkout": False})).status_code == 201
+    a = await login_phone(client, "9770000481", name="Combo Buyer")
+    addr = await add_address(a, state="33")
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 5})                     # 2500 g: two started kg over
+    quote = lambda code=None: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"} | ({"coupon_code": code} if code else {}))
+    plain = (await quote()).json()["summary"]
+    assert plain["shipping_total"] > 2000
+    q = (await quote("SHIPFREE2")).json()
+    assert q["summary"]["shipping_total"] == 0                                              # the coupon waives delivery and the surcharge
+    assert q["summary"]["grand_total"] == plain["grand_total"] - plain["shipping_total"]
+    assert (await admin.put("/api/admin/settings", {"free_shipping_threshold_paise": 1})).status_code == 200
+    assert (await quote()).json()["summary"]["shipping_total"] == 0                         # the threshold waives it too
