@@ -417,3 +417,15 @@ Admin → Growth → Settings → "Welcome popup" (off): title, text, button lab
 
 ## Push 137: "New" badge on product tiles
 Growth section `new_badge` (off by default, window of 1 to 90 days, default 14). Product cards carry `is_new`; bazaar, luxe, classic and fresh tiles show a "New" line. Same on wishlist cards in .NET. Python: tests/test_catalog.py. .NET: New_badge test. No migration. Not run in a browser.
+
+## Held items: groundwork notes (Instinct, 28 Nov, design only, nothing changed, no money moved)
+
+### 1. Account delete and loyalty points
+Today `delete_account` (Python `routers/customer.py`; .NET equivalent in the customer BAL) anonymises the user, keeps orders for GST, and leaves `loyalty_ledger` rows and their balance in place. They are tied to a deactivated login, so nobody can spend them, but the rows still count toward any "points outstanding" total.
+Options for the owner: (a) leave as is and exclude deleted users from the outstanding-points report; (b) write one `adjust` row that zeroes the balance with note "account deleted" (keeps the ledger honest, no money moves); (c) warn on the delete screen that unused points are lost.
+Recommendation: (b) plus (c). It is a small change in both stacks, no migration (`adjust` is an allowed kind). Needs the owner's yes because it removes customer value.
+
+### 2. Gift card void and refund
+Model: `gift_cards.status` is `active` or `void`; `gift_card_uses` records balance moved into single-use coupons; `gift_card_purchases` records online buys with `gateway_ref` and stays `created` until the gateway reports capture.
+Open cases: (1) void a card that still has balance: today it just stops working, with no refund path; (2) void a card whose coupon was already partly used; (3) refund a purchase back to the gateway.
+Proposal, not built: void sets balance to 0 and writes an audit row; a refund is only offered when the card is unused (balance equals initial), is a purchase (has a gateway ref), and goes through the same gateway refund call orders use, simulators only until the owner approves live use. Partly used cards are void-only, no refund. Any refund is staff-initiated, never automatic, and logged. Needs the owner's decision on refund policy before code.
