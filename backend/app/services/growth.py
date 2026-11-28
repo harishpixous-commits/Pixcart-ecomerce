@@ -44,7 +44,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
                   "min_orders": (10, "int", 1, 10000), "auto_suspend": (False, "bool", 0, 0)},
     "cod_risk": {"enabled": (False, "bool", 0, 0), "max_cod_paise": (500000, "int", 0, 100000000), "block_after_refused": (2, "int", 1, 20),
                  "new_account_max_cod_paise": (200000, "int", 0, 100000000), "blocked_pincodes": ([], "list", 0, 500)},
-    "seo": {"sitemap_enabled": (True, "bool", 0, 0), "sitemap_include_categories": (True, "bool", 0, 0), "sitemap_include_sellers": (False, "bool", 0, 0)},
+    "seo": {"sitemap_enabled": (True, "bool", 0, 0), "sitemap_include_categories": (True, "bool", 0, 0), "sitemap_include_sellers": (False, "bool", 0, 0), "sitemap_include_collections": (True, "bool", 0, 0)},
     "return_photos": {"enabled": (False, "bool", 0, 0), "required_for_defects": (False, "bool", 0, 0), "max_photos": (3, "int", 1, 6)},
     "newsletter": {"enabled": (False, "bool", 0, 0), "title": ("Get offers in your inbox", "label", 0, 60)},
     "wishlist_share": {"enabled": (False, "bool", 0, 0)},

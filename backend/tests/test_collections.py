@@ -17,6 +17,7 @@ async def test_collection_hand_picked_and_by_rules(client, admin, categories):
     page = (await client.get("/api/catalog/collections/gifts-for-him")).json()
     assert page["title"] == "Gifts for him" and [p["slug"] for p in page["products"]] == [shirt_slug]
     assert [c["slug"] for c in (await client.get("/api/catalog/collections")).json()["items"]] == ["gifts-for-him"]
+    assert "/collections/gifts-for-him</loc>" in (await client.get("/api/seo/sitemap.xml")).text   # search engines are told about it
     # a second one with the same title gets its own link name; price rules pick products without a list
     c2 = (await admin.post("/api/admin/collections", {"title": "Gifts for him", "min_price_paise": 1, "max_price_paise": 100_000_000})).json()
     assert c2["slug"] == "gifts-for-him-2"
@@ -27,6 +28,7 @@ async def test_collection_hand_picked_and_by_rules(client, admin, categories):
     # hidden collections are not found; a delete removes the page
     await admin.put(f"/api/admin/collections/{col['id']}", {"title": "Gifts for him", "product_slugs": [shirt_slug], "is_active": False})
     assert (await client.get("/api/catalog/collections/gifts-for-him")).status_code == 404
+    assert "/collections/gifts-for-him</loc>" not in (await client.get("/api/seo/sitemap.xml")).text
     assert (await admin.delete(f"/api/admin/collections/{col['id']}")).status_code == 200
     assert len((await admin.get("/api/admin/collections")).json()["items"]) == 1
     # a customer cannot manage them
