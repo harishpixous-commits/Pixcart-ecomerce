@@ -45,17 +45,6 @@ public static partial class ProductInfo
     [GeneratedRegex(@"^\d{14}$")]
     private static partial Regex FssaiRx();
 
-    internal static List<List<string>> ChartRows(string? text) =>
-        Clean(text).Split('\n').Select(line => line.Split(',', '\t').Select(c => c.Trim()).ToList()).Where(r => r.Any(c => c.Length > 0)).ToList();
-
-    private static string Chart(string text)
-    {
-        var rows = ChartRows(text);
-        if (rows.Count == 0) return "";
-        if (rows.Count > 21 || rows[0].Count is < 2 or > 8 || rows.Any(r => r.Count != rows[0].Count || r.Any(c => c.Length > 20))) throw new Invalid();
-        return string.Join("\n", rows.Select(r => string.Join(", ", r)));
-    }
-
     private static string Clean(string? v) => ControlRx().Replace(v ?? "", "").Trim();
 
     /// <summary>Stored in <c>products.details</c>. Every field is optional unless the category requires it.</summary>
@@ -66,10 +55,6 @@ public static partial class ProductInfo
         public int MinQty { get; init; }
         /// <summary>Pre-order: the date (yyyy-MM-dd) the seller starts shipping; empty for in-stock items.</summary>
         public string ShipsOn { get; init; } = "";
-        /// <summary>A size guide: one row per line, cells separated by commas, the first line is the header.</summary>
-        public string SizeChart { get; init; } = "";
-        /// <summary>The size guide as table rows, header first; empty when the seller gave none.</summary>
-        public List<List<string>> SizeChartRows() => ChartRows(SizeChart);
         /// <summary>The ship date while it is still ahead (India time), else empty.</summary>
         public string PreorderDate()
         {
@@ -166,7 +151,7 @@ public static partial class ProductInfo
             }
             return new Details
             {
-                NetUnit = unit, MinQty = minQty, ShipsOn = shipsOn, SizeChart = Chart(Text("size_chart", 1500, strip: false)),
+                NetUnit = unit, MinQty = minQty, ShipsOn = shipsOn,
                 GenericName = Text("generic_name", 120), ModelNumber = Text("model_number", 60), Manufacturer = Text("manufacturer", 400),
                 Packer = Text("packer", 400), Importer = Text("importer", 400), CustomerCare = Text("customer_care", 300), FssaiLicense = fssai,
                 Ingredients = Text("ingredients", 2000), Directions = Text("directions", 2000), SafetyInfo = Text("safety_info", 2000),

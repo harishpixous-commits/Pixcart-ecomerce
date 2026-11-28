@@ -131,26 +131,6 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
-    public async Task A_size_guide_is_cleaned_checked_and_shown_on_the_product_page()
-    {
-        var d = ProductInfo.DetailsOf("{\"size_chart\": \" Size, Chest (cm), Waist (cm)\\n\\nS, 90, 76\\nM,96 ,82\\n\"}", strict: true);
-        Assert.Equal(new[] { "Size", "Chest (cm)", "Waist (cm)" }, d.SizeChartRows()[0]);
-        Assert.Equal(3, d.SizeChartRows().Count);
-        Assert.Equal("Size, Chest (cm), Waist (cm)\nS, 90, 76\nM, 96, 82", d.SizeChart);
-        Assert.Empty(ProductInfo.DetailsOf("{}").SizeChartRows());
-        foreach (var bad in new[] { "Size, Chest\\nS, 90, 76", "Size\\nS", "a, " + new string('x', 21) })
-            Assert.Throws<AppException>(() => ProductInfo.DetailsOf("{\"size_chart\": \"" + bad + "\"}", strict: true));
-        Assert.Equal("", ProductInfo.DetailsOf("{\"size_chart\": \"Size, Chest\\nS\"}").SizeChart);   // a bad stored value never breaks a page
-
-        var (_, productId, _) = await ShirtInStock("9400000413", "size-guide-shirt", "33SIZEG1234K1Z");
-        await ApiFactory.DbExecAsync("UPDATE products SET details = CAST(@d AS JSON) WHERE id = @productId", new { d = "{\"size_chart\": \"Size, Chest\\nS, 90\\nM, 96\"}", productId });
-        await Refresh(productId);
-        var page = (await (await LoginPhone("9620000413", "Size Buyer")).Get("/api/catalog/products/size-guide-shirt")).Json;
-        Assert.Equal("M", page["size_chart"]![2]![0]!.GetValue<string>());
-        Assert.Equal(3, page["size_chart"]!.AsArray().Count);
-    }
-
-    [Fact]
     public async Task A_preorder_date_shows_on_the_cart_line_until_it_passes()
     {
         var (variantId, productId, _) = await ShirtInStock("9400000412", "preorder-shirt");

@@ -14,7 +14,7 @@ import { Icon } from "../../shared/ui/icon";
 import { Field, Input, Select, Textarea } from "../../shared/ui/ui";
 
 export const EMPTY_DETAILS: ProductDetails = {
-  net_unit: "", ships_on: "", min_qty: 0, size_chart: "", generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
+  net_unit: "", ships_on: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
   ingredients: "", directions: "", safety_info: "", legal_disclaimer: "", shelf_life: "", warranty: "", in_the_box: [],
   length_cm: null, width_cm: null, height_cm: null, key_specs: [],
 };
@@ -22,7 +22,7 @@ export const EMPTY_DETAILS: ProductDetails = {
 export const UNIT_LABEL: Record<string, string> = { g: "g", kg: "kg", ml: "ml", l: "litre", m: "metre", pcs: "pieces", pair: "pairs" };
 
 type TextKey = "generic_name" | "model_number" | "manufacturer" | "packer" | "importer" | "customer_care" | "fssai_license" | "ingredients" | "directions"
-  | "safety_info" | "legal_disclaimer" | "shelf_life" | "warranty" | "size_chart";
+  | "safety_info" | "legal_disclaimer" | "shelf_life" | "warranty";
 type TextOpts = { key: TextKey; label: string; reqKey?: string; hint?: string; rows?: number; max?: number; placeholder?: string };
 type DimKey = "length_cm" | "width_cm" | "height_cm";
 
@@ -117,7 +117,6 @@ type DimKey = "length_cm" | "width_cm" | "height_cm";
 
       <div class="grid gap-3 sm:grid-cols-2">
         <ng-container [ngTemplateOutlet]="text" [ngTemplateOutletContext]="{ $implicit: { key: 'ingredients', label: 'Ingredients', rows: 3 } }" />
-        <ng-container [ngTemplateOutlet]="text" [ngTemplateOutletContext]="{ $implicit: { key: 'size_chart', label: 'Size guide (one row per line, cells separated by commas, first line is the header)', rows: 5, max: 1500, placeholder: 'Size, Chest (cm), Waist (cm)' } }" />
         <ng-container [ngTemplateOutlet]="text" [ngTemplateOutletContext]="{ $implicit: { key: 'directions', label: 'Directions for use', rows: 3 } }" />
         <ng-container [ngTemplateOutlet]="text" [ngTemplateOutletContext]="{ $implicit: { key: 'safety_info', label: 'Safety information', rows: 3, reqKey: 'safety_info' } }" />
         <ng-container [ngTemplateOutlet]="text" [ngTemplateOutletContext]="{ $implicit: { key: 'legal_disclaimer', label: 'Legal disclaimer', rows: 3, max: 1000, reqKey: '_' } }" />
