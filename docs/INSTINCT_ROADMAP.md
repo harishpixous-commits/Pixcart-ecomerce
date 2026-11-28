@@ -564,3 +564,4 @@ Grepped both repos: neither exists. Written designs only, nothing built, for Har
 - Push 190: wrong coupon codes typed at checkout are counted; after 30 wrong ones in an hour the typed code is refused (the bill still shows). Stops code guessing. Test added.
 - Push 191: Python indexes on 15 foreign keys used by cart, order, refund, ledger, review and audit lookups (Alembic 0067). The .NET MySQL database already indexes every foreign key automatically, so no change there.
 - Push 192: screen-reader names on the notification title/message/link fields and the app-file pickers (admin).
+- Push 193: odd request bodies (NUL characters, huge text, wrong types, file routes sent JSON) never end as a server error; sweep tests over every staff and customer write route in both stacks.

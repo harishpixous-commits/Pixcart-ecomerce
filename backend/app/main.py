@@ -6,6 +6,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.nul_guard import NulGuardMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -91,6 +93,7 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if settings.environment != "production" else None,
 )
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(NulGuardMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
