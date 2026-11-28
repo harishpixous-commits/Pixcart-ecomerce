@@ -76,6 +76,20 @@ export default async function ProductPageView({ params }: { params: Promise<{ sl
 
       <ProductMain p={p} />
 
+      {(p.size_chart?.length ?? 0) > 1 && (
+        <section className="rounded-xl bg-white p-4 sm:p-6" aria-labelledby="size-h">
+          <h2 id="size-h" className="mb-3 text-xl font-semibold">Size guide</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse text-sm">
+              <thead><tr>{p.size_chart![0].map((h) => <th key={h} className="border-b px-3 py-2 text-left font-semibold">{h}</th>)}</tr></thead>
+              <tbody>{p.size_chart!.slice(1).map((r, i) => (
+                <tr key={i}>{r.map((c, j) => <td key={j} className="border-b px-3 py-2">{c}</td>)}</tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {(p.important?.length ?? 0) > 0 && (
         <section className="rounded-xl bg-white p-4 sm:p-6" aria-labelledby="important-h">
           <h2 id="important-h" className="mb-3 text-xl font-semibold">Important information</h2>

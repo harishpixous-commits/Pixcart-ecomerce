@@ -160,6 +160,7 @@ export interface ProductDetails {
   net_unit: "" | "g" | "kg" | "ml" | "l" | "m" | "pcs" | "pair";
   ships_on: string;
   min_qty: number;
+  size_chart: string;
   generic_name: string;
   model_number: string;
   manufacturer: string;
@@ -226,6 +227,7 @@ export interface ProductPage {
   key_specs?: { label: string; value: string }[];
   info?: { label: string; value: string }[];
   important?: { title: string; text: string }[];
+  size_chart?: string[][];
   first_available?: string | null;
   bought_last_month?: string | null;
   bestseller?: { rank: number; category: string; slug: string } | null;

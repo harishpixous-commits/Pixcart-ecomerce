@@ -13,7 +13,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui";
 import type { ProductDetails } from "@/lib/types";
 
 export const EMPTY_DETAILS: ProductDetails = {
-  net_unit: "", ships_on: "", min_qty: 0, generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
+  net_unit: "", ships_on: "", min_qty: 0, size_chart: "", generic_name: "", model_number: "", manufacturer: "", packer: "", importer: "", customer_care: "", fssai_license: "",
   ingredients: "", directions: "", safety_info: "", legal_disclaimer: "", shelf_life: "", warranty: "", in_the_box: [],
   length_cm: null, width_cm: null, height_cm: null, key_specs: [],
 };
@@ -108,6 +108,7 @@ export function ProductInfoSection({ details, onChange, required, countryOfOrigi
 
       <div className="grid gap-3 sm:grid-cols-2">
         {text("ingredients", "Ingredients", { rows: 3 })}
+        {text("size_chart", "Size guide (one row per line, cells separated by commas, first line is the header)", { rows: 5, max: 1500, placeholder: "Size, Chest (cm), Waist (cm)\nS, 90, 76" })}
         {text("directions", "Directions for use", { rows: 3 })}
         {text("safety_info", "Safety information", { rows: 3, reqKey: "safety_info" })}
         {text("legal_disclaimer", "Legal disclaimer", { rows: 3, max: 1000, reqKey: "_" })}
