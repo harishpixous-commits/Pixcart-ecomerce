@@ -70,6 +70,18 @@ public class CustomerAccountController(
     [HttpGet("/api/wishlist"), SignedIn]
     public async Task<object> Wishlist() => await wishlist.ListAsync(await me.RequireAsync());
 
+    [HttpGet("/api/wishlist/share"), SignedIn, RouteGuard("signed_in")]
+    public async Task<object> WishlistShareStatus() => await wishlist.ShareStatusAsync(await me.RequireAsync());
+
+    [HttpPost("/api/wishlist/share"), SignedIn, RouteGuard("signed_in")]
+    public async Task<object> WishlistShareOn() => await wishlist.ShareOnAsync(await me.RequireAsync());
+
+    [HttpDelete("/api/wishlist/share"), SignedIn, RouteGuard("signed_in")]
+    public async Task<object> WishlistShareOff() => await wishlist.ShareOffAsync(await me.RequireAsync());
+
+    [HttpGet("/api/wishlist/shared/{token}"), RouteGuard("public")]
+    public async Task<object> WishlistShared(string token) => await wishlist.SharedAsync(token);
+
     [HttpPut("/api/wishlist/{productId}"), SignedIn]
     public async Task<object> WishlistAdd(Guid productId)
     {

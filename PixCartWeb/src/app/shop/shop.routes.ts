@@ -37,6 +37,7 @@ import { ShopSupportIdPage } from "./pages/support-id.page";
 import { ShopSupportNewPage } from "./pages/support-new.page";
 import { ShopSupportPage } from "./pages/support.page";
 import { ShopWishlistPage } from "./pages/wishlist.page";
+import { ShopWishlistSharedPage } from "./pages/wishlist-shared.page";
 
 export const SHOP_ROUTES: Routes = [
   { path: "", component: HomePage },
@@ -71,5 +72,6 @@ export const SHOP_ROUTES: Routes = [
   { path: "support/new", component: ShopSupportNewPage },
   { path: "support/:id", component: ShopSupportIdPage },
   { path: "wishlist", component: ShopWishlistPage },
+  { path: "wishlist/shared/:token", component: ShopWishlistSharedPage },
   { path: "**", component: ShopNotFound, title: "Page not found" },
 ];

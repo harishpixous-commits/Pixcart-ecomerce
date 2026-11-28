@@ -28,6 +28,42 @@ public class WishlistBAL(WishlistDAL dal, SettingsDAL settings) : IWishlistBAL
 
     public Task RemoveAsync(UserModel user, Guid productId) => dal.DeleteAsync(user.Id, productId);
 
+    // ---------------------------------------------------------------- the shared link (Admin → Growth → Share wishlist)
+
+    private async Task<bool> ShareEnabledAsync() =>
+        ((JsonObject)SettingsDAL.Merge(GrowthBAL.Defaults(), await settings.GetAsync("growth"))["wishlist_share"]!).Bool("enabled");
+
+    public async Task<object> ShareStatusAsync(UserModel user) => new { enabled = await ShareEnabledAsync(), token = await dal.ShareTokenAsync(user.Id) };
+
+    /// <summary>Make (or return) the shopper's private link. Anyone with it sees the saved products and the first name.</summary>
+    public async Task<object> ShareOnAsync(UserModel user)
+    {
+        if (!await ShareEnabledAsync()) throw new AppException("Sharing a wishlist is not switched on", "share_off");
+        var token = await dal.ShareTokenAsync(user.Id);
+        if (string.IsNullOrEmpty(token))
+        {
+            token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18)).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+            await dal.SetShareTokenAsync(user.Id, token);
+        }
+        return new { enabled = true, token };
+    }
+
+    /// <summary>Stop sharing: the old link stops working and a new one is made next time.</summary>
+    public async Task<object> ShareOffAsync(UserModel user)
+    {
+        await dal.SetShareTokenAsync(user.Id, null);
+        return new { enabled = await ShareEnabledAsync(), token = (string?)null };
+    }
+
+    public async Task<object> SharedAsync(string token)
+    {
+        if (!await ShareEnabledAsync() || token.Length < 16) throw new NotFoundException("Wishlist");
+        var name = await dal.NameByShareTokenAsync(token) ?? throw new NotFoundException("Wishlist");
+        var rows = (await dal.SharedProductsAsync(token)).ToList();
+        var first = name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        return new { owner = first.Length > 30 ? first[..30] : first, items = await ProductCardsAsync(rows) };
+    }
+
     // ---------------------------------------------------------------- product cards (the reference catalog.product_cards)
 
     private static readonly Dictionary<string, string> DealKinds = new()

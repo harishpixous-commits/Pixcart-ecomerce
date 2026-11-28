@@ -1262,4 +1262,37 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, (await admin.Delete($"/api/admin/growth/newsletter/{list["items"]![0]!["id"]!.GetValue<string>()}")).Status);
         Assert.Equal(0, (await admin.Get("/api/admin/growth/newsletter")).Json["total"]!.GetValue<long>());
     }
+
+    [Fact]
+    public async Task Wishlist_share_link_is_private_switchable_and_dies_when_stopped()
+    {
+        var admin = await Admin();
+        var (_, productId, _) = await ShirtInStock("9400000614", "wishshare-shirt");
+        await Refresh(productId);
+        var me = await LoginPhone("9620000614", "Meena Kumar");
+        Assert.Equal(200, (await me.Put($"/api/wishlist/{productId}")).Status);
+        var st = (await me.Get("/api/wishlist/share")).Json;
+        Assert.False(st["enabled"]!.GetValue<bool>()); Assert.Null(st["token"]);
+        var off = await me.Post("/api/wishlist/share");
+        Assert.Equal(400, off.Status); Assert.Equal("share_off", off.Json["error"]!["code"]!.GetValue<string>());
+
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { wishlist_share = new { enabled = true } })).Status);
+        var token = (await me.Post("/api/wishlist/share")).Json["token"]!.GetValue<string>();
+        Assert.True(token.Length >= 16);
+        Assert.Equal(token, (await me.Post("/api/wishlist/share")).Json["token"]!.GetValue<string>());
+        var shared = await Anon($"/api/wishlist/shared/{token}");
+        Assert.Equal(200, shared.Status);
+        Assert.Equal("Meena", shared.Json["owner"]!.GetValue<string>()); Assert.Single(shared.Json["items"]!.AsArray());
+        Assert.Equal(404, (await Anon("/api/wishlist/shared/" + new string('x', 24))).Status);
+
+        var gone = await me.Delete("/api/wishlist/share");
+        Assert.Equal(200, gone.Status); Assert.Null(gone.Json["token"]);
+        Assert.Equal(404, (await Anon($"/api/wishlist/shared/{token}")).Status);
+        var next = (await me.Post("/api/wishlist/share")).Json["token"]!.GetValue<string>();
+        Assert.NotEqual(token, next);
+        await admin.Put("/api/admin/growth/settings", new { wishlist_share = new { enabled = false } });
+        Assert.Equal(404, (await Anon($"/api/wishlist/shared/{next}")).Status);
+    }
+
+    private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }

@@ -32,6 +32,8 @@ public partial class UserModel
     public DateTime? DeletedAt { get; set; }
     /// <summary>users.ui_prefs</summary>
     public string UiPrefs { get; set; } = "null";
+    /// <summary>users.wishlist_share_token: the secret in the shared wishlist link; null when not sharing.</summary>
+    public string? WishlistShareToken { get; set; }
     /// <summary>users.sessions_valid_after</summary>
     public DateTime? SessionsValidAfter { get; set; }
     /// <summary>users.razorpay_customer_id</summary>

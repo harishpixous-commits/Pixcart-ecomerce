@@ -28,6 +28,20 @@ public class WishlistDAL(IMySqlDapperHelper db)
         db.QueryAsync<ProductModel>(
             "SELECT p.* FROM products p JOIN wishlist_items w ON w.product_id = p.id WHERE w.user_id = @userId ORDER BY w.created_at DESC", new { userId });
 
+    public Task<string?> ShareTokenAsync(Guid userId) =>
+        db.QueryFirstOrDefaultAsync<string?>("SELECT wishlist_share_token FROM users WHERE id = @userId", new { userId });
+
+    public Task<int> SetShareTokenAsync(Guid userId, string? token) =>
+        db.ExecuteAsync("UPDATE users SET wishlist_share_token = @token WHERE id = @userId", new { userId, token });
+
+    public Task<string?> NameByShareTokenAsync(string token) =>
+        db.QueryFirstOrDefaultAsync<string?>("SELECT name FROM users WHERE wishlist_share_token = @token AND is_active = 1", new { token });
+
+    /// <summary>The products a shared link shows: saved by the owner and live in the shop.</summary>
+    public Task<IEnumerable<ProductModel>> SharedProductsAsync(string token) =>
+        db.QueryAsync<ProductModel>(
+            $"SELECT p.* FROM products p JOIN wishlist_items w ON w.product_id = p.id JOIN users u ON u.id = w.user_id WHERE u.wishlist_share_token = @token AND {CatalogDAL.PublicFilter} ORDER BY w.created_at DESC", new { token });
+
     // ---------------------------------------------------------------- product cards
 
     public Task<IEnumerable<ProductImageModel>> ImagesAsync(IEnumerable<Guid> productIds) =>

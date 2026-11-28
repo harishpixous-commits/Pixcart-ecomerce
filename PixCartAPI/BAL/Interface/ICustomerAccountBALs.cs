@@ -48,6 +48,10 @@ public interface IWishlistBAL
     Task<object> ListAsync(UserModel user);
     Task AddAsync(UserModel user, Guid productId);
     Task RemoveAsync(UserModel user, Guid productId);
+    Task<object> ShareStatusAsync(UserModel user);
+    Task<object> ShareOnAsync(UserModel user);
+    Task<object> ShareOffAsync(UserModel user);
+    Task<object> SharedAsync(string token);
 }
 
 /// <summary>Privacy (DPDP Act 2023): marketing consent, data export and account deletion.</summary>
