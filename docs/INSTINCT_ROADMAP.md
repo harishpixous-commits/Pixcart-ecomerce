@@ -441,3 +441,6 @@ Recommendation: (b) plus (c). It is a small change in both stacks, no migration 
 Model: `gift_cards.status` is `active` or `void`; `gift_card_uses` records balance moved into single-use coupons; `gift_card_purchases` records online buys with `gateway_ref` and stays `created` until the gateway reports capture.
 Open cases: (1) void a card that still has balance: today it just stops working, with no refund path; (2) void a card whose coupon was already partly used; (3) refund a purchase back to the gateway.
 Proposal, not built: void sets balance to 0 and writes an audit row; a refund is only offered when the card is unused (balance equals initial), is a purchase (has a gateway ref), and goes through the same gateway refund call orders use, simulators only until the owner approves live use. Partly used cards are void-only, no refund. Any refund is staff-initiated, never automatic, and logged. Needs the owner's decision on refund policy before code.
+
+## Browser click-through, Python storefront (28 Nov)
+Scripted headless Chrome on seeded demo: sign-in by OTP, add to cart, cart, address form, checkout, cash on delivery, order page. All worked, no console or page errors. Online payment with fake test keys fails cleanly with 502 from the gateway. Not covered: online payment success, admin pages, Angular app.
