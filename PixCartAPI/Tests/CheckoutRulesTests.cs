@@ -155,6 +155,38 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Collections_are_hand_picked_or_by_rules_and_shown_by_link_name()
+    {
+        var (_, productId, _) = await ShirtInStock("9400000415", "collection-shirt", "33COLLN1234K1Z");
+        await Refresh(productId);
+        var shirtSlug = await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id = @productId", new { productId });
+        var admin = await Admin();
+        var r = await admin.Post("/api/admin/collections", new { title = "Gifts for him", product_slugs = new[] { shirtSlug, "no-such-product" } });
+        Assert.Equal(400, r.Status); Assert.Equal("product_not_found", r.ErrorCode);
+        Assert.Equal(422, (await admin.Post("/api/admin/collections", new { title = "Empty one" })).Status);   // nothing to pick by
+        r = await admin.Post("/api/admin/collections", new { title = "Gifts for him", description = "Shirts and more", product_slugs = new[] { shirtSlug } });
+        Assert.True(r.Status == 201, r.ToString());
+        var col = r.Json; Assert.Equal("gifts-for-him", col["slug"]!.GetValue<string>()); Assert.Equal(shirtSlug, col["product_slugs"]![0]!.GetValue<string>());
+        var visitor = Factory.CreateClient();
+        var page = (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections/gifts-for-him"))!;
+        Assert.Equal("Gifts for him", page["title"]!.GetValue<string>()); Assert.Equal(shirtSlug, page["products"]![0]!["slug"]!.GetValue<string>());
+        Assert.Equal("gifts-for-him", (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections"))!["items"]![0]!["slug"]!.GetValue<string>());
+        var c2 = (await admin.Post("/api/admin/collections", new { title = "Gifts for him", min_price_paise = 1, max_price_paise = 100000000 })).Json;
+        Assert.Equal("gifts-for-him-2", c2["slug"]!.GetValue<string>());
+        var byRule = (await visitor.GetFromJsonAsync<JsonObject>("/api/catalog/collections/gifts-for-him-2"))!;
+        Assert.Contains(byRule["products"]!.AsArray(), p => p!["slug"]!.GetValue<string>() == shirtSlug);
+        var dear = (await admin.Put($"/api/admin/collections/{c2["id"]!.GetValue<string>()}", new { title = "Too dear", min_price_paise = 99000000 })).Json;
+        Assert.Empty((await visitor.GetFromJsonAsync<JsonObject>($"/api/catalog/collections/{dear["slug"]!.GetValue<string>()}"))!["products"]!.AsArray());
+        Assert.Equal(422, (await admin.Put($"/api/admin/collections/{c2["id"]!.GetValue<string>()}", new { title = "Bad", min_price_paise = 5, max_price_paise = 1 })).Status);
+        await admin.Put($"/api/admin/collections/{col["id"]!.GetValue<string>()}", new { title = "Gifts for him", product_slugs = new[] { shirtSlug }, is_active = false });
+        Assert.Equal(404, (int)(await visitor.GetAsync("/api/catalog/collections/gifts-for-him")).StatusCode);
+        Assert.Equal(200, (await admin.Delete($"/api/admin/collections/{col["id"]!.GetValue<string>()}")).Status);
+        Assert.Single((await admin.Get("/api/admin/collections")).Json["items"]!.AsArray());
+        var buyer = await LoginPhone("9620000415", "Collection Buyer");
+        Assert.Equal(403, (await buyer.Post("/api/admin/collections", new { title = "Nope nope", brand = "X" })).Status);
+    }
+
+    [Fact]
     public async Task A_preorder_date_shows_on_the_cart_line_until_it_passes()
     {
         var (variantId, productId, _) = await ShirtInStock("9400000412", "preorder-shirt");

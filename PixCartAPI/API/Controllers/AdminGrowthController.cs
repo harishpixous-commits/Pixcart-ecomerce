@@ -189,3 +189,20 @@ public class PromoPopupController(IMySqlDapperHelper db) : ControllerBase
 {
     [HttpGet(""), RouteGuard("public")] public async Task<object> Box() => await BAL.PromoPopup.BoxAsync(db);
 }
+
+/// <summary>Collections: pages of chosen products. Staff manage them; customers open /collections/{slug}.</summary>
+[ApiController, SignedIn]
+public class CollectionsAdminController(IMySqlDapperHelper db, ICurrentUser me) : ControllerBase
+{
+    [HttpGet("/api/admin/collections"), RouteGuard("perm:marketing")] public async Task<object> List() { await me.RequireAsync(); return await BAL.ProductCollections.AdminListAsync(db); }
+    [HttpPost("/api/admin/collections"), RouteGuard("perm:marketing")] public async Task<IActionResult> Create(BAL.ProductCollections.Input b) => StatusCode(201, await BAL.ProductCollections.CreateAsync(db, await me.RequireAsync(), b));
+    [HttpPut("/api/admin/collections/{id:guid}"), RouteGuard("perm:marketing")] public async Task<object> Edit(Guid id, BAL.ProductCollections.Input b) => await BAL.ProductCollections.EditAsync(db, await me.RequireAsync(), id, b);
+    [HttpDelete("/api/admin/collections/{id:guid}"), RouteGuard("perm:marketing")] public async Task<object> Delete(Guid id) => await BAL.ProductCollections.DeleteAsync(db, await me.RequireAsync(), id);
+}
+
+[ApiController]
+public class CollectionsPublicController(IMySqlDapperHelper db, ICatalogBAL catalog, CatalogDAL dal) : ControllerBase
+{
+    [HttpGet("/api/catalog/collections")] public async Task<object> List() => await BAL.ProductCollections.PublicListAsync(db);
+    [HttpGet("/api/catalog/collections/{slug}")] public async Task<object> Page(string slug) => await BAL.ProductCollections.PublicPageAsync(db, catalog, dal, slug);
+}

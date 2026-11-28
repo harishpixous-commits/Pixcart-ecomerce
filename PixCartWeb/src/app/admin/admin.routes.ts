@@ -15,6 +15,7 @@ import { AdminAssistantPage } from "./pages/assistant.page";
 import { AdminAuditPage } from "./pages/audit.page";
 import { AdminCategoriesPage } from "./pages/categories.page";
 import { AdminCheckoutPage } from "./pages/checkout.page";
+import { AdminCollectionsPage } from "./pages/collections.page";
 import { AdminCouponsPage } from "./pages/coupons.page";
 import { AdminCustomersIdPage } from "./pages/customers-id.page";
 import { AdminCustomersPage } from "./pages/customers.page";
@@ -72,6 +73,7 @@ export const ADMIN_ROUTES: Routes = [
   { path: "audit", component: AdminAuditPage },
   { path: "categories", component: AdminCategoriesPage },
   { path: "checkout", component: AdminCheckoutPage },
+  { path: "collections", component: AdminCollectionsPage },
   { path: "coupons", component: AdminCouponsPage },
   { path: "customers", component: AdminCustomersPage },
   { path: "customers/:id", component: AdminCustomersIdPage },

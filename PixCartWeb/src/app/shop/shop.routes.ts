@@ -11,6 +11,7 @@ import { HomePage } from "./home/home-sections";
 import { ShopAccountPage } from "./pages/account.page";
 import { ShopAlertsPage } from "./pages/alerts.page";
 import { ShopAppPage } from "./pages/app.page";
+import { ShopCollectionsSlugPage } from "./pages/collections-slug.page";
 import { ShopBestsellersPage } from "./pages/bestsellers.page";
 import { ShopCSlugPage } from "./pages/c-slug.page";
 import { ShopCartPage } from "./pages/cart.page";
@@ -49,6 +50,7 @@ export const SHOP_ROUTES: Routes = [
   { path: "cart", component: ShopCartPage },
   { path: "categories", component: ShopCategoriesPage, title: "All categories" },
   { path: "checkout", component: ShopCheckoutPage },
+  { path: "collections/:slug", component: ShopCollectionsSlugPage },
   { path: "compare", component: ShopComparePage },
   { path: "contact", component: ShopContactPage },
   { path: "coupons", component: ShopCouponsPage },
