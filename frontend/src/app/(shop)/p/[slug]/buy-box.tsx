@@ -189,7 +189,7 @@ export function ProductMain({ p }: { p: ProductPage }) {
   const axes = Object.entries(p.option_axes);
   const firstAvailable = p.variants.find((v) => v.in_stock) ?? p.variants[0];
   const [chosen, setChosen] = useState<Record<string, string>>(firstAvailable?.options ?? {});
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(Math.max(1, p.min_qty ?? 1));
   const [busy, setBusy] = useState<"cart" | "buy" | null>(null);
   const buttons = useRef<HTMLDivElement>(null);
   // Opened from a sponsored product: link the click to this shopper so an order counts as an ad sale.
@@ -239,7 +239,8 @@ export function ProductMain({ p }: { p: ProductPage }) {
   const dealHere = Boolean(p.deal && shown && shown.id === p.deal.variant_id);
   // the quantity picker stops at the stock, the per-item limit (Admin → Marketplace settings) and a lightning deal's units left
   const dealLeft = dealHere && variant && p.deal!.units_left ? p.deal!.units_left : null;
-  const maxQty = Math.max(1, Math.min(site.max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
+  const minQty = Math.max(1, p.min_qty ?? 1);
+  const maxQty = Math.max(minQty, Math.min(site.max_qty_per_item ?? 10, variant?.stock_left ?? 10, dealLeft ?? Infinity));
   const netRow = shown?.net_quantity ? [{ label: "Net quantity", value: shown.net_quantity }] : [];
   const stock = variant ? (variant.in_stock
     ? <p className={clsx("text-lg font-semibold", variant.low_stock ? "text-vermilion" : "text-leaf")}>{variant.low_stock ? `Only ${variant.stock_left} left in stock` : "In stock"}</p>
@@ -377,8 +378,9 @@ export function ProductMain({ p }: { p: ProductPage }) {
             {stock}
             <div className="flex items-center gap-3">
               <label htmlFor="qty" className="text-sm font-semibold">Quantity</label>
+              {minQty > 1 && <span className="text-xs text-ink-faint">Minimum order: {minQty}</span>}
               <select id="qty" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-10 rounded-lg border border-line bg-mist px-3" disabled={!variant?.in_stock}>
-                {Array.from({ length: Math.max(1, maxQty) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                {Array.from({ length: Math.max(1, maxQty - minQty + 1) }, (_, i) => i + minQty).map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
             <div ref={buttons} className="flex flex-col gap-2">

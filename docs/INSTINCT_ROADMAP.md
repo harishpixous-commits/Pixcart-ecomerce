@@ -456,3 +456,6 @@ As the seller (Chennai Silks & Co): 11 seller pages loaded clean. Confirmed, pac
 
 ## Browser check, return flow (28 Nov)
 Customer requested a return on the delivered COD order, seller approved and marked received, credit note issued, admin Returns shows it as refund due. The staff step that records the UPI refund was not clicked. No errors.
+
+## Push 138: Minimum order quantity per product (Python done, .NET/Angular pending)
+Seller or admin sets "Minimum order quantity" (0 to 100, 0/1 = none) in the product info editor. Stored in `Product.details.min_qty`, so no migration. Adding to cart raises the quantity to the minimum with a notice; it fails if stock is below the minimum. Checkout flags a line under the minimum as a cart problem. The product page shows "Minimum order: N" and the quantity picker starts there. Test: `tests/test_cart_limits.py`. Not wired: .NET `ProductInfo.cs`/cart and Angular UI (pending, see state doc).

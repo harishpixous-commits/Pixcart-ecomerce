@@ -158,6 +158,7 @@ export interface CustomerMediaItem extends ReviewMedia {
 
 export interface ProductDetails {
   net_unit: "" | "g" | "kg" | "ml" | "l" | "m" | "pcs" | "pair";
+  min_qty: number;
   generic_name: string;
   model_number: string;
   manufacturer: string;
@@ -230,6 +231,7 @@ export interface ProductPage {
   offers?: ProductOffer[];
   seller_snapshot?: SellerSnapshot | null;
   returnable?: boolean;
+  min_qty?: number;
 }
 
 export interface CartLine {

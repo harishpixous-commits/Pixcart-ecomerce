@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from app.services.product_info import details_of
 from app.core.deps import CurrentUser, SessionDep
 from app.core.errors import ApiError, NotFound
 from app.integrations import get as get_integrations
@@ -73,6 +74,12 @@ async def _set(session, user, variant_id: uuid.UUID, qty: int, *, add: bool = Fa
                      (deal_left or 0, f"Only {deal_left} left at the deal price")):
         if 0 < cap < new_qty:
             new_qty, note = cap, why
+    product = await session.get(Product, variant.product_id)
+    min_qty = max(1, min(details_of(product.details).min_qty if product else 1, cfg["max_qty_per_item"]))
+    if new_qty < min_qty:
+        if min_qty > variant.stock:
+            raise ApiError(f"The minimum order for this item is {min_qty}, but only {variant.stock} are in stock", "below_minimum")
+        new_qty, note = min_qty, f"The minimum order for this item is {min_qty}"
     if note:
         note = f"{note}, so your cart has {new_qty}."
     if item is None:

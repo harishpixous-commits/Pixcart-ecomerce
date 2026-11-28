@@ -49,6 +49,7 @@ class ProductDetails(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     net_unit: Literal["", "g", "kg", "ml", "l", "m", "pcs", "pair"] = ""
+    min_qty: int = Field(default=0, ge=0, le=100)  # the fewest units one order may hold; 0 or 1 means no minimum
     generic_name: str = Field(default="", max_length=120)
     model_number: str = Field(default="", max_length=60)
     manufacturer: str = Field(default="", max_length=400)

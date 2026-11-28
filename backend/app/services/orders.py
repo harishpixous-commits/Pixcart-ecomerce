@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.product_info import details_of
 from app.config import Settings
 from app.core.errors import ApiError, Conflict
 from app.core.money import apply_bps, compute_settlement, split_inclusive_gst
@@ -91,6 +92,7 @@ class CartLine:
     qty: int
     image: str
     problem: str = ""  # why this line cannot be bought right now
+    min_qty: int = 1  # the fewest units of this item one order may hold (the seller's minimum order quantity)
     max_qty: int = 0  # the most this line can hold now: stock, the per-item limit and units left at a deal price
 
     @property
@@ -143,6 +145,7 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
         line = CartLine(item.id, variant, product, seller, item.qty, (imgs.get(product.id) or [""])[0])
         deal_left = at_deal.get(variant.id)
         line.max_qty = max(0, min(variant.stock, per_item, deal_left if deal_left else per_item))
+        line.min_qty = max(1, min(details_of(product.details).min_qty, per_item))
         if product.status != "approved" or seller.status != "approved" or not variant.is_active:
             line.problem = "This item is no longer available"
         elif seller.holiday_mode:
@@ -151,6 +154,8 @@ async def load_cart(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = F
             line.problem = "Out of stock"
         elif variant.stock < item.qty:
             line.problem = f"Only {variant.stock} left in stock"
+        elif item.qty < line.min_qty:
+            line.problem = f"The minimum order for this item is {line.min_qty}"
         elif item.qty > per_item:
             line.problem = f"You can buy at most {per_item} of this item in one order"
         elif deal_left and item.qty > deal_left:
@@ -209,6 +214,7 @@ def cart_payload(groups: list[SellerGroup], cfg: dict, online_available: bool, c
                         "line_total": line.line_total,
                         "stock_left": line.variant.stock,
                         "max_qty": line.max_qty,
+                        "min_qty": line.min_qty,
                         "problem": line.problem,
                     }
                     for line in g.lines

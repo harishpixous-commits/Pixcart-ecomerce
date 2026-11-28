@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Deal, InventoryLevel, OrderItem, SubOrder, Variant
+from app.models import Deal, InventoryLevel, OrderItem, Product, SubOrder, Variant
 from tests.conftest import add_address, login_phone, valid_gstin
 from tests.test_phase2_money import key, setup
 
@@ -110,3 +110,26 @@ async def test_lightning_deal_units_cap_every_order_and_come_back_on_cancel(clie
         assert d.sold_qty == 0 and d.status == "active"
     o2 = await second.post("/api/orders", {"address_id": a2, "payment_method": "cod", "idempotency_key": key()})
     assert o2.status_code == 201 and o2.json()["order"]["items_total"] == 160000
+
+
+async def test_minimum_order_quantity_lifts_the_cart_and_shows_on_the_product_page(client, admin, categories):
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    vid = shirt["variants"][0]["id"]
+    async with SessionLocal() as s:
+        v = await s.get(Variant, uuid.UUID(vid))
+        p = await s.get(Product, v.product_id)
+        p.details = {**(p.details or {}), "min_qty": 3}
+        await s.commit()
+        slug = p.slug
+    buyer = await login_phone(client, "9600000821", name="Moq Buyer")
+    pdp = await buyer.get(f"/api/catalog/products/{slug}")
+    assert pdp.json()["min_qty"] == 3
+    r = await buyer.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert r.status_code == 200 and "minimum order for this item is 3" in r.json()["notice"]
+    line = r.json()["groups"][0]["lines"][0]
+    assert line["qty"] == 3 and line["min_qty"] == 3
+    low = await buyer.put("/api/cart/items", {"variant_id": vid, "qty": 2})
+    assert low.json()["groups"][0]["lines"][0]["qty"] == 3
+    addr = await add_address(buyer, state="33")
+    ok = await buyer.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key()})
+    assert ok.status_code == 201, ok.text

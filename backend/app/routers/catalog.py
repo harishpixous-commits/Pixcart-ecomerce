@@ -447,6 +447,7 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "offers": await pp.offers_for(session, p, seller, cfg["pdp_offers_max"]) if cfg["pdp_offers"] and cfg["feature_coupons"] else [],
         "seller_snapshot": await pp.seller_snapshot(session, seller, cfg) if cfg["pdp_seller_snapshot"] else None,
         "returnable": p.return_window_days > 0,
+        "min_qty": max(1, details.min_qty),
         "deal": (await deals_svc.active_for_products(session, [p.id])).get(p.id) if cfg["feature_deals"] else None,
         # Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.
         "seller": {
