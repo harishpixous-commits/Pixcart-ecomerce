@@ -1,0 +1,28 @@
+# AI agents: what works today (honest status)
+
+Rule for this file: "Working" means the code exists AND an automated test ran it green. Everything else is under "Not built".
+All agents run on plain rules over real database queries. No paid or live AI provider is called. Nothing runs without an owner pressing Approve.
+Both versions get every agent: Python (`instinct/python-advanced`) and .NET/Angular (`instinct/continue`).
+
+## How agents work (Admin -> AI agents)
+- A master switch and one switch per agent. All off by default.
+- A background job (every 30 minutes) lets each switched-on agent scan and write proposals. "Run now" does it on demand.
+- A proposal is a card: what the agent noticed, why, and what will happen. Staff press Approve or Reject.
+- Approve runs the same admin code as doing it by hand (notifications, refunds, audit log). The role must hold the permission the action needs.
+- The same idea is never proposed twice, even after a rejection. Pending proposals expire after a set number of hours. If the package changed before approval, nothing is done and the card says so.
+
+## Working and tested
+
+| Agent | Python | .NET + Angular | What it does |
+|---|---|---|---|
+| Delivery and shipping | yes (`tests/test_agents.py`) | not yet | Finds confirmed packages not shipped after N hours: proposes a seller reminder. Much later: proposes cancel and refund. Shipped with no tracking: proposes asking the seller for it. |
+
+Also working from before (not part of the proposal queue): admin business assistant (26 read tools, 20 Confirm-gated actions), customer shop assistant, AI task library (listing writer, listing check, review summary, support reply, customer message, review reply, business brief), seller and order risk scores. All answer from real queries or templates in sandbox mode.
+
+## Not built yet
+- Order update agent (tell customers about late or stuck parcels).
+- Sourcing and reorder agent.
+- Marketing agent.
+- Listing and support drafts feeding the same approval queue.
+- Delivery agent: no courier calls, no pickup re-booking, no live tracking events.
+- Any live AI model. Every agent today is rule-based.

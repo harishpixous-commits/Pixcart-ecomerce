@@ -593,3 +593,24 @@ class AssistantAction(IdMixin, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (CheckConstraint("status IN ('pending','running','done','cancelled','failed','expired')", name="status"),)
+
+
+class AgentProposal(IdMixin, Base):
+    """Something an AI agent noticed and wants to do. It runs only when staff press Approve (Admin -> AI agents)."""
+
+    __tablename__ = "agent_proposals"
+
+    agent: Mapped[str] = mapped_column(String(30), index=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    dedupe_key: Mapped[str] = mapped_column(String(120), unique=True)  # one proposal per subject and kind, ever: a rejected idea is not re-proposed
+    summary: Mapped[str] = mapped_column(String(500))
+    details: Mapped[list] = mapped_column(JSONB, default=list)  # [[label, value], ...] shown on the card
+    params: Mapped[dict] = mapped_column(JSONB, default=dict)
+    permission: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)
+    result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (CheckConstraint("status IN ('pending','running','done','rejected','expired','failed')", name="status"),)

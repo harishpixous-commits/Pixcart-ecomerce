@@ -44,6 +44,7 @@ _LOCK_REVIEW_REMINDERS = 7_201_019
 _LOCK_POINTS_EXPIRY = 7_201_030
 _LOCK_CAMPAIGNS = 7_201_018
 _LOCK_SHIP_REMINDERS = 7_201_020
+_LOCK_AGENTS = 7_201_031
 
 
 async def _with_lock(lock_id: int, fn) -> None:
@@ -109,6 +110,18 @@ async def ship_reminders_job() -> None:
             log.info("sent %d ship reminder(s)", n)
 
     await _with_lock(_LOCK_SHIP_REMINDERS, run)
+
+
+async def agents_job() -> None:
+    async def run(session):
+        from app.agents import core
+
+        made = await core.run_all(session)
+        await session.commit()
+        if any(made.values()):
+            log.info("agents wrote proposals: %s", made)
+
+    await _with_lock(_LOCK_AGENTS, run)
 
 
 async def points_expiry_job() -> None:
@@ -341,6 +354,7 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(seller_auto_suspend_job, "interval", hours=1, id="seller_auto_suspend", max_instances=1, coalesce=True)
     scheduler.add_job(campaigns_job, "interval", minutes=5, id="campaigns", max_instances=1, coalesce=True)
     scheduler.add_job(ship_reminders_job, "interval", hours=1, id="ship_reminders", max_instances=1, coalesce=True)
+    scheduler.add_job(agents_job, "interval", minutes=30, id="agents", max_instances=1, coalesce=True)
     scheduler.add_job(points_expiry_job, "interval", hours=6, id="points_expiry", max_instances=1, coalesce=True)
     scheduler.add_job(review_reminders_job, "interval", hours=1, id="review_reminders", max_instances=1, coalesce=True)
     scheduler.add_job(saved_searches_job, "interval", minutes=30, id="saved_searches", max_instances=1, coalesce=True)

@@ -467,3 +467,7 @@ Seller/admin can set "Pre-order: ships from" (a date up to a year ahead) in the 
 1. Account delete and loyalty points: Admin > Growth > Loyalty "on_account_delete" = keep (default, rows stay as before) or zero (an "adjust" row takes the whole balance to 0 at delete, audit note says how many). The shopper sees a warning with their point count before confirming (GET /api/account/delete-info, shown in the delete dialog). 
 2. Refund of a bought gift card nobody used: Admin > Growth > Gift cards "staff_refund" (off by default). On: staff get a Refund button on the Bought online table, enter the payment reference; the card is voided, balance zeroed, purchase shows "refunded" with the reference, buyer is told in-app and by email, audit row. A card with any use is refused (409). Staff send the money from the gateway dashboard; no gateway is called (nothing live). Migration 0051. Tests: tests/test_policies.py (both branches of both policies).
 Not wired: automatic gateway refund call.
+
+## Push 141: AI agents framework and the delivery agent (Python)
+- New: `agent_proposals` table (alembic 0052), `app/agents/` (core, executors, delivery), `/api/admin/agents` (overview, settings, proposals, run, approve, reject), job every 30 minutes, Admin -> AI agents page, `agents` growth section, notification `seller_tracking_reminder`.
+- Delivery agent: seller reminder, cancel and refund, ask for tracking. Owner approval always. Tests: `tests/test_agents.py` (2). Status doc: `docs/AI_AGENTS_STATUS.md`. .NET port next.

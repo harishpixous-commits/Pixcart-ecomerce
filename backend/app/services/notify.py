@@ -52,6 +52,10 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("Order {{order_number}} is waiting to ship", "You confirmed it {{hours}} hours ago. Ship it and add the tracking number so the customer is not left waiting."),
         "email": ("Order {{order_number}} is waiting to ship", "Hi {{name}},\n\nYou confirmed order {{order_number}} {{hours}} hours ago and it has not shipped yet. Ship it and add the tracking number so the customer is not left waiting.\n\n{{link}}"),
     },
+    "seller_tracking_reminder": {
+        "inapp": ("Add tracking for order {{order_number}}", "You marked it shipped {{hours}} hours ago but no tracking number is on it. Add the courier and tracking number so the customer can follow the parcel."),
+        "email": ("Add tracking for order {{order_number}}", "Hi {{name}},\n\nOrder {{order_number}} was marked shipped {{hours}} hours ago but has no tracking number. Add the courier and tracking number.\n\n{{link}}"),
+    },
     "review_reminder": {
         "inapp": ("How was {{item}}?", "Tell other shoppers what you think. It takes a minute."),
         "email": ("How was {{item}}?", "Hi {{name}},\n\nTell other shoppers what you think of {{item}}. It takes a minute.\n\n{{link}}"),

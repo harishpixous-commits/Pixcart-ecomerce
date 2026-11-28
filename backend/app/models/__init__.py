@@ -14,6 +14,7 @@ from app.models.growth import CartReminder, GiftCard, GiftCardPurchase, GiftCard
 from app.models.extended import (
     AdminRole,
     AiRun,
+    AgentProposal,
     AssistantAction,
     AssistantConversation,
     AssistantMessage,
@@ -74,7 +75,7 @@ __all__ = [
     "OrderStatusLog", "PushToken",
     "AdCampaign", "AdCampaignProduct", "AdClick", "AdImpression", "AdStat", "Deal", "SavedItem",
     "AnswerReport", "AnswerVote", "ProductAnswer", "ProductQuestion", "QuestionReport", "StockAlert",
-    "AdminRole", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
+    "AdminRole", "AgentProposal", "AiRun", "AssistantAction", "AssistantConversation", "AssistantMessage", "AssistantUpload",
     "ShopChatAction", "ShopChatMessage", "ShopChatSession", "ShopKbArticle", "ProductVideo",
     "CmsPage", "Coupon", "CouponRedemption", "DocumentCounter", "HomeSection", "IntegrationToken", "InventoryLevel",
     "CartReminder", "GiftCard", "GiftCardPurchase", "GiftCardUse", "LoyaltyEntry", "Referral", "PaymentGatewayEvent", "LedgerEntry", "MediaAsset", "Notification", "NotificationTemplate", "Payout", "ProductDailyStat", "ReturnItem",
