@@ -966,6 +966,28 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Automatic_volume_offer_competes_with_other_automatic_coupons()
+    {
+        var admin = await Admin();
+        var (varA, prodA, _) = await ShirtInStock("9400000401", "autovol-shirt");
+        await Refresh(prodA);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { auto_discounts = new { enabled = true } })).Status);
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "AUTO10B", description = "", kind = "percent", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = true })).Status);
+        var made = await admin.Post("/api/admin/coupons", new { code = "AUTOVOL20", description = "", kind = "volume", value = 20, buy_qty = 2, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = true });
+        Assert.True(made.Status == 201, made.ToString());
+        var buyer = await LoginPhone("9620000401", "Auto Volume Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        var price = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = varA });
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 });
+        var q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" });
+        Assert.Equal("AUTO10B", q.Json["coupon"]!["code"]!.GetValue<string>());        // one unit: the volume offer does not apply yet
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 });
+        q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod" });
+        Assert.Equal("AUTOVOL20", q.Json["coupon"]!["code"]!.GetValue<string>());      // two units: the bigger saving wins
+        Assert.Equal(price * 2 * 20 / 100, q.Json["coupon"]!["discount"]!.GetValue<long>());
+    }
+
+    [Fact]
     public async Task Staff_can_make_a_batch_of_single_use_codes_from_a_coupon()
     {
         var admin = await Admin();
