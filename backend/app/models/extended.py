@@ -634,6 +634,7 @@ class ProductCollection(IdMixin, TimestampMixin, Base):
     product_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # hand-picked, in this order; wins over the rules
     category_slug: Mapped[str] = mapped_column(String(120), default="", server_default="")
     brand: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    tag: Mapped[str] = mapped_column(String(30), default="", server_default="")  # rule: products carrying this label
     min_price_paise: Mapped[int | None] = mapped_column(BigInteger)
     max_price_paise: Mapped[int | None] = mapped_column(BigInteger)
 

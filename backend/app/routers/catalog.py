@@ -187,6 +187,7 @@ async def search(
     q: str = Query(default="", max_length=100),
     category: str | None = Query(default=None, max_length=90),
     brand: list[str] = Query(default_factory=list),
+    tag: str = Query(default="", max_length=30),
     seller: str | None = Query(default=None, max_length=90),
     min_price: int | None = Query(default=None, ge=0),
     max_price: int | None = Query(default=None, ge=0),
@@ -244,6 +245,8 @@ async def search(
     facet_conds = list(conds)
     if brand:
         conds.append(Product.brand.in_(brand))
+    if tag.strip():  # a product label, any letter case
+        conds.append(Product.tags.contains([" ".join(tag.split()).lower()]))
     if min_price is not None:
         conds.append(Product.price_from >= min_price)
     if max_price is not None:

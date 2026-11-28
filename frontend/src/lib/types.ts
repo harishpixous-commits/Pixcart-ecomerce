@@ -575,6 +575,7 @@ export interface SellerProduct {
   country_of_origin: string;
   return_window_days: number;
   size_guide?: string;
+  tags?: string[];
   images: string[];
   videos?: ProductVideo[];
   variants: SellerVariant[];

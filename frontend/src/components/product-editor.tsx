@@ -63,6 +63,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   const [origin, setOrigin] = useState(product?.country_of_origin ?? "India");
   const [returnDays, setReturnDays] = useState(String(product?.return_window_days ?? 7));
   const [sizeGuide, setSizeGuide] = useState(product?.size_guide ?? "");
+  const [tags, setTags] = useState((product?.tags ?? []).join(", "));
   const [images, setImages] = useState<string[]>(product?.images ?? []);
   const [videos, setVideos] = useState<ProductVideo[]>(product?.videos ?? []);
   const [details, setDetails] = useState<ProductDetails>({ ...EMPTY_DETAILS, ...(product?.details ?? {}) });
@@ -207,6 +208,7 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       country_of_origin: origin.trim(),
       return_window_days: Number(returnDays),
       size_guide: sizeGuide,
+      tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       images,
       videos,
       variants,
@@ -449,6 +451,9 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         </Field>
         <Field label="Size guide (optional)" htmlFor="sg" hint="Only for this product. Leave empty to show the category's guide, if there is one. One line per size, columns split with |, first line is the heading.">
           <textarea id="sg" rows={4} maxLength={2000} value={sizeGuide} onChange={(e) => setSizeGuide(e.target.value)} placeholder={"Size | Chest (in) | Length (in)\nS | 38 | 27"} className="w-full rounded-lg border border-line p-2 font-mono text-sm" data-testid="product-size-guide" />
+        </Field>
+        <Field label="Tags (optional)" htmlFor="ptags" hint="Up to 10 short labels, separated by commas, like gift, cotton. Staff use them to group products. Changing them does not send the product for approval again.">
+          <Input id="ptags" value={tags} maxLength={400} onChange={(e) => setTags(e.target.value)} data-testid="product-tags" />
         </Field>
       </section>
 

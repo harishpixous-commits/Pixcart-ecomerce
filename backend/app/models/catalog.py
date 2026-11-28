@@ -71,6 +71,7 @@ class Product(IdMixin, TimestampMixin, Base):
     gst_bps: Mapped[int] = mapped_column(Integer, default=1800)
     country_of_origin: Mapped[str] = mapped_column(String(60), default="India")
     size_guide: Mapped[str] = mapped_column(Text, default="", server_default="")  # this product's own size table; empty: the category's
+    tags: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # up to 10 lower-case words ("gift", "cotton") for grouping and collection rules
     return_window_days: Mapped[int] = mapped_column(Integer, default=7)
     status: Mapped[str] = mapped_column(String(10), default="draft", index=True)
     rejection_reason: Mapped[str] = mapped_column(Text, default="")

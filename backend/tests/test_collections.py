@@ -42,3 +42,26 @@ async def test_collection_hand_picked_and_by_rules(client, admin, categories):
     assert len((await admin.get("/api/admin/collections")).json()["items"]) == 1
     # a customer cannot manage them
     assert (await tn.post("/api/admin/collections", {"title": "Nope nope", "brand": "X"})).status_code == 403
+
+
+async def test_product_tags_filter_search_and_collection_rule(client, admin, categories):
+    tn, _ka, shirt, phone = await setup(client, admin, categories)
+    detail = (await tn.get(f"/api/seller/products/{shirt['id']}")).json()
+    assert detail["tags"] == []
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"tags": ["  Gift ", "COTTON", "gift", "", "x" * 50]})
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert got["tags"] == ["gift", "cotton", "x" * 30]            # tidied: lower case, no repeats, 30 characters at most
+    assert got["status"] == "approved"                              # labels never send a live product back for approval
+    assert (await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"tags": [f"t{i}" for i in range(11)]})).status_code == 422
+    found = (await client.get("/api/catalog/products", params={"tag": "GIFT"})).json()
+    assert [p["slug"] for p in found["items"]] == [shirt["slug"]]
+    assert (await client.get("/api/catalog/products", params={"tag": "nothing"})).json()["items"] == []
+    # a collection can pick by label
+    c = await admin.post("/api/admin/collections", {"title": "Gifts", "tag": " Gift "})
+    assert c.status_code == 201 and c.json()["tag"] == "gift"
+    page = (await client.get("/api/catalog/collections/gifts")).json()
+    assert [p["slug"] for p in page["products"]] == [shirt["slug"]]
+    # a copy of the product keeps the labels
+    dup = (await tn.post(f"/api/seller/products/{shirt['id']}/duplicate")).json()
+    assert dup["tags"] == ["gift", "cotton", "x" * 30]

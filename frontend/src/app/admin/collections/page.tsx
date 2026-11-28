@@ -7,10 +7,10 @@ import { api, ApiError } from "@/lib/api";
 
 type Col = {
   id: string; slug: string; title: string; description: string; image_url: string; is_active: boolean; position: number;
-  product_slugs: string[]; category_slug: string; brand: string; min_price_paise: number | null; max_price_paise: number | null;
+  product_slugs: string[]; category_slug: string; brand: string; tag?: string; min_price_paise: number | null; max_price_paise: number | null;
 };
-type Form = { title: string; slug: string; description: string; image_url: string; is_active: boolean; position: string; products: string; category_slug: string; brand: string; min: string; max: string };
-const EMPTY: Form = { title: "", slug: "", description: "", image_url: "", is_active: true, position: "0", products: "", category_slug: "", brand: "", min: "", max: "" };
+type Form = { title: string; slug: string; description: string; image_url: string; is_active: boolean; position: string; products: string; category_slug: string; brand: string; tag: string; min: string; max: string };
+const EMPTY: Form = { title: "", slug: "", description: "", image_url: "", is_active: true, position: "0", products: "", category_slug: "", brand: "", tag: "", min: "", max: "" };
 const rupeesToPaise = (v: string) => (v.trim() ? Math.round(Number(v) * 100) : null);
 
 /** Collections: a page of chosen products at /collections/<link name>. Hand-picked by product link name, or by category, brand and price. */
@@ -26,7 +26,7 @@ export default function AdminCollections() {
   function open(c?: Col) {
     setError(null);
     setEdit(c ? { id: c.id, f: { title: c.title, slug: c.slug, description: c.description, image_url: c.image_url, is_active: c.is_active, position: String(c.position), products: c.product_slugs.join(", "),
-      category_slug: c.category_slug, brand: c.brand, min: c.min_price_paise == null ? "" : String(c.min_price_paise / 100), max: c.max_price_paise == null ? "" : String(c.max_price_paise / 100) } } : { id: null, f: EMPTY });
+      category_slug: c.category_slug, brand: c.brand, tag: c.tag ?? "", min: c.min_price_paise == null ? "" : String(c.min_price_paise / 100), max: c.max_price_paise == null ? "" : String(c.max_price_paise / 100) } } : { id: null, f: EMPTY });
   }
   async function save() {
     if (!edit) return;
@@ -34,7 +34,7 @@ export default function AdminCollections() {
     setBusy(true);
     setError(null);
     const body = { title: f.title, slug: f.slug, description: f.description, image_url: f.image_url, is_active: f.is_active, position: Number(f.position) || 0,
-      product_slugs: f.products.split(",").map((s) => s.trim()).filter(Boolean), category_slug: f.category_slug, brand: f.brand, min_price_paise: rupeesToPaise(f.min), max_price_paise: rupeesToPaise(f.max) };
+      product_slugs: f.products.split(",").map((s) => s.trim()).filter(Boolean), category_slug: f.category_slug, brand: f.brand, tag: f.tag, min_price_paise: rupeesToPaise(f.min), max_price_paise: rupeesToPaise(f.max) };
     try {
       await api(edit.id ? `/api/admin/collections/${edit.id}` : "/api/admin/collections", { method: edit.id ? "PUT" : "POST", body });
       toast("Collection saved");
@@ -85,6 +85,7 @@ export default function AdminCollections() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Rule: category link name"><Input value={edit.f.category_slug} onChange={(e) => set({ category_slug: e.target.value })} /></Field>
               <Field label="Rule: brand"><Input value={edit.f.brand} onChange={(e) => set({ brand: e.target.value })} /></Field>
+              <Field label="Rule: product tag" hint="Products carrying this tag."><Input value={edit.f.tag} maxLength={30} onChange={(e) => set({ tag: e.target.value })} /></Field>
               <Field label="Rule: lowest price (₹)"><Input type="number" min="0" value={edit.f.min} onChange={(e) => set({ min: e.target.value })} /></Field>
               <Field label="Rule: highest price (₹)"><Input type="number" min="0" value={edit.f.max} onChange={(e) => set({ max: e.target.value })} /></Field>
             </div>

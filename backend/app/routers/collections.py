@@ -30,6 +30,7 @@ class CollectionIn(BaseModel):
     product_slugs: list[str] = Field(default_factory=list, max_length=60)  # product link names, in the order shown
     category_slug: str = Field(default="", max_length=120)
     brand: str = Field(default="", max_length=80)
+    tag: str = Field(default="", max_length=30)  # rule: products carrying this label
     min_price_paise: int | None = Field(default=None, ge=0, le=100_000_000)
     max_price_paise: int | None = Field(default=None, ge=0, le=100_000_000)
 
@@ -37,7 +38,7 @@ class CollectionIn(BaseModel):
     def _one_way_to_pick(self):
         if self.min_price_paise is not None and self.max_price_paise is not None and self.min_price_paise > self.max_price_paise:
             raise ValueError("The lowest price is above the highest price")
-        if not (self.product_slugs or self.category_slug.strip() or self.brand.strip() or self.min_price_paise is not None or self.max_price_paise is not None):
+        if not (self.product_slugs or self.category_slug.strip() or self.brand.strip() or self.tag.strip() or self.min_price_paise is not None or self.max_price_paise is not None):
             raise ValueError("Pick products by link name, or give a category, brand or price range")
         return self
 
@@ -58,7 +59,7 @@ async def _out(session, c: ProductCollection) -> dict:
     names = {str(i): s for i, s in (await session.execute(select(Product.id, Product.slug).where(Product.id.in_(ids)))).all()} if ids else {}
     return {"id": str(c.id), "slug": c.slug, "title": c.title, "description": c.description, "image_url": c.image_url, "is_active": c.is_active,
             "position": c.position, "product_slugs": [names[i] for i in (c.product_ids or []) if i in names], "category_slug": c.category_slug,
-            "brand": c.brand, "min_price_paise": c.min_price_paise, "max_price_paise": c.max_price_paise}
+            "brand": c.brand, "tag": c.tag, "min_price_paise": c.min_price_paise, "max_price_paise": c.max_price_paise}
 
 
 async def _unique_slug(session, wanted: str, but: uuid.UUID | None = None) -> str:
@@ -81,6 +82,7 @@ async def _apply(session, c: ProductCollection, body: CollectionIn) -> None:
     c.is_active, c.position = body.is_active, body.position
     c.product_ids = await _slugs_to_ids(session, body.product_slugs)
     c.category_slug, c.brand = body.category_slug.strip(), body.brand.strip()
+    c.tag = " ".join(body.tag.split()).lower()
     c.min_price_paise, c.max_price_paise = body.min_price_paise, body.max_price_paise
 
 
@@ -145,6 +147,8 @@ async def collection_products(session, c: ProductCollection) -> list[Product]:
             base = base.where(Product.category_id.in_(await category_descendant_ids(session, cat.id)))
         if c.brand:
             base = base.where(func.lower(Product.brand) == c.brand.lower())
+        if c.tag:
+            base = base.where(Product.tags.contains([c.tag]))
         if c.min_price_paise is not None:
             base = base.where(Product.price_from >= c.min_price_paise)
         if c.max_price_paise is not None:

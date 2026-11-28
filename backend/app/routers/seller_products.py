@@ -111,6 +111,7 @@ class ProductIn(BaseModel):
     country_of_origin: str = Field(default="India", min_length=2, max_length=60)
     return_window_days: int | None = Field(default=None, ge=0, le=30)  # none: the category's default
     size_guide: str = Field(default="", max_length=2000)  # empty: the category's guide is shown
+    tags: list[str] = Field(default_factory=list, max_length=10)  # short labels for grouping; they do not need re-approval
     images: list[str] = Field(default_factory=list, max_length=MAX_IMAGES)
     videos: list[VideoIn] = Field(default_factory=list, max_length=10)
     variants: list[VariantIn] = Field(min_length=1, max_length=MAX_VARIANTS)
@@ -122,6 +123,12 @@ class ProductIn(BaseModel):
         from app.services.size_guide import clean
 
         return clean(v)
+
+    @field_validator("tags")
+    @classmethod
+    def _tags(cls, v: list[str]) -> list[str]:
+        out = list(dict.fromkeys(" ".join(t.split()).lower()[:30] for t in v if t.strip()))
+        return out
 
     @field_validator("gst_bps")
     @classmethod
@@ -211,6 +218,7 @@ async def product_detail(session, p: Product) -> dict:
         "country_of_origin": p.country_of_origin,
         "return_window_days": p.return_window_days,
         "size_guide": p.size_guide or "",
+        "tags": p.tags or [],
         "images": imgs,
         "videos": vids,
         "details": details.model_dump(),
@@ -385,6 +393,7 @@ async def create_product(body: ProductIn, seller: SellerAccount, user: CurrentUs
         seller_id=seller.id,
         slug=await unique_product_slug(session, body.title),
         status="draft",
+        tags=body.tags,
         **body.model_dump(include=set(CONTENT_FIELDS)),
     )
     p.title, p.brand = body.title.strip(), body.brand.strip()
@@ -423,7 +432,7 @@ async def import_products(seller: SellerAccount, user: CurrentUser, session: Ses
             body = item["payload"]
             if body is None:
                 continue
-            p = Product(seller_id=seller.id, slug=await unique_product_slug(session, body.title), status="draft", **body.model_dump(include=set(CONTENT_FIELDS)))
+            p = Product(seller_id=seller.id, slug=await unique_product_slug(session, body.title), status="draft", tags=body.tags, **body.model_dump(include=set(CONTENT_FIELDS)))
             p.title, p.brand = body.title.strip(), body.brand.strip()
             session.add(p)
             await session.flush()
@@ -464,6 +473,7 @@ async def update_product(product_id: uuid.UUID, body: ProductIn, seller: SellerA
     for f in CONTENT_FIELDS:
         setattr(p, f, dumped[f])
     p.title, p.brand = body.title.strip(), body.brand.strip()
+    p.tags = body.tags  # labels only: changing them never sends a live product back for approval
     content_changed = (any(before[f] != getattr(p, f) for f in CONTENT_FIELDS) or before_images != body.images
                        or before_videos != [v.url for v in body.videos])
     if [v.url for v in body.videos] != before_videos:
@@ -595,7 +605,7 @@ async def duplicate_product(product_id: uuid.UUID, seller: SellerAccount, user: 
                                   weight_grams=v.get("weight_grams") or 500, net_qty=v.get("net_qty"), is_active=v.get("is_active", True)))
     body = ProductIn(
         **{k: src[k] for k in ("category_id", "title", "brand", "description", "highlights", "specs", "hsn_code", "gst_bps", "country_of_origin",
-                               "return_window_days", "size_guide", "images", "videos", "details") if k in src},
+                               "return_window_days", "size_guide", "tags", "images", "videos", "details") if k in src},
         variants=variants)
     body.title = ("Copy of " + body.title)[:200]
     return await create_product(body, seller, user, session)
