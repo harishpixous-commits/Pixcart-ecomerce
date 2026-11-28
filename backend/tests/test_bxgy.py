@@ -269,3 +269,39 @@ async def test_free_delivery_code_zeroes_the_delivery_fee_in_the_quote_and_the_o
     assert used((await admin.get("/api/admin/coupons")).json()) == 1
     await a.post(f"/api/orders/{o['id']}/cancel", {"reason": "Ordered by mistake"})
     assert used((await admin.get("/api/admin/coupons")).json()) == 0
+
+
+async def test_weight_surcharge_adds_per_started_kg_above_the_free_weight(client, admin, categories):
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import SubOrder
+    from tests.test_phase2_money import key
+
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    sv = shirt["variants"][0]                                     # 500 g each
+    assert (await admin.put("/api/admin/settings", {"free_shipping_threshold_paise": 10_000_000})).status_code == 200
+    a = await login_phone(client, "9770000471", name="Weight Buyer")
+    addr = await add_address(a, state="33")
+    quote = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})
+    await a.post("/api/cart/items", {"variant_id": sv["id"], "qty": 3})
+    base = (await quote()).json()["summary"]["shipping_total"]
+    assert base > 0
+    r = await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 1000, "shipping_free_grams": 1000})
+    assert r.status_code == 200, r.text
+    assert (await quote()).json()["summary"]["shipping_total"] == base + 1000        # 1500 g: 500 g over, one started kg
+    await a.put("/api/cart/items", {"variant_id": sv["id"], "qty": 2})
+    assert (await quote()).json()["summary"]["shipping_total"] == base               # 1000 g is covered
+    await a.put("/api/cart/items", {"variant_id": sv["id"], "qty": 5})
+    q = (await quote()).json()
+    assert q["summary"]["shipping_total"] == base + 2000                             # 2500 g: 1500 g over, two started kg
+    r = await a.post("/api/orders", {"address_id": addr, "payment_method": "cod", "idempotency_key": key(), "expected_total": q["summary"]["grand_total"]})
+    assert r.status_code == 201, r.text
+    o = r.json()["order"]
+    async with SessionLocal() as s:
+        subs = list((await s.execute(select(SubOrder).where(SubOrder.order_id == uuid.UUID(o["id"])))).scalars())
+        assert sum(x.shipping_fee for x in subs) == base + 2000
+    assert (await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 0})).status_code == 200
+    assert (await admin.put("/api/admin/settings", {"shipping_per_kg_paise": 100_001})).status_code == 400

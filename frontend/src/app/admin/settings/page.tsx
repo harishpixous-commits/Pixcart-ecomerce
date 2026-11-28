@@ -9,7 +9,7 @@ import { paiseToInput, toPaise, WEEKDAYS } from "@/lib/format";
 import { MobileApps, type AppSettings } from "./mobile-apps";
 
 type S = {
-  shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number;
+  shipping_fee_paise: number; free_shipping_threshold_paise: number; cod_enabled: boolean; cod_fee_paise: number; cod_max_order_paise: number; tcs_bps: number; tds_bps: number; commission_gst_bps: number; max_qty_per_item: number; shipping_per_kg_paise?: number; shipping_free_grams?: number;
   feature_wishlist: boolean; feature_reviews: boolean; feature_returns: boolean; feature_coupons: boolean; feature_support: boolean;
   reviews_need_approval: boolean; auto_approve_returns: boolean; transit_days_same_city: number; transit_days_same_state: number; transit_days_national: number;
   auto_cancel_unconfirmed_hours: number; auto_payouts: boolean; payout_min_paise: number; low_stock_threshold: number;
@@ -85,7 +85,7 @@ export default function AdminSettings() {
       setFlags(Object.fromEntries(FLAGS.map(([k]) => [k, Boolean(x[k])])));
       setF({
         shipping: paiseToInput(x.shipping_fee_paise), free: paiseToInput(x.free_shipping_threshold_paise), codFee: paiseToInput(x.cod_fee_paise),
-        codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item),
+        codMax: paiseToInput(x.cod_max_order_paise), tcs: String(x.tcs_bps / 100), tds: String(x.tds_bps / 100), cgst: String(x.commission_gst_bps / 100), qty: String(x.max_qty_per_item), perKg: paiseToInput(x.shipping_per_kg_paise ?? 0), freeGrams: String(x.shipping_free_grams ?? 1000),
         city: String(x.transit_days_same_city), state: String(x.transit_days_same_state), national: String(x.transit_days_national),
         autoCancel: String(x.auto_cancel_unconfirmed_hours), payoutMin: paiseToInput(x.payout_min_paise), lowStock: String(x.low_stock_threshold),
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
@@ -106,7 +106,7 @@ export default function AdminSettings() {
     try {
       const body = {
         shipping_fee_paise: toPaise(f.shipping), free_shipping_threshold_paise: toPaise(f.free), cod_enabled: cod, cod_fee_paise: toPaise(f.codFee),
-        cod_max_order_paise: toPaise(f.codMax), tcs_bps: bps(f.tcs), tds_bps: bps(f.tds), commission_gst_bps: bps(f.cgst), max_qty_per_item: Number(f.qty),
+        cod_max_order_paise: toPaise(f.codMax), tcs_bps: bps(f.tcs), tds_bps: bps(f.tds), commission_gst_bps: bps(f.cgst), max_qty_per_item: Number(f.qty), shipping_per_kg_paise: toPaise(f.perKg), shipping_free_grams: Number(f.freeGrams),
         transit_days_same_city: Number(f.city), transit_days_same_state: Number(f.state), transit_days_national: Number(f.national),
         auto_cancel_unconfirmed_hours: Number(f.autoCancel), payout_min_paise: toPaise(f.payoutMin), low_stock_threshold: Number(f.lowStock), ...flags,
         defect_return_days: Number(f.defectDays), payout_weekday: Number(f.payDay), payout_every_weeks: Number(f.payEvery),
@@ -158,6 +158,8 @@ export default function AdminSettings() {
         <TextField label="Delivery fee per seller package (₹)" {...bind("shipping")} />
         <TextField label="Free delivery from (₹, per seller)" {...bind("free")} />
         <TextField label="Maximum quantity per item" {...bind("qty")} hint="1 to 10 units of one item in an order" />
+        <TextField label="Extra delivery fee per kg (₹)" {...bind("perKg")} hint="Added for each started kg above the free weight, per seller package. 0 switches it off. Packages that already ship free stay free." />
+        <TextField label="Weight covered by the delivery fee (grams)" {...bind("freeGrams")} hint="0 to 50000. Used only when the extra fee per kg is above 0." />
         <TextField label="Low stock at (units)" {...bind("lowStock")} inputMode="numeric"
           hint="Shoppers see “Only N left”, and sellers get a low-stock alert, at or below this many units" />
       </section>

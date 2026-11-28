@@ -28,6 +28,8 @@ DEFAULTS: dict[str, Any] = {
     "tds_bps": 10,
     "commission_gst_bps": 1800,
     "max_qty_per_item": 10,
+    "shipping_per_kg_paise": 0,  # weight surcharge: per started kg above the free weight, for each seller package (0 = off)
+    "shipping_free_grams": 1000,  # the package weight the delivery fee already covers
     "low_stock_threshold": 5,  # "Only N left" for shoppers, sellers' low-stock alert, filter and dashboard count
     # features customers and sellers see
     "feature_wishlist": True,
@@ -204,6 +206,8 @@ LIMITS: dict[str, tuple[type, int, int]] = {
     "tds_bps": (int, 0, 500),
     "commission_gst_bps": (int, 0, 2800),
     "max_qty_per_item": (int, 1, 10),
+    "shipping_per_kg_paise": (int, 0, 100_000),
+    "shipping_free_grams": (int, 0, 50_000),
     "low_stock_threshold": (int, 1, 1000),
     "search_page_size": (int, 8, 60),
     "search_suggestions": (int, 1, 12),

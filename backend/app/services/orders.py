@@ -186,6 +186,11 @@ def group_by_seller(lines: list[CartLine], cfg: dict, remote: tuple[int, bool] =
     for g in groups.values():
         has_items = g.items_total > 0
         g.shipping_fee = 0 if (not has_items or member_free or g.items_total >= free_threshold(g.seller, cfg, bounds)) else (cfg["shipping_fee_paise"] if state_fee is None else state_fee)
+        # Weight surcharge (Admin -> Marketplace settings, off by default): per started kg above the free weight, on a package that pays delivery.
+        if g.shipping_fee and cfg.get("shipping_per_kg_paise"):
+            over = sum(line.variant.weight_grams * line.qty for line in g.lines if not line.problem) - cfg["shipping_free_grams"]
+            if over > 0:
+                g.shipping_fee += -(-over // 1000) * cfg["shipping_per_kg_paise"]
         # Remote-area surcharge (Admin -> Growth -> Shipping zones): once per seller package, not charged on an empty group.
         if has_items and remote[0] and not member_free and not (remote[1] and g.shipping_fee == 0):
             g.shipping_fee += remote[0]
