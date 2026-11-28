@@ -602,6 +602,7 @@ public class CatalogBAL(
             ["returnable"] = p.ReturnWindowDays > 0,
             ["min_qty"] = Math.Max(1, ProductInfo.DetailsOf(p.Details).MinQty),
             ["ships_on"] = ProductInfo.DetailsOf(p.Details).PreorderDate(),
+            ["size_chart"] = new JsonArray(ProductInfo.DetailsOf(p.Details).SizeChartRows().Select(r => (JsonNode)new JsonArray(r.Select(c => (JsonNode)JsonValue.Create(c)).ToArray())).ToArray()),
             ["deal"] = deal,
             // Consumer Protection (E-Commerce) Rules 2020, rule 6(5): seller identity shown to buyers.
             ["seller"] = new JsonObject

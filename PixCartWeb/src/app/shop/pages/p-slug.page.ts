@@ -34,6 +34,22 @@ import { ProductReviews } from "../browse/reviews";
 
           <pc-product-main [p]="p" />
 
+          @if ((p.size_chart?.length ?? 0) > 1) {
+            <section class="rounded-xl bg-white p-4 sm:p-6" aria-labelledby="size-h">
+              <h2 id="size-h" class="mb-3 text-xl font-semibold">Size guide</h2>
+              <div class="overflow-x-auto">
+                <table class="min-w-full border-collapse text-sm">
+                  <thead><tr>@for (h of p.size_chart![0]; track $index) { <th class="border-b px-3 py-2 text-left font-semibold">{{ h }}</th> }</tr></thead>
+                  <tbody>
+                    @for (r of p.size_chart!.slice(1); track $index) {
+                      <tr>@for (c of r; track $index) { <td class="border-b px-3 py-2">{{ c }}</td> }</tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          }
+
           @if ((p.important?.length ?? 0) > 0) {
             <section class="rounded-xl bg-white p-4 sm:p-6" aria-labelledby="important-h">
               <h2 id="important-h" class="mb-3 text-xl font-semibold">Important information</h2>

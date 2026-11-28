@@ -34,7 +34,7 @@ public class ProductModerationBAL(
         ["directions"] = d.Directions, ["safety_info"] = d.SafetyInfo, ["legal_disclaimer"] = d.LegalDisclaimer,
         ["shelf_life"] = d.ShelfLife, ["warranty"] = d.Warranty,
         ["in_the_box"] = new JsonArray(d.InTheBox.Select(x => (JsonNode)JsonValue.Create(x)).ToArray()),
-        ["length_cm"] = d.LengthCm, ["width_cm"] = d.WidthCm, ["height_cm"] = d.HeightCm,
+        ["length_cm"] = d.LengthCm, ["width_cm"] = d.WidthCm, ["height_cm"] = d.HeightCm, ["size_chart"] = d.SizeChart,
         ["key_specs"] = new JsonArray(d.KeySpecs.Select(x => (JsonNode)JsonValue.Create(x)).ToArray()),
     };
 
