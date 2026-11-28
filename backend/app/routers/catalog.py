@@ -423,6 +423,8 @@ async def product_page(slug: str, session: SessionDep) -> dict:
         "in_stock": p.in_stock,
         "breadcrumbs": breadcrumbs,
         "size_guide": size_guide_rows,
+        "seo_title": p.seo_title or "",
+        "seo_description": p.seo_description or "",
         "option_axes": axes,
         "variants": [
             {

@@ -65,3 +65,17 @@ async def test_product_tags_filter_search_and_collection_rule(client, admin, cat
     # a copy of the product keeps the labels
     dup = (await tn.post(f"/api/seller/products/{shirt['id']}/duplicate")).json()
     assert dup["tags"] == ["gift", "cotton", "x" * 30]
+
+
+async def test_product_search_listing_text(client, admin, categories):
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    detail = (await tn.get(f"/api/seller/products/{shirt['id']}")).json()
+    assert detail["seo_title"] == "" and detail["seo_description"] == ""
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"seo_title": "  Cotton   shirt, made in Kovai ", "seo_description": "Soft  cotton."})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved"                         # listing text never sends a live product back for approval
+    page = (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()
+    assert page["seo_title"] == "Cotton shirt, made in Kovai" and page["seo_description"] == "Soft cotton."
+    assert (await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"seo_title": "x" * 71})).status_code == 422
+    dup = (await tn.post(f"/api/seller/products/{shirt['id']}/duplicate")).json()
+    assert dup["seo_title"] == "Cotton shirt, made in Kovai"

@@ -63,6 +63,8 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
   const [origin, setOrigin] = useState(product?.country_of_origin ?? "India");
   const [returnDays, setReturnDays] = useState(String(product?.return_window_days ?? 7));
   const [sizeGuide, setSizeGuide] = useState(product?.size_guide ?? "");
+  const [seoTitle, setSeoTitle] = useState(product?.seo_title ?? "");
+  const [seoDesc, setSeoDesc] = useState(product?.seo_description ?? "");
   const [tags, setTags] = useState((product?.tags ?? []).join(", "));
   const [images, setImages] = useState<string[]>(product?.images ?? []);
   const [videos, setVideos] = useState<ProductVideo[]>(product?.videos ?? []);
@@ -208,6 +210,8 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
       country_of_origin: origin.trim(),
       return_window_days: Number(returnDays),
       size_guide: sizeGuide,
+      seo_title: seoTitle,
+      seo_description: seoDesc,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       images,
       videos,
@@ -454,6 +458,12 @@ export function ProductEditor({ product, onSaved }: { product?: SellerProduct; o
         </Field>
         <Field label="Tags (optional)" htmlFor="ptags" hint="Up to 10 short labels, separated by commas, like gift, cotton. Staff use them to group products. Changing them does not send the product for approval again.">
           <Input id="ptags" value={tags} maxLength={400} onChange={(e) => setTags(e.target.value)} data-testid="product-tags" />
+        </Field>
+        <Field label="Search listing title (optional)" htmlFor="pseot" hint="What Google shows as the title, up to 70 characters. Leave empty to use the product title.">
+          <Input id="pseot" value={seoTitle} maxLength={70} onChange={(e) => setSeoTitle(e.target.value)} data-testid="product-seo-title" />
+        </Field>
+        <Field label="Search listing description (optional)" htmlFor="pseod" hint="Up to 160 characters. Leave empty to use the start of the description.">
+          <Input id="pseod" value={seoDesc} maxLength={160} onChange={(e) => setSeoDesc(e.target.value)} data-testid="product-seo-description" />
         </Field>
       </section>
 

@@ -207,6 +207,8 @@ export interface ProductPage {
   in_stock: boolean;
   breadcrumbs: { name: string; slug: string }[];
   size_guide?: string[][] | null;
+  seo_title?: string;
+  seo_description?: string;
   option_axes: Record<string, string[]>;
   variants: PublicVariant[];
   seller: {
@@ -576,6 +578,8 @@ export interface SellerProduct {
   return_window_days: number;
   size_guide?: string;
   tags?: string[];
+  seo_title?: string;
+  seo_description?: string;
   images: string[];
   videos?: ProductVideo[];
   variants: SellerVariant[];
