@@ -13,7 +13,7 @@ import { date, rupees } from "@/lib/format";
 type Loyalty = { enabled: boolean; balance: number; lifetime: number; tier: string; value_paise: number; history: { kind: string; points: number; note: string; at: string }[] };
 
 type Detail = {
-  id: string; name: string; phone: string | null; email: string | null; is_active: boolean; is_admin: boolean; marketing_opt_in: boolean;
+  id: string; name: string; phone: string | null; email: string | null; is_active: boolean; is_admin: boolean; marketing_opt_in: boolean; staff_note?: string; staff_tags?: string[];
   created_at: string; last_login_at: string | null; terms_accepted_at: string | null;
   seller: { id: string; name: string; status: string } | null;
   stats: { orders: number; spent: number; returns: number; tickets: number; open_tickets: number; wishlist: number; reviews: number };
@@ -68,7 +68,7 @@ export default function CustomerDetail() {
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [f, setF] = useState({ name: "", phone: "", email: "", marketing: false });
+  const [f, setF] = useState({ name: "", phone: "", email: "", marketing: false, note: "", tags: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [blocking, setBlocking] = useState(false);
   const [reason, setReason] = useState("");
@@ -78,7 +78,7 @@ export default function CustomerDetail() {
 
   function openEdit() {
     if (!d) return;
-    setF({ name: d.name, phone: d.phone ?? "", email: d.email ?? "", marketing: d.marketing_opt_in });
+    setF({ name: d.name, phone: d.phone ?? "", email: d.email ?? "", marketing: d.marketing_opt_in, note: d.staff_note ?? "", tags: (d.staff_tags ?? []).join(", ") });
     setFieldErrors({});
     setError(null);
     setEditing(true);
@@ -89,7 +89,7 @@ export default function CustomerDetail() {
     setBusy(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = { name: f.name, phone: f.phone, marketing_opt_in: f.marketing };
+      const body: Record<string, unknown> = { name: f.name, phone: f.phone, marketing_opt_in: f.marketing, staff_note: f.note, staff_tags: f.tags.split(",").map((t) => t.trim()).filter(Boolean) };
       if (f.email.trim()) body.email = f.email.trim();
       else if (d.email) body.clear_email = true;
       setD(await api<Detail>(`/api/admin/customers/${id}`, { method: "PATCH", body }));
@@ -159,6 +159,8 @@ export default function CustomerDetail() {
             <dt className="text-ink-faint">Joined</dt><dd>{date(d.created_at)}</dd>
             <dt className="text-ink-faint">Last sign-in</dt><dd>{d.last_login_at ? date(d.last_login_at) : "Never"}</dd>
             <dt className="text-ink-faint">Terms accepted</dt><dd>{d.terms_accepted_at ? date(d.terms_accepted_at) : "Not yet (account made by staff)"}</dd>
+            <dt className="text-ink-faint">Staff tags</dt><dd>{(d.staff_tags ?? []).length ? (d.staff_tags ?? []).join(", ") : "None"}</dd>
+            <dt className="text-ink-faint">Staff note (private)</dt><dd>{d.staff_note || "None"}</dd>
             <dt className="text-ink-faint">Offers by message</dt><dd>{d.marketing_opt_in ? "Yes, opted in" : "No"}</dd>
           </dl>
         </Card>
@@ -256,6 +258,8 @@ export default function CustomerDetail() {
           <TextField label="Mobile number" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} error={fieldErrors.phone}
             hint="Changing it signs the customer out; they sign in again with a code sent to the new number." required />
           <TextField label="Email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} error={fieldErrors.email} hint="Leave empty to remove" />
+          <TextField label="Tags (private, comma separated)" value={f.tags} onChange={(e) => setF({ ...f, tags: e.target.value })} hint="Up to 10, for example VIP, wholesale. Customers never see these." />
+          <TextField label="Staff note (private)" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} hint="Up to 1000 characters. Customers never see this." />
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-peacock" checked={f.marketing} onChange={(e) => setF({ ...f, marketing: e.target.checked })} />Agrees to receive offers</label>
           <Button type="submit" loading={busy}>Save</Button>
         </form>

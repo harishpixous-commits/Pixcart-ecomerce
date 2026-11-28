@@ -34,6 +34,8 @@ class User(IdMixin, TimestampMixin, Base):
     admin_role: Mapped[str] = mapped_column(String(40), default="", server_default="")
     totp_secret_enc: Mapped[str | None] = mapped_column(Text)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    staff_note: Mapped[str] = mapped_column(Text, default="", server_default="")  # private note staff keep on a customer, never shown to them
+    staff_tags: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # private labels staff give a customer (VIP, wholesale ...)
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

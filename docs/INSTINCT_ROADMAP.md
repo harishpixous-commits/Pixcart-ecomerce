@@ -484,3 +484,6 @@ Not wired: automatic gateway refund call.
 
 ## Push 148: Buy X get Y discount (Python done; .NET/Angular pending)
 - Admin, Coupons: new type "Buy X get Y" (platform coupons only): customer buys X, the cheapest Y of every X+Y items get N% off (100 = free). Columns coupons.buy_qty, get_qty (Alembic 0054, kind check widened). Works with codes and with Automatic discounts. Test: tests/test_bxgy.py. Not covered: limiting it to chosen products (category limit works). Alembic 0054 not run against a real upgrade, only the test schema. Next.js type-check only.
+
+## Push 149: Customer staff notes and tags (Python and .NET/Angular done)
+- Admin, Customers, a customer's page: private "Staff note" (up to 1000 characters) and up to 10 "Tags" (VIP, wholesale ...), edited in the Edit form, saved with the customer edit audit line. Never shown to the customer (the sign-in/me output does not carry them). Columns users.staff_note, users.staff_tags (Alembic 0055; .NET V032). Tests: tests/test_customer_notes.py and the .NET Staff_note test. Not wired: filtering the customer list or segments by tag, tag-based coupons. Alembic 0055 not run as a real upgrade. Next.js and Angular forms type-checked only.

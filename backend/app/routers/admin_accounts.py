@@ -101,6 +101,8 @@ class CustomerPatch(BaseModel):
     email: EmailStr | None = None
     clear_email: bool = False
     marketing_opt_in: bool | None = None
+    staff_note: str | None = Field(default=None, max_length=1000)
+    staff_tags: list[str] | None = Field(default=None, max_length=10)
 
 
 async def _phone_free(session, phone: str, but: uuid.UUID | None = None) -> None:
@@ -166,7 +168,7 @@ async def customer_detail(user_id: uuid.UUID, admin: Perm("customers"), session:
     actors = dict((await session.execute(select(User.id, User.name).where(User.id.in_({h.actor_user_id for h in history if h.actor_user_id})))).all()) if history else {}
     return {
         "id": str(u.id), "name": u.name, "phone": u.phone, "email": u.email, "is_active": u.is_active, "is_admin": u.is_admin,
-        "marketing_opt_in": u.marketing_opt_in, "created_at": u.created_at.isoformat(), "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+        "marketing_opt_in": u.marketing_opt_in, "staff_note": u.staff_note, "staff_tags": u.staff_tags or [], "created_at": u.created_at.isoformat(), "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
         "terms_accepted_at": u.terms_accepted_at.isoformat() if u.terms_accepted_at else None,
         "seller": {"id": str(seller.id), "name": seller.display_name, "status": seller.status} if seller else None,
         "stats": {
@@ -224,6 +226,14 @@ async def edit_customer(user_id: uuid.UUID, body: CustomerPatch, admin: Perm("cu
     if body.marketing_opt_in is not None:
         u.marketing_opt_in = body.marketing_opt_in
         changes.append(f"marketing {'on' if body.marketing_opt_in else 'off'}")
+    if body.staff_note is not None and body.staff_note.strip() != u.staff_note:
+        u.staff_note = body.staff_note.strip()
+        changes.append("staff note")
+    if body.staff_tags is not None:
+        tags = list(dict.fromkeys(" ".join(t.split())[:30] for t in body.staff_tags if t.strip()))
+        if tags != (u.staff_tags or []):
+            u.staff_tags = tags
+            changes.append("tags")
     audit(session, admin, "user.edit", "user", u.id, ", ".join(changes) or "no change")
     await session.commit()
     return await customer_detail(user_id, admin, session)
