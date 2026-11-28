@@ -432,12 +432,12 @@ class SellerCouponIn(BaseModel):
     code: str = Field(min_length=4, max_length=30, pattern=r"^[A-Za-z0-9]+$")
     description: str = Field(default="", max_length=200)
     kind: Literal["percent", "flat"]
-    value: int = Field(gt=0)
-    max_discount_paise: int | None = Field(default=None, gt=0)
-    min_order_paise: int = Field(default=0, ge=0)
+    value: int = Field(gt=0, le=100_000_000)  # percent in basis points or a flat amount in paise (up to 10 lakh rupees)
+    max_discount_paise: int | None = Field(default=None, gt=0, le=10_000_000_000)
+    min_order_paise: int = Field(default=0, ge=0, le=10_000_000_000)
     starts_at: datetime | None = None
     ends_at: datetime | None = None
-    usage_limit: int | None = Field(default=None, gt=0)
+    usage_limit: int | None = Field(default=None, gt=0, le=1_000_000_000)
     per_user_limit: int = Field(default=1, ge=1, le=10)
     is_active: bool = True
 
