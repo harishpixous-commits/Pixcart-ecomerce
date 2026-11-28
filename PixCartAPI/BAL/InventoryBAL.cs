@@ -148,6 +148,19 @@ public class InventoryBAL(InventoryDAL inventory, IMySqlDapperHelper db,
     public Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow) =>
         inventory.SetVariantStockAsync(variantId, stock, uow);
 
+    /// <summary>Tells a seller once when an approved product with a go-live time has gone live.</summary>
+    public async Task<int> ProductLiveNotifyAsync()
+    {
+        var n = 0;
+        foreach (var p in (await inventory.ProductsGoneLiveAsync()).ToList())
+        {
+            if (await inventory.MarkProductLiveNotifiedAsync(p.Id) == 0) continue;
+            await notify.NotifySellerAsync(p.SellerId, "product_live", new Dictionary<string, string> { ["item"] = p.Title }, $"/p/{p.Slug}");
+            n++;
+        }
+        return n;
+    }
+
     /// <summary>Reference: jobs.low_stock_scan — one in-app note per seller listing their at-or-below-threshold options.</summary>
     public async Task<int> LowStockNotifyAsync()
     {

@@ -105,6 +105,20 @@ public class InventoryDAL(IMySqlDapperHelper db)
         uow.ExecuteAsync("UPDATE warehouses SET lat = @lat, lng = @lng, updated_at = UTC_TIMESTAMP(6) WHERE id = @id AND lat IS NULL",
             new { id, lat, lng });
 
+    public sealed class LiveProductRow
+    {
+        public Guid Id { get; set; }
+        public Guid SellerId { get; set; }
+        public string Title { get; set; } = "";
+        public string Slug { get; set; } = "";
+    }
+
+    /// <summary>Approved products whose go-live time has passed and whose seller has not been told yet.</summary>
+    public Task<IEnumerable<LiveProductRow>> ProductsGoneLiveAsync() => db.QueryAsync<LiveProductRow>(
+        "SELECT id AS Id, seller_id AS SellerId, title AS Title, slug AS Slug FROM products WHERE status = 'approved' AND publish_at IS NOT NULL AND publish_at <= UTC_TIMESTAMP(6) AND publish_notified_at IS NULL LIMIT 500");
+
+    public Task<int> MarkProductLiveNotifiedAsync(Guid id) => db.ExecuteAsync("UPDATE products SET publish_notified_at = UTC_TIMESTAMP(6) WHERE id = @id AND publish_notified_at IS NULL", new { id });
+
     public sealed class LowStockRow
     {
         public Guid SellerId { get; set; }

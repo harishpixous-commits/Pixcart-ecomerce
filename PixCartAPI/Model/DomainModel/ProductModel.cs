@@ -43,6 +43,8 @@ public class ProductModel
     public DateTime? ApprovedAt { get; set; }
     /// <summary>products.publish_at: an approved product shows to shoppers only from this moment (null: right away)</summary>
     public DateTime? PublishAt { get; set; }
+    /// <summary>products.publish_notified_at: the seller was told the scheduled product went live</summary>
+    public DateTime? PublishNotifiedAt { get; set; }
     /// <summary>products.price_from</summary>
     public long PriceFrom { get; set; }
     /// <summary>products.mrp_from</summary>

@@ -36,6 +36,14 @@ public class ProductPublishAtTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(200, (int)(await v.GetAsync($"/api/catalog/products/{slug}")).StatusCode);
         Assert.Contains((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products"))!["items"]!.AsArray(), p => p!["slug"]!.GetValue<string>() == slug);
         Assert.Contains((await buyer.Post("/api/cart/items", new { variant_id = vid, qty = 1 })).Status, new[] { 200, 201 });
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var inv = scope.ServiceProvider.GetRequiredService<BAL.Interface.IInventoryBAL>();
+            Assert.Equal(1, await inv.ProductLiveNotifyAsync());
+            Assert.Equal(0, await inv.ProductLiveNotifyAsync());                               // told once
+        }
+        var notes = (await seller.Get("/api/notifications")).Json["items"]!.AsArray();
+        Assert.Single(notes, x => x!["title"]!.GetValue<string>() == "Your product is live" && x["body"]!.GetValue<string>().Contains("Scheduled Cotton Shirt"));
         Assert.Equal(422, (await seller.Put($"/api/seller/products/{pid}", Body(DateTime.UtcNow.AddDays(400).ToString("o"), vid))).Status);
         Assert.Null((await seller.Put($"/api/seller/products/{pid}", Body(null, vid))).Json["publish_at"]);
         var dup = await seller.Post($"/api/seller/products/{pid}/duplicate", new { });

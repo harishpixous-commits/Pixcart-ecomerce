@@ -26,4 +26,5 @@ public interface IInventoryBAL
     /// _release_stock).</summary>
     Task<int> SetVariantStockAsync(Guid variantId, int stock, IUnitOfWork uow);
     Task<int> LowStockNotifyAsync();
+    Task<int> ProductLiveNotifyAsync();
 }

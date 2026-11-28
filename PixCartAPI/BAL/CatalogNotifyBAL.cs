@@ -63,6 +63,7 @@ public partial class CatalogNotifyBAL(CatalogSupportDAL support, CatalogDAL cata
         ["staff_review"] = ("{{subject}}", "{{message}}"),
         ["staff_ticket"] = ("{{subject}}", "{{message}}"),
         ["staff_delivery_stuck"] = ("Delivery stuck: {{order_number}}", "It has been '{{status}}' for {{minutes}} minutes with {{partner}}."),
+        ["product_live"] = ("Your product is live", "{{item}} is now live in the shop."),
         ["low_stock"] = ("Low stock", "{{count}} of your product options have {{threshold}} or fewer units left."),
         ["staff_delivery_failed"] = ("Delivery failed: {{order_number}}", "{{partner}} could not deliver: {{reason}}. Choose to try again or return it to the seller."),
         ["staff_delivery_bank"] = ("Partner payout details changed", "{{name}} ({{phone}}) changed their bank or UPI details. Check them before the next payout."),
