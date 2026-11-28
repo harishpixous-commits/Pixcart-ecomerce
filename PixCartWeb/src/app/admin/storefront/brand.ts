@@ -4,8 +4,9 @@
  * Port of frontend/src/app/admin/storefront/brand.tsx.
  */
 
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from "@angular/core";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-angular";
+import { api } from "../../core/api";
 import { SiteService } from "../../core/site";
 import { fillTokens } from "../../core/tokens";
 import type { LinkItem, Site } from "../../core/types";
@@ -173,12 +174,27 @@ export class BrandEditor {
       </div>
     }
     @if (links().length < max()) {<button pcButton type="button" size="sm" variant="ghost" class="self-start" (click)="linksChange.emit([...links(), { label: '', href: '/' }])"><svg [pcIcon]="Plus" class="h-4 w-4" /> Add link</button>}
+    @if (links().length < max() && cols().length > 0) {
+      <select class="self-start rounded-md border border-line bg-white px-2 py-1.5 text-sm" aria-label="Add a collection link" (change)="addCol($any($event.target))">
+        <option value="">Add a collection link...</option>
+        @for (c of cols(); track c.slug) { <option [value]="c.slug">{{ c.title }}</option> }
+      </select>
+    }
   `,
 })
 export class LinksEditor {
   readonly links = input.required<LinkItem[]>();
   readonly max = input.required<number>();
   readonly linksChange = output<LinkItem[]>();
+  protected readonly cols = signal<{ slug: string; title: string }[]>([]);
+  constructor() {
+    api<{ items: { slug: string; title: string }[] }>("/api/catalog/collections").then((r) => this.cols.set(r.items)).catch(() => this.cols.set([]));
+  }
+  protected addCol(el: HTMLSelectElement): void {
+    const c = this.cols().find((x) => x.slug === el.value);
+    el.value = "";
+    if (c) this.linksChange.emit([...this.links(), { label: c.title.slice(0, 40), href: `/collections/${c.slug}` }]);
+  }
   protected readonly ArrowUp = ArrowUp;
   protected readonly ArrowDown = ArrowDown;
   protected readonly Plus = Plus;
