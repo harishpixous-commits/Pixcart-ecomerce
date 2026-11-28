@@ -2367,5 +2367,53 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
         Assert.Equal(stockBefore, await ApiFactory.DbScalarAsync<int>("SELECT stock FROM variants WHERE id = @id", new { id = variantId }));
     }
 
+    [Fact]
+    public async Task Returning_everything_from_a_two_seller_coupon_order_zeroes_each_sellers_ledger()
+    {
+        var admin = await Admin();
+        var (varA, prodA, sellerA) = await ShirtInStock("9400000541", "cons-shirt-a");
+        var (varB, prodB, sellerB) = await ShirtInStock("9400000542", "cons-shirt-b", "29MYSUR1234M1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        var ownerA = await LoginPhone("9400000541", "Owner A"); var ownerB = await LoginPhone("9400000542", "Owner B");
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "SAVE10", description = "", kind = "percent", value = 1000, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = false })).Status);
+        var buyer = await LoginPhone("9620000541", "Returner");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 2 });
+        await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 1 });
+        var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = "SAVE10" });
+        Assert.True(r.Status == 201, r.ToString());
+        var order = r.Json["order"]!; var orderId = order["id"]!.GetValue<string>();
+        var subs = order["sub_orders"]!.AsArray();
+        Assert.Equal(2, subs.Count);
+        var subA = (await ApiFactory.DbScalarAsync<Guid>("SELECT id FROM sub_orders WHERE order_id = @orderId AND seller_id = @sellerA", new { orderId, sellerA })).ToString();
+        var subB = (await ApiFactory.DbScalarAsync<Guid>("SELECT id FROM sub_orders WHERE order_id = @orderId AND seller_id = @sellerB", new { orderId, sellerB })).ToString();
+        foreach (var (sid, owner) in new[] { (subA, ownerA), (subB, ownerB) })
+        {
+            Assert.Equal(200, (await owner.Post($"/api/seller/orders/{sid}/confirm")).Status);
+            Assert.Equal(200, (await owner.Post($"/api/seller/orders/{sid}/pack")).Status);
+            Assert.Equal(200, (await owner.Post($"/api/seller/orders/{sid}/ship", new { courier_name = "DTDC", tracking_number = "AWB77" })).Status);
+            Assert.Equal(200, (await owner.Post($"/api/seller/orders/{sid}/deliver")).Status);
+        }
+        var returnable = (await buyer.Get($"/api/orders/{orderId}/returnable")).Json["items"]!;
+        long refunds = 0;
+        foreach (var (sid, owner) in new[] { (subA, ownerA), (subB, ownerB) })
+        {
+            var items = returnable[sid]!.AsArray().Select(i => new { order_item_id = i!["order_item_id"]!.GetValue<string>(), qty = i["qty_left"]!.GetValue<int>() }).ToArray();
+            Assert.NotEmpty(items);
+            var ret = await buyer.Post("/api/returns", new { sub_order_id = sid, items, reason = "size_fit", refund_upi = "priya@okaxis" });
+            Assert.True(ret.Status == 201, ret.ToString());
+            refunds += ret.Json["refund_amount"]!.GetValue<long>();
+            var rid = ret.Json["id"]!.GetValue<string>();
+            Assert.Equal(200, (await owner.Post($"/api/seller/returns/{rid}", new { action = "approve" })).Status);
+            Assert.Equal(200, (await owner.Post($"/api/seller/returns/{rid}", new { action = "received" })).Status);
+        }
+        Assert.Equal(order["grand_total"]!.GetValue<long>(), refunds);
+        Assert.True(order["discount_total"]!.GetValue<long>() > 0);
+        // The seller's own courier took the cash, so the ledger carries that cash as owed back (cod_collected).
+        // Every other entry must net to zero once everything is returned.
+        foreach (var sellerId in new[] { sellerA, sellerB })
+            Assert.Equal(0L, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(amount), 0) FROM seller_ledger WHERE seller_id = @sellerId AND kind <> 'cod_collected'", new { sellerId }));
+    }
+
     private Task<Res> Anon(string url) => Factory.Browser().Get(url);
 }
