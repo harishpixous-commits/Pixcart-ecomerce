@@ -91,6 +91,11 @@ export default async function ProductPageView({ params }: { params: Promise<{ sl
         </section>
       )}
 
+      {p.tags && p.tags.length > 0 && (
+        <p className="mt-4 flex flex-wrap gap-2" aria-label="Tags">
+          {p.tags.map((t) => <Link key={t} href={`/search?tag=${encodeURIComponent(t)}`} className="rounded-full border border-line px-3 py-1 text-sm text-ink-soft hover:text-peacock">{t}</Link>)}
+        </p>
+      )}
       {p.description && (
         <section className="rounded-xl bg-white p-4 sm:p-6" aria-labelledby="desc-h">
           <h2 id="desc-h" className="mb-2 text-xl font-semibold">Product description</h2>

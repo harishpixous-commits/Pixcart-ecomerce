@@ -293,7 +293,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
     const params = new URLSearchParams(key);
     track(api<Result>("/api/catalog/products", {
       query: {
-        q: params.get("q"), category: category ?? params.get("category"), seller, brand: params.getAll("brand"),
+        q: params.get("q"), category: category ?? params.get("category"), seller, brand: params.getAll("brand"), tag: params.get("tag"),
         min_price: params.get("min_price"), max_price: params.get("max_price"), min_rating: params.get("min_rating"), min_discount: params.get("min_discount"),
         in_stock: params.get("in_stock"), deal: params.get("deal"), pincode: pin || undefined, delivery: pin ? params.get("delivery") : undefined,
         sort: params.get("sort") ?? "relevance", page: params.get("page") ?? 1,
@@ -322,7 +322,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
   const from = data.total ? (data.page - 1) * data.page_size + 1 : 0;
   const to = Math.min(data.total, data.page * data.page_size);
   const heading = data.category?.name ?? (seller ? "Products from this store" : q ? null : "All products");
-  const filterKeys = ["brand", "min_price", "max_price", "min_rating", "min_discount", "in_stock", "deal", "delivery", ...(category ? [] : ["category"])];
+  const filterKeys = ["brand", "tag", "min_price", "max_price", "min_rating", "min_discount", "in_stock", "deal", "delivery", ...(category ? [] : ["category"])];
   const activeCount = filterKeys.filter((k) => sp.get(k)).length;
   const activeFilters = activeCount > 0;
   const sponsored = data.page === 1 ? data.sponsored ?? [] : [];
@@ -376,6 +376,7 @@ export function SearchView({ category, seller }: { category?: string; seller?: s
       {priceLabel && <Chip label={priceLabel} onClear={() => set({ min_price: null, max_price: null })} />}
       {sp.get("min_rating") && <Chip label={`${sp.get("min_rating")}★ & up`} onClear={() => set({ min_rating: null })} />}
       {sp.get("min_discount") && <Chip label={`${sp.get("min_discount")}% off or more`} onClear={() => set({ min_discount: null })} />}
+      {sp.get("tag") && <Chip label={`Tag: ${sp.get("tag")}`} onClear={() => set({ tag: null })} />}
       {sp.get("in_stock") && <Chip label="In stock" onClear={() => set({ in_stock: null })} />}
       <button type="button" onClick={clearAll} className="font-semibold text-peacock hover:underline">Clear all</button>
     </div>
