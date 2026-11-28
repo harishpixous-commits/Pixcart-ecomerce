@@ -65,7 +65,7 @@ function AppUpload({ current, version, onUploaded }: { current: string; version:
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
           New APK file
-          <input type="file" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          <input type="file" aria-label="App file (.apk)" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-peacock-light file:px-3 file:py-2 file:font-semibold file:text-peacock" data-testid="apk-file" />
         </label>
         <div className="w-32"><TextField label="Version" value={ver} onChange={(e) => setVer(e.target.value)} placeholder="1.0.1" maxLength={20} /></div>

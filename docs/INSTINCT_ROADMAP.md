@@ -563,3 +563,4 @@ Grepped both repos: neither exists. Written designs only, nothing built, for Har
 - Push 189: coupon money inputs capped (value up to 10 lakh rupees, min order and max discount up to 10 crore rupees, usage limit up to 1 billion); a huge number is now a clear 4xx, not a crash. Test added.
 - Push 190: wrong coupon codes typed at checkout are counted; after 30 wrong ones in an hour the typed code is refused (the bill still shows). Stops code guessing. Test added.
 - Push 191: Python indexes on 15 foreign keys used by cart, order, refund, ledger, review and audit lookups (Alembic 0067). The .NET MySQL database already indexes every foreign key automatically, so no change there.
+- Push 192: screen-reader names on the notification title/message/link fields and the app-file pickers (admin).

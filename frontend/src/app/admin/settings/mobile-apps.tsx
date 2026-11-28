@@ -58,7 +58,7 @@ export function MobileApps({ value, onChange }: { value: AppSettings; onChange: 
         <p className="font-semibold">Android app (APK)</p>
         <ErrorNote message={error} />
         <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto] sm:items-end">
-          <input type="file" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          <input type="file" aria-label="App file (.apk)" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-peacock-light file:px-3 file:py-2 file:font-semibold file:text-peacock" data-testid="shop-apk-file" />
           <TextField label="Version" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.0.0" />
           <Button type="button" onClick={upload} loading={busy} disabled={!file}>Publish</Button>

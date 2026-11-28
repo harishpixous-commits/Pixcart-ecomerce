@@ -317,9 +317,9 @@ function CampaignsTab() {
         <select className="rounded-lg border px-3 py-2 text-sm" value={segment} onChange={(e) => edit(setSegment)(e.target.value)} aria-label="Segment">
           {(segs.length ? segs : [{ key: "never_ordered", label: "Never placed an order", count: 0 }]).map((g) => <option key={g.key} value={g.key}>{g.label} ({g.count})</option>)}
         </select>
-        <input className="rounded-lg border px-3 py-2 text-sm" maxLength={80} placeholder="Title" value={title} onChange={(e) => edit(setTitle)(e.target.value)} />
-        <textarea className="rounded-lg border px-3 py-2 text-sm" maxLength={300} rows={3} placeholder="Message" value={message} onChange={(e) => edit(setMessage)(e.target.value)} />
-        <input className="rounded-lg border px-3 py-2 text-sm" maxLength={200} placeholder="Page to open, like /offers (optional)" value={link} onChange={(e) => edit(setLink)(e.target.value)} />
+        <input className="rounded-lg border px-3 py-2 text-sm" maxLength={80} placeholder="Title" aria-label="Notification title" value={title} onChange={(e) => edit(setTitle)(e.target.value)} />
+        <textarea className="rounded-lg border px-3 py-2 text-sm" maxLength={300} rows={3} placeholder="Message" aria-label="Notification message" value={message} onChange={(e) => edit(setMessage)(e.target.value)} />
+        <input className="rounded-lg border px-3 py-2 text-sm" maxLength={200} aria-label="Page to open" placeholder="Page to open, like /offers (optional)" value={link} onChange={(e) => edit(setLink)(e.target.value)} />
         <label className="flex flex-col gap-1 text-sm"><span className="font-semibold">Send later (optional, 2 minutes to 30 days ahead)</span>
           <input type="datetime-local" className="rounded-lg border px-3 py-2 text-sm" value={sendAt} onChange={(e) => edit(setSendAt)(e.target.value)} data-testid="campaign-send-at" />
         </label>
