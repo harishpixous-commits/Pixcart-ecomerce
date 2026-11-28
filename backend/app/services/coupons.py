@@ -148,13 +148,13 @@ async def best_automatic(session: AsyncSession, user_id: uuid.UUID, lines: list)
 
 
 async def volume_nudge(session: AsyncSession, user_id: uuid.UUID, lines: list) -> str | None:
-    """A short cart hint for the closest automatic volume offer the cart is just short of ("Add 1 more item to get 10% off"), or None."""
+    """A short cart hint for the closest automatic volume or buy-X-get-Y offer the cart is just short of ("Add 1 more item to get 10% off"), or None."""
     from app.services import growth
 
     if not (await growth.get(session))["auto_discounts"]["enabled"]:
         return None
     rows = (await session.execute(select(Coupon).where(Coupon.is_automatic.is_(True), Coupon.is_active.is_(True), Coupon.funded_by == "platform",
-                                                       Coupon.only_user_id.is_(None), Coupon.kind == "volume").limit(50))).scalars().all()
+                                                       Coupon.only_user_id.is_(None), Coupon.kind.in_(("volume", "bxgy"))).limit(50))).scalars().all()
     best: tuple[int, Coupon] | None = None
     for c in rows:
         try:
@@ -166,7 +166,8 @@ async def volume_nudge(session: AsyncSession, user_id: uuid.UUID, lines: list) -
     if best is None:
         return None
     n, c = best
-    return f"Add {n} more item{'s' if n > 1 else ''} to get {c.value}% off"
+    reward = f"{c.value}% off" if c.kind == "volume" else (f"{c.get_qty} free" if c.value == 100 else f"{c.get_qty} at {c.value}% off")
+    return f"Add {n} more item{'s' if n > 1 else ''} to get {reward}"
 
 
 async def list_for_checkout(session: AsyncSession) -> list[dict]:

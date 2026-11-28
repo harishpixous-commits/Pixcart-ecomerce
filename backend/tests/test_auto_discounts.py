@@ -85,3 +85,20 @@ async def test_cart_hint_says_how_many_more_items_unlock_an_automatic_volume_off
     assert r["coupon"]["code"] == "NUDGE15" and not any("15% off" in h for h in r["hints"])    # unlocked: no hint left
     assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": False}})).status_code == 200
     assert not any("15% off" in h for h in (await q()).json()["hints"])                          # switched off: no hint
+
+
+async def test_cart_hint_also_covers_an_automatic_buy_x_get_y_offer(client, admin, categories):
+    tn, ka, shirt, phone_p = await setup(client, admin, categories)
+    assert (await admin.put("/api/admin/growth/settings", {"auto_discounts": {"enabled": True}})).status_code == 200
+    assert (await admin.post("/api/admin/coupons", {"code": "AUTOB2G1", "kind": "bxgy", "value": 100, "buy_qty": 2, "get_qty": 1, "is_automatic": True, "show_on_checkout": False})).status_code == 201
+    a = await login_phone(client, "9770000351", name="Bxgy Nudge Buyer")
+    addr = await add_address(a, state="33")
+    vid = shirt["variants"][0]["id"]
+    q = lambda: a.post("/api/checkout/quote", {"address_id": addr, "payment_method": "cod"})
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert "Add 2 more items to get 1 free" in (await q()).json()["hints"]
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    assert "Add 1 more item to get 1 free" in (await q()).json()["hints"]
+    await a.post("/api/cart/items", {"variant_id": vid, "qty": 1})
+    r = (await q()).json()
+    assert r["coupon"]["code"] == "AUTOB2G1" and not any("free" in h for h in r["hints"])
