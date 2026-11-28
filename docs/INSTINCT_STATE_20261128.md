@@ -4,7 +4,8 @@ Read this first. Branches: `instinct/continue` (.NET API + Angular) and `instinc
 
 ## Validation (after Push 137)
 - Python: 312 tests passed. .NET: 579 passed (5 groups). Angular `ngc` and Next.js `tsc` clean.
-- NOT run anywhere: a real browser, Flutter apps, Windows publish, live payment gateways (simulators only), real email or SMS delivery.
+- Python storefront viewed in headless Chrome (seeded demo data, Next.js dev server on the FastAPI backend): home, product page, search listing with the New badge, and the welcome popup all render correctly. Admin screens and the checkout flow were not clicked through.
+- NOT run anywhere: the Angular app in a browser, Flutter apps, Windows publish, live payment gateways (simulators only), real email or SMS delivery.
 - Python dependencies are unpinned because the pinned fastapi version was not on the index in the build sandbox. Run once on pinned versions.
 
 ## Held for the owner (not decided by Instinct)

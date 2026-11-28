@@ -426,3 +426,6 @@ Admin → Growth → Settings → "Welcome popup" (off): title, text, button lab
 
 ## Push 137: "New" badge on product tiles
 Growth section `new_badge` (off by default, window of 1 to 90 days, default 14). Product cards carry `is_new`; bazaar, luxe, classic and fresh tiles show a "New" line. Same on wishlist cards in .NET. Python: tests/test_catalog.py. .NET: New_badge test. No migration. Not run in a browser.
+
+## Browser smoke test, Python storefront (28 Nov)
+Seeded demo data, ran FastAPI plus Next.js dev, screenshots from headless Chrome: home, product page, search with New badges, welcome popup after switching both on through the admin API. All rendered without errors. Not covered: clicking through cart, checkout, admin pages; Angular app.
