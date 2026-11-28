@@ -38,6 +38,11 @@ public static class NotificationEvents
                 ["inapp"] = ("Your package is running late", "Package {{order_number}} was due on {{expected}} and has not arrived yet. It is still on its way. You can follow it in your orders."),
                 ["email"] = ("Your package {{order_number}} is running late", "Hi {{name}},\n\nPackage {{order_number}} was due on {{expected}} and has not arrived yet. It is still on its way.\n\nFollow it here: {{link}}"),
             },
+            ["seller_restock"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("Restock {{item}}", "{{item}} has {{stock}} left and sold {{sold}} in the last {{days}} days, so it may run out in about {{left}} days. Consider adding about {{suggest}} units."),
+                ["email"] = ("Restock {{item}}", "Hi {{name}},\n\n{{item}} has {{stock}} left and sold {{sold}} in the last {{days}} days, so it may run out in about {{left}} days. Consider adding about {{suggest}} units.\n\n{{link}}"),
+            },
             ["seller_tracking_reminder"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("Add tracking for order {{order_number}}", "You marked it shipped {{hours}} hours ago but no tracking number is on it. Add the courier and tracking number so the customer can follow the parcel."),

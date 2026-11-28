@@ -447,3 +447,6 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 
 ## Push 142: Order update agent (.NET and Angular)
 - Same agent in `AgentsBAL` (event `order_delay`, settings `orderupdate_*`). Test `Order_update_agent_proposes_a_delay_notice...` passes. ngc clean.
+
+## Push 143: Sourcing and reorder agent (.NET and Angular)
+- Same agent in `AgentsBAL` (event `seller_restock`, settings `reorder_*`). Test `Reorder_agent_asks_the_seller_to_restock...` passes. ngc clean.

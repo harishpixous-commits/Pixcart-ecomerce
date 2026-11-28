@@ -12,6 +12,7 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
     private sealed record Draft(string Kind, string Key, string Summary, string[][] Details, Dictionary<string, string> Args, string Permission);
     private sealed record AgentDef(string Key, string Label, string Job, string NotWired, Func<JsonObject, Task<List<Draft>>> Scan);
     private sealed record SubRow(Guid SellerId, string Number, string Status, string Tracking, DateTime? ConfirmedAt, DateTime? ShippedAt);
+    private sealed record VariantRow(Guid SellerId, int Stock, bool Active);
     private sealed record DelayRow(string Number, string Status, Guid UserId);
     private sealed class Stale(string message) : Exception(message);
 
@@ -25,6 +26,10 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             "Finds packages on their way that are past the promised delivery date and proposes a plain delay message to the customer (in-app and email).",
             "Does not read live courier tracking, promise a new date, or message about other order stages. Normal shipped and delivered messages already go out without an agent.",
             OrderUpdateScanAsync),
+        new("reorder", "Sourcing and reorder agent",
+            "Compares each live item's stock with how fast it sold recently. When it would run out within the cover period, proposes asking the seller to restock, with a suggested quantity.",
+            "Does not buy stock, raise purchase orders or contact outside suppliers: on this marketplace sellers own their stock. Does not predict seasons or sales spikes, only the recent average.",
+            ReorderScanAsync),
     ];
 
     private async Task<JsonObject> CfgAsync() => (JsonObject)(await growth.GetAsync())["agents"]!;
@@ -76,6 +81,30 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             outp.Add(new("delay_notice", r.Id.ToString(), $"Tell the customer package {r.Number} is late (due {expected}, {late} hours past)",
                 [["Package", r.Number], ["Courier", string.IsNullOrEmpty(r.Courier) ? "not recorded" : r.Courier], ["Was due", expected], ["Hours late", late.ToString()]],
                 new() { ["sub_id"] = r.Id.ToString(), ["expected"] = expected }, "orders"));
+        }
+        return outp;
+    }
+
+    // ---------- sourcing and reorder agent ----------
+    private async Task<List<Draft>> ReorderScanAsync(JsonObject cfg)
+    {
+        var window = cfg.Int("reorder_window_days"); var cover = cfg.Int("reorder_cover_days"); var since = DateTime.UtcNow.AddDays(-window);
+        var rows = await db.QueryAsync<(Guid Id, int Stock, string Options, string Title, string Seller, long Sold)>(
+            "SELECT v.id AS Id, v.stock AS Stock, CAST(v.options AS CHAR) AS Options, p.title AS Title, k.display_name AS Seller, x.qty AS Sold FROM variants v " +
+            "JOIN (SELECT oi.variant_id AS vid, SUM(oi.qty) AS qty FROM order_items oi JOIN sub_orders s ON s.id = oi.sub_order_id WHERE s.created_at >= @since AND s.status NOT IN ('pending_payment','cancelled') GROUP BY oi.variant_id) x ON x.vid = v.id " +
+            "JOIN products p ON p.id = v.product_id JOIN sellers k ON k.id = v.seller_id WHERE v.is_active = 1 AND p.status = 'approved' AND x.qty >= @minSold LIMIT 500", new { since, minSold = cfg.Int("reorder_min_sold") });
+        var outp = new List<Draft>(); var month = DateTime.UtcNow.ToString("yyyy-MM");
+        foreach (var r in rows)
+        {
+            var rate = (double)r.Sold / window; var left = r.Stock / rate;
+            if (left > cover) continue;
+            var suggest = Math.Max(1, (int)Math.Ceiling(rate * cover * 2) - r.Stock);
+            var opts = JsonNode.Parse(r.Options) as JsonObject;
+            var label = r.Title + (opts is { Count: > 0 } ? " (" + string.Join(", ", opts.Select(o => o.Value?.ToString())) + ")" : "");
+            var daysLeft = (int)left;
+            outp.Add(new("request_restock", $"{r.Id}:{month}", $"Ask {r.Seller} to restock {label}: {r.Stock} left, sells about {rate:0.0} a day, out in about {daysLeft} days",
+                [["Item", label], ["Seller", r.Seller], ["In stock", r.Stock.ToString()], [$"Sold in {window} days", r.Sold.ToString()], ["Suggested to add", suggest.ToString()]],
+                new() { ["variant_id"] = r.Id.ToString(), ["item"] = label[..Math.Min(100, label.Length)], ["stock"] = r.Stock.ToString(), ["sold"] = r.Sold.ToString(), ["days"] = window.ToString(), ["left"] = daysLeft.ToString(), ["suggest"] = suggest.ToString() }, "orders"));
         }
         return outp;
     }
@@ -217,6 +246,19 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             var since = DateTime.SpecifyKind((track ? s.ShippedAt : s.ConfirmedAt) ?? DateTime.UtcNow, DateTimeKind.Utc);
             await notify.NotifySellerAsync(s.SellerId, track ? "seller_tracking_reminder" : "seller_ship_reminder",
                 new Dictionary<string, string> { ["order_number"] = s.Number, ["hours"] = ((int)(DateTime.UtcNow - since).TotalHours).ToString() }, $"/seller/orders/{subId}");
+            return;
+        }
+        if (row.Kind == "request_restock")
+        {
+            var vid = Guid.Parse(p["variant_id"]!.GetValue<string>());
+            var v = await db.QueryFirstOrDefaultAsync<VariantRow>("SELECT seller_id AS SellerId, stock AS Stock, is_active AS Active FROM variants WHERE id = @vid", new { vid });
+            if (v is null || !v.Active) throw new Stale("This item is no longer for sale, so nothing was sent.");
+            if (v.Stock > int.Parse(p["stock"]!.GetValue<string>())) throw new Stale($"Stock was already topped up ({v.Stock} now), so nothing was sent.");
+            await notify.NotifySellerAsync(v.SellerId, "seller_restock", new Dictionary<string, string>
+            {
+                ["item"] = p["item"]!.GetValue<string>(), ["stock"] = v.Stock.ToString(), ["sold"] = p["sold"]!.GetValue<string>(), ["days"] = p["days"]!.GetValue<string>(),
+                ["left"] = p["left"]!.GetValue<string>(), ["suggest"] = p["suggest"]!.GetValue<string>(),
+            }, "/seller/inventory?low_stock=1");
             return;
         }
         if (row.Kind == "delay_notice")

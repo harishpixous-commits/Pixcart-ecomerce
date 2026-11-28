@@ -17,6 +17,9 @@ const NUMBERS: Record<string, string> = {
   delivery_tracking_hours: "Ask for tracking after (hours since shipped)",
   delivery_cancel_hours: "Propose cancel and refund after (hours unshipped)",
   delivery_max_age_days: "Ignore packages older than (days)",
+  reorder_cover_days: "Restock when stock lasts less than (days)",
+  reorder_window_days: "Sales window (days)",
+  reorder_min_sold: "Only items that sold at least (units)",
   orderupdate_late_hours: "Tell customer after (hours past the promised date)",
   orderupdate_max_age_days: "Ignore packages more than (days) past due",
 };

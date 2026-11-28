@@ -15,6 +15,7 @@ Both versions get every agent: Python (`instinct/python-advanced`) and .NET/Angu
 
 | Agent | Python | .NET + Angular | What it does |
 |---|---|---|---|
+| Sourcing and reorder | yes (`tests/test_agents.py`) | yes (`Reorder_agent...` in CheckoutRulesTests; Angular type-checked only) | Compares each live item's stock with its recent sales rate. If it would run out within the cover period, proposes asking the seller to restock, with a suggested quantity. Approve sends the seller an in-app note and email. |
 | Order update | yes (`tests/test_agents.py`) | yes (`Order_update_agent...` in CheckoutRulesTests; Angular type-checked only) | Finds packages on their way that are past the promised delivery date and proposes a plain delay message to the customer (in-app and email). Says only what is true: it was due, it has not arrived. No new date promised. |
 | Delivery and shipping | yes (`tests/test_agents.py`) | yes (`Delivery_agent_writes_proposals...` in CheckoutRulesTests; Angular type-checked only, never run in a browser) | Finds confirmed packages not shipped after N hours: proposes a seller reminder. Much later: proposes cancel and refund. Shipped with no tracking: proposes asking the seller for it. |
 
@@ -22,7 +23,7 @@ Also working from before (not part of the proposal queue): admin business assist
 
 ## Not built yet
 - Order update agent: no live courier tracking, so it works from the promised date only.
-- Sourcing and reorder agent.
+- Sourcing and reorder agent: does not buy stock or raise purchase orders (sellers own their stock); uses a recent average, no seasonality.
 - Marketing agent.
 - Listing and support drafts feeding the same approval queue.
 - Delivery agent: no courier calls, no pickup re-booking, no live tracking events.

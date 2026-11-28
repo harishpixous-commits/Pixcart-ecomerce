@@ -999,6 +999,40 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Reorder_agent_asks_the_seller_to_restock_items_that_will_run_out()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000314", "agent-reorder-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000204", "Reorder Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        Assert.True((await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") })).Status == 201);
+        await ApiFactory.DbExecAsync("UPDATE variants SET stock = 4 WHERE id = @variantId", new { variantId });
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true, reorder_cover_days = 180, reorder_min_sold = 1 })).Status);
+        Assert.Equal(0, (await Run())["reorder"]!.GetValue<int>()); // its switch is off
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { reorder_enabled = true })).Status);
+        Assert.Equal(1, (await Run())["reorder"]!.GetValue<int>());
+        Assert.Equal(0, (await Run())["reorder"]!.GetValue<int>());
+        var p = (await admin.Get("/api/admin/agents/proposals?agent=reorder")).Json["items"]![0]!;
+        Assert.Equal("request_restock", p["kind"]!.GetValue<string>()); Assert.Contains("4 left", p["summary"]!.GetValue<string>());
+        Task<long> Heard() => ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_restock' AND channel = 'inapp'");
+        Assert.Equal(0, await Heard());
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{p["id"]!.GetValue<string>()}/approve", new { })).Status);
+        Assert.Equal(1, await Heard());
+        // stock topped up before approval: nothing is sent
+        await ApiFactory.DbExecAsync("INSERT INTO agent_proposals (id, agent, kind, dedupe_key, summary, details, params, permission, status, result, created_at) VALUES (UUID(), 'reorder', 'request_restock', 'request_restock:manual', 'x', '[]', JSON_OBJECT('variant_id', @variantId, 'item', 'Shirt', 'stock', '4', 'sold', '12', 'days', '30', 'left', '10', 'suggest', '5'), 'orders', 'pending', '{}', UTC_TIMESTAMP(6))", new { variantId });
+        await ApiFactory.DbExecAsync("UPDATE variants SET stock = 50 WHERE id = @variantId", new { variantId });
+        var pid = (await admin.Get("/api/admin/agents/proposals")).Json["items"]![0]!["id"]!.GetValue<string>();
+        Assert.Equal(409, (await admin.Post($"/api/admin/agents/proposals/{pid}/approve", new { })).Status);
+        Assert.Equal(1, await Heard());
+        // plenty of stock for the cover period: nothing proposed
+        await ApiFactory.DbExecAsync("UPDATE variants SET stock = 400 WHERE id = @variantId", new { variantId });
+        Assert.Equal(0, (await Run())["reorder"]!.GetValue<int>());
+    }
+
+    [Fact]
     public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
     {
         var admin = await Admin();
