@@ -63,7 +63,7 @@ export class DeliveryToggle {
       <div class="flex flex-wrap items-end gap-3">
         <label class="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium">
           New APK file
-          <input #fileInput type="file" accept=".apk,application/vnd.android.package-archive" (change)="file.set($any($event.target).files?.[0] ?? null)"
+          <input #fileInput type="file" aria-label="App file (.apk)" accept=".apk,application/vnd.android.package-archive" (change)="file.set($any($event.target).files?.[0] ?? null)"
             class="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-peacock-light file:px-3 file:py-2 file:font-semibold file:text-peacock" data-testid="apk-file" />
         </label>
         <div class="w-32"><pc-text-field label="Version" [value]="ver()" (valueChange)="ver.set($event)" placeholder="1.0.1" [maxlength]="20" /></div>

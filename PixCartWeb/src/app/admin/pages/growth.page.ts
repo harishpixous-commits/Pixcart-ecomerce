@@ -185,9 +185,9 @@ const label = (k: string): string => {
           <select class="rounded-lg border px-3 py-2 text-sm" aria-label="Segment" (change)="cSegment.set($any($event.target).value); cPreview.set(null)">
             @for (g of segs(); track g.key) {<option [value]="g.key" [selected]="g.key === cSegment()">{{ g.label }} ({{ g.count }})</option>}
           </select>
-          <input class="rounded-lg border px-3 py-2 text-sm" maxlength="80" placeholder="Title" [value]="cTitle()" (input)="cTitle.set($any($event.target).value); cPreview.set(null)" />
-          <textarea class="rounded-lg border px-3 py-2 text-sm" maxlength="300" rows="3" placeholder="Message" [value]="cMessage()" (input)="cMessage.set($any($event.target).value); cPreview.set(null)"></textarea>
-          <input class="rounded-lg border px-3 py-2 text-sm" maxlength="200" placeholder="Page to open, like /offers (optional)" [value]="cLink()" (input)="cLink.set($any($event.target).value); cPreview.set(null)" />
+          <input class="rounded-lg border px-3 py-2 text-sm" maxlength="80" placeholder="Title" aria-label="Notification title" [value]="cTitle()" (input)="cTitle.set($any($event.target).value); cPreview.set(null)" />
+          <textarea class="rounded-lg border px-3 py-2 text-sm" maxlength="300" rows="3" placeholder="Message" aria-label="Notification message" [value]="cMessage()" (input)="cMessage.set($any($event.target).value); cPreview.set(null)"></textarea>
+          <input class="rounded-lg border px-3 py-2 text-sm" maxlength="200" aria-label="Page to open" placeholder="Page to open, like /offers (optional)" [value]="cLink()" (input)="cLink.set($any($event.target).value); cPreview.set(null)" />
           <label class="flex flex-col gap-1 text-sm"><span class="font-semibold">Send later (optional, 2 minutes to 30 days ahead)</span>
             <input type="datetime-local" class="rounded-lg border px-3 py-2 text-sm" [value]="cSendAt()" (input)="cSendAt.set($any($event.target).value); cPreview.set(null)" data-testid="campaign-send-at" />
           </label>

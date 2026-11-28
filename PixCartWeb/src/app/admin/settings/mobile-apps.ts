@@ -36,7 +36,7 @@ export type AppSettings = { shop_app_banner: boolean; shop_android_apk_url: stri
         <p class="font-semibold">Android app (APK)</p>
         <pc-error-note [message]="error()" />
         <div class="grid gap-2 sm:grid-cols-[1fr_140px_auto] sm:items-end">
-          <input #apk type="file" accept=".apk,application/vnd.android.package-archive" (change)="file.set(apk.files?.[0] ?? null)"
+          <input #apk type="file" aria-label="App file (.apk)" accept=".apk,application/vnd.android.package-archive" (change)="file.set(apk.files?.[0] ?? null)"
             class="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-peacock-light file:px-3 file:py-2 file:font-semibold file:text-peacock" data-testid="shop-apk-file" />
           <pc-text-field label="Version" [(value)]="version" placeholder="1.0.0" />
           <button pcButton type="button" (click)="upload()" [loading]="busy()" [disabled]="!file()">Publish</button>
