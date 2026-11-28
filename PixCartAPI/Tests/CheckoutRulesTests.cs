@@ -966,6 +966,39 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Order_update_agent_proposes_a_delay_notice_and_the_customer_hears_only_after_approval()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000313", "agent-orderupdate-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000203", "Update Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        Assert.True(o.Status == 201, o.ToString());
+        var sid = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'shipped', shipped_at = UTC_TIMESTAMP(6), tracking_number = 'AWB7', expected_delivery_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 30 HOUR) WHERE id = @sid", new { sid });
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true })).Status);
+        Assert.Equal(0, (await Run())["orderupdate"]!.GetValue<int>()); // its own switch is off
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { orderupdate_enabled = true })).Status);
+        Assert.Equal(1, (await Run())["orderupdate"]!.GetValue<int>());
+        Assert.Equal(0, (await Run())["orderupdate"]!.GetValue<int>());
+        var p = (await admin.Get("/api/admin/agents/proposals?agent=orderupdate")).Json["items"]![0]!;
+        Assert.Equal("delay_notice", p["kind"]!.GetValue<string>());
+        Task<long> Heard() => ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'order_delay' AND channel = 'inapp'");
+        Assert.Equal(0, await Heard());
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{p["id"]!.GetValue<string>()}/approve", new { })).Status);
+        Assert.Equal(1, await Heard());
+        // delivered before approval: skipped, nobody is messaged
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'delivered' WHERE id = @sid", new { sid });
+        await ApiFactory.DbExecAsync("INSERT INTO agent_proposals (id, agent, kind, dedupe_key, summary, details, params, permission, status, result, created_at) VALUES (UUID(), 'orderupdate', 'delay_notice', 'delay_notice:manual', 'x', '[]', JSON_OBJECT('sub_id', @sid, 'expected', '1 Jan'), 'orders', 'pending', '{}', UTC_TIMESTAMP(6))", new { sid });
+        var pid = (await admin.Get("/api/admin/agents/proposals")).Json["items"]![0]!["id"]!.GetValue<string>();
+        Assert.Equal(409, (await admin.Post($"/api/admin/agents/proposals/{pid}/approve", new { })).Status);
+        Assert.Equal(1, await Heard());
+    }
+
+    [Fact]
     public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
     {
         var admin = await Admin();

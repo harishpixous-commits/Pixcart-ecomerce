@@ -444,3 +444,6 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 ## Push 141: AI agents framework and the delivery agent (.NET and Angular)
 - `agent_proposals` (V029), `AgentsBAL` + `AgentsController` (`/api/admin/agents`: overview, settings, proposals, run, approve, reject), `agents` growth section, job every 30 minutes, notification `seller_tracking_reminder`, Angular Admin -> AI agents page and menu entry. Same behaviour as Python.
 - Test: `Delivery_agent_writes_proposals_and_nothing_happens_until_staff_approve` passes. ngc clean.
+
+## Push 142: Order update agent (.NET and Angular)
+- Same agent in `AgentsBAL` (event `order_delay`, settings `orderupdate_*`). Test `Order_update_agent_proposes_a_delay_notice...` passes. ngc clean.

@@ -12,6 +12,7 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
     private sealed record Draft(string Kind, string Key, string Summary, string[][] Details, Dictionary<string, string> Args, string Permission);
     private sealed record AgentDef(string Key, string Label, string Job, string NotWired, Func<JsonObject, Task<List<Draft>>> Scan);
     private sealed record SubRow(Guid SellerId, string Number, string Status, string Tracking, DateTime? ConfirmedAt, DateTime? ShippedAt);
+    private sealed record DelayRow(string Number, string Status, Guid UserId);
     private sealed class Stale(string message) : Exception(message);
 
     private List<AgentDef> Agents() =>
@@ -20,6 +21,10 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             "Finds packages that are not shipped on time or shipped with no tracking, and proposes a seller reminder or a cancel and refund.",
             "Does not talk to couriers, re-book a pickup or read live tracking events. Late-in-transit packages are handled by the order update agent (not built yet).",
             DeliveryScanAsync),
+        new("orderupdate", "Order update agent",
+            "Finds packages on their way that are past the promised delivery date and proposes a plain delay message to the customer (in-app and email).",
+            "Does not read live courier tracking, promise a new date, or message about other order stages. Normal shipped and delivered messages already go out without an agent.",
+            OrderUpdateScanAsync),
     ];
 
     private async Task<JsonObject> CfgAsync() => (JsonObject)(await growth.GetAsync())["agents"]!;
@@ -52,6 +57,25 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             var hours = (int)(now - DateTime.SpecifyKind(r.At, DateTimeKind.Utc)).TotalHours;
             outp.Add(new("nudge_tracking", r.Id.ToString(), $"Ask {r.Seller} to add tracking to {r.Number} (shipped {hours} hours ago, no tracking)",
                 [["Package", r.Number], ["Seller", r.Seller], ["Marked shipped", $"{hours} hours ago"]], new() { ["sub_id"] = r.Id.ToString() }, "orders"));
+        }
+        return outp;
+    }
+
+    // ---------- order update agent ----------
+    private async Task<List<Draft>> OrderUpdateScanAsync(JsonObject cfg)
+    {
+        var now = DateTime.UtcNow; var lateBefore = now.AddHours(-cfg.Int("orderupdate_late_hours")); var oldest = now.AddDays(-cfg.Int("orderupdate_max_age_days"));
+        var rows = await db.QueryAsync<(Guid Id, string Number, string Courier, DateTime Due)>(
+            "SELECT id AS Id, number AS Number, courier_name AS Courier, expected_delivery_at AS Due FROM sub_orders WHERE status = 'shipped' AND expected_delivery_at IS NOT NULL " +
+            "AND expected_delivery_at <= @lateBefore AND expected_delivery_at >= @oldest ORDER BY expected_delivery_at LIMIT 200", new { lateBefore, oldest });
+        var outp = new List<Draft>();
+        foreach (var r in rows)
+        {
+            var due = DateTime.SpecifyKind(r.Due, DateTimeKind.Utc); var ist = due + TimeSpan.FromHours(5.5);
+            var late = (int)(now - due).TotalHours; var expected = $"{ist.Day} {ist:MMM}";
+            outp.Add(new("delay_notice", r.Id.ToString(), $"Tell the customer package {r.Number} is late (due {expected}, {late} hours past)",
+                [["Package", r.Number], ["Courier", string.IsNullOrEmpty(r.Courier) ? "not recorded" : r.Courier], ["Was due", expected], ["Hours late", late.ToString()]],
+                new() { ["sub_id"] = r.Id.ToString(), ["expected"] = expected }, "orders"));
         }
         return outp;
     }
@@ -193,6 +217,15 @@ public class AgentsBAL(IMySqlDapperHelper db, IAccessBAL access, IGrowthBAL grow
             var since = DateTime.SpecifyKind((track ? s.ShippedAt : s.ConfirmedAt) ?? DateTime.UtcNow, DateTimeKind.Utc);
             await notify.NotifySellerAsync(s.SellerId, track ? "seller_tracking_reminder" : "seller_ship_reminder",
                 new Dictionary<string, string> { ["order_number"] = s.Number, ["hours"] = ((int)(DateTime.UtcNow - since).TotalHours).ToString() }, $"/seller/orders/{subId}");
+            return;
+        }
+        if (row.Kind == "delay_notice")
+        {
+            var subId = Guid.Parse(p["sub_id"]!.GetValue<string>());
+            var s = await db.QueryFirstOrDefaultAsync<DelayRow>("SELECT s.number AS Number, s.status AS Status, o.user_id AS UserId FROM sub_orders s JOIN orders o ON o.id = s.order_id WHERE s.id = @subId", new { subId })
+                ?? throw new Stale("The package no longer exists.");
+            if (s.Status != "shipped") throw new Stale("The package is no longer on its way, so nothing was sent.");
+            await notify.NotifyUserAsync(s.UserId, "order_delay", new Dictionary<string, string> { ["order_number"] = s.Number, ["expected"] = p["expected"]!.GetValue<string>() }, "/account/orders");
             return;
         }
         throw new Stale("This kind of proposal is no longer supported.");
