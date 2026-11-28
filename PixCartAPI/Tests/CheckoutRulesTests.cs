@@ -906,6 +906,31 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Volume_offer_counts_units_across_variants_of_the_product()
+    {
+        var admin = await Admin();
+        var (varA, prodA, sellerA) = await ShirtInStock("9400000441", "varmix-shirt-a");
+        var (varB, prodB, _) = await ShirtInStock("9400000442", "varmix-shirt-b", "33KOVAI9876K1Z");
+        await Refresh(prodA); await Refresh(prodB);
+        var varA2 = Guid.NewGuid();
+        await ApiFactory.DbExecAsync(
+            "INSERT INTO variants (id, product_id, seller_id, sku, options, mrp_paise, price_paise, stock, weight_grams, net_qty, is_active, created_at, updated_at) " +
+            "VALUES (@varA2, @prodA, @sellerA, 'VARMIX-2', CAST('{}' AS JSON), 200000, 100000, 10, 500, NULL, 1, @now, @now)", new { varA2, prodA, sellerA, now = DateTime.UtcNow });
+        await ApiFactory.DbExecAsync("INSERT INTO inventory_levels (variant_id, warehouse_id, quantity, updated_at) SELECT @varA2, warehouse_id, 10, @now FROM inventory_levels WHERE variant_id = @varA", new { varA2, varA, now = DateTime.UtcNow });
+        Assert.Equal(201, (await admin.Post("/api/admin/coupons", new { code = "VARMIX", description = "", kind = "volume", value = 10, buy_qty = 2, min_order_paise = 0, per_user_limit = 1, is_active = true, show_on_checkout = false, product_slugs = new[] { "varmix-shirt-a" } })).Status);
+        var buyer = await LoginPhone("9620000441", "Variant Mix Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = varA, qty = 1 });
+        await buyer.Post("/api/cart/items", new { variant_id = varB, qty = 1 });     // another product does not count
+        var q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "VARMIX" });
+        Assert.NotNull(q.Json["coupon"]!["error"]);
+        await buyer.Post("/api/cart/items", new { variant_id = varA2, qty = 1 });    // a second variant of the same shirt does
+        q = await buyer.Post("/api/checkout/quote", new { address_id = addr, payment_method = "cod", coupon_code = "VARMIX" });
+        Assert.Null(q.Json["coupon"]!["error"]);
+        Assert.Equal(200000L * 10 / 100, q.Json["coupon"]!["discount"]!.GetValue<long>());
+    }
+
+    [Fact]
     public async Task Volume_coupon_needs_the_minimum_number_of_items()
     {
         var admin = await Admin();
