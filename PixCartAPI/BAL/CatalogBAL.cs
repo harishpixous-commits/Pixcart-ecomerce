@@ -485,6 +485,7 @@ public class CatalogBAL(
             title = $"{(c.Value / 100.0).ToString("G6", CultureInfo.InvariantCulture)}% off";
             if (c.MaxDiscountPaise is > 0) title += $" up to {Rupees(c.MaxDiscountPaise.Value)}";
         }
+        else if (c.Kind == "freeship") title = "Free delivery";
         else if (c.Kind == "volume") title = $"Buy {c.BuyQty} or more, get {c.Value}% off";
         else if (c.Kind == "bundle") title = $"Bundle: {c.Value}% off when you buy all {JsonHelper.Array(c.ProductIds).Count} together";
         else if (c.Kind == "bxgy") title = $"Buy {c.BuyQty}, get {c.GetQty} " + (c.Value == 100 ? "free" : $"at {c.Value}% off");

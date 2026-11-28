@@ -33,7 +33,14 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
         if (address is null || address.UserId != user.Id || address.IsDeleted) throw new NotFoundException("Address");
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
-        var view = await cart.ViewAsync(user.Id, address.Pincode, address.StateCode);
+        // a typed code is checked first: a free delivery code changes the delivery fee in the bill below
+        BAL.CouponsBAL.Result? typedRes = null; string? typedErr = null;
+        if (!string.IsNullOrWhiteSpace(body.CouponCode))
+        {
+            try { typedRes = await coupons.EvaluateAsync(body.CouponCode, user.Id, await cart.LoadCartAsync(user.Id)); }
+            catch (AppException exc) { typedErr = exc.Message; }
+        }
+        var view = await cart.ViewAsync(user.Id, address.Pincode, address.StateCode, typedRes?.FreeShipping ?? false);
         var summary = view["summary"]!.AsObject();
         var codFee = body.PaymentMethod == "cod" ? cfg.Int("cod_fee_paise") : 0;
         summary["cod_fee"] = codFee;
@@ -52,18 +59,15 @@ public class CheckoutController(ICartBAL cart, IFeesBAL fees, ICouponsBAL coupon
         view["coupon"] = null;
         if (!string.IsNullOrWhiteSpace(body.CouponCode))
         {
-            var lines = await cart.LoadCartAsync(user.Id);
-            try
+            if (typedRes is not null)
             {
-                var res = await coupons.EvaluateAsync(body.CouponCode, user.Id, lines);
+                var res = typedRes;
                 view["coupon"] = new JsonObject { ["code"] = res.Coupon.Code, ["discount"] = res.Discount, ["description"] = res.Coupon.Description, ["error"] = null };
+                if (res.FreeShipping) view["coupon"]!["free_shipping"] = true;
                 summary["grand_total"] = summary["grand_total"]!.GetValue<long>() - res.Discount;
                 summary["coupon_discount"] = res.Discount;
             }
-            catch (AppException exc)
-            {
-                view["coupon"] = new JsonObject { ["code"] = body.CouponCode.Trim().ToUpperInvariant(), ["discount"] = 0, ["error"] = exc.Message };
-            }
+            else view["coupon"] = new JsonObject { ["code"] = body.CouponCode.Trim().ToUpperInvariant(), ["discount"] = 0, ["error"] = typedErr };
         }
         else if (cfg.Bool("feature_coupons"))
         {

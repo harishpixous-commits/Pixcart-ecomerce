@@ -19,7 +19,7 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
         Math.Round(paise / 100m, 0, MidpointRounding.ToEven).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A validated coupon: the discount and its per-cart-line split (variant id -> paise).</summary>
-    public sealed record Result(CouponModel Coupon, long Discount, Dictionary<Guid, long> PerLine);
+    public sealed record Result(CouponModel Coupon, long Discount, Dictionary<Guid, long> PerLine, bool FreeShipping = false);
 
     /// <summary>Checks a coupon against the cart lines. Throws AppException with the reference's reason.</summary>
     public async Task<Result> EvaluateAsync(string code, Guid userId, IReadOnlyList<CartBAL.CartLine> lines)
@@ -82,6 +82,12 @@ public class CouponsBAL(CouponDAL coupons, CatalogDAL catalogDal, ICatalogBAL ca
             if (c.MaxDiscountPaise is { } cap) off = Math.Min(off, cap);
             off = Math.Min(off, baseSum);
             return new Result(c, off, Money.Allocate(off, eligible));
+        }
+        if (c.Kind == "freeship")   // delivery is free for the order: no discount
+        {
+            if (baseSum == 0) throw new AppException("This coupon does not apply to the items in your cart", "coupon_not_applicable");
+            if (baseSum < c.MinOrderPaise) throw new AppException($"Add items worth ₹{ShortfallRupees(c.MinOrderPaise - baseSum)} more to use this coupon", "coupon_min_order");
+            return new Result(c, 0, eligible.Keys.ToDictionary(k => k, _ => 0L), true);
         }
         if (baseSum == 0) throw new AppException("This coupon does not apply to the items in your cart", "coupon_not_applicable");
         if (baseSum < c.MinOrderPaise)

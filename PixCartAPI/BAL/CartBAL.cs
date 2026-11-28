@@ -157,12 +157,12 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
     }
 
     /// <summary>The full cart view (reference: routers/cart.py _view).</summary>
-    public async Task<JsonObject> ViewAsync(Guid userId, string? pincode = null, string? stateCode = null)
+    public async Task<JsonObject> ViewAsync(Guid userId, string? pincode = null, string? stateCode = null, bool freeShipping = false)
     {
         var cfg = await platform.GetAsync();
         var ck = await fees.GetAsync();
         if (stateCode is not null) cfg = await ShippingZones.WithStateThresholdAsync(db, cfg, stateCode);
-        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode), await ShippingZones.SellerFreeBoundsAsync(db), stateCode is null ? null : await ShippingZones.StateFeeAsync(db, stateCode), await LoyaltyPoints.FreeDeliveryAsync(db, userId)), cfg, await razorpay.OnlinePaymentsAsync(), ck, await ShippingZones.SellerFreeBoundsAsync(db));
+        return CartPayload(GroupBySeller(await LoadCartAsync(userId), cfg, pincode is null ? default : await ShippingZones.SurchargeAsync(db, pincode), await ShippingZones.SellerFreeBoundsAsync(db), stateCode is null ? null : await ShippingZones.StateFeeAsync(db, stateCode), freeShipping || await LoyaltyPoints.FreeDeliveryAsync(db, userId)), cfg, await razorpay.OnlinePaymentsAsync(), ck, await ShippingZones.SellerFreeBoundsAsync(db));
     }
 
     /// <summary>

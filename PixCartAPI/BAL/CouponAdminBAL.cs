@@ -72,6 +72,7 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
         if (kind == "bxgy" && (buyQty < 1 || getQty < 1)) throw new AppException("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value", 400);
         if (kind == "bundle" && (productSlugs ?? []).Select(s => s.Trim().ToLowerInvariant()).Where(s => s.Length > 0).Distinct().Count() is < 2 or > 10) throw new AppException("A bundle needs between 2 and 10 products", "invalid_value", 400);
         if (kind == "volume" && buyQty < 2) throw new AppException("A volume offer needs a minimum of at least 2 items", "invalid_value", 400);
+        if (kind == "freeship" && isAutomatic) throw new AppException("A free delivery code has to be typed by the customer, it cannot be automatic", "invalid_value", 400);
         if (kind is not ("bxgy" or "volume")) buyQty = 0;
         if (kind != "bxgy") getQty = 0;
         var productIds = await ProductIdsJsonAsync(db, productSlugs);
@@ -107,6 +108,7 @@ public class CouponAdminBAL(IAccessBAL access, IMySqlDapperHelper db) : ICouponA
         if (kind == "bxgy" && (buyQty < 1 || getQty < 1)) throw new AppException("A buy X get Y offer needs at least 1 item to buy and 1 to get", "invalid_value", 400);
         if (kind == "bundle" && (productSlugs ?? []).Select(s => s.Trim().ToLowerInvariant()).Where(s => s.Length > 0).Distinct().Count() is < 2 or > 10) throw new AppException("A bundle needs between 2 and 10 products", "invalid_value", 400);
         if (kind == "volume" && buyQty < 2) throw new AppException("A volume offer needs a minimum of at least 2 items", "invalid_value", 400);
+        if (kind == "freeship" && isAutomatic) throw new AppException("A free delivery code has to be typed by the customer, it cannot be automatic", "invalid_value", 400);
         if (kind is not ("bxgy" or "volume")) buyQty = 0;
         if (kind != "bxgy") getQty = 0;
         var productIds = await ProductIdsJsonAsync(db, productSlugs);

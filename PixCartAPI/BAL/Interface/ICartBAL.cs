@@ -6,7 +6,7 @@ namespace BAL.Interface;
 public interface ICartBAL
 {
     /// <summary>The full cart view (groups, summary with fees, hints, checkout options).</summary>
-    Task<JsonObject> ViewAsync(Guid userId, string? pincode = null, string? stateCode = null);
+    Task<JsonObject> ViewAsync(Guid userId, string? pincode = null, string? stateCode = null, bool freeShipping = false);
 
     /// <summary>The cart lines with availability problems and buy limits filled in (reference: load_cart).</summary>
     Task<List<CartBAL.CartLine>> LoadCartAsync(Guid userId, Utils.Interface.IUnitOfWork? uow = null, bool forUpdate = false);

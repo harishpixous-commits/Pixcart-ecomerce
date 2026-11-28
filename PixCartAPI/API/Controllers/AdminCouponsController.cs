@@ -66,7 +66,7 @@ public sealed record AdminCouponIn(
 
     /// <summary>Reference: kind is Literal["percent", "flat", "bxgy"].</summary>
     public static System.ComponentModel.DataAnnotations.ValidationResult? ValidateKind(string? kind, System.ComponentModel.DataAnnotations.ValidationContext context)
-        => kind is "percent" or "flat" or "bxgy" or "bundle" or "volume"
+        => kind is "percent" or "flat" or "bxgy" or "bundle" or "volume" or "freeship"
             ? System.ComponentModel.DataAnnotations.ValidationResult.Success
-            : new System.ComponentModel.DataAnnotations.ValidationResult("kind must be percent, flat, bxgy, bundle or volume", ["Kind"]);
+            : new System.ComponentModel.DataAnnotations.ValidationResult("kind must be percent, flat, bxgy, bundle, volume or freeship", ["Kind"]);
 }

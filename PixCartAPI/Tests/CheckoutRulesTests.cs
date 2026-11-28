@@ -872,6 +872,46 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Free_delivery_code_zeroes_the_delivery_fee_in_the_quote_and_the_order()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000491", "freeship-shirt");
+        await Refresh(productId);
+        var price = await ApiFactory.DbScalarAsync<long>("SELECT price_paise FROM variants WHERE id = @id", new { id = variantId });
+        Assert.Equal(200, (await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 5_000_000 } })).Status);   // nothing is free by the threshold
+        try
+        {
+            object Body(bool auto, long min) => new { code = "SHIPFREE", description = "", kind = "freeship", value = 1, min_order_paise = min, per_user_limit = 1, is_active = true, show_on_checkout = false, is_automatic = auto };
+            Assert.Equal(400, (await admin.Post("/api/admin/coupons", Body(true, 0))).Status);            // has to be typed
+            Assert.Equal(201, (await admin.Post("/api/admin/coupons", Body(false, price * 5))).Status);
+            var buyer = await LoginPhone("9620000491", "Free Ship Buyer");
+            var addr = await AddAddress(buyer, state: "33");
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            Task<Res> Quote(string? code = null) => buyer.Post("/api/checkout/quote", code is null ? new { address_id = addr, payment_method = "cod", coupon_code = (string?)null } : new { address_id = addr, payment_method = "cod", coupon_code = (string?)code });
+            var plain = (await Quote()).Json;
+            var ship = plain["summary"]!["shipping_total"]!.GetValue<long>();
+            Assert.True(ship > 0);
+            var low = (await Quote("SHIPFREE")).Json;
+            Assert.NotNull(low["coupon"]!["error"]);                                                  // minimum order not met: nothing changes
+            Assert.Equal(ship, low["summary"]!["shipping_total"]!.GetValue<long>());
+            await ApiFactory.DbExecAsync("UPDATE coupons SET min_order_paise = 0 WHERE code = 'SHIPFREE'");
+            var q = (await Quote("SHIPFREE")).Json;
+            Assert.Null(q["coupon"]!["error"]); Assert.True(q["coupon"]!["free_shipping"]!.GetValue<bool>()); Assert.Equal(0, q["coupon"]!["discount"]!.GetValue<long>());
+            Assert.Equal(0, q["summary"]!["shipping_total"]!.GetValue<long>());
+            Assert.Equal(plain["summary"]!["grand_total"]!.GetValue<long>() - ship, q["summary"]!["grand_total"]!.GetValue<long>());
+            var r = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N"), coupon_code = "SHIPFREE", expected_total = q["summary"]!["grand_total"]!.GetValue<long>() });
+            Assert.True(r.Status == 201, r.ToString());
+            var orderId = r.Json["order"]!["id"]!.GetValue<string>();
+            Assert.Equal(q["summary"]!["grand_total"]!.GetValue<long>(), r.Json["order"]!["grand_total"]!.GetValue<long>());
+            Assert.Equal(0, await ApiFactory.DbScalarAsync<long>("SELECT COALESCE(SUM(shipping_fee), 0) FROM sub_orders WHERE order_id = @orderId", new { orderId }));
+            Assert.Equal(1, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = 'SHIPFREE'"));
+            Assert.Equal(200, (await buyer.Post($"/api/orders/{orderId}/cancel", new { reason = "Ordered by mistake" })).Status);
+            Assert.Equal(0, await ApiFactory.DbScalarAsync<int>("SELECT used_count FROM coupons WHERE code = 'SHIPFREE'"));
+        }
+        finally { await admin.Put("/api/admin/checkout", new { marketplace = new { free_shipping_threshold_paise = 49900 } }); }
+    }
+
+    [Fact]
     public async Task Cart_hint_also_covers_an_automatic_buy_x_get_y_offer()
     {
         var admin = await Admin();
