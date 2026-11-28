@@ -47,6 +47,7 @@ export interface ProductCard {
   deal?: DealInfo | null;
   unit_price?: { paise: Paise; per: string } | null;
   bought?: string | null;
+  is_new?: boolean;
   variant_count?: number;
   variant_id?: string | null;
   sponsored?: boolean;

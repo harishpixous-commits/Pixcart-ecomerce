@@ -70,6 +70,7 @@ export function BazaarProductTile({ p, showAdd, rank, quickPlus }: ProductTilePr
           <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-ink transition-colors group-hover:text-peacock">{p.title}</p>
           <TileRating p={p} className="mt-1.5" />
           {p.bought && <p className="mt-1 text-xs text-ink-soft">{p.bought}</p>}
+          {p.is_new && <p className="mt-1 text-xs font-semibold text-leaf" data-testid="new-badge">New</p>}
           {p.deal && <div className="mt-2"><DealBadge deal={p.deal} discount={p.discount_pct} /></div>}
           {/* the ribbon (or the deal badge) shows the discount, so the price line does not repeat it */}
           <TilePrice p={p} showDiscount={false} className="mt-auto pt-2" priceClass="font-display text-lg font-bold text-ink" />

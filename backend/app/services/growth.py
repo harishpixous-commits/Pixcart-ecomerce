@@ -46,6 +46,7 @@ SCHEMA: dict[str, dict[str, tuple]] = {
     "return_photos": {"enabled": (False, "bool", 0, 0), "required_for_defects": (False, "bool", 0, 0), "max_photos": (3, "int", 1, 6)},
     "newsletter": {"enabled": (False, "bool", 0, 0), "title": ("Get offers in your inbox", "label", 0, 60)},
     "wishlist_share": {"enabled": (False, "bool", 0, 0)},
+    "new_badge": {"enabled": (False, "bool", 0, 0), "days": (14, "int", 1, 90)},
     "promo_popup": {"enabled": (False, "bool", 0, 0), "title": ("Welcome", "label", 0, 60), "body": ("Today's best deals are live.", "label", 0, 200),
                     "button_label": ("Shop now", "label", 0, 30), "link": ("/search?sort=discount", "label", 0, 200), "delay_seconds": (5, "int", 0, 60)},
     "bulk_edit": {"enabled": (True, "bool", 0, 0), "max_rows": (500, "int", 1, 5000)},

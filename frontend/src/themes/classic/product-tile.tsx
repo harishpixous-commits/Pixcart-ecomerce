@@ -44,6 +44,7 @@ export function ClassicProductTile({ p, showAdd, rank, quickPlus }: ProductTileP
         <p className="line-clamp-2 text-[15px] leading-snug text-ink group-hover:text-peacock">{p.title}</p>
         <TileRating p={p} className="mt-1" />
         {p.bought && <p className="mt-0.5 text-xs text-ink-soft">{p.bought}</p>}
+        {p.is_new && <p className="mt-0.5 text-xs font-semibold text-leaf" data-testid="new-badge">New</p>}
         {p.deal && <div className="mt-1.5"><DealBadge deal={p.deal} discount={p.discount_pct} /></div>}
         <TilePrice p={p} className="mt-auto pt-1.5" />
         <TileDelivery p={p} />

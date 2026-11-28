@@ -61,6 +61,8 @@ async def product_cards(session, products: list[Product], *, sponsored: dict | N
             select(OrderItem.product_id, func.sum(OrderItem.qty)).join(SubOrder, SubOrder.id == OrderItem.sub_order_id)
             .where(OrderItem.product_id.in_(ids), SubOrder.status.in_(LIVE_PACKAGE), SubOrder.created_at >= since)
             .group_by(OrderItem.product_id))).all())
+    nb = (await growth_svc.get(session))["new_badge"]
+    new_since = utcnow() - timedelta(days=int(nb["days"])) if nb["enabled"] else None
     out = []
     for p in products:
         vs = variants.get(p.id, [])
@@ -83,6 +85,7 @@ async def product_cards(session, products: list[Product], *, sponsored: dict | N
             "deal": deal_map.get(p.id),
             "unit_price": unit_price(cheapest.price_paise, cheapest.net_qty, unit) if (cheapest and cfg["pdp_unit_price"]) else None,
             "bought": f"{bucket(units)} bought in past month" if units >= cfg["pdp_bought_min"] else None,
+            "is_new": bool(new_since and p.created_at and p.created_at >= new_since),
             "variant_count": len(vs),
             "variant_id": str(cheapest.id) if cheapest and len(vs) == 1 and cheapest.stock > 0 else None,
         }

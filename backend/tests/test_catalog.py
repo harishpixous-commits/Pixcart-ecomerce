@@ -211,3 +211,27 @@ async def test_promo_popup_is_off_until_switched_on_and_keeps_links_on_site(clie
     await admin.put("/api/admin/growth/settings", {"promo_popup": {"link": "//evil.example"}})
     assert (await client.get("/api/promo-popup")).json()["link"] == ""
     assert (await admin.put("/api/admin/growth/settings", {"promo_popup": {"delay_seconds": 99}})).status_code == 400
+
+
+async def test_new_badge_marks_fresh_products_only_when_switched_on(client, admin, categories):
+    from datetime import timedelta
+    from sqlalchemy import update as sa_update
+
+    from app.db import SessionLocal, utcnow
+    from app.models import Product
+
+    seller = await make_seller(client, admin, "9100000780", name="New Badge", pan="NEWBG1234K")
+    fresh = await make_live_product(client, admin, seller, categories["shirts"], title="Fresh Arrival Shirt", variants=[{**v, "sku": v["sku"] + "-F"} for v in SHIRT_VARIANTS])
+    old = await make_live_product(client, admin, seller, categories["shirts"], title="Old Stock Shirt", variants=[{**v, "sku": v["sku"] + "-O"} for v in SHIRT_VARIANTS])
+    async with SessionLocal() as s:
+        await s.execute(sa_update(Product).where(Product.slug == old["slug"]).values(created_at=utcnow() - timedelta(days=40)))
+        await s.commit()
+
+    async def flags():
+        items = (await client.get("/api/catalog/products?q=shirt")).json()["items"]
+        return {i["title"]: i["is_new"] for i in items}
+
+    assert set((await flags()).values()) == {False}
+    assert (await admin.put("/api/admin/growth/settings", {"new_badge": {"enabled": True, "days": 14}})).status_code == 200
+    got = await flags()
+    assert got["Fresh Arrival Shirt"] is True and got["Old Stock Shirt"] is False

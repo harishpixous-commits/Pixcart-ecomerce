@@ -94,6 +94,7 @@ export function FreshProductTile({ p, rank }: ProductTileProps) {
           {p.sponsored && <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft" data-testid="sponsored-label">Sponsored</span>}
           <p className="line-clamp-2 min-h-[2.75em] text-[13px] font-semibold leading-snug text-ink">{p.title}</p>
           {p.unit_price && <p className="mt-0.5 text-[11px] text-ink-soft">{rupees(p.unit_price.paise)}/{p.unit_price.per}</p>}
+          {p.is_new && <p className="mt-0.5 text-[11px] font-semibold text-leaf" data-testid="new-badge">New</p>}
           {p.rating_count > 0 && (
             <p className="mt-1 flex items-center gap-1 text-[11px] leading-none">
               <span className="sr-only">Rated {p.rating_avg.toFixed(1)} out of 5 from {p.rating_count.toLocaleString("en-IN")} ratings</span>

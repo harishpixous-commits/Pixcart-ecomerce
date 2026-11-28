@@ -162,6 +162,7 @@ export function LuxeProductTile({ p, rank }: ProductTileProps) {
             {p.deal && <DealLine deal={p.deal} />}
             <StarLine p={p} />
             {p.bought && <p className="mt-1 text-[12px] text-ink-soft">{p.bought}</p>}
+            {p.is_new && <p className="mt-1 text-xs font-semibold text-leaf" data-testid="new-badge">New</p>}
             <div className="mt-1.5">
               <TileDelivery p={p} />
             </div>
