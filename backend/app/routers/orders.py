@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import uuid
+from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request
@@ -14,9 +15,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.deps import CurrentUser, SessionDep, rate_limit
-from app.core.errors import ApiError, NotFound
+from app.core.errors import ApiError, NotFound, TooManyRequests
 from app.db import SessionLocal, utcnow
 from app.integrations import get as get_integrations
+from app.models import RateLimitEvent
 from app.models import (
     DeliveryAssignment,
     DeliveryBoy,
@@ -243,6 +245,14 @@ async def _own_order(session, user, order_id: uuid.UUID) -> Order:
     return o
 
 
+async def rate_limit_misses(session, user_id) -> None:
+    """Counts only wrong coupon codes: 30 an hour per customer, then typed codes are refused for a while."""
+    since = utcnow() - timedelta(hours=1)
+    n = (await session.execute(select(func.count()).select_from(RateLimitEvent).where(RateLimitEvent.key == f"coupon-miss:{user_id}", RateLimitEvent.created_at >= since))).scalar_one()
+    if n >= 30:
+        raise TooManyRequests("Too many wrong coupon codes. Please try again in a while.")
+
+
 @router.post("/api/checkout/quote")
 async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     address = await get_owned_address(session, user.id, body.address_id)
@@ -253,9 +263,13 @@ async def quote(body: QuoteIn, user: CurrentUser, session: SessionDep) -> dict:
     typed_res = typed_err = None   # a typed code is checked first: a free delivery code changes the delivery fee in the bill below
     if body.coupon_code and body.coupon_code.strip():
         try:
+            await rate_limit_misses(session, user.id)
             typed_res = await evaluate(session, body.coupon_code, user.id, await load_cart(session, user.id))
         except ApiError as exc:
             typed_err = exc
+            if exc.code != "rate_limited" and typed_res is None:
+                session.add(RateLimitEvent(key=f"coupon-miss:{user.id}", created_at=utcnow()))
+                await session.commit()   # wrong guesses are counted so a code cannot be brute-forced
     free_ship = bool(typed_res and typed_res.free_shipping)
     view = cart_payload(group_by_seller(await load_cart(session, user.id), cfg, await growth_svc.remote_surcharge(session, address.pincode), bounds, await growth_svc.state_fee(session, address.state_code), free_ship or await loyalty_svc.free_delivery(session, user.id)), cfg, (await get_integrations(session)).online_payments, ck, bounds)
     cod_fee = cfg["cod_fee_paise"] if body.payment_method == "cod" else 0
