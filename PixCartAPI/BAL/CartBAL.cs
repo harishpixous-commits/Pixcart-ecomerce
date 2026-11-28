@@ -52,7 +52,7 @@ public class CartBAL(CartDAL cart, ICatalogBAL catalog, IPlatformSettingsBAL pla
             var det = ProductInfo.DetailsOf(product.Details);
             line.MinQty = Math.Max(1, Math.Min(det.MinQty, perItem));
             line.ShipsOn = det.PreorderDate();
-            if (product.Status != "approved" || seller.Status != "approved" || !variant.IsActive)
+            if (product.Status != "approved" || seller.Status != "approved" || !variant.IsActive || (product.PublishAt is { } live && live > DateTime.UtcNow))
                 line.Problem = "This item is no longer available";
             else if (seller.HolidayMode)
                 line.Problem = "The seller is not taking orders right now";

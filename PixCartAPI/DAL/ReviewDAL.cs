@@ -288,7 +288,7 @@ public class ReviewDAL(IMySqlDapperHelper db)
     /// <summary>A product customers may see and buy (reference: public_product_filter).</summary>
     public Task<ProductModel?> PublicProductBySlugAsync(string slug) =>
         db.QueryFirstOrDefaultAsync<ProductModel>(
-            "SELECT * FROM products WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug AND status = 'approved' AND price_from > 0 " +
+            "SELECT * FROM products WHERE slug = @slug AND slug COLLATE utf8mb4_0900_bin = @slug AND status = 'approved' AND (publish_at IS NULL OR publish_at <= UTC_TIMESTAMP(6)) AND price_from > 0 " +
             "AND seller_id IN (SELECT id FROM sellers WHERE status = 'approved' AND holiday_mode = 0)", new { slug });
 
     public async Task<long> VerifiedCountAsync(Guid productId) =>

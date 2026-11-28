@@ -67,7 +67,7 @@ public static class SavedSearches
         var sent = 0;
         foreach (var r in rows)
         {
-            var sql = "SELECT title FROM products WHERE status = 'approved' AND price_from > 0 AND approved_at > @since AND seller_id IN (SELECT id FROM sellers WHERE status = 'approved' AND holiday_mode = 0)";
+            var sql = "SELECT title FROM products WHERE status = 'approved' AND (publish_at IS NULL OR publish_at <= UTC_TIMESTAMP(6)) AND price_from > 0 AND approved_at > @since AND seller_id IN (SELECT id FROM sellers WHERE status = 'approved' AND holiday_mode = 0)";
             var p = new Dictionary<string, object> { ["since"] = r.Checked };
             var i = 0;
             foreach (var t in Terms(r.Q)) { sql += $" AND (LOWER(title) LIKE @t{i} OR LOWER(brand) LIKE @t{i})"; p[$"t{i}"] = "%" + t.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%"; i++; }

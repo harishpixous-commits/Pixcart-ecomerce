@@ -8,7 +8,7 @@ public class ProductEventDAL(IMySqlDapperHelper db)
     /// <summary>True when customers may see and buy the product (approved, priced, from an approved seller not on holiday).</summary>
     public async Task<bool> IsPublicAsync(Guid productId) =>
         await db.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM products p WHERE p.id = @productId AND p.status = 'approved' AND p.price_from > 0 " +
+            "SELECT COUNT(*) FROM products p WHERE p.id = @productId AND p.status = 'approved' AND (p.publish_at IS NULL OR p.publish_at <= UTC_TIMESTAMP(6)) AND p.price_from > 0 " +
             "AND p.seller_id IN (SELECT s.id FROM sellers s WHERE s.status = 'approved' AND s.holiday_mode = 0)", new { productId }) > 0;
 
     /// <summary>Adds to the product's counters for the day (one row per product and India calendar day).</summary>

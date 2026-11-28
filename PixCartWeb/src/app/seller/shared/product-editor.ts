@@ -239,6 +239,7 @@ const STATUS_TEXT: Record<string, string> = {
         <textarea pcTextarea id="sg" data-testid="product-size-guide" [value]="sizeGuide()" (input)="sizeGuide.set($any($event.target).value)" rows="4" maxlength="2000" placeholder="Size | Chest (in) | Length (in)&#10;S | 38 | 27"></textarea>
       </pc-field>
       <pc-text-field class="sm:col-span-2" label="Tags (optional)" [(value)]="tags" maxlength="400" hint="Up to 10 short labels, separated by commas, e.g. summer sale, new. Used to group products into collections." />
+      <pc-text-field class="sm:col-span-2" label="Go live at (optional)" type="datetime-local" [(value)]="publishAt" hint="Once approved, the product shows to shoppers from this time. Leave empty to show it as soon as it is approved. Changing it does not send the product for approval again." />
       <pc-text-field class="sm:col-span-2" label="Search listing title (optional)" [(value)]="seoTitle" maxlength="70" hint="What Google shows as the title, up to 70 characters. Leave empty to use the product title." />
       <pc-text-field class="sm:col-span-2" label="Search listing description (optional)" [(value)]="seoDescription" maxlength="160" hint="Up to 160 characters. Leave empty to use the start of the description." />
     </section>
@@ -331,6 +332,7 @@ export class ProductEditor implements OnInit {
   protected readonly sizeGuide = signal("");
   protected readonly tags = signal("");
   protected readonly seoTitle = signal("");
+  protected readonly publishAt = signal("");
   protected readonly seoDescription = signal("");
   protected readonly images = signal<string[]>([]);
   protected readonly videos = signal<ProductVideo[]>([]);
@@ -390,6 +392,8 @@ export class ProductEditor implements OnInit {
     this.sizeGuide.set(p?.size_guide ?? "");
     this.tags.set((p?.tags ?? []).join(", "));
     this.seoTitle.set(p?.seo_title ?? "");
+    const pub = p?.publish_at ? new Date(p.publish_at) : null;
+    this.publishAt.set(pub && !Number.isNaN(pub.getTime()) ? new Date(pub.getTime() - pub.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
     this.seoDescription.set(p?.seo_description ?? "");
     this.images.set(p?.images ?? []);
     this.videos.set(p?.videos ?? []);
@@ -612,6 +616,7 @@ export class ProductEditor implements OnInit {
       return_window_days: Number(this.returnDays()),
       size_guide: this.sizeGuide(),
       seo_title: this.seoTitle(),
+      publish_at: this.publishAt() ? new Date(this.publishAt()).toISOString() : null,
       seo_description: this.seoDescription(),
       tags: this.tags().split(",").map((t) => t.trim()).filter(Boolean),
       images: this.images(),

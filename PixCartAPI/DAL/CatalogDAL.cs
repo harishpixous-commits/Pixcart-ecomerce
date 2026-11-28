@@ -44,7 +44,7 @@ public class CatalogDAL(IMySqlDapperHelper db, SearchDocumentCache searchDocs)
 {
     /// <summary>A product customers may see and buy (approved, priced, from an approved seller not on holiday). Alias p.</summary>
     public const string PublicFilter =
-        "p.status = 'approved' AND p.price_from > 0 AND p.seller_id IN (SELECT s.id FROM sellers s WHERE s.status = 'approved' AND s.holiday_mode = 0)";
+        "p.status = 'approved' AND (p.publish_at IS NULL OR p.publish_at <= UTC_TIMESTAMP(6)) AND p.price_from > 0 AND p.seller_id IN (SELECT s.id FROM sellers s WHERE s.status = 'approved' AND s.holiday_mode = 0)";
 
     public static readonly string[] LivePackage = ["placed", "confirmed", "packed", "shipped", "delivered"];
 

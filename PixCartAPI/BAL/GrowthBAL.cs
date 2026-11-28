@@ -276,7 +276,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         var b = app.PublicWebUrl.TrimEnd('/');
         var urls = new List<string> { b + "/" };
         if (cfg.Bool("sitemap_include_categories")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM categories WHERE is_active = 1 ORDER BY slug")).Select(x => $"{b}/c/{x}"));
-        urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM products WHERE status = 'approved' ORDER BY slug LIMIT 50000")).Select(x => $"{b}/p/{x}"));
+        urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM products WHERE status = 'approved' AND (publish_at IS NULL OR publish_at <= UTC_TIMESTAMP(6)) ORDER BY slug LIMIT 50000")).Select(x => $"{b}/p/{x}"));
         if (cfg.Bool("sitemap_include_sellers")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM sellers WHERE status = 'approved' ORDER BY slug")).Select(x => $"{b}/store/{x}"));
         if (cfg.Bool("sitemap_include_collections")) urls.AddRange((await db.QueryAsync<string>("SELECT slug FROM product_collections WHERE is_active = 1 ORDER BY slug")).Select(x => $"{b}/collections/{x}"));
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +

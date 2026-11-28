@@ -92,6 +92,7 @@ public class ProductModerationBAL(
             ["size_guide"] = p.SizeGuide ?? "",
             ["tags"] = JsonHelper.Node(p.Tags) ?? new JsonArray(),
             ["seo_title"] = p.SeoTitle ?? "", ["seo_description"] = p.SeoDescription ?? "",
+            ["publish_at"] = p.PublishAt is { } pubAt ? DateTime.SpecifyKind(pubAt, DateTimeKind.Utc).ToString("o") : null,
             ["return_window_days"] = p.ReturnWindowDays,
             ["images"] = new JsonArray(imgs.Select(x => (JsonNode)JsonValue.Create(x)).ToArray()),
             ["videos"] = videosOut,

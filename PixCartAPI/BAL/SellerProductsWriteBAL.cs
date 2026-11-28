@@ -81,6 +81,13 @@ public partial class SellerProductsBAL
         foreach(var x in videos){var v=x as JsonObject??throw Invalid("Invalid video");var poster=Text(v,"poster_url",0,400,"");vids.Add(new(){Url=Media(Text(v,"url",1,400),"videos"),PosterUrl=poster.Length>0?Media(poster,"products"):"",Title=Text(v,"title",0,120,""),DurationS=(int)Number(v,"duration_s",0,3600,0)});}
         var sizeGuide=Utils.SizeGuide.Clean(Text(b,"size_guide",0,2000,""));
         var seoTitle=Text(b,"seo_title",0,70,"");var seoDesc=Text(b,"seo_description",0,160,"");
+        DateTime? publishAt=null;
+        if(b["publish_at"] is {} pa&&pa.GetValueKind()!=System.Text.Json.JsonValueKind.Null)
+        {
+            if(!DateTimeOffset.TryParse(pa.ToString(),System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.AssumeUniversal,out var when))throw Invalid("Invalid publish_at");
+            if(when>DateTimeOffset.UtcNow.AddDays(365))throw Invalid("Pick a go-live time within the next year");
+            publishAt=when.UtcDateTime;
+        }
         var tagsIn=b["tags"] is null?new JsonArray():b["tags"] as JsonArray??throw Invalid("Invalid tags");if(tagsIn.Count>10)throw Invalid("At most 10 tags");
         var tags=new JsonArray();foreach(var t in tagsIn){var tag=string.Join(' ',(t?.GetValue<string>()??"").Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();if(tag.Length==0)continue;if(tag.Length>30)tag=tag[..30];if(!tags.Any(x=>x!.GetValue<string>()==tag))tags.Add(tag);}
         var details=ProductModerationBAL.DetailsDump(ProductInfo.DetailsOf((b["details"]??new JsonObject()).ToJsonString(),strict:true));
@@ -94,7 +101,7 @@ public partial class SellerProductsBAL
             if(validateOnly)return Guid.Empty;
             var before=id is null?null:await detail.DetailAsync(p);var oldVideos=before?["videos"]?.AsArray().Select(v=>v!["url"]!.GetValue<string>()).ToList()??[];
             if(vids.Count>0&&!oldVideos.SequenceEqual(vids.Select(v=>v.Url))) {var cfg=await platform.GetAsync();if(!cfg.Bool("feature_product_videos"))throw new AppException("Product videos are switched off on this marketplace","videos_off");if(vids.Count>cfg.Int("max_videos_per_listing"))throw new AppException($"At most {cfg.Int("max_videos_per_listing")} videos per listing","too_many_videos");}
-            p.CategoryId=categoryId;p.Title=title.Trim();p.Brand=brand.Trim();p.Description=description;p.Highlights=cleanHighlights.ToJsonString();p.Specs=cleanSpecs.ToJsonString();p.HsnCode=hsn;p.GstBps=gst;p.CountryOfOrigin=country;p.SizeGuide=sizeGuide;p.Tags=tags.ToJsonString();p.SeoTitle=string.Join(' ',seoTitle.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));p.SeoDescription=string.Join(' ',seoDesc.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));p.ReturnWindowDays=days.Value;p.Details=details.ToJsonString();p.UpdatedAt=DateTimeFunctions.UtcNow();
+            p.CategoryId=categoryId;p.Title=title.Trim();p.Brand=brand.Trim();p.Description=description;p.Highlights=cleanHighlights.ToJsonString();p.Specs=cleanSpecs.ToJsonString();p.HsnCode=hsn;p.GstBps=gst;p.CountryOfOrigin=country;p.SizeGuide=sizeGuide;p.Tags=tags.ToJsonString();p.PublishAt=publishAt;p.SeoTitle=string.Join(' ',seoTitle.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));p.SeoDescription=string.Join(' ',seoDesc.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));p.ReturnWindowDays=days.Value;p.Details=details.ToJsonString();p.UpdatedAt=DateTimeFunctions.UtcNow();
             if(id is null){var root=IndianFormats.Slugify(title,200);p.Slug=root;while(await dal.SlugTakenAsync(p.Slug,tx))p.Slug=root+"-"+Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(3));await dal.InsertProductAsync(p,tx);}
             var existing=(await dal.ProductVariantsAsync(p.Id,tx)).ToDictionary(v=>v.Id);var busy=await deals.ActiveVariantIdsAsync(existing.Keys.ToList());var seen=new HashSet<Guid>();
             foreach(var item in inputs)

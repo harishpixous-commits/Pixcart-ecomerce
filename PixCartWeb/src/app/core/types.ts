@@ -581,6 +581,7 @@ export interface SellerProduct {
   tags?: string[];
   seo_title?: string;
   seo_description?: string;
+  publish_at?: string | null;
   images: string[];
   videos?: ProductVideo[];
   variants: SellerVariant[];

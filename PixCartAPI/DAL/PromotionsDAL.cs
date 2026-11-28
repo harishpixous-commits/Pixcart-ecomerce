@@ -8,7 +8,7 @@ namespace DAL;
 public class PromotionsDAL(IMySqlDapperHelper db)
 {
     private const string PublicProduct =
-        "p.status = 'approved' AND p.price_from > 0 AND p.seller_id IN (SELECT id FROM sellers WHERE status = 'approved' AND holiday_mode = 0)";
+        "p.status = 'approved' AND (p.publish_at IS NULL OR p.publish_at <= UTC_TIMESTAMP(6)) AND p.price_from > 0 AND p.seller_id IN (SELECT id FROM sellers WHERE status = 'approved' AND holiday_mode = 0)";
 
     public Task<CategoryModel?> CategoryBySlugAsync(string slug, bool activeOnly = false) =>
         db.QueryFirstOrDefaultAsync<CategoryModel>(

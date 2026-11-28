@@ -41,6 +41,8 @@ public class ProductModel
     public DateTime? SubmittedAt { get; set; }
     /// <summary>products.approved_at</summary>
     public DateTime? ApprovedAt { get; set; }
+    /// <summary>products.publish_at: an approved product shows to shoppers only from this moment (null: right away)</summary>
+    public DateTime? PublishAt { get; set; }
     /// <summary>products.price_from</summary>
     public long PriceFrom { get; set; }
     /// <summary>products.mrp_from</summary>

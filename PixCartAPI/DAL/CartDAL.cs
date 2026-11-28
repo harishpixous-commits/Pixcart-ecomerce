@@ -40,7 +40,7 @@ public class CartDAL(IMySqlDapperHelper db)
             SELECT v.* FROM variants v
             JOIN products p ON p.id = v.product_id
             JOIN sellers s ON s.id = p.seller_id
-            WHERE v.id = @variantId AND v.is_active = 1 AND p.status = 'approved' AND s.status = 'approved'
+            WHERE v.id = @variantId AND v.is_active = 1 AND p.status = 'approved' AND (p.publish_at IS NULL OR p.publish_at <= UTC_TIMESTAMP(6)) AND s.status = 'approved'
             """, new { variantId });
 
     public Task<CartItemModel?> GetItemAsync(Guid userId, Guid variantId) =>
