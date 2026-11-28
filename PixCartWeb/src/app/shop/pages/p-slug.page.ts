@@ -49,6 +49,11 @@ import { ProductReviews } from "../browse/reviews";
             </section>
           }
 
+          @if (p.tags?.length) {
+            <p class="mt-4 flex flex-wrap gap-2" aria-label="Tags">
+              @for (t of p.tags; track t) {<a [pcLink]="tagHref(t)" class="rounded-full border border-line px-3 py-1 text-sm text-ink-soft hover:text-peacock">{{ t }}</a>}
+            </p>
+          }
           @if (p.description) {
             <section class="rounded-xl bg-white p-4 sm:p-6" aria-labelledby="desc-h">
               <h2 id="desc-h" class="mb-2 text-xl font-semibold">Product description</h2>
@@ -125,6 +130,9 @@ export class ShopPSlugPage {
   private notFound = false;
 
   private readonly meta = inject(Meta);
+  protected tagHref(t: string): string {
+    return "/search?tag=" + encodeURIComponent(t);
+  }
 
   constructor() {
     effect(() => {

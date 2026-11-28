@@ -495,6 +495,7 @@ export class Chip {
           @if (priceLabel()) {<pc-filter-chip [label]="priceLabel()!" (clear)="set({ min_price: null, max_price: null })" />}
           @if (params().get("min_rating")) {<pc-filter-chip [label]="params().get('min_rating') + '★ & up'" (clear)="set({ min_rating: null })" />}
           @if (params().get("min_discount")) {<pc-filter-chip [label]="params().get('min_discount') + '% off or more'" (clear)="set({ min_discount: null })" />}
+          @if (params().get("tag")) {<pc-filter-chip [label]="'Tag: ' + params().get('tag')" (clear)="set({ tag: null })" />}
           @if (params().get("in_stock")) {<pc-filter-chip label="In stock" (clear)="set({ in_stock: null })" />}
           <button type="button" (click)="clearAll()" class="font-semibold text-peacock hover:underline">Clear all</button>
         </div>
@@ -556,7 +557,7 @@ export class SearchView {
     return d.total ? `${from}-${to} of ${d.total.toLocaleString("en-IN")} results` : "No results";
   });
   protected readonly activeCount = computed(() => {
-    const keys = ["brand", "min_price", "max_price", "min_rating", "min_discount", "in_stock", "deal", "delivery", ...(this.category() ? [] : ["category"])];
+    const keys = ["brand", "tag", "min_price", "max_price", "min_rating", "min_discount", "in_stock", "deal", "delivery", ...(this.category() ? [] : ["category"])];
     return keys.filter((k) => this.params().get(k)).length;
   });
   protected readonly activeFilters = computed(() => this.activeCount() > 0);
@@ -595,7 +596,7 @@ export class SearchView {
       untracked(() => {
         this.track(api<Result>("/api/catalog/products", {
           query: {
-            q: params.get("q"), category: category ?? params.get("category"), seller, brand: params.getAll("brand"),
+            q: params.get("q"), category: category ?? params.get("category"), seller, brand: params.getAll("brand"), tag: params.get("tag"),
             min_price: params.get("min_price"), max_price: params.get("max_price"), min_rating: params.get("min_rating"), min_discount: params.get("min_discount"),
             in_stock: params.get("in_stock"), deal: params.get("deal"), pincode: pin || undefined, delivery: pin ? params.get("delivery") : undefined,
             sort: params.get("sort") ?? "relevance", page: params.get("page") ?? 1,

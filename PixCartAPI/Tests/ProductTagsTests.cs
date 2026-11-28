@@ -29,6 +29,7 @@ public class ProductTagsTests(ApiFactory f) : ApiTest(f)
         var v = Factory.CreateClient();
         var pub = (await v.GetFromJsonAsync<JsonObject>($"/api/catalog/products/{(await ApiFactory.DbScalarAsync<string>("SELECT slug FROM products WHERE id=@pid", new { pid = Guid.Parse(pid) }))}"))!;
         Assert.Equal("Cotton shirt, Kovai", pub["seo_title"]!.GetValue<string>());
+        Assert.Equal("[\"summer sale\",\"new\"]", pub["tags"]!.ToJsonString());
         Assert.Equal("Soft cotton.", pub["seo_description"]!.GetValue<string>());
         Assert.Single((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products?tag=Summer%20Sale"))!["items"]!.AsArray());
         Assert.Empty((await v.GetFromJsonAsync<JsonObject>("/api/catalog/products?tag=winter"))!["items"]!.AsArray());

@@ -209,6 +209,7 @@ export interface ProductPage {
   size_guide?: string[][] | null;
   seo_title?: string;
   seo_description?: string;
+  tags?: string[];
   option_axes: Record<string, string[]>;
   variants: PublicVariant[];
   seller: {
