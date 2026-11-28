@@ -96,6 +96,8 @@ public sealed class JobsWorker(IServiceScopeFactory scopes, AppSettings app, ILo
         // Ship reminders: one in-app note to the seller per confirmed package that has not shipped (Admin → Growth; off unless switched on).
         new("ship_reminders", async sp => await ShipReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromHours(1))),
+        // AI agents: every switched-on agent scans and writes proposals for staff to approve (Admin → AI agents; off unless switched on).
+        new("agents", async sp => await sp.GetRequiredService<IAgentsBAL>().RunAllAsync(), Every(TimeSpan.FromMinutes(30))),
         // Review reminders: one in-app note per delivered package after a few days (Admin → Growth; off unless switched on).
         new("review_reminders", async sp => await ReviewReminders.SendDueAsync(sp.GetRequiredService<IMySqlDapperHelper>(), sp.GetRequiredService<ICatalogNotifyBAL>()),
             Every(TimeSpan.FromHours(1))),

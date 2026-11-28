@@ -33,6 +33,11 @@ public static class NotificationEvents
                 ["inapp"] = ("You left something in your cart", "{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}"),
                 ["email"] = ("{{item}} is still in your {{brand}} cart", "Hi {{name}},\n\n{{item}}{{more}} is still waiting in your cart ({{amount}}).{{offer}}\n\nFinish your order: {{link}}"),
             },
+            ["seller_tracking_reminder"] = new Dictionary<string, (string Subject, string Body)>
+            {
+                ["inapp"] = ("Add tracking for order {{order_number}}", "You marked it shipped {{hours}} hours ago but no tracking number is on it. Add the courier and tracking number so the customer can follow the parcel."),
+                ["email"] = ("Add tracking for order {{order_number}}", "Hi {{name}},\n\nOrder {{order_number}} was marked shipped {{hours}} hours ago but has no tracking number. Add the courier and tracking number.\n\n{{link}}"),
+            },
             ["seller_ship_reminder"] = new Dictionary<string, (string Subject, string Body)>
             {
                 ["inapp"] = ("Order {{order_number}} is waiting to ship", "You confirmed it {{hours}} hours ago. Ship it and add the tracking number so the customer is not left waiting."),

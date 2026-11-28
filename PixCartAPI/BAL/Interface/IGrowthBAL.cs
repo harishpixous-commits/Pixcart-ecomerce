@@ -9,7 +9,7 @@ public interface IGrowthBAL
 {
     Task<JsonObject> GetAsync();
     Task<JsonObject> SettingsAsync(UserModel admin);
-    Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body);
+    Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body, string permission = "marketing");
     Task<JsonObject> ScorecardAsync(UserModel admin);
     Task<int> AutoSuspendAsync(ICatalogNotifyBAL notify);
     Task<JsonObject> LoyaltyAsync(Guid userId);

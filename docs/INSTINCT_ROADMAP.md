@@ -440,3 +440,7 @@ Same as the Python version: "Pre-order: ships from" date in the product info edi
 - `loyalty.on_account_delete` = keep (default) or zero. Zero writes an adjust row that takes the balance to 0 when an account is deleted. `GET /api/account/delete-info` feeds the warning in the delete dialog. `DELETE /api/account` returns `points_cleared`.
 - `gift_cards.staff_refund` (off by default). `POST /api/admin/growth/gift-card-purchases/{id}/refund` voids a never-used bought card, marks the purchase refunded with the staff payment reference, tells the buyer, audits. Used card: 409 `card_used`. Setting off: 400. No gateway is called; staff send the money by hand.
 - SQL V028. Tests: GiftPurchaseTests (refund) and CustomerAccountTests (delete policy) pass. ngc clean. Same as the Python Push 140.
+
+## Push 141: AI agents framework and the delivery agent (.NET and Angular)
+- `agent_proposals` (V029), `AgentsBAL` + `AgentsController` (`/api/admin/agents`: overview, settings, proposals, run, approve, reject), `agents` growth section, job every 30 minutes, notification `seller_tracking_reminder`, Angular Admin -> AI agents page and menu entry. Same behaviour as Python.
+- Test: `Delivery_agent_writes_proposals_and_nothing_happens_until_staff_approve` passes. ngc clean.

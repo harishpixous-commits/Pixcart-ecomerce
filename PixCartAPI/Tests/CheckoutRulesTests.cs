@@ -908,6 +908,64 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Delivery_agent_writes_proposals_and_nothing_happens_until_staff_approve()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000312", "agent-delivery-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000201", "Agent Buyer");
+        async Task<string> Order(string status, int hoursAgo)
+        {
+            var addr = await AddAddress(buyer, state: "33");
+            await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+            var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+            Assert.True(o.Status == 201, o.ToString());
+            var sid = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+            await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = @status, confirmed_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL @h HOUR), shipped_at = DATE_SUB(UTC_TIMESTAMP(6), INTERVAL @h HOUR), tracking_number = '' WHERE id = @sid", new { status, h = hoursAgo, sid });
+            return sid;
+        }
+        var late = await Order("confirmed", 30); var veryLate = await Order("confirmed", 9 * 24); var untracked = await Order("shipped", 20); await Order("confirmed", 2);
+        async Task<JsonObject> Run() => (await admin.Post("/api/admin/agents/run", new { })).Json["new"]!.AsObject();
+        Task<JsonArray> Items(string q = "pending") => admin.Get("/api/admin/agents/proposals?status=" + q).ContinueWith(t => t.Result.Json["items"]!.AsArray());
+        Assert.Equal(0, (await Run())["delivery"]!.GetValue<int>()); // off by default
+        Assert.Equal(200, (await admin.Put("/api/admin/agents/settings", new { enabled = true, delivery_enabled = true })).Status);
+        Assert.Equal(400, (await admin.Put("/api/admin/agents/settings", new { delivery_nudge_hours = 0 })).Status);
+        var ovr = await admin.Get("/api/admin/agents"); Assert.True(ovr.Status == 200, ovr.ToString()); var ov = ovr.Json;
+        Assert.Equal("delivery", ov["agents"]![0]!["key"]!.GetValue<string>()); Assert.True(ov["agents"]![0]!["enabled"]!.GetValue<bool>());
+        Assert.Equal(3, (await Run())["delivery"]!.GetValue<int>());
+        Assert.Equal(0, (await Run())["delivery"]!.GetValue<int>()); // never written twice
+        var items = await Items();
+        string Id(string kind) => items.Single(x => x!["kind"]!.GetValue<string>() == kind)!["id"]!.GetValue<string>();
+        Assert.Equal(["cancel_package", "nudge_seller", "nudge_tracking"], items.Select(x => x!["kind"]!.GetValue<string>()).Order().ToList());
+        Assert.Equal(0, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event IN ('seller_ship_reminder','seller_tracking_reminder')"));
+        var shopper = await LoginPhone("9770000202", "Not Staff");
+        Assert.Equal(403, (await shopper.Post($"/api/admin/agents/proposals/{Id("nudge_seller")}/approve", new { })).Status);
+        var nid = Id("nudge_seller"); var tid = Id("nudge_tracking"); var cancelId = Id("cancel_package");
+        var ok = await admin.Post($"/api/admin/agents/proposals/{nid}/approve", new { });
+        Assert.Equal(200, ok.Status); Assert.Equal("done", ok.Json["status"]!.GetValue<string>());
+        Assert.Equal(409, (await admin.Post($"/api/admin/agents/proposals/{nid}/approve", new { })).Status);
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_ship_reminder' AND channel = 'inapp'"));
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{tid}/approve", new { })).Status);
+        Assert.Equal(1, await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE event = 'seller_tracking_reminder' AND channel = 'inapp'"));
+        // reject: nothing is cancelled and it is not proposed again
+        Assert.Equal("rejected", (await admin.Post($"/api/admin/agents/proposals/{cancelId}/reject", new { })).Json["status"]!.GetValue<string>());
+        Assert.Equal(0, (await Run())["delivery"]!.GetValue<int>());
+        Assert.Equal("confirmed", await ApiFactory.DbScalarAsync<string>("SELECT status FROM sub_orders WHERE id = @veryLate", new { veryLate }));
+        // stale: the package shipped before staff looked
+        await ApiFactory.DbExecAsync("UPDATE sub_orders SET status = 'shipped', tracking_number = 'AWB1' WHERE id = @late", new { late });
+        await ApiFactory.DbExecAsync("INSERT INTO agent_proposals (id, agent, kind, dedupe_key, summary, details, params, permission, status, result, created_at) VALUES (UUID(), 'delivery', 'nudge_seller', 'nudge_seller:stale', 'x', '[]', JSON_OBJECT('sub_id', @late), 'orders', 'pending', '{}', UTC_TIMESTAMP(6))", new { late });
+        var staleId = (await Items()).Single()!["id"]!.GetValue<string>();
+        Assert.Equal(409, (await admin.Post($"/api/admin/agents/proposals/{staleId}/approve", new { })).Status);
+        Assert.Single(await Items("expired"));
+        // approving a cancel runs the real cancel and refund
+        await ApiFactory.DbExecAsync("INSERT INTO agent_proposals (id, agent, kind, dedupe_key, summary, details, params, permission, status, result, created_at) VALUES (UUID(), 'delivery', 'cancel_package', 'cancel_package:manual', 'x', '[]', JSON_OBJECT('sub_id', @veryLate, 'reason', 'Test cancel'), 'orders', 'pending', '{}', UTC_TIMESTAMP(6))", new { veryLate });
+        var cid = (await Items()).Single()!["id"]!.GetValue<string>();
+        Assert.Equal(200, (await admin.Post($"/api/admin/agents/proposals/{cid}/approve", new { })).Status);
+        Assert.Equal("cancelled", await ApiFactory.DbScalarAsync<string>("SELECT status FROM sub_orders WHERE id = @veryLate", new { veryLate }));
+        Assert.True(await ApiFactory.DbScalarAsync<long>("SELECT COUNT(*) FROM audit_logs WHERE action = 'agent.delivery.nudge_seller'") >= 1);
+    }
+
+    [Fact]
     public async Task Bought_together_lists_products_from_the_same_orders_and_is_off_by_default()
     {
         var admin = await Admin();

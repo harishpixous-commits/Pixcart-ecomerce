@@ -46,6 +46,9 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         ["return_reasons"] = PlatformSettingsBAL.ReturnReasons.Keys.SelectMany(c => new[] { new F("label_" + c, "", K.Label, 0, 60), new F("off_" + c, false, K.Bool) }).ToArray(),
         ["shipping_zones"] = [new("enabled", false, K.Bool), new("remote_prefixes", "", K.Text, 0, 300), new("remote_surcharge_paise", 6000, K.Int, 0, 100000), new("state_fees", "", K.Text, 0, 400), new("state_free_above", "", K.Text, 0, 400), new("waive_when_free", true, K.Bool)],
         ["bought_together"] = [new("enabled", false, K.Bool), new("max_items", 4, K.Int, 1, 12)],
+        ["agents"] = [new("enabled", false, K.Bool), new("expire_hours", 72, K.Int, 1, 720), new("max_per_run", 30, K.Int, 1, 200),
+            new("delivery_enabled", false, K.Bool), new("delivery_nudge_hours", 24, K.Int, 1, 720), new("delivery_tracking_hours", 12, K.Int, 1, 720),
+            new("delivery_cancel_hours", 168, K.Int, 24, 2160), new("delivery_max_age_days", 30, K.Int, 1, 180)],
         ["ship_reminders"] = [new("enabled", false, K.Bool), new("after_hours", 24, K.Int, 1, 720), new("max_age_days", 14, K.Int, 1, 60)],
         ["review_reminders"] = [new("enabled", false, K.Bool), new("after_days", 5, K.Int, 1, 60), new("max_age_days", 30, K.Int, 1, 180)],
         ["seller_shipping"] = [new("enabled", false, K.Bool), new("min_paise", 0, K.Int, 0, 10000000), new("max_paise", 500000, K.Int, 0, 10000000)],
@@ -108,9 +111,9 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         return new JsonObject { ["settings"] = await GetAsync(), ["defaults"] = Defaults() };
     }
 
-    public async Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body)
+    public async Task<JsonObject> UpdateAsync(UserModel admin, JsonObject body, string permission = "marketing")
     {
-        await access.RequireAsync(admin, "marketing");
+        await access.RequireAsync(admin, permission);
         var clean = new JsonObject();
         foreach (var (sec, vals) in body)
         {
@@ -148,7 +151,7 @@ public partial class GrowthBAL(SettingsDAL settings, CatalogSupportDAL support, 
         var detail = string.Join(", ", body.Select(x => x.Key).Order());
         await audit.AuditAsync(admin, "settings.growth", "settings", "growth", detail[..Math.Min(200, detail.Length)], tx);
         await tx.CommitAsync();
-        return await SettingsAsync(admin);
+        return new JsonObject { ["settings"] = await GetAsync(), ["defaults"] = Defaults() };
     }
 
     private static string Level(double pct, int warn, int crit) => crit > 0 && pct >= crit ? "critical" : warn > 0 && pct >= warn ? "warning" : "ok";
