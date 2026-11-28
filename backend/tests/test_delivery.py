@@ -697,3 +697,12 @@ async def test_return_pickup_by_our_partner(client, admin, categories):
     assert received["status"] == "received" and received["credit_note_number"]
     earned = (await rider.get("/api/delivery/earnings")).json()
     assert earned["today"]["trips"] == 2  # the delivery and the return pickup are both paid
+
+
+def test_drop_note_leads_with_the_customers_preferred_time():
+    from app.services.fleet import drop_note
+
+    assert drop_note({"instructions": "Blue gate"}) == "Blue gate"
+    assert drop_note({"instructions": "Blue gate", "delivery_slot": "Evening"}) == "Customer would like delivery: Evening. Blue gate"
+    assert drop_note({"delivery_slot": "Morning"}) == "Customer would like delivery: Morning."
+    assert drop_note({}) == ""

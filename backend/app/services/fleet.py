@@ -1077,6 +1077,14 @@ async def generate_payouts(session: AsyncSession, week_start: date) -> int:
 # ============================================================================ views
 
 
+def drop_note(st: dict) -> str:
+    """What the partner reads under the drop address: the customer's instructions, led by their preferred delivery time when they picked one
+    (a request from the customer, not something the shop promised)."""
+    note = st.get("instructions", "") or ""
+    slot = (st.get("delivery_slot") or "").strip()
+    return f"Customer would like delivery: {slot}. {note}".strip() if slot else note
+
+
 def assignment_brief(a: DeliveryAssignment) -> dict:
     return {"id": str(a.id), "status": a.status, "status_label": STEP_LABEL.get(a.status, a.status), "kind": a.kind, "mode": a.mode,
             "assigned_at": a.assigned_at.isoformat(), "expires_at": a.expires_at.isoformat() if a.expires_at else None,
@@ -1109,7 +1117,7 @@ async def trip_view(session: AsyncSession, a: DeliveryAssignment, *, for_partner
         "drop": {"name": st.get("full_name", "") if show_customer else "", "phone": st.get("phone", "") if show_customer else "",
                  "address": ", ".join(x for x in (st.get("line1", ""), st.get("line2", ""), st.get("landmark", "")) if x) if show_customer else "",
                  "city": st.get("city", ""), "pincode": st.get("pincode", ""), "lat": st.get("lat"), "lng": st.get("lng"),
-                 "instructions": st.get("instructions", "") if show_customer else "", "no_bag": bool(st.get("no_bag"))},
+                 "instructions": drop_note(st) if show_customer else "", "no_bag": bool(st.get("no_bag"))},
         "items": [{"title": t, "variant": v, "qty": q, "image": img} for t, v, q, img in items],
         "fee_estimate": fee_for(cfg, None) + (order.tip_paise if a.kind == "delivery" and await is_fee_carrier(session, sub) else 0) + bonus_now,
         "bonus_now": bonus_now,  # bad weather bonus if the trip finished now (the final one is fixed when it ends)
