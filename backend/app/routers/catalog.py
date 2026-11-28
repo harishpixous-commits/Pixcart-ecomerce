@@ -316,10 +316,14 @@ async def search(
 async def suggest(session: SessionDep, q: str = Query(min_length=1, max_length=60)) -> dict:
     text = q.strip()
     lists = await get_settings(session)
-    tsq = _prefix_tsquery(text)
-    conds = [literal(text).op("<%")(Product.title)]
-    if tsq:
-        conds.insert(0, Product.search_vector.op("@@")(func.to_tsquery("simple", tsq)))
+    from app.services.search_synonyms import parse_groups, variants
+
+    conds = []
+    for variant in variants(text, parse_groups(lists["search_synonyms"])):
+        conds.append(literal(variant).op("<%")(Product.title))
+        tsq = _prefix_tsquery(variant)
+        if tsq:
+            conds.insert(0, Product.search_vector.op("@@")(func.to_tsquery("simple", tsq)))
     titles = (
         await session.execute(
             select(Product.title, Product.slug).where(*public_product_filter(), or_(*conds)).order_by(func.word_similarity(text, Product.title).desc()).limit(lists["search_suggestions"])

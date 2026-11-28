@@ -15,10 +15,12 @@ async def test_admin_synonyms_widen_the_search(client, admin, categories):
     seller = await make_seller(client, admin, "9600000071", name="Synonym Traders", pan="ABCDE1234G")
     await make_live_product(client, admin, seller, categories["shirts"], title="Cotton Casual Shirt for Men", variants=SHIRT_VARIANTS)
     assert (await client.get("/api/catalog/products?q=kurta")).json()["total"] == 0
+    assert (await client.get("/api/catalog/suggest?q=kurta")).json()["products"] == []
     assert (await admin.put("/api/admin/settings", {"search_synonyms": "shirt"})).status_code == 400
     r = await admin.put("/api/admin/settings", {"search_synonyms": "shirt = kurta; shoes = sneakers"})
     assert r.status_code == 200 and r.json()["search_synonyms"] == "shirt = kurta; shoes = sneakers"
     assert (await client.get("/api/catalog/products?q=kurta")).json()["total"] == 1
     assert (await client.get("/api/catalog/products?q=kur")).json()["total"] == 0
+    assert [x["slug"] for x in (await client.get("/api/catalog/suggest?q=kurta")).json()["products"]] != []
     assert (await admin.put("/api/admin/settings", {"search_synonyms": ""})).status_code == 200
     assert (await client.get("/api/catalog/products?q=kurta")).json()["total"] == 0
