@@ -91,7 +91,7 @@ async def returnable_items(session: AsyncSession, sub: SubOrder) -> list[dict]:
     return out
 
 
-async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: list[tuple[uuid.UUID, int]], reason: str, comment: str, refund_upi: str) -> ReturnRequest:
+async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: list[tuple[uuid.UUID, int]], reason: str, comment: str, refund_upi: str, photos: list[str] | None = None) -> ReturnRequest:
     cfg = await get_settings(session)
     if not cfg["feature_returns"]:
         raise ApiError("Returns are not available right now", "returns_off")
@@ -103,6 +103,17 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
 
     if reason not in await growth_svc.return_reasons(session):
         raise ApiError("Choose a reason for the return", "invalid_reason")
+    from app.config import settings as app_settings
+
+    pcfg = (await growth_svc.get(session))["return_photos"]
+    photos = list(dict.fromkeys(photos or []))
+    if photos and not pcfg["enabled"]:
+        raise ApiError("Photos with a return are switched off", "photos_off")
+    base = f"{app_settings.media_base_url.rstrip('/')}/return-photos/"
+    if len(photos) > pcfg["max_photos"] or any(not u.startswith(base) or ".." in u or len(u) > 400 for u in photos):
+        raise ApiError(f"Add up to {pcfg['max_photos']} photos, uploaded here", "invalid_photos")
+    if pcfg["enabled"] and pcfg["required_for_defects"] and reason in DEFECT_REASONS and not photos:
+        raise ApiError("Please add a photo of the problem so the seller can check it", "photos_required", fields={"photos": "Required"})
     eligible = {r["order_item_id"]: r for r in await returnable_items(session, sub)}
     if not items:
         raise ApiError("Choose at least one item to return", "no_items")
@@ -126,7 +137,7 @@ async def create(session: AsyncSession, user: User, sub_id: uuid.UUID, items: li
     if order.payment_method == "cod" and not UPI.match(refund_upi or ""):
         raise ApiError("Enter the UPI ID where we should send your refund (for example name@okbank)", "upi_required", fields={"refund_upi": "Required"})
     ret = ReturnRequest(
-        number=f"RT{utcnow():%y%m%d}{secrets.token_hex(3).upper()}", sub_order_id=sub.id, seller_id=sub.seller_id, user_id=user.id,
+        photos=photos, number=f"RT{utcnow():%y%m%d}{secrets.token_hex(3).upper()}", sub_order_id=sub.id, seller_id=sub.seller_id, user_id=user.id,
         reason=reason, comment=comment[:2000], refund_upi=refund_upi if order.payment_method == "cod" else "",
     )
     session.add(ret)
@@ -261,7 +272,7 @@ async def return_out(session: AsyncSession, ret: ReturnRequest, *, with_upi: boo
     return {
         "fleet_pickup": await fleet.pickup_tracking(session, ret, viewer=viewer),
         "id": str(ret.id), "number": ret.number, "status": ret.status, "reason": ret.reason, "reason_label": reason_labels.get(ret.reason, ret.reason),
-        "comment": ret.comment, "seller_note": ret.seller_note, "refund_amount": ret.refund_amount,
+        "comment": ret.comment, "photos": list(ret.photos or []), "seller_note": ret.seller_note, "refund_amount": ret.refund_amount,
         "refund_upi": ret.refund_upi if with_upi else (ret.refund_upi[:2] + "…@" + ret.refund_upi.split("@")[-1] if ret.refund_upi else ""),
         "pickup_courier": ret.pickup_courier, "pickup_tracking": ret.pickup_tracking, "credit_note_number": ret.credit_note_number,
         "sub_order_id": str(ret.sub_order_id), "sub_order_number": sub.number if sub else "", "order_id": str(sub.order_id) if sub else "",

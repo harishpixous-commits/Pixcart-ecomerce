@@ -185,6 +185,7 @@ class ReturnRequest(IdMixin, TimestampMixin, Base):
     pickup_courier: Mapped[str] = mapped_column(String(60), default="")
     pickup_tracking: Mapped[str] = mapped_column(String(60), default="")
     credit_note_number: Mapped[str] = mapped_column(String(20), default="")
+    photos: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")  # urls of the customer's photos
     # own delivery fleet collecting the item: when it was asked for, staff alerted, and the code the customer gives
     fleet_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fleet_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -241,3 +241,36 @@ async def test_staff_open_a_return_for_the_customer(client, admin, categories):
     async with SessionLocal() as s:
         row = (await s.execute(select(AuditLog).where(AuditLog.action == "return.admin_open"))).scalar_one()
         assert row.entity_id == ret["id"] and row.actor_user_id == uuid.UUID(support.user["id"])
+
+
+async def test_return_photos_are_off_until_admin_switches_them_on(client, admin, categories):
+    tn, buyer, o, sub_id, *_ = await delivered_order(client, admin, categories, qty=2, phone="9500000191")
+    x = (await returnable(buyer, o["id"], sub_id))[0]["order_item_id"]
+    body = {"sub_order_id": sub_id, "items": [{"order_item_id": x, "qty": 1}], "reason": "damaged", "refund_upi": "priya@okaxis"}
+    png = (await upload_image(client, tn))  # a hosted seller image url, not a return photo
+
+    assert (await buyer.get("/api/returns/reasons")).json()["photos"] == {"enabled": False, "required_for_defects": False, "max": 3}
+    r = await buyer.post("/api/returns", {**body, "photos": [png]})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "photos_off"
+    assert (await client.post("/api/returns/photos", headers=buyer.h(), files={"file": ("p.png", __import__("tests.conftest", fromlist=["png_bytes"]).png_bytes(), "image/png")})).status_code == 400
+
+    assert (await admin.put("/api/admin/growth/settings", {"return_photos": {"enabled": True, "required_for_defects": True, "max_photos": 2}})).status_code == 200
+    r = await buyer.post("/api/returns", body)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "photos_required"
+    r = await buyer.post("/api/returns", {**body, "photos": [png]})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_photos"  # not from the return photo folder
+    from tests.conftest import png_bytes
+
+    urls = []
+    for _ in range(3):
+        up = await client.post("/api/returns/photos", headers=buyer.h(), files={"file": ("p.png", png_bytes(), "image/png")})
+        assert up.status_code == 201, up.text
+        assert "/return-photos/" in up.json()["url"]
+        urls.append(up.json()["url"])
+    r = await buyer.post("/api/returns", {**body, "photos": urls})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "invalid_photos"  # more than max_photos
+    r = await buyer.post("/api/returns", {**body, "photos": urls[:2]})
+    assert r.status_code == 201, r.text
+    assert r.json()["photos"] == urls[:2]
+    # The seller and staff see the same photos.
+    assert (await tn.get("/api/seller/returns")).json()["items"][0]["photos"] == urls[:2]

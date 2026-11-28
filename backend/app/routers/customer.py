@@ -468,6 +468,7 @@ class ReturnIn(BaseModel):
     reason: str
     comment: str = Field(default="", max_length=2000)
     refund_upi: str = Field(default="", max_length=60)
+    photos: list[str] = Field(default_factory=list, max_length=6)
 
     def lines(self) -> list[tuple[uuid.UUID, int]]:
         try:
@@ -481,7 +482,25 @@ async def return_reasons(session: SessionDep) -> dict:
     from app.services import growth as growth_svc
 
     # `defect`: also allowed for items that can be returned only when they arrived damaged, faulty, wrong or incomplete
-    return {"reasons": [{"code": k, "label": v, "defect": k in DEFECT_REASONS} for k, v in (await growth_svc.return_reasons(session)).items()]}
+    pcfg = (await growth_svc.get(session))["return_photos"]
+    return {
+        "reasons": [{"code": k, "label": v, "defect": k in DEFECT_REASONS} for k, v in (await growth_svc.return_reasons(session)).items()],
+        "photos": {"enabled": pcfg["enabled"], "required_for_defects": pcfg["required_for_defects"], "max": pcfg["max_photos"]},
+    }
+
+
+@router.post("/api/returns/photos", status_code=201)
+async def upload_return_photo(user: CurrentUser, session: SessionDep, file: UploadFile = File(...)) -> dict:
+    """A photo for a return request (the return itself is sent with POST /api/returns)."""
+    from app.services import growth as growth_svc
+
+    if not (await growth_svc.get(session))["return_photos"]["enabled"]:
+        raise ApiError("Photos with a return are switched off", "photos_off")
+    await rate_limit(session, f"return-photo:{user.id}", limit=30, window_seconds=3600)
+    data = await file.read(settings.max_image_bytes + 1)
+    url = await storage.save_image(data, "return-photos")
+    await session.commit()  # keep the rate-limit record
+    return {"url": url}
 
 
 @router.get("/api/orders/{order_id}/returnable")
@@ -499,7 +518,7 @@ async def returnable(order_id: uuid.UUID, user: CurrentUser, session: SessionDep
 
 @router.post("/api/returns", status_code=201)
 async def create_return(body: ReturnIn, user: CurrentUser, session: SessionDep) -> dict:
-    ret = await returns_svc.create(session, user, body.sub_order_id, body.lines(), body.reason, body.comment, body.refund_upi.strip())
+    ret = await returns_svc.create(session, user, body.sub_order_id, body.lines(), body.reason, body.comment, body.refund_upi.strip(), body.photos)
     await session.commit()
     return await returns_svc.return_out(session, ret)
 
