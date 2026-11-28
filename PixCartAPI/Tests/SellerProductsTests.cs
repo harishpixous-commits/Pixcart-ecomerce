@@ -13,6 +13,18 @@ public class SellerProductsTests(ApiFactory f) : ApiTest(f)
         return (user,seller,p,v,cat);
     }
     [Fact]
+    public async Task Admin_search_synonyms_widen_the_storefront_search()
+    {
+        var (user,seller,p,v,cat)=await Seed(); var admin=await Admin();
+        await ApiFactory.DbExecAsync("UPDATE sellers SET status='approved' WHERE id=@seller",new{seller}); await ApiFactory.DbExecAsync("UPDATE products SET status='approved' WHERE id=@p",new{p});
+        async Task<int> Total(string q)=>(await user.Get("/api/catalog/products?q="+q)).Json["total"]!.GetValue<int>();
+        Assert.Equal(1,await Total("shirt")); Assert.Equal(0,await Total("kurta"));
+        Assert.Equal(400,(await admin.Put("/api/admin/settings",new{search_synonyms="shirt"})).Status);
+        var r=await admin.Put("/api/admin/settings",new{search_synonyms="shirt = kurta;\nshoes = sneakers"}); Assert.True(r.Status==200,r.ToString()); Assert.Equal("shirt = kurta; shoes = sneakers",r.Json["search_synonyms"]!.GetValue<string>());
+        Assert.Equal(1,await Total("kurta")); Assert.Equal(0,await Total("sneakers"));
+        Assert.Equal(200,(await admin.Put("/api/admin/settings",new{search_synonyms=""})).Status); Assert.Equal(0,await Total("kurta"));
+    }
+    [Fact]
     public async Task Seller_list_detail_requirements_and_lifecycle()
     {
         var (user,seller,p,v,cat)=await Seed(); var adminApi=await Admin();

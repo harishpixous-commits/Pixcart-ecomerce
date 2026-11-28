@@ -103,6 +103,7 @@ public partial class PlatformSettingsBAL(SettingsDAL settings, CatalogSupportDAL
         ["feature_compare"] = true,
         ["feature_bought_together"] = true,
         ["search_page_size"] = 24,
+        ["search_synonyms"] = "",
         ["search_suggestions"] = 8,
         ["recent_searches_max"] = 8,
         ["brand_filter_max"] = 30,
@@ -153,7 +154,7 @@ public partial class PlatformSettingsBAL(SettingsDAL settings, CatalogSupportDAL
     public static readonly IReadOnlyDictionary<string, (int Min, int Max)> Texts = new Dictionary<string, (int, int)>
     {
         ["maintenance_message"] = (10, 300), ["not_found_title"] = (3, 80), ["not_found_message"] = (10, 300),
-        ["error_title"] = (3, 80), ["error_message"] = (10, 300),
+        ["error_title"] = (3, 80), ["error_message"] = (10, 300), ["search_synonyms"] = (0, 1000),
     };
 
     /// <summary>The list sizes the storefront needs (sent with /api/site as lists).</summary>
@@ -304,7 +305,7 @@ public partial class PlatformSettingsBAL(SettingsDAL settings, CatalogSupportDAL
                 var s = isString ? Tidy(value!.GetValue<string>()) : null;
                 if (s is null || s.Length < range.Min || s.Length > range.Max)
                     throw new ArgumentException($"{key} must be text of {range.Min} to {range.Max} characters");
-                clean[key] = s;
+                clean[key] = key == "search_synonyms" ? Utils.TextSearch.SearchSynonyms.Normalize(string.Join(";", value!.GetValue<string>().Replace("\n", ";").Split(';').Select(Tidy))) : s;
                 continue;
             }
             if (!Limits.TryGetValue(key, out var lim)) throw new ArgumentException($"Unknown setting: {key}");

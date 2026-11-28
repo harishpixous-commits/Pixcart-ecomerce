@@ -187,6 +187,15 @@ const AREA = "w-full rounded-lg border border-line bg-white px-3 py-2 text-[15px
             <pc-text-field [label]="l[1]" inputmode="numeric" [hint]="l[2] + '. Default ' + l[3] + '.'" [value]="v(l[0])" (valueChange)="setF(l[0], $event)" />
           }
         </section>
+        <section class="grid gap-3 rounded-xl bg-white p-5" data-testid="search-synonyms">
+          <div>
+            <h2 class="text-lg font-semibold">Search synonyms</h2>
+            <p class="text-sm text-ink-soft">Words that mean the same to a shopper. A search for one also finds products that use the others. Write each group on its own line or split with semicolons, for example: tee = t-shirt = tshirt</p>
+          </div>
+          <pc-field label="Synonym groups" for="search-synonyms" [hint]="'Single words only. Leave empty to turn off. ' + v('search_synonyms').length + '/1000'">
+            <textarea id="search-synonyms" rows="4" maxlength="1000" [value]="v('search_synonyms')" (input)="setF('search_synonyms', $any($event.target).value)" [class]="area"></textarea>
+          </pc-field>
+        </section>
         <section class="grid gap-3 rounded-xl bg-white p-5 sm:grid-cols-2" data-testid="error-page-settings">
           <div class="sm:col-span-2">
             <h2 class="text-lg font-semibold">Error pages</h2>
@@ -256,7 +265,7 @@ export class AdminSettingsPage {
         defectDays: String(x.defect_return_days), payDay: String(x.payout_weekday), payEvery: String(x.payout_every_weeks),
         payWindow: String(x.payment_window_minutes ?? 30), cancelUntil: x.customer_cancel_until ?? "packed", payReturn: x.payment_return_mode ?? "return",
         adminLayout: x.admin_layout_default ?? "sidebar", maintenanceMessage: x.maintenance_message ?? "",
-        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, String(x[k] ?? "")])),
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, String(x[k] ?? "")])), search_synonyms: String(x["search_synonyms"] ?? ""),
         ...Object.fromEntries(LIST_FIELDS.map(([k, , , d]) => [k, String(x[k] ?? d)])),
       });
       this.s.set(x);
@@ -295,7 +304,7 @@ export class AdminSettingsPage {
         payment_window_minutes: Number(f["payWindow"]), customer_cancel_until: f["cancelUntil"] || "packed", payment_return_mode: f["payReturn"] || "return",
         admin_layout_default: f["adminLayout"] || "sidebar",
         maintenance_mode: this.maintenance(), maintenance_message: f["maintenanceMessage"] ?? "",
-        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), ...this.pageFlags(), ...this.apps(),
+        ...Object.fromEntries(PAGE_TEXTS.map(([k]) => [k, f[k] ?? ""])), search_synonyms: f["search_synonyms"] ?? "", ...this.pageFlags(), ...this.apps(),
         ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, Number(f[k])])),
       };
       if (Object.values(body).some((v) => v === null || (typeof v === "number" && Number.isNaN(v)))) throw new Error("Check that every amount is a number");

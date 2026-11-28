@@ -298,10 +298,15 @@ public class CatalogBAL(
     /// </summary>
     private async Task<List<(Guid Id, int Key)>> TextMatchesAsync(ProductFilter scope, string text)
     {
-        var query = ProductTextQuery.For(text);
+        var queries = SearchSynonyms.Variants(text, SearchSynonyms.Parse((await platform.GetAsync()).Str("search_synonyms"))).Select(v => ProductTextQuery.For(v)).ToList();
         var outp = new List<(Guid, int)>();
         foreach (var c in await catalog.SearchCandidatesAsync(scope))
-            if (query.Matches(c.Entry.Document, out var relevance)) outp.Add((c.Id, ProductTextQuery.OrderKey(relevance)));
+        {
+            var best = -1;
+            foreach (var query in queries)
+                if (query.Matches(c.Entry.Document, out var relevance)) best = Math.Max(best, ProductTextQuery.OrderKey(relevance));
+            if (best >= 0) outp.Add((c.Id, best));
+        }
         return outp;
     }
 
