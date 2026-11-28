@@ -13,7 +13,13 @@ public interface IReturnsBAL
 
     /// <summary>The customer's return request (reference: POST /api/returns).</summary>
     Task<ReturnRequestModel> CreateAsync(UserModel user, Guid subOrderId, IReadOnlyList<(Guid OrderItemId, int Qty)> lines,
-        string reason, string comment, string refundUpi);
+        string reason, string comment, string refundUpi, IReadOnlyList<string>? photos = null);
+
+    /// <summary>A photo for a return request (reference: POST /api/returns/photos).</summary>
+    Task<System.Text.Json.Nodes.JsonObject> UploadPhotoAsync(UserModel user, byte[] data);
+
+    /// <summary>The return photo settings the form needs.</summary>
+    Task<System.Text.Json.Nodes.JsonObject> PhotoConfigAsync();
 
     /// <summary>Moves a return forward inside the caller's transaction; returns refund ids to process after commit
     /// (reference: set_status).</summary>

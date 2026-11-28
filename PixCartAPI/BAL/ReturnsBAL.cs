@@ -27,8 +27,24 @@ public partial class ReturnsBAL(
     IDeliveryFleetBAL fleetBal,
     IInventoryBAL inventoryBal,
     IRefundQueue refundQueue,
-    IMySqlDapperHelper db) : IReturnsBAL
+    IMySqlDapperHelper db,
+    DAL.SettingsDAL growthSettings,
+    IImageUpload uploads,
+    AppSettings app) : IReturnsBAL
 {
+    public async Task<JsonObject> PhotoConfigAsync()
+    {
+        var c = (JsonObject)SettingsDAL.Merge(GrowthBAL.Defaults(), await growthSettings.GetAsync("growth"))["return_photos"]!;
+        return new JsonObject { ["enabled"] = c.Bool("enabled"), ["required_for_defects"] = c.Bool("required_for_defects"), ["max"] = c.Int("max_photos") };
+    }
+
+    public async Task<JsonObject> UploadPhotoAsync(UserModel user, byte[] data)
+    {
+        if (!(await PhotoConfigAsync()).Bool("enabled")) throw new AppException("Photos with a return are switched off", "photos_off");
+        await support.RateLimitAsync($"return-photo:{user.Id}", 30, 3600);
+        return new JsonObject { ["url"] = await uploads.SaveImageAsync(data, "return-photos") };
+    }
+
     private static readonly string[] Open = ["requested", "approved", "picked_up"];
 
     [GeneratedRegex(@"^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$")]
@@ -106,7 +122,7 @@ public partial class ReturnsBAL(
     /// <summary>The customer's return request (reference: POST /api/returns). Auto-approves when the marketplace
     /// setting says so, which also asks the fleet to collect.</summary>
     public async Task<ReturnRequestModel> CreateAsync(UserModel user, Guid subOrderId, IReadOnlyList<(Guid OrderItemId, int Qty)> lines,
-        string reason, string comment, string refundUpi)
+        string reason, string comment, string refundUpi, IReadOnlyList<string>? photos = null)
     {
         var cfg = await platform.GetAsync();
         if (!cfg.Bool("feature_returns"))
@@ -119,6 +135,14 @@ public partial class ReturnsBAL(
         var reasonLabels = await ReturnReasonsConfig.Async(db);
         if (!reasonLabels.ContainsKey(reason))
             throw new AppException("Choose a reason for the return", "invalid_reason");
+        var pcfg = await PhotoConfigAsync();
+        var photoList = (photos ?? []).Distinct().ToList();
+        if (photoList.Count > 0 && !pcfg.Bool("enabled")) throw new AppException("Photos with a return are switched off", "photos_off");
+        var photoBase = app.MediaBaseUrl.TrimEnd('/') + "/return-photos/";
+        if (photoList.Count > pcfg.Int("max") || photoList.Any(u => !u.StartsWith(photoBase, StringComparison.Ordinal) || u.Contains("..") || u.Length > 400))
+            throw new AppException($"Add up to {pcfg.Int("max")} photos, uploaded here", "invalid_photos");
+        if (pcfg.Bool("enabled") && pcfg.Bool("required_for_defects") && PlatformSettingsBAL.DefectReasons.Contains(reason) && photoList.Count == 0)
+            throw new AppException("Please add a photo of the problem so the seller can check it", "photos_required", 400, new Dictionary<string, string> { ["photos"] = "Required" });
         var eligible = (await ReturnableItemsAsync(sub, uow)).ToDictionary(e => e["order_item_id"]!.GetValue<string>());
         if (lines.Count == 0)
             throw new AppException("Choose at least one item to return", "no_items");
@@ -148,6 +172,7 @@ public partial class ReturnsBAL(
         var now = DateTimeFunctions.UtcNow();
         var ret = new ReturnRequestModel
         {
+            Photos = System.Text.Json.JsonSerializer.Serialize(photoList),
             Id = Guid.NewGuid(),
             Number = $"RT{now:yyMMdd}{Convert.ToHexString(RandomNumberGenerator.GetBytes(3))}",
             SubOrderId = sub.Id, SellerId = sub.SellerId, UserId = user.Id, Status = "requested",
@@ -557,7 +582,7 @@ public partial class ReturnsBAL(
                 ["id"] = ret.Id.ToString(), ["number"] = ret.Number, ["status"] = ret.Status,
                 ["reason"] = ret.Reason,
                 ["reason_label"] = (await ReturnReasonsConfig.Async(db, false)).GetValueOrDefault(ret.Reason, ret.Reason),
-                ["comment"] = ret.Comment, ["seller_note"] = ret.SellerNote, ["refund_amount"] = ret.RefundAmount,
+                ["comment"] = ret.Comment, ["photos"] = JsonNode.Parse(string.IsNullOrEmpty(ret.Photos) ? "[]" : ret.Photos), ["seller_note"] = ret.SellerNote, ["refund_amount"] = ret.RefundAmount,
                 ["refund_upi"] = withUpi ? ret.RefundUpi : MaskUpi(ret.RefundUpi),
                 ["pickup_courier"] = ret.PickupCourier, ["pickup_tracking"] = ret.PickupTracking,
                 ["credit_note_number"] = ret.CreditNoteNumber,

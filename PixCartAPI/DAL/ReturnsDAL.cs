@@ -137,11 +137,11 @@ public class ReturnsDAL(IMySqlDapperHelper db)
             """
             INSERT INTO return_requests
                 (id, number, sub_order_id, seller_id, user_id, status, reason, comment, refund_amount, refund_upi,
-                 seller_note, pickup_courier, pickup_tracking, credit_note_number, fleet_requested_at,
+                 seller_note, pickup_courier, pickup_tracking, credit_note_number, photos, fleet_requested_at,
                  fleet_alerted_at, pickup_otp, approved_at, received_at, refunded_at, created_at, updated_at)
             VALUES
                 (@Id, @Number, @SubOrderId, @SellerId, @UserId, @Status, @Reason, @Comment, @RefundAmount, @RefundUpi,
-                 @SellerNote, @PickupCourier, @PickupTracking, @CreditNoteNumber, @FleetRequestedAt,
+                 @SellerNote, @PickupCourier, @PickupTracking, @CreditNoteNumber, @Photos, @FleetRequestedAt,
                  @FleetAlertedAt, @PickupOtp, @ApprovedAt, @ReceivedAt, @RefundedAt, @CreatedAt, @UpdatedAt)
             """, r);
 

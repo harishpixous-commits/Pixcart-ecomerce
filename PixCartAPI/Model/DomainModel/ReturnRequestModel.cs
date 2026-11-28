@@ -30,6 +30,8 @@ public class ReturnRequestModel
     public string PickupTracking { get; set; } = "";
     /// <summary>return_requests.credit_note_number</summary>
     public string CreditNoteNumber { get; set; } = "";
+    /// <summary>return_requests.photos: a JSON list of image addresses.</summary>
+    public string Photos { get; set; } = "[]";
     /// <summary>return_requests.fleet_requested_at</summary>
     public DateTime? FleetRequestedAt { get; set; }
     /// <summary>return_requests.fleet_alerted_at</summary>

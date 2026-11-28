@@ -654,6 +654,34 @@ public class CheckoutRulesTests(ApiFactory f) : ApiTest(f)
     }
 
     [Fact]
+    public async Task Return_photos_are_off_until_staff_switch_them_on()
+    {
+        var admin = await Admin();
+        var (variantId, productId, _) = await ShirtInStock("9400000305", "photo-shirt");
+        await Refresh(productId);
+        var buyer = await LoginPhone("9770000072", "Photo Buyer");
+        var addr = await AddAddress(buyer, state: "33");
+        await buyer.Post("/api/cart/items", new { variant_id = variantId, qty = 1 });
+        var o = await buyer.Post("/api/orders", new { address_id = addr, payment_method = "cod", idempotency_key = Guid.NewGuid().ToString("N") });
+        var subId = o.Json["order"]!["sub_orders"]![0]!["id"]!.GetValue<string>();
+        var items = new[] { new { order_item_id = Guid.NewGuid(), qty = 1 } };
+        static MultipartFormDataContent Form() { var f = new MultipartFormDataContent(); f.Add(new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAZAAAAGQCAIAAAAP3aGbAAAFNUlEQVR4nO3UMQ0AIADAMEAI/qUgCwt8ZEmrYNfm2XsAFKzfAQCvDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwg4wJyZAQkd7kafwAAAABJRU5ErkJggg==")), "file", "p.png"); return f; }
+        Assert.False((await buyer.Get("/api/returns/reasons")).Json["photos"]!["enabled"]!.GetValue<bool>());
+        Assert.Equal("photos_off", (await buyer.Post("/api/returns", new { sub_order_id = subId, items, reason = "damaged", refund_upi = "r@okaxis", photos = new[] { "http://x/y.png" } })).ErrorCode);
+        Assert.Equal("photos_off", (await buyer.Post("/api/returns/photos", Form())).ErrorCode);
+        Assert.Equal(200, (await admin.Put("/api/admin/growth/settings", new { return_photos = new { enabled = true, required_for_defects = true, max_photos = 2 } })).Status);
+        var cfg = (await buyer.Get("/api/returns/reasons")).Json["photos"]!;
+        Assert.Equal(2, cfg["max"]!.GetValue<int>()); Assert.True(cfg["required_for_defects"]!.GetValue<bool>());
+        Assert.Equal("photos_required", (await buyer.Post("/api/returns", new { sub_order_id = subId, items, reason = "damaged", refund_upi = "r@okaxis" })).ErrorCode);
+        Assert.Equal("invalid_photos", (await buyer.Post("/api/returns", new { sub_order_id = subId, items, reason = "damaged", refund_upi = "r@okaxis", photos = new[] { "https://elsewhere.example/a.png" } })).ErrorCode);
+        var up = await buyer.Post("/api/returns/photos", Form()); Assert.True(up.Status == 201, up.ToString());
+        var url = up.Json["url"]!.GetValue<string>(); Assert.Contains("/return-photos/", url);
+        Assert.Equal("invalid_photos", (await buyer.Post("/api/returns", new { sub_order_id = subId, items, reason = "damaged", refund_upi = "r@okaxis", photos = new[] { url, url + "?a", url + "?b" } })).ErrorCode);
+        // a valid photo passes the photo checks; the order is not delivered yet, so the item itself is refused
+        Assert.Equal("not_returnable", (await buyer.Post("/api/returns", new { sub_order_id = subId, items, reason = "damaged", refund_upi = "r@okaxis", photos = new[] { url } })).ErrorCode);
+    }
+
+    [Fact]
     public async Task Staff_can_rename_and_switch_off_return_reasons()
     {
         var admin = await Admin();
