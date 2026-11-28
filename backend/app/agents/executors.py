@@ -85,6 +85,11 @@ async def run(session: AsyncSession, user: User, row: AgentProposal, bg: Backgro
         if n != p["messages"]:
             raise Stale("The ticket has new messages since this draft, so nothing was sent.")
         return await ax.staff_reply(t.id, ax.StaffReply(body=p["body"]), user, session)
+    if k == "send_digest":
+        from app.services.notify import notify
+
+        await notify(session, "assistant_digest", user, {"digest": p["digest"]}, link="/admin/agents")
+        return {"ok": True, "sent_to": "approver"}
     if k == "delay_notice":
         from app.models import Order
         from app.services.notify import notify

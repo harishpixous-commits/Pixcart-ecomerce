@@ -56,6 +56,10 @@ EVENTS: dict[str, dict[str, tuple[str, str]]] = {
         "inapp": ("Your package is running late", "Package {{order_number}} was due on {{expected}} and has not arrived yet. It is still on its way. You can follow it in your orders."),
         "email": ("Your package {{order_number}} is running late", "Hi {{name}},\n\nPackage {{order_number}} was due on {{expected}} and has not arrived yet. It is still on its way.\n\nFollow it here: {{link}}"),
     },
+    "assistant_digest": {
+        "inapp": ("Your weekly business digest", "{{digest}}"),
+        "email": ("Your weekly business digest", "Hi {{name}},\n\n{{digest}}\n\n{{link}}"),
+    },
     "seller_restock": {
         "inapp": ("Restock {{item}}", "{{item}} has {{stock}} left and sold {{sold}} in the last {{days}} days, so it may run out in about {{left}} days. Consider adding about {{suggest}} units."),
         "email": ("Restock {{item}}", "Hi {{name}},\n\n{{item}} has {{stock}} left and sold {{sold}} in the last {{days}} days, so it may run out in about {{left}} days. Consider adding about {{suggest}} units.\n\n{{link}}"),

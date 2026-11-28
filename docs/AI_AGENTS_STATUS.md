@@ -37,3 +37,6 @@ Listing (`listing`): runs the listing rules on pending products; proposes approv
 
 ## Test status (28 Nov, after Push 145)
 Full Python suite: 323 passed. .NET full suite: see the instinct/continue copy of this file.
+
+## Business assistant (Python: working and tested)
+Key `assistant`. Once a week proposes a digest: sales for the last N days against the N before, items with few units left, tickets nobody answered, listings waiting for review. Approving sends it to the person who approved, in-app and by email. Counts only: no explanation of why, no forecast, goes to the approver only. Test: tests/test_agents.py (8 green). Note on test counts: earlier "573" and "579" .NET figures were sums of overlapping filter groups; the true single-run count is 392 before this push. .NET version: pending.

@@ -273,3 +273,25 @@ async def test_support_agent_drafts_first_reply_and_staff_approval_sends_it(clie
     assert (await admin.post(f"/api/admin/agents/proposals/{p['id']}/approve")).json()["status"] == "done"
     msgs = (await a.get(f"/api/support/tickets/{tid}")).json()["messages"]
     assert len(msgs) == 2 and "Ticket" in msgs[1]["body"] and "refund" not in msgs[1]["body"].lower()
+
+
+async def test_assistant_agent_proposes_a_weekly_digest_and_approval_sends_it_to_the_approver(client, admin, categories):
+    tn, buyer, sid = await _place(client, admin, categories, "9770000208")
+    await admin.put("/api/admin/agents/settings", {"enabled": True})
+
+    async def run():
+        async with SessionLocal() as s:
+            n = await core.run_agent(s, "assistant")
+            await s.commit()
+            return n
+
+    assert await run() == 0
+    assert (await admin.put("/api/admin/agents/settings", {"assistant_enabled": True})).status_code == 200
+    assert await run() == 1 and await run() == 0  # one per week
+    p = (await admin.get("/api/admin/agents/proposals?agent=assistant")).json()["items"][0]
+    assert p["kind"] == "send_digest" and "1 orders" in p["summary"]
+    digest = lambda items: [n for n in items if n["title"].startswith("Your weekly business digest")]
+    assert digest((await admin.get("/api/notifications")).json()["items"]) == []
+    assert (await admin.post(f"/api/admin/agents/proposals/{p['id']}/approve")).json()["status"] == "done"
+    got = digest((await admin.get("/api/notifications")).json()["items"])
+    assert len(got) == 1 and "Sales, last 7 days: 1 orders" in got[0]["body"]

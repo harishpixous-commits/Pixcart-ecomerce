@@ -20,6 +20,7 @@ const NUMBERS: Record<string, string> = {
   marketing_window_days: "Sales window (days)", marketing_max_sold: "Slow if it sold at most (units)", marketing_min_items: "Only categories with at least (items in stock)",
   marketing_discount_percent: "Discount (%)", marketing_valid_days: "Coupon valid for (days)",
   support_wait_hours: "Reply when a ticket waited (hours)", support_max_age_days: "Ignore tickets older than (days)",
+  assistant_window_days: "Digest covers the last (days)", assistant_low_stock: "Count items with at most (units left)", assistant_ticket_hours: "Count tickets unanswered for (hours)",
   orderupdate_late_hours: "Tell customer after (hours past the promised date)", orderupdate_max_age_days: "Ignore packages more than (days) past due",
 };
 
