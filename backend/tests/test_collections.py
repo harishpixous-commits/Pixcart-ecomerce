@@ -161,3 +161,27 @@ async def test_most_units_per_order_limits_the_cart_and_blocks_the_order(client,
     await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"details": (detail.get("details") or {}) | {"max_qty": 0}})
     assert (await admin.post(f"/api/admin/products/{shirt['id']}/approve")).status_code == 200
     assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).json()["max_qty"] is None
+
+
+async def test_staff_can_set_the_go_live_time_and_approval_says_when_it_goes_live(client, admin, categories):
+    from datetime import datetime, timedelta, timezone
+
+    tn, _ka, shirt, _phone = await setup(client, admin, categories)
+    path = f"/api/admin/products/{shirt['id']}/publish-at"
+    soon = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    r = await admin.put(path, {"publish_at": soon})
+    assert r.status_code == 200 and r.json()["publish_at"] is not None and r.json()["status"] == "approved"
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).status_code == 404
+    assert (await tn.get(f"/api/seller/products/{shirt['id']}")).json()["publish_at"] is not None     # the seller sees it
+    assert (await admin.put(path, {"publish_at": (datetime.now(timezone.utc) + timedelta(days=400)).isoformat()})).status_code == 400
+    r = await admin.put(path, {"publish_at": None})
+    assert r.status_code == 200 and r.json()["publish_at"] is None
+    assert (await client.get(f"/api/catalog/products/{shirt['slug']}")).status_code == 200
+    assert (await client.put(path, json={"publish_at": None})).status_code in (401, 403)             # staff only
+    # a content change sends it back for approval; approving it tells the seller when it will go live
+    detail = (await tn.get(f"/api/seller/products/{shirt['id']}")).json()
+    r = await tn.put(f"/api/seller/products/{shirt['id']}", detail | {"details": (detail.get("details") or {}) | {"max_qty": 4}, "publish_at": soon})
+    assert r.json()["status"] == "pending"
+    assert (await admin.post(f"/api/admin/products/{shirt['id']}/approve")).status_code == 200
+    notes = (await tn.get("/api/notifications")).json()["items"]
+    assert any("goes live on the store on" in n["body"] for n in notes)

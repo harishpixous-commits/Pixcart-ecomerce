@@ -405,6 +405,32 @@ async def set_product_videos(product_id: uuid.UUID, body: ProductVideosIn, admin
     return data
 
 
+class PublishAtIn(BaseModel):
+    publish_at: datetime | None = None  # empty: live as soon as approved
+
+
+@router.put("/products/{product_id}/publish-at")
+async def set_publish_at(product_id: uuid.UUID, body: PublishAtIn, admin: Perm("catalog"), session: SessionDep) -> dict:
+    """Staff sets or clears the go-live time of a listing (the seller can do the same in the product form)."""
+    from datetime import timezone
+
+    p = await _product(session, product_id, lock=True)
+    if p.status == "archived":
+        raise Conflict("Restore this product before changing it", "invalid_status")
+    when = body.publish_at
+    if when is not None:
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when > utcnow() + timedelta(days=365):
+            raise ApiError("Pick a go-live time within the next year", "invalid_value")
+    if p.publish_at != when:
+        p.publish_notified_at = None
+    p.publish_at = when
+    audit(session, admin, "product.publish_at", "product", p.id, when.isoformat() if when else "cleared")
+    await session.commit()
+    return await product_detail(session, p)
+
+
 @router.post("/products/{product_id}/approve")
 async def approve_product(product_id: uuid.UUID, admin: Perm("catalog"), session: SessionDep) -> dict:
     p = await _product(session, product_id, lock=True)
@@ -414,7 +440,9 @@ async def approve_product(product_id: uuid.UUID, admin: Perm("catalog"), session
     p.approved_at = utcnow()
     p.rejection_reason = ""
     audit(session, admin, "product.approve", "product", p.id)
-    await notify_seller(session, p.seller_id, "listing_update", {"status": "approved", "title": p.title, "message": "It is live on the store now."},
+    later = p.publish_at is not None and p.publish_at > utcnow()
+    await notify_seller(session, p.seller_id, "listing_update", {"status": "approved", "title": p.title,
+                        "message": f"It goes live on the store on {p.publish_at.astimezone(IST):%d %b %Y at %I:%M %p} IST." if later else "It is live on the store now."},
                         link=f"/seller/products/{p.id}")
     await session.commit()
     return await product_detail(session, p)
